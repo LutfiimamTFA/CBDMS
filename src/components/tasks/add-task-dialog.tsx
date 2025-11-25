@@ -55,9 +55,11 @@ import {
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
+import { Textarea } from '../ui/textarea';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
+  description: z.string().optional(),
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assignees: z.array(z.string()).optional(),
@@ -95,6 +97,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     resolver: zodResolver(taskSchema),
     defaultValues: {
       title: '',
+      description: '',
       status: 'To Do',
       priority: 'Medium',
       assignees: [],
@@ -202,6 +205,21 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('addtask.form.description')}</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -510,3 +528,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    

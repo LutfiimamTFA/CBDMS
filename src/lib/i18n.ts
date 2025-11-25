@@ -33,6 +33,8 @@ export const ui = {
     'addtask.description': 'Fill in the details below to create a new task.',
     'addtask.form.title': 'Title',
     'addtask.form.title.placeholder': 'e.g. Design landing page',
+    'addtask.form.description': 'Description',
+    'addtask.form.description.placeholder': 'Add a more detailed description...',
     'addtask.form.status': 'Status',
     'addtask.form.status.placeholder': 'Select a status',
     'addtask.form.priority': 'Priority',
@@ -102,6 +104,8 @@ export const ui = {
     'addtask.description': 'Isi detail di bawah ini untuk membuat tugas baru.',
     'addtask.form.title': 'Judul',
     'addtask.form.title.placeholder': 'contoh: Desain halaman arahan',
+    'addtask.form.description': 'Deskripsi',
+    'addtask.form.description.placeholder': 'Tambahkan deskripsi yang lebih detail...',
     'addtask.form.status': 'Status',
     'addtask.form.status.placeholder': 'Pilih status',
     'addtask.form.priority': 'Prioritas',
@@ -145,3 +149,5 @@ export const ui = {
     'addtask.form.create': 'Buat Tugas',
   },
 } as const;
+
+    
