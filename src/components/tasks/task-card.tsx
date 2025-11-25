@@ -1,0 +1,98 @@
+'use client';
+import type { Task } from '@/lib/types';
+import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { priorityInfo } from '@/lib/utils';
+import { Clock, Calendar, Link as LinkIcon, ListTodo } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TaskDetailsSheet } from './task-details-sheet';
+import { Progress } from '../ui/progress';
+
+interface TaskCardProps {
+  task: Task;
+  onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
+}
+
+export function TaskCard({ task, onDragStart }: TaskCardProps) {
+  const PriorityIcon = priorityInfo[task.priority].icon;
+  const priorityColor = priorityInfo[task.priority].color;
+
+  const timeTrackingProgress = task.timeEstimate && task.timeTracked
+    ? (task.timeTracked / task.timeEstimate) * 100
+    : 0;
+
+  return (
+    <TaskDetailsSheet task={task}>
+        <Card
+            draggable
+            onDragStart={(e) => onDragStart(e, task.id)}
+            className="cursor-pointer transition-shadow duration-200 hover:shadow-lg"
+        >
+            <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+                <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{task.priority} Priority</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            </div>
+            
+            {(task.timeTracked !== undefined && task.timeEstimate !== undefined) && (
+                <div className="mt-3 space-y-1">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Time Tracking</span>
+                        <span>{task.timeTracked}h / {task.timeEstimate}h</span>
+                    </div>
+                    <Progress value={timeTrackingProgress} className="h-1" />
+                </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-between">
+                <div className="flex items-center -space-x-2">
+                <TooltipProvider>
+                    {task.assignees.map((assignee) => (
+                    <Tooltip key={assignee.id}>
+                        <TooltipTrigger asChild>
+                        <Avatar className="h-7 w-7 border-2 border-background">
+                            <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
+                            <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                        <p>{assignee.name}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                    ))}
+                </TooltipProvider>
+                </div>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    {task.subtasks && task.subtasks.length > 0 && (
+                        <span className="flex items-center gap-1">
+                            <ListTodo className="h-3.5 w-3.5" /> {task.subtasks.length}
+                        </span>
+                    )}
+                    {task.dependencies && task.dependencies.length > 0 && (
+                        <span className="flex items-center gap-1">
+                            <LinkIcon className="h-3.5 w-3.5" /> {task.dependencies.length}
+                        </span>
+                    )}
+                    {task.dueDate && (
+                        <span className="flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {format(parseISO(task.dueDate), 'MMM d')}
+                        </span>
+                    )}
+                </div>
+            </div>
+            </CardContent>
+        </Card>
+    </TaskDetailsSheet>
+  );
+}
