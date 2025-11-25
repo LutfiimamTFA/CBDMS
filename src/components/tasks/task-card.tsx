@@ -1,3 +1,4 @@
+
 'use client';
 import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,6 +9,7 @@ import { format, parseISO } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TaskDetailsSheet } from './task-details-sheet';
 import { Progress } from '../ui/progress';
+import { useI18n } from '@/context/i18n-provider';
 
 interface TaskCardProps {
   task: Task;
@@ -17,10 +19,13 @@ interface TaskCardProps {
 export function TaskCard({ task, onDragStart }: TaskCardProps) {
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
+  const { t } = useI18n();
 
   const timeTrackingProgress = task.timeEstimate && task.timeTracked
     ? (task.timeTracked / task.timeEstimate) * 100
     : 0;
+  
+  const priorityTranslationKey = `priority.${task.priority.toLowerCase()}` as any;
 
   return (
     <TaskDetailsSheet task={task}>
@@ -38,7 +43,7 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
                             <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
                         </TooltipTrigger>
                         <TooltipContent>
-                            <p>{task.priority} Priority</p>
+                            <p>{t(priorityTranslationKey)} Priority</p>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>

@@ -1,9 +1,11 @@
+
 'use client';
 
 import { TaskCard } from './task-card';
 import type { Task, Status } from '@/lib/types';
 import { statusInfo } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useI18n } from '@/context/i18n-provider';
 
 interface KanbanColumnProps {
   status: Status;
@@ -15,6 +17,9 @@ interface KanbanColumnProps {
 export function KanbanColumn({ status, tasks, onDrop, onDragStart }: KanbanColumnProps) {
   const info = statusInfo[status];
   const Icon = info.icon;
+  const { t } = useI18n();
+  const translationKey = `status.${status.toLowerCase().replace(' ', '')}` as any;
+
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -28,7 +33,7 @@ export function KanbanColumn({ status, tasks, onDrop, onDragStart }: KanbanColum
     >
       <div className="flex items-center gap-2 p-4">
         <Icon className="h-5 w-5 text-muted-foreground" />
-        <h2 className="font-headline font-semibold">{status}</h2>
+        <h2 className="font-headline font-semibold">{t(translationKey)}</h2>
         <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
           {tasks.length}
         </span>

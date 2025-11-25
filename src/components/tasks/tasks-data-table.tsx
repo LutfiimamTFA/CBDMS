@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -37,92 +38,96 @@ import { format, parseISO } from 'date-fns';
 import { ChevronDown, Plus } from 'lucide-react';
 import { TaskDetailsSheet } from './task-details-sheet';
 import { AddTaskDialog } from './add-task-dialog';
+import { useI18n } from '@/context/i18n-provider';
 
-
-export const columns: ColumnDef<Task>[] = [
-  {
-    accessorKey: 'title',
-    header: 'Title',
-    cell: ({ row }) => {
-      const task = row.original;
-      return (
-        <TaskDetailsSheet task={task}>
-          <div className="font-medium cursor-pointer hover:underline">{task.title}</div>
-        </TaskDetailsSheet>
-      );
-    }
-  },
-  {
-    accessorKey: 'status',
-    header: 'Status',
-    cell: ({ row }) => {
-      const status = row.getValue('status') as string;
-      const Icon = statusInfo[status as keyof typeof statusInfo].icon;
-      return <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-muted-foreground" />
-        {status}
-      </div>;
-    },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
-    },
-  },
-  {
-    accessorKey: 'priority',
-    header: 'Priority',
-    cell: ({ row }) => {
-      const priority = row.getValue('priority') as string;
-      const Icon = priorityInfo[priority as keyof typeof priorityInfo].icon;
-      const color = priorityInfo[priority as keyof typeof priorityInfo].color;
-      return <div className="flex items-center gap-2">
-        <Icon className={`h-4 w-4 ${color}`} />
-        {priority}
-        </div>;
-    },
-     filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
-    },
-  },
-  {
-    accessorKey: 'assignees',
-    header: 'Assignees',
-    cell: ({ row }) => {
-      const assignees = row.getValue('assignees') as any[];
-      return (
-        <div className="flex -space-x-2">
-          <TooltipProvider>
-            {assignees.map((assignee) => (
-              <Tooltip key={assignee.id}>
-                <TooltipTrigger asChild>
-                  <Avatar className="h-7 w-7 border-2 border-background">
-                    <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
-                    <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{assignee.name}</p>
-                </TooltipContent>
-              </Tooltip>
-            ))}
-          </TooltipProvider>
-        </div>
-      );
-    },
-  },
-  {
-    accessorKey: 'dueDate',
-    header: 'Due Date',
-    cell: ({ row }) => {
-        const dueDate = row.getValue('dueDate') as string;
-        return dueDate ? <div>{format(parseISO(dueDate), 'MMM d, yyyy')}</div> : <div className="text-muted-foreground">-</div>;
-    }
-  },
-];
 
 export function TasksDataTable() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const { t } = useI18n();
+
+  const columns: ColumnDef<Task>[] = [
+    {
+      accessorKey: 'title',
+      header: 'Title',
+      cell: ({ row }) => {
+        const task = row.original;
+        return (
+          <TaskDetailsSheet task={task}>
+            <div className="font-medium cursor-pointer hover:underline">{task.title}</div>
+          </TaskDetailsSheet>
+        );
+      }
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const status = row.getValue('status') as keyof typeof statusInfo;
+        const Icon = statusInfo[status].icon;
+        const translationKey = `status.${status.toLowerCase().replace(' ', '')}` as any;
+        return <div className="flex items-center gap-2">
+          <Icon className="h-4 w-4 text-muted-foreground" />
+          {t(translationKey)}
+        </div>;
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id))
+      },
+    },
+    {
+      accessorKey: 'priority',
+      header: 'Priority',
+      cell: ({ row }) => {
+        const priority = row.getValue('priority') as keyof typeof priorityInfo;
+        const Icon = priorityInfo[priority].icon;
+        const color = priorityInfo[priority].color;
+        const translationKey = `priority.${priority.toLowerCase()}` as any;
+        return <div className="flex items-center gap-2">
+          <Icon className={`h-4 w-4 ${color}`} />
+          {t(translationKey)}
+          </div>;
+      },
+       filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id))
+      },
+    },
+    {
+      accessorKey: 'assignees',
+      header: 'Assignees',
+      cell: ({ row }) => {
+        const assignees = row.getValue('assignees') as any[];
+        return (
+          <div className="flex -space-x-2">
+            <TooltipProvider>
+              {assignees.map((assignee) => (
+                <Tooltip key={assignee.id}>
+                  <TooltipTrigger asChild>
+                    <Avatar className="h-7 w-7 border-2 border-background">
+                      <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
+                      <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{assignee.name}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </TooltipProvider>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: 'dueDate',
+      header: 'Due Date',
+      cell: ({ row }) => {
+          const dueDate = row.getValue('dueDate') as string;
+          return dueDate ? <div>{format(parseISO(dueDate), 'MMM d, yyyy')}</div> : <div className="text-muted-foreground">-</div>;
+      }
+    },
+  ];
 
   const table = useReactTable({
     data,
