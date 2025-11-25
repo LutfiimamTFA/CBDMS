@@ -34,7 +34,7 @@ import { users } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Copy, Mail, Repeat, Share, UserPlus, Users, X } from 'lucide-react';
+import { Calendar, Copy, Loader2, Mail, Repeat, Share, UserPlus, Users, Wand2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -53,6 +53,8 @@ import {
   startOfWeek,
 } from 'date-fns';
 import { useI18n } from '@/context/i18n-provider';
+import { suggestPriority } from '@/ai/flows/suggest-priority';
+import { useToast } from '@/hooks/use-toast';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -75,7 +77,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('public');
+  const [isSuggesting, setIsSuggesting] = React.useState(false);
   const { t } = useI18n();
+  const { toast } = useToast();
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -132,6 +136,39 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     daily: t('addtask.form.recurring.daily'),
     weekly: t('addtask.form.recurring.weekly'),
     monthly: t('addtask.form.recurring.monthly'),
+  };
+
+  const handleSuggestPriority = async () => {
+    const title = form.getValues('title');
+    if (!title) {
+      toast({
+        variant: 'destructive',
+        title: 'Title is required',
+        description: 'Please enter a task title before suggesting a priority.',
+      });
+      return;
+    }
+    setIsSuggesting(true);
+    try {
+      const result = await suggestPriority({
+        title,
+        description: form.getValues('description'),
+      });
+      form.setValue('priority', result.priority);
+      toast({
+        title: `Priority set to ${result.priority}`,
+        description: result.reason,
+      });
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: 'destructive',
+        title: 'Suggestion Failed',
+        description: 'Could not get an AI suggestion. Please try again.',
+      });
+    } finally {
+      setIsSuggesting(false);
+    }
   };
 
   return (
@@ -202,26 +239,43 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>{t('addtask.form.priority')}</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={t('addtask.form.priority.placeholder')} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {Object.values(priorityInfo).map((p) => (
-                              <SelectItem key={p.value} value={p.value}>
-                                <div className="flex items-center gap-2">
-                                  <p.icon className={`h-4 w-4 ${p.color}`} />
-                                  {t(`priority.${p.value.toLowerCase()}` as any)}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                         <div className="flex items-center gap-2">
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder={t('addtask.form.priority.placeholder')} />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {Object.values(priorityInfo).map((p) => (
+                                <SelectItem key={p.value} value={p.value}>
+                                  <div className="flex items-center gap-2">
+                                    <p.icon className={`h-4 w-4 ${p.color}`} />
+                                    {t(`priority.${p.value.toLowerCase()}` as any)}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                           <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={handleSuggestPriority}
+                            disabled={isSuggesting}
+                            className="shrink-0"
+                          >
+                            {isSuggesting ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Wand2 className="h-4 w-4" />
+                            )}
+                            <span className="sr-only">Suggest Priority</span>
+                          </Button>
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
