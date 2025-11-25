@@ -502,7 +502,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                 </div>
                  {/* --- End Assignees Section --- */}
 
-
                  <FormField
                   control={form.control}
                   name="timeEstimate"
@@ -510,7 +509,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     <FormItem>
                       <FormLabel>{t('addtask.form.timeestimate')}</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} />
+                        <Input
+                          type="number"
+                          placeholder={t('addtask.form.timeestimate.placeholder')}
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)}
+                          value={field.value ?? ''}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -520,7 +525,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             </Form>
           </div>
         </ScrollArea>
-        <DialogFooter className="p-6 pt-0">
+        <DialogFooter className="p-6 pt-0 border-t">
           <Button type="submit" form="add-task-form">
             {t('addtask.form.create')}
           </Button>
