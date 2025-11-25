@@ -34,7 +34,7 @@ import { users, tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, LogIn, Mail, PauseCircle, PlayCircle, Repeat, Share, Tag, UserPlus, Users, Wand2, X } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Repeat, Share, Tag, UserPlus, Users, Wand2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -96,9 +96,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   // Time Tracking State
   const [elapsedTime, setElapsedTime] = React.useState(0);
   const [isRunning, setIsRunning] = React.useState(false);
-  const [timerStartTime, setTimerStartTime] = React.useState<Date | null>(null);
   const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
   const [timeTracked, setTimeTracked] = React.useState(0);
+  const [logNote, setLogNote] = React.useState('');
+  const [logDate, setLogDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -142,6 +143,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setTimeTracked(0);
     setElapsedTime(0);
     setIsRunning(false);
+    setLogNote('');
   };
   
   React.useEffect(() => {
@@ -157,35 +159,33 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }, [isRunning]);
   
   const handleStartStop = React.useCallback(() => {
-    if (isRunning) {
-      setIsRunning(false);
-    } else {
-      setIsRunning(true);
-      if (!timerStartTime) {
-        setTimerStartTime(new Date());
-      }
-    }
-  }, [isRunning, timerStartTime]);
+    setIsRunning(prev => !prev);
+  }, []);
 
   const handleLogTime = () => {
-    if (elapsedTime === 0 && !isRunning) return;
+    if (elapsedTime === 0) return;
 
-    const endTime = new Date();
+    const now = new Date();
+    const [year, month, day] = logDate.split('-').map(Number);
+    const startTime = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds() - elapsedTime);
+    const endTime = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
+
     const newLog: TimeLog = {
       id: `log-${Date.now()}`,
-      startTime: timerStartTime?.toISOString() || new Date().toISOString(),
+      startTime: startTime.toISOString(),
       endTime: endTime.toISOString(),
       duration: elapsedTime,
+      description: logNote,
     };
     
     setTimeLogs(prevLogs => [...prevLogs, newLog]);
     const newTimeTracked = timeTracked + (elapsedTime / 3600);
     setTimeTracked(parseFloat(newTimeTracked.toFixed(2)));
     
-    // Reset timer
+    // Reset timer and note
     setIsRunning(false);
     setElapsedTime(0);
-    setTimerStartTime(null);
+    setLogNote('');
   };
 
   const handleSelectUser = (user: (typeof users)[0]) => {
@@ -623,22 +623,35 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
                     </div>
                     <div className="space-y-2">
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>Progress</span>
-                        <span>{timeTracked}h / {timeEstimateValue}h</span>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Progress</span>
+                            <span>{timeTracked.toFixed(2)}h / {timeEstimateValue}h</span>
+                        </div>
+                        <Progress value={timeTrackingProgress} />
                     </div>
-                    <Progress value={timeTrackingProgress} />
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="log-note" className="flex items-center gap-2 text-xs"><Notebook className="h-3 w-3"/> Note</Label>
+                        <Textarea id="log-note" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What did you work on?" rows={2}/>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="log-date" className="flex items-center gap-2 text-xs"><Calendar className="h-3 w-3"/> Date</Label>
+                        <Input id="log-date" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} />
+                      </div>
                     </div>
+
                     <div className="grid grid-cols-2 gap-2">
-                    <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>
-                        {isRunning ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-                        {isRunning ? 'Pause Timer' : 'Start Timer'}
-                    </Button>
-                    <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}>
-                        <LogIn className="mr-2 h-4 w-4" />
-                        Log Time
-                    </Button>
+                      <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>
+                          {isRunning ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+                          {isRunning ? 'Pause Timer' : 'Start Timer'}
+                      </Button>
+                      <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}>
+                          <LogIn className="mr-2 h-4 w-4" />
+                          Log Time
+                      </Button>
                     </div>
+
                     {timeLogs.length > 0 && (
                         <div className="space-y-3 pt-4">
                             <h4 className='text-xs font-semibold text-muted-foreground'>History</h4>
@@ -647,7 +660,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                 <div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'>
                                     <div>
                                         <p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p>
-                                        <p className='text-muted-foreground'>{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p>
+                                        <p className='text-muted-foreground'>
+                                          {log.description ? `${log.description} - ` : ''}
+                                          {format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}
+                                        </p>
                                     </div>
                                     <div className='font-semibold'>
                                         {formatDistanceToNow(new Date(new Date().getTime() - log.duration * 1000), { includeSeconds: true, addSuffix: false })}
@@ -710,3 +726,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+  
