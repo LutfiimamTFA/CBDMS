@@ -184,7 +184,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             {t('addtask.description')}
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="overflow-y-auto">
+        <ScrollArea>
           <div className="p-6">
             <Form {...form}>
               <form
@@ -528,5 +528,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
 
     
