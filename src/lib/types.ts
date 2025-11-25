@@ -11,6 +11,11 @@ export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 
 export type Status = 'To Do' | 'Doing' | 'Done';
 
+export type Tag = {
+  label: string;
+  color: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -25,6 +30,7 @@ export type Task = {
   dependencies?: string[];
   subtasks?: Partial<Task>[];
   recurring?: string;
+  tags?: Tag[];
 };
 
 export type PriorityInfo = {

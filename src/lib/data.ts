@@ -1,4 +1,4 @@
-import type { User, Task } from './types';
+import type { User, Task, Tag } from './types';
 import { PlaceHolderImages } from './placeholder-images';
 import { addDays, formatISO } from 'date-fns';
 
@@ -15,6 +15,15 @@ export const currentUser: User = { id: 'user-5', name: 'Alex Doe', email: 'alex@
 
 const today = new Date();
 
+const tags: Record<string, Tag> = {
+  design: { label: 'Design', color: 'bg-pink-500' },
+  dev: { label: 'Development', color: 'bg-blue-500' },
+  docs: { label: 'Documentation', color: 'bg-green-500' },
+  research: { label: 'Research', color: 'bg-purple-500' },
+  bug: { label: 'Bug Fix', color: 'bg-red-500' },
+  feature: { label: 'Feature', color: 'bg-yellow-500' },
+}
+
 export const tasks: Task[] = [
   {
     id: 'task-1',
@@ -27,6 +36,7 @@ export const tasks: Task[] = [
     timeTracked: 6,
     description: 'Create a visually appealing and high-converting landing page for the upcoming Q3 marketing campaign. Focus on mobile-first design and clear calls-to-action.',
     subtasks: [{ id: 'sub-1', title: 'Create wireframes' }, { id: 'sub-2', title: 'Design mockups' }],
+    tags: [tags.design, tags.feature],
   },
   {
     id: 'task-2',
@@ -39,6 +49,7 @@ export const tasks: Task[] = [
     timeTracked: 10,
     description: 'Implement the full user authentication (login, registration, password reset) using JWT and OAuth2.',
     dependencies: ['task-3'],
+    tags: [tags.dev, tags.feature],
   },
   {
     id: 'task-3',
@@ -50,6 +61,7 @@ export const tasks: Task[] = [
     timeEstimate: 8,
     timeTracked: 8,
     description: 'Define and migrate the initial database schema for users, tasks, and projects tables.',
+    tags: [tags.dev],
   },
   {
     id: 'task-4',
@@ -60,6 +72,7 @@ export const tasks: Task[] = [
     dueDate: formatISO(addDays(today, 10)),
     timeEstimate: 12,
     description: 'Use Swagger/OpenAPI to document all v1 endpoints, including request/response examples.',
+    tags: [tags.docs],
   },
   {
     id: 'task-5',
@@ -70,6 +83,7 @@ export const tasks: Task[] = [
     dueDate: formatISO(addDays(today, 14)),
     timeEstimate: 20,
     description: 'Design and implement an interactive tutorial to guide new users through the main features of the application.',
+    tags: [tags.design, tags.dev, tags.feature],
   },
   {
     id: 'task-6',
@@ -80,6 +94,7 @@ export const tasks: Task[] = [
     dueDate: formatISO(addDays(today, 1)),
     timeEstimate: 4,
     description: 'User reports show that timestamps are not being correctly converted to their local timezone in the reports section.',
+    tags: [tags.bug],
   },
   {
     id: 'task-7',
@@ -91,6 +106,7 @@ export const tasks: Task[] = [
     timeEstimate: 8,
     timeTracked: 9,
     description: 'Analyze the features, pricing, and user experience of "TaskMaster Pro" to identify our competitive advantages and areas for improvement.',
+    tags: [tags.research],
   },
   {
     id: 'task-8',

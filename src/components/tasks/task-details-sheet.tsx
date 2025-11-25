@@ -34,7 +34,7 @@ import {
 import { users } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
-import { CalendarIcon, Clock, LogIn, PlayCircle, Users } from 'lucide-react';
+import { CalendarIcon, Clock, LogIn, PlayCircle, Tag, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -173,6 +173,19 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                   </FormItem>
                 )}
               />
+
+              {task.tags && task.tags.length > 0 && (
+                <div className="space-y-2">
+                  <FormLabel className="flex items-center gap-2"><Tag className="w-4 h-4"/>Tags</FormLabel>
+                  <div className="flex flex-wrap gap-2">
+                    {task.tags.map((tag) => (
+                      <div key={tag.label} className={`px-2.5 py-1 text-sm font-medium text-white rounded-md ${tag.color}`}>
+                        {tag.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
                 
               <div className="space-y-4">
                 <FormLabel className="flex items-center gap-2"><Users className="w-4 h-4"/>{t('addtask.form.teammembers')}</FormLabel>

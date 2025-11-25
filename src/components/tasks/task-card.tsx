@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TaskDetailsSheet } from './task-details-sheet';
 import { Progress } from '../ui/progress';
 import { useI18n } from '@/context/i18n-provider';
+import { Badge } from '@/components/ui/badge';
 
 interface TaskCardProps {
   task: Task;
@@ -35,19 +36,29 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
             className="cursor-pointer transition-shadow duration-200 hover:shadow-lg"
         >
             <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-                <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>{t(priorityTranslationKey)}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-            </div>
+              <div className="flex items-start justify-between">
+                  <h3 className="font-headline text-base font-semibold leading-tight pr-2">{task.title}</h3>
+                  <TooltipProvider>
+                      <Tooltip>
+                          <TooltipTrigger asChild>
+                              <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                              <p>{t(priorityTranslationKey)}</p>
+                          </TooltipContent>
+                      </Tooltip>
+                  </TooltipProvider>
+              </div>
+
+              {task.tags && task.tags.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {task.tags.map((tag) => (
+                    <div key={tag.label} className={`px-2 py-0.5 text-xs font-medium text-white rounded-full ${tag.color}`}>
+                      {tag.label}
+                    </div>
+                  ))}
+                </div>
+              )}
             
             {(task.timeTracked !== undefined && task.timeEstimate !== undefined) && (
                 <div className="mt-3 space-y-1">
