@@ -34,10 +34,11 @@ import {
 import { users } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
-import { CalendarIcon, Clock, Users } from 'lucide-react';
+import { CalendarIcon, Clock, LogIn, PlayCircle, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
+import { Progress } from '../ui/progress';
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -70,6 +71,10 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
     console.log('Updated Task Data:', data);
     setOpen(false);
   };
+  
+  const timeTrackingProgress = task.timeEstimate && task.timeTracked
+    ? (task.timeTracked / task.timeEstimate) * 100
+    : 0;
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -189,24 +194,39 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                 </Button>
               </div>
 
-               <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-4 rounded-lg border p-4">
+                <h3 className="text-sm font-medium flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  Time Tracking
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Progress</span>
+                    <span>{task.timeTracked || 0}h / {task.timeEstimate || 0}h</span>
+                  </div>
+                  <Progress value={timeTrackingProgress} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                   <Button variant="outline">
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      Start Timer
+                   </Button>
+                   <Button variant="outline">
+                      <LogIn className="mr-2 h-4 w-4" />
+                      Log Time
+                   </Button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  View history
+                </div>
+              </div>
+
+
+               <div className="grid grid-cols-1 gap-6">
                 <FormItem>
                     <FormLabel className="flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> Due Date</FormLabel>
                     <Input type="date" defaultValue={task.dueDate ? task.dueDate.split('T')[0] : ''} />
                 </FormItem>
-                 <FormField
-                  control={form.control}
-                  name="timeEstimate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex items-center gap-2"><Clock className="w-4 h-4" /> Time Estimate (hours)</FormLabel>
-                      <FormControl>
-                        <Input type="number" placeholder="e.g. 8" {...field} onChange={event => field.onChange(+event.target.value)} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                </div>
 
             </div>
