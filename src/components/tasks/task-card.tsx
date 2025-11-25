@@ -43,7 +43,7 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
                             <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
                         </TooltipTrigger>
                         <TooltipContent>
-                            <p>{t(priorityTranslationKey)} Priority</p>
+                            <p>{t(priorityTranslationKey)}</p>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
