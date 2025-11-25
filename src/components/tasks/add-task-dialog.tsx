@@ -33,7 +33,7 @@ import { users } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Mail, Share, UserPlus, Users, X } from 'lucide-react';
+import { Copy, Mail, Share, UserPlus, Users, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -195,7 +195,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     Anggota Tim
                   </h3>
                   
-                   <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3">
+                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 p-3">
                      <div className="flex items-center gap-3">
                         <Share className="h-8 w-8 text-primary" />
                         <div>
@@ -207,18 +207,24 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           </p>
                         </div>
                      </div>
-                     <Select
-                        defaultValue={shareSetting}
-                        onValueChange={(value: ShareSetting) => setShareSetting(value)}
-                      >
-                        <SelectTrigger className="h-8 w-[100px] text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="public">Publik</SelectItem>
-                          <SelectItem value="private">Privat</SelectItem>
-                        </SelectContent>
-                      </Select>
+                     <div className="flex items-center gap-2">
+                        <Select
+                          defaultValue={shareSetting}
+                          onValueChange={(value: ShareSetting) => setShareSetting(value)}
+                        >
+                          <SelectTrigger className="h-8 w-[100px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="public">Publik</SelectItem>
+                            <SelectItem value="private">Privat</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button variant="outline" size="sm" className="h-8" onClick={() => navigator.clipboard.writeText(window.location.href)}>
+                            <Copy className="h-3 w-3 mr-2" />
+                            Salin
+                        </Button>
+                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
