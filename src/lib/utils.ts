@@ -21,25 +21,25 @@ export const priorityInfo: Record<Priority, PriorityInfo> = {
     label: 'Urgent',
     value: 'Urgent',
     icon: ArrowUpCircle,
-    color: 'text-red-500',
+    color: 'text-red-500 dark:text-red-400',
   },
   High: {
     label: 'High',
     value: 'High',
     icon: ArrowUp,
-    color: 'text-orange-500',
+    color: 'text-orange-500 dark:text-orange-400',
   },
   Normal: {
     label: 'Normal',
     value: 'Normal',
     icon: Minus,
-    color: 'text-blue-500',
+    color: 'text-blue-500 dark:text-blue-400',
   },
   Low: {
     label: 'Low',
     value: 'Low',
     icon: ArrowDown,
-    color: 'text-gray-500',
+    color: 'text-gray-500 dark:text-gray-400',
   },
 };
 

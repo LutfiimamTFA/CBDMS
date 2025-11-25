@@ -1,5 +1,6 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type React from 'react';
+import { ThemeSwitcher } from '@/components/theme-switcher';
 
 interface HeaderProps {
   title: string;
@@ -15,7 +16,10 @@ export function Header({ title, actions }: HeaderProps) {
           {title}
         </h1>
       </div>
-      {actions && <div className="flex items-center gap-4">{actions}</div>}
+      <div className="flex items-center gap-4">
+        {actions}
+        <ThemeSwitcher />
+      </div>
     </header>
   );
 }
