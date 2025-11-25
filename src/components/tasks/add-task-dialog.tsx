@@ -104,6 +104,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       recurring: 'never',
       startDate: '',
       dueDate: '',
+      timeEstimate: undefined,
     },
   });
 
@@ -528,7 +529,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    
 
     
