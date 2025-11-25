@@ -33,7 +33,7 @@ import { users } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Copy, Mail, Share, UserPlus, Users, X } from 'lucide-react';
+import { Calendar, Copy, Mail, Repeat, Share, UserPlus, Users, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -43,6 +43,14 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu';
 import { Label } from '../ui/label';
+import {
+  addDays,
+  endOfWeek,
+  format,
+  nextSaturday,
+  nextSunday,
+  startOfWeek,
+} from 'date-fns';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -50,12 +58,25 @@ const taskSchema = z.object({
   priority: z.enum(['Urgent', 'High', 'Normal', 'Low']),
   assignees: z.array(z.string()).optional(),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
+  startDate: z.string().optional(),
   dueDate: z.string().optional(),
+  recurring: z.string().optional(),
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
 
 type ShareSetting = 'public' | 'private';
+
+const quickDateOptions = [
+    { label: 'Today', getValue: () => new Date() },
+    { label: 'Tomorrow', getValue: () => addDays(new Date(), 1) },
+    { label: 'This weekend', getValue: () => nextSaturday(new Date()) },
+    { label: 'Next week', getValue: () => addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 7) },
+    { label: 'Next weekend', getValue: () => addDays(nextSaturday(new Date()), 7) },
+    { label: '2 weeks', getValue: () => addDays(new Date(), 14) },
+    { label: '4 weeks', getValue: () => addDays(new Date(), 28) },
+];
+
 
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
@@ -69,6 +90,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       status: 'To Do',
       priority: 'Normal',
       assignees: [],
+      recurring: 'never',
     },
   });
 
@@ -92,6 +114,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setSelectedUsers(selectedUsers.filter((u) => u.id !== userId));
      const currentAssignees = form.getValues('assignees') || [];
      form.setValue('assignees', currentAssignees.filter(id => id !== userId));
+  };
+  
+  const setDateValue = (field: 'startDate' | 'dueDate', date: Date) => {
+    form.setValue(field, format(date, 'yyyy-MM-dd'));
   };
 
   return (
@@ -188,6 +214,86 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   />
                 </div>
 
+                <div className="space-y-4 rounded-lg border p-4">
+                    <h3 className="text-sm font-medium flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Dates
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                        control={form.control}
+                        name="startDate"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Start Date</FormLabel>
+                            <FormControl>
+                                <Input type="date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                        <FormField
+                        control={form.control}
+                        name="dueDate"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Due Date</FormLabel>
+                            <FormControl>
+                                <Input type="date" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
+                    </div>
+                     <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Quick Select Due Date</Label>
+                        <div className="flex flex-wrap gap-2">
+                        {quickDateOptions.map(option => (
+                            <Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>
+                                {option.label}
+                            </Button>
+                        ))}
+                         <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>
+                            Clear
+                        </Button>
+                        </div>
+                    </div>
+                    <Separator />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Button type="button" variant="outline">
+                            <svg className="mr-2" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.25 1.75H11.375V0.875H9.625V1.75H4.375V0.875H2.625V1.75H1.75C1.29688 1.75 1.00094 2.05188 1.00094 2.5L1 12.25C1 12.7 1.29688 13 1.75 13H12.25C12.7031 13 13 12.7 13 12.25V2.5C13 2.05188 12.7031 1.75 12.25 1.75ZM11.375 11.375H2.625V4.375H11.375V11.375Z" fill="#4285F4"/><path d="M4.375 6.125H6.125V7.875H4.375V6.125Z" fill="#34A853"/><path d="M7 6.125H8.75V7.875H7V6.125Z" fill="#FBBC05"/><path d="M9.625 6.125H11.375V7.875H9.625V6.125Z" fill="#EA4335"/><path d="M4.375 8.75H6.125V10.5H4.375V8.75Z" fill="#4285F4"/><path d="M7 8.75H8.75V10.5H7V8.75Z" fill="#34A853"/></svg>
+                            Add to Google Calendar
+                        </Button>
+                        <FormField
+                            control={form.control}
+                            name="recurring"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl>
+                                        <Button variant="outline" asChild className="w-full">
+                                            <SelectTrigger>
+                                                <Repeat className="mr-2" />
+                                                <SelectValue placeholder="Set recurring task" />
+                                            </SelectTrigger>
+                                        </Button>
+                                    </FormControl>
+                                    <SelectContent>
+                                        <SelectItem value="never">Never</SelectItem>
+                                        <SelectItem value="daily">Daily</SelectItem>
+                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                    </SelectContent>
+                                    </Select>
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                </div>
+
+
                 {/* --- Assignees / Members Section --- */}
                 <div className="space-y-4 rounded-lg border p-4">
                   <h3 className="text-sm font-medium flex items-center gap-2">
@@ -222,7 +328,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </Select>
                         <Button variant="outline" size="sm" className="h-8" onClick={() => navigator.clipboard.writeText(window.location.href)}>
                             <Copy className="h-3 w-3 mr-2" />
-                            Copy
+                            Copy link
                         </Button>
                      </div>
                   </div>
@@ -314,19 +420,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       <FormLabel>Time Estimate (hours)</FormLabel>
                       <FormControl>
                         <Input type="number" placeholder="e.g. 8" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="dueDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Due Date</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -24,6 +24,7 @@ export type Task = {
   timeTracked?: number; 
   dependencies?: string[];
   subtasks?: Partial<Task>[];
+  recurring?: string;
 };
 
 export type PriorityInfo = {
