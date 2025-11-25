@@ -100,6 +100,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [timeTracked, setTimeTracked] = React.useState(0);
   const [logNote, setLogNote] = React.useState('');
   const [logDate, setLogDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
+  const [currentTime, setCurrentTime] = React.useState(new Date());
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -157,6 +158,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       if (interval) clearInterval(interval);
     };
   }, [isRunning]);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
   
   const handleStartStop = React.useCallback(() => {
     setIsRunning(prev => !prev);
@@ -509,7 +517,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           </SelectContent>
                         </Select>
                         <Button variant="outline" size="sm" className="h-8" onClick={() => navigator.clipboard.writeText(window.location.href)}>
-                            <Copy className="h-3 w-3 mr-2" />
+                            <Copy className="mr-2 h-3 w-3" />
                             {t('addtask.form.copylink')}
                         </Button>
                      </div>
@@ -620,7 +628,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <Clock className="h-4 w-4" />
                             Time Tracking
                         </h3>
-                        <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
+                        <div className="flex items-center gap-4">
+                          <div className='font-mono text-sm text-muted-foreground'>{format(currentTime, 'HH:mm:ss')}</div>
+                          <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
+                        </div>
                     </div>
                     <div className="space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
@@ -727,4 +738,4 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   );
 }
 
-  
+    
