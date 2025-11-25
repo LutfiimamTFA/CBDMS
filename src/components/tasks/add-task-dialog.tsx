@@ -192,18 +192,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                 <div className="space-y-4 rounded-lg border p-4">
                   <h3 className="text-sm font-medium flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    Anggota Tim
+                    Team Members
                   </h3>
                   
                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 p-3">
                      <div className="flex items-center gap-3">
                         <Share className="h-8 w-8 text-primary" />
                         <div>
-                          <p className="text-sm font-medium">Bagikan Tautan</p>
+                          <p className="text-sm font-medium">Share Link</p>
                           <p className="text-xs text-muted-foreground">
                             {shareSetting === 'public'
-                              ? 'Siapa pun dengan tautan dapat melihat'
-                              : 'Hanya anggota yang bisa mengakses'}
+                              ? 'Anyone with the link can view'
+                              : 'Only members can access'}
                           </p>
                         </div>
                      </div>
@@ -216,13 +216,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="public">Publik</SelectItem>
-                            <SelectItem value="private">Privat</SelectItem>
+                            <SelectItem value="public">Public</SelectItem>
+                            <SelectItem value="private">Private</SelectItem>
                           </SelectContent>
                         </Select>
                         <Button variant="outline" size="sm" className="h-8" onClick={() => navigator.clipboard.writeText(window.location.href)}>
                             <Copy className="h-3 w-3 mr-2" />
-                            Salin
+                            Copy
                         </Button>
                      </div>
                   </div>
@@ -231,25 +231,25 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     <Mail className="h-4 w-4 text-muted-foreground" />
                     <Input
                       type="email"
-                      placeholder="Undang dengan email..."
+                      placeholder="Invite with email..."
                       className="flex-1"
                     />
                     <Button variant="outline" size="sm">
                       <UserPlus className="mr-2 h-4 w-4" />
-                      Undang
+                      Invite
                     </Button>
                   </div>
                   <div className="relative">
                     <Separator className="my-3" />
                     <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-                      ATAU
+                      OR
                     </span>
                   </div>
                   
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="w-full justify-start text-muted-foreground">
-                        Pilih anggota tim...
+                        Select team members...
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
@@ -270,7 +270,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
                   {selectedUsers.length > 0 && (
                     <div className="space-y-2">
-                      <Label>Anggota Terpilih</Label>
+                      <Label>Selected Members</Label>
                       {selectedUsers.map((user) => (
                         <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
                           <div className="flex items-center gap-2">
@@ -287,10 +287,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="full-access">Akses Penuh</SelectItem>
-                                  <SelectItem value="edit">Bisa Edit</SelectItem>
-                                  <SelectItem value="comment">Bisa Komentar</SelectItem>
-                                  <SelectItem value="view">Lihat Saja</SelectItem>
+                                  <SelectItem value="full-access">Full Access</SelectItem>
+                                  <SelectItem value="edit">Can Edit</SelectItem>
+                                  <SelectItem value="comment">Can Comment</SelectItem>
+                                  <SelectItem value="view">View Only</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
