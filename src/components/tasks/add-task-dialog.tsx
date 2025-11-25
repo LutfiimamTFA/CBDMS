@@ -34,7 +34,7 @@ import { users, tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Text, Hash, Calendar as CalendarIcon, Type, List } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -78,11 +78,14 @@ type TaskFormValues = z.infer<typeof taskSchema>;
 
 type ShareSetting = 'public' | 'private';
 
+type CustomFieldType = 'Text' | 'Number' | 'Date' | 'Dropdown';
 type CustomField = {
   id: number;
   name: string;
+  type: CustomFieldType;
   value: string;
 };
+
 
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
@@ -134,10 +137,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const onSubmit = (data: TaskFormValues) => {
     const customFieldsData = customFields.reduce((acc, field) => {
       if (field.name) {
-        acc[field.name] = field.value;
+        acc[field.name] = { type: field.type, value: field.value };
       }
       return acc;
-    }, {} as Record<string, string>);
+    }, {} as Record<string, { type: CustomFieldType; value: string }>);
 
     console.log('New Task Data:', {
         ...data,
@@ -220,8 +223,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     form.setValue(field, format(date, 'yyyy-MM-dd'));
   };
 
-  const handleAddCustomField = () => {
-    setCustomFields([...customFields, { id: Date.now(), name: '', value: '' }]);
+  const handleAddCustomField = (type: CustomFieldType) => {
+    setCustomFields([...customFields, { id: Date.now(), name: '', type, value: '' }]);
   };
 
   const handleCustomFieldChange = (id: number, field: 'name' | 'value', fieldValue: string) => {
@@ -230,6 +233,20 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const handleRemoveCustomField = (id: number) => {
     setCustomFields(customFields.filter(cf => cf.id !== id));
+  };
+
+  const renderCustomFieldInput = (field: CustomField) => {
+    switch (field.type) {
+      case 'Number':
+        return <Input type="number" placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
+      case 'Date':
+        return <Input type="date" placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
+      case 'Dropdown':
+          return <Input placeholder="Value (comma-separated)" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
+      case 'Text':
+      default:
+        return <Input placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
+    }
   };
 
   const recurringValue = form.watch('recurring');
@@ -731,12 +748,36 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
                 {/* --- Custom Fields Section --- */}
                 <div className="space-y-4 rounded-lg border p-4">
-                    <h3 className="text-sm font-medium flex items-center gap-2">
-                        <Plus className="h-4 w-4" />
-                        Custom Fields
-                    </h3>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-medium flex items-center gap-2">
+                            <Plus className="h-4 w-4" />
+                            Custom Fields
+                        </h3>
+                         <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Add Field
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                                <DropdownMenuItem onSelect={() => handleAddCustomField('Text')}>
+                                    <Type className="mr-2 h-4 w-4" /> Text
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleAddCustomField('Number')}>
+                                    <Hash className="mr-2 h-4 w-4" /> Number
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleAddCustomField('Date')}>
+                                    <CalendarIcon className="mr-2 h-4 w-4" /> Date
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => handleAddCustomField('Dropdown')}>
+                                    <List className="mr-2 h-4 w-4" /> Dropdown
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                     <div className="space-y-2">
-                      {customFields.map((field, index) => (
+                      {customFields.map((field) => (
                         <div key={field.id} className="flex items-center gap-2">
                           <Input
                             placeholder="Field Name"
@@ -744,22 +785,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             onChange={(e) => handleCustomFieldChange(field.id, 'name', e.target.value)}
                             className="flex-1"
                           />
-                          <Input
-                            placeholder="Field Value"
-                            value={field.value}
-                            onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)}
-                            className="flex-1"
-                          />
+                          {renderCustomFieldInput(field)}
                           <Button variant="ghost" size="icon" onClick={() => handleRemoveCustomField(field.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </div>
                       ))}
                     </div>
-                    <Button type="button" variant="outline" onClick={handleAddCustomField} className="w-full">
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Custom Field
-                    </Button>
                 </div>
 
 
