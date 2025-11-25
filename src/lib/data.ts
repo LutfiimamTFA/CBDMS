@@ -38,8 +38,8 @@ export const tasks: Task[] = [
     subtasks: [{ id: 'sub-1', title: 'Create wireframes' }, { id: 'sub-2', title: 'Design mockups' }],
     tags: [tags.design, tags.feature],
     timeLogs: [
-      { id: 'log-1', startTime: formatISO(subHours(today, 4)), endTime: formatISO(subHours(today, 2)), duration: 7200 },
-      { id: 'log-2', startTime: formatISO(subHours(today, 8)), endTime: formatISO(subHours(today, 7)), duration: 3600 },
+      { id: 'log-1', startTime: subHours(today, 4).toISOString(), endTime: subHours(today, 2).toISOString(), duration: 7200 },
+      { id: 'log-2', startTime: subHours(today, 8).toISOString(), endTime: subHours(today, 7).toISOString(), duration: 3600 },
     ]
   },
   {
@@ -67,6 +67,7 @@ export const tasks: Task[] = [
     timeTracked: 8,
     description: 'Define and migrate the initial database schema for users, tasks, and projects tables.',
     tags: [tags.dev],
+    timeLogs: [],
   },
   {
     id: 'task-4',
@@ -79,6 +80,7 @@ export const tasks: Task[] = [
     timeTracked: 0,
     description: 'Use Swagger/OpenAPI to document all v1 endpoints, including request/response examples.',
     tags: [tags.docs],
+    timeLogs: [],
   },
   {
     id: 'task-5',
@@ -91,6 +93,7 @@ export const tasks: Task[] = [
     timeTracked: 0,
     description: 'Design and implement an interactive tutorial to guide new users through the main features of the application.',
     tags: [tags.design, tags.dev, tags.feature],
+    timeLogs: [],
   },
   {
     id: 'task-6',
@@ -103,6 +106,7 @@ export const tasks: Task[] = [
     timeTracked: 0,
     description: 'User reports show that timestamps are not being correctly converted to their local timezone in the reports section.',
     tags: [tags.bug],
+    timeLogs: [],
   },
   {
     id: 'task-7',
@@ -115,6 +119,7 @@ export const tasks: Task[] = [
     timeTracked: 9,
     description: 'Analyze the features, pricing, and user experience of "TaskMaster Pro" to identify our competitive advantages and areas for improvement.',
     tags: [tags.research],
+    timeLogs: [],
   },
   {
     id: 'task-8',
@@ -126,5 +131,8 @@ export const tasks: Task[] = [
     timeEstimate: 10,
     timeTracked: 0,
     description: 'Organize the annual team offsite, including location scouting, activity planning, and budget management.',
+    timeLogs: [],
   },
 ];
+
+    

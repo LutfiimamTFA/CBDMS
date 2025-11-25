@@ -316,7 +316,7 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
                       {isRunning ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}
                       {isRunning ? 'Pause Timer' : 'Start Timer'}
                    </Button>
-                   <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0}>
+                   <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}>
                       <LogIn className="mr-2 h-4 w-4" />
                       Log Time
                    </Button>
@@ -332,7 +332,7 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
                                     <p className='text-muted-foreground'>{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p>
                                 </div>
                                 <div className='font-semibold'>
-                                    {formatDistanceToNow(new Date().setSeconds(new Date().getSeconds() - log.duration), { includeSeconds: true, addSuffix: false })}
+                                    {formatDistanceToNow(new Date(new Date().getTime() - log.duration * 1000), { includeSeconds: true, addSuffix: false })}
                                 </div>
                             </div>
                         ))}
@@ -350,3 +350,5 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
     </Sheet>
   );
 }
+
+    
