@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -113,7 +113,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <SelectContent>
                             {Object.values(statusInfo).map((s) => (
                               <SelectItem key={s.value} value={s.value}>
-                                {s.label}
+                                <div className="flex items-center gap-2">
+                                  <s.icon className="h-4 w-4 text-muted-foreground" />
+                                  {s.label}
+                                </div>
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -140,7 +143,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <SelectContent>
                             {Object.values(priorityInfo).map((p) => (
                               <SelectItem key={p.value} value={p.value}>
-                                {p.label}
+                                <div className="flex items-center gap-2">
+                                  <p.icon className={`h-4 w-4 ${p.color}`} />
+                                  {p.label}
+                                </div>
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -163,7 +169,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select an assignee" />
-                          </SelectTrigger>
+                          </Trigger>
                         </FormControl>
                         <SelectContent>
                           {users.map((user) => (
