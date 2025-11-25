@@ -18,9 +18,12 @@ import {
   FileText,
   Settings,
   ClipboardList,
+  Plus,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
+import { AddTaskDialog } from '@/components/tasks/add-task-dialog';
+import { Button } from '@/components/ui/button';
 
 export default function MainLayout({
   children,
@@ -43,6 +46,16 @@ export default function MainLayout({
           <Logo />
         </SidebarHeader>
         <SidebarContent>
+           <div className="p-2">
+            <AddTaskDialog>
+              <SidebarMenuButton asChild tooltip="Create Task" className="w-full justify-center">
+                <Button>
+                  <Plus />
+                  <span>Create Task</span>
+                </Button>
+              </SidebarMenuButton>
+            </AddTaskDialog>
+          </div>
           <SidebarMenu>
             {navItems.map((item) => (
               <SidebarMenuItem key={item.href}>
