@@ -185,8 +185,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             {t('addtask.description')}
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea>
-          <div className="p-6">
+        <ScrollArea className="px-6">
+          <div className="pt-6">
             <Form {...form}>
               <form
                 id="add-task-form"
