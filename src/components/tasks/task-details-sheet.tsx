@@ -350,5 +350,3 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
     </Sheet>
   );
 }
-
-    

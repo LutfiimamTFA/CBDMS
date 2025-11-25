@@ -134,5 +134,3 @@ export const tasks: Task[] = [
     timeLogs: [],
   },
 ];
-
-    
