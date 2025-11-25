@@ -33,12 +33,22 @@ import { users } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
+import { Mail, Share, UserPlus, Users, X } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Separator } from '../ui/separator';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu';
+import { Label } from '../ui/label';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Normal', 'Low']),
-  assignee: z.string().optional(),
+  assignees: z.array(z.string()).optional(),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
   dueDate: z.string().optional(),
 });
@@ -47,26 +57,44 @@ type TaskFormValues = z.infer<typeof taskSchema>;
 
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
+  const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
+
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
     defaultValues: {
       title: '',
       status: 'To Do',
       priority: 'Normal',
+      assignees: [],
     },
   });
 
   const onSubmit = (data: TaskFormValues) => {
-    console.log('New Task Data:', data);
+    console.log('New Task Data:', data, 'Selected Users:', selectedUsers);
     // Here you would typically call a server action or API to create the task
     setOpen(false);
     form.reset();
+    setSelectedUsers([]);
+  };
+
+  const handleSelectUser = (user: (typeof users)[0]) => {
+    if (!selectedUsers.find((u) => u.id === user.id)) {
+      setSelectedUsers([...selectedUsers, user]);
+      const currentAssignees = form.getValues('assignees') || [];
+      form.setValue('assignees', [...currentAssignees, user.id]);
+    }
+  };
+
+  const handleRemoveUser = (userId: string) => {
+    setSelectedUsers(selectedUsers.filter((u) => u.id !== userId));
+     const currentAssignees = form.getValues('assignees') || [];
+     form.setValue('assignees', currentAssignees.filter(id => id !== userId));
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[425px] grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+      <DialogContent className="sm:max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>Add New Task</DialogTitle>
           <DialogDescription>
@@ -156,33 +184,108 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     )}
                   />
                 </div>
-                <FormField
-                  control={form.control}
-                  name="assignee"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Assignee</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select an assignee" />
-                          </SelectTrigger>
-                        </FormControl>
+
+                {/* --- Assignees / Members Section --- */}
+                <div className="space-y-4 rounded-lg border p-4">
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Assignees / Members
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="email"
+                      placeholder="Invite friends by email..."
+                      className="flex-1"
+                    />
+                    <Button variant="outline" size="sm">
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Invite
+                    </Button>
+                  </div>
+                  <div className="relative">
+                    <Separator className="my-3" />
+                    <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
+                      OR
+                    </span>
+                  </div>
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="w-full justify-start text-muted-foreground">
+                        Select a team member...
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                      {users.map((user) => (
+                        <DropdownMenuItem
+                          key={user.id}
+                          onSelect={() => handleSelectUser(user)}
+                        >
+                          <Avatar className="h-6 w-6 mr-2">
+                              <AvatarImage src={user.avatarUrl} alt={user.name} />
+                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          <span>{user.name}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  {selectedUsers.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Selected Members</Label>
+                      {selectedUsers.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-7 w-7">
+                                <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm font-medium">{user.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Select defaultValue="edit">
+                              <SelectTrigger className="h-8 w-[100px] text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="edit">Can Edit</SelectItem>
+                                <SelectItem value="comment">Can Comment</SelectItem>
+                                <SelectItem value="view">Can View</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3 mt-4">
+                     <div className="flex items-center gap-3">
+                        <Share className="h-8 w-8 text-primary" />
+                        <div>
+                          <p className="text-sm font-medium">Share link</p>
+                          <p className="text-xs text-muted-foreground">Anyone with the link can view</p>
+                        </div>
+                     </div>
+                     <Select defaultValue="public">
+                        <SelectTrigger className="h-8 w-[100px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
-                          {users.map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                              {user.name}
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="public">Public</SelectItem>
+                          <SelectItem value="private">Private</SelectItem>
                         </SelectContent>
                       </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  </div>
+                </div>
+                 {/* --- End Assignees Section --- */}
+
+
                  <FormField
                   control={form.control}
                   name="timeEstimate"
