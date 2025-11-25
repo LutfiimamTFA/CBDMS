@@ -13,19 +13,25 @@ import {
   SidebarFooter,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LayoutDashboard, FileText, Settings, ChevronLast } from 'lucide-react';
+import {
+  LayoutDashboard,
+  FileText,
+  Settings,
+  ClipboardList,
+} from 'lucide-react';
 import { Logo } from '@/components/logo';
-import { currentUser } from '@/lib/data';
-import { cn } from '@/lib/utils';
-import { UserNav } from '@/components/layout/user-nav';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { href: '/tasks', icon: ClipboardList, label: 'Tasks' },
   { href: '/reports', icon: FileText, label: 'Reports' },
 ];
 
-export default function MainLayout({ children }: { children: React.ReactNode }) {
+export default function MainLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
 
   return (
@@ -40,7 +46,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
               <SidebarMenuItem key={item.href}>
                 <Link href={item.href}>
                   <SidebarMenuButton
-                    isActive={pathname === item.href}
+                    isActive={pathname.startsWith(item.href)}
                     tooltip={item.label}
                   >
                     <item.icon />
