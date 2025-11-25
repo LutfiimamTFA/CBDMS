@@ -55,9 +55,12 @@ const taskSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskSchema>;
 
+type ShareSetting = 'public' | 'private';
+
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
+  const [shareSetting, setShareSetting] = React.useState<ShareSetting>('public');
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -191,6 +194,33 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     <Users className="h-4 w-4" />
                     Anggota Tim
                   </h3>
+                  
+                   <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3">
+                     <div className="flex items-center gap-3">
+                        <Share className="h-8 w-8 text-primary" />
+                        <div>
+                          <p className="text-sm font-medium">Bagikan Tautan</p>
+                          <p className="text-xs text-muted-foreground">
+                            {shareSetting === 'public'
+                              ? 'Siapa pun dengan tautan dapat melihat'
+                              : 'Hanya anggota yang bisa mengakses'}
+                          </p>
+                        </div>
+                     </div>
+                     <Select
+                        defaultValue={shareSetting}
+                        onValueChange={(value: ShareSetting) => setShareSetting(value)}
+                      >
+                        <SelectTrigger className="h-8 w-[100px] text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="public">Publik</SelectItem>
+                          <SelectItem value="private">Privat</SelectItem>
+                        </SelectContent>
+                      </Select>
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-muted-foreground" />
                     <Input
@@ -245,17 +275,19 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <span className="text-sm font-medium">{user.name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Select defaultValue="full-access">
-                              <SelectTrigger className="h-8 w-[120px] text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="full-access">Akses Penuh</SelectItem>
-                                <SelectItem value="edit">Bisa Edit</SelectItem>
-                                <SelectItem value="comment">Bisa Komentar</SelectItem>
-                                <SelectItem value="view">Lihat Saja</SelectItem>
-                              </SelectContent>
-                            </Select>
+                            {shareSetting === 'private' && (
+                              <Select defaultValue="full-access">
+                                <SelectTrigger className="h-8 w-[120px] text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="full-access">Akses Penuh</SelectItem>
+                                  <SelectItem value="edit">Bisa Edit</SelectItem>
+                                  <SelectItem value="comment">Bisa Komentar</SelectItem>
+                                  <SelectItem value="view">Lihat Saja</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            )}
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}>
                               <X className="h-4 w-4" />
                             </Button>
@@ -264,25 +296,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       ))}
                     </div>
                   )}
-
-                  <div className="flex items-center justify-between rounded-lg bg-secondary/50 p-3 mt-4">
-                     <div className="flex items-center gap-3">
-                        <Share className="h-8 w-8 text-primary" />
-                        <div>
-                          <p className="text-sm font-medium">Bagikan Tautan</p>
-                          <p className="text-xs text-muted-foreground">Siapa pun dengan tautan dapat melihat</p>
-                        </div>
-                     </div>
-                     <Select defaultValue="public">
-                        <SelectTrigger className="h-8 w-[100px] text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="public">Publik</SelectItem>
-                          <SelectItem value="private">Privat</SelectItem>
-                        </SelectContent>
-                      </Select>
-                  </div>
                 </div>
                  {/* --- End Assignees Section --- */}
 
