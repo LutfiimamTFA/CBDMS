@@ -1,6 +1,6 @@
 export const languages = {
-  en: { code: 'en', name: 'English', flag: '🇬🇧' },
-  id: { code: 'id', name: 'Indonesia', flag: '🇮🇩' },
+  en: { code: 'en', name: 'English', countryCode: 'gb' },
+  id: { code: 'id', name: 'Indonesia', countryCode: 'id' },
 };
 
 export const defaultLang = 'en';

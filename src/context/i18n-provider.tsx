@@ -6,8 +6,14 @@ import { languages, defaultLang, ui } from '@/lib/i18n';
 type Lang = keyof typeof ui;
 type Key = keyof (typeof ui)[Lang];
 
+type Language = {
+  code: string;
+  name: string;
+  countryCode: string;
+};
+
 interface I18nContextType {
-  language: typeof languages[Lang];
+  language: Language;
   setLanguage: (lang: Lang) => void;
   t: (key: Key) => string;
 }
