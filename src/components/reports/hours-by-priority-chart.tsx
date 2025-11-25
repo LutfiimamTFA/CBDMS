@@ -7,29 +7,18 @@ import {
   ChartTooltipContent,
   ChartConfig,
 } from '@/components/ui/chart';
-import { Bar, BarChart, CartesianGrid, XAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, Cell } from 'recharts';
+import { priorityInfo } from '@/lib/utils';
 
 const chartConfig = {
   hours: {
     label: 'Hours',
   },
-  Urgent: {
-    label: 'Urgent',
-    color: 'hsl(var(--chart-5))',
-  },
-  High: {
-    label: 'High',
-    color: 'hsl(var(--chart-4))',
-  },
-  Normal: {
-    label: 'Normal',
-    color: 'hsl(var(--chart-1))',
-  },
-  Low: {
-    label: 'Low',
-    color: 'hsl(var(--chart-2))',
-  },
+  ...Object.fromEntries(
+    Object.values(priorityInfo).map((p) => [p.value, { label: p.label, color: `hsl(var(--${p.value.toLowerCase()}))` }])
+  )
 } satisfies ChartConfig;
+
 
 export function HoursByPriorityChart() {
   const data = (['Urgent', 'High', 'Normal', 'Low'] as Priority[]).map((priority) => ({
@@ -37,7 +26,15 @@ export function HoursByPriorityChart() {
     hours: tasks
       .filter((task) => task.priority === priority)
       .reduce((acc, task) => acc + (task.timeTracked || 0), 0),
+    fill: priorityInfo[priority].color
   }));
+
+  const priorityColors: Record<Priority, string> = {
+    Urgent: 'hsl(var(--chart-5))',
+    High: 'hsl(var(--chart-4))',
+    Normal: 'hsl(var(--chart-1))',
+    Low: 'hsl(var(--chart-2))',
+  }
 
   return (
     <div className="h-[250px] w-full">
@@ -60,11 +57,7 @@ export function HoursByPriorityChart() {
             barSize={40}
           >
              {data.map((entry) => (
-              <Bar
-                key={entry.priority}
-                dataKey="hours"
-                fill={chartConfig[entry.priority as keyof typeof chartConfig]?.color}
-              />
+              <Cell key={`cell-${entry.priority}`} fill={priorityColors[entry.priority]} />
             ))}
           </Bar>
         </BarChart>
