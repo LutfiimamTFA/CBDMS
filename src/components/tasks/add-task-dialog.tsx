@@ -52,6 +52,7 @@ import {
   nextSunday,
   startOfWeek,
 } from 'date-fns';
+import { useI18n } from '@/context/i18n-provider';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -83,6 +84,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('public');
+  const { t } = useI18n();
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -177,7 +179,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                               <SelectItem key={s.value} value={s.value}>
                                 <div className="flex items-center gap-2">
                                   <s.icon className="h-4 w-4" />
-                                  {s.label}
+                                  {t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}
                                 </div>
                               </SelectItem>
                             ))}
@@ -207,7 +209,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                               <SelectItem key={p.value} value={p.value}>
                                 <div className="flex items-center gap-2">
                                   <p.icon className={`h-4 w-4 ${p.color}`} />
-                                  {p.label}
+                                  {t(`priority.${p.value.toLowerCase()}` as any)}
                                 </div>
                               </SelectItem>
                             ))}

@@ -36,6 +36,7 @@ import React from 'react';
 import { CalendarIcon, Clock, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
+import { useI18n } from '@/context/i18n-provider';
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -50,6 +51,8 @@ type TaskDetailsFormValues = z.infer<typeof taskDetailsSchema>;
 
 export function TaskDetailsSheet({ task, children }: { task: Task; children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
+  const { t } = useI18n();
+
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
     defaultValues: {
@@ -110,7 +113,7 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                             <SelectItem key={s.value} value={s.value}>
                                 <div className="flex items-center gap-2">
                                   <s.icon className="h-4 w-4" />
-                                  {s.label}
+                                  {t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}
                                 </div>
                             </SelectItem>
                           ))}
@@ -136,7 +139,7 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                             <SelectItem key={p.value} value={p.value}>
                                 <div className="flex items-center gap-2">
                                   <p.icon className={`h-4 w-4 ${p.color}`} />
-                                  {p.label}
+                                  {t(`priority.${p.value.toLowerCase()}` as any)}
                                 </div>
                             </SelectItem>
                           ))}
