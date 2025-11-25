@@ -114,7 +114,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             {Object.values(statusInfo).map((s) => (
                               <SelectItem key={s.value} value={s.value}>
                                 <div className="flex items-center gap-2">
-                                  <s.icon className="h-4 w-4 text-muted-foreground" />
+                                  <s.icon className="h-4 w-4" />
                                   {s.label}
                                 </div>
                               </SelectItem>
