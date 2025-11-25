@@ -15,7 +15,7 @@ export const currentUser: User = { id: 'user-5', name: 'Alex Doe', email: 'alex@
 
 const today = new Date();
 
-const tags: Record<string, Tag> = {
+export const tags: Record<string, Tag> = {
   design: { label: 'Design', color: 'bg-pink-500 text-white' },
   dev: { label: 'Development', color: 'bg-blue-500 text-white' },
   docs: { label: 'Documentation', color: 'bg-green-500 text-white' },
