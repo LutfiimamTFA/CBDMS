@@ -39,6 +39,8 @@ const taskSchema = z.object({
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Normal', 'Low']),
   assignee: z.string().optional(),
+  timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
+  dueDate: z.string().optional(),
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
@@ -175,14 +177,32 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </FormItem>
                   )}
                 />
-                 <FormItem>
-                    <FormLabel>Time Estimate (hours)</FormLabel>
-                    <Input type="number" placeholder="e.g. 8" />
-                </FormItem>
-                <FormItem>
-                    <FormLabel>Due Date</FormLabel>
-                    <Input type="date" />
-                </FormItem>
+                 <FormField
+                  control={form.control}
+                  name="timeEstimate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Time Estimate (hours)</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="e.g. 8" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="dueDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Due Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </form>
             </Form>
           </div>
