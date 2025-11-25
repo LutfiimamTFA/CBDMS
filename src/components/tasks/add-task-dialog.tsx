@@ -34,7 +34,7 @@ import { users, tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Text, Hash, Calendar as CalendarIcon, Type, List, UploadCloud, Paperclip, FileText, FileUp, Link as LinkIcon, FileImage } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Text, Hash, Calendar as CalendarIcon, Type, List, UploadCloud, Paperclip, FileText, FileUp, Link as LinkIcon, FileImage, HelpCircle, Workflow, Timer, Blocks, File, User, CalendarCheck2, Star, Edit } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -60,6 +60,8 @@ import { Textarea } from '../ui/textarea';
 import type { Tag as TagType, TimeLog } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Progress } from '../ui/progress';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -378,7 +380,49 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="px-6">
-          <div className="pt-6">
+          <div className="pt-4">
+             <Accordion type="single" collapsible className="w-full mb-6">
+              <AccordionItem value="item-1">
+                <AccordionTrigger>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <HelpCircle className="h-4 w-4"/>
+                    Panduan Fitur
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="space-y-4 text-sm text-muted-foreground pt-2">
+                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                    <Star className="h-5 w-5 mt-1 text-primary shrink-0"/>
+                    <div>
+                      <h4 className="font-semibold text-foreground">Manajemen Tugas</h4>
+                      <p>Isi detail dasar tugas. Gunakan tombol <Wand2 className="inline h-3 w-3"/> untuk mendapatkan saran prioritas otomatis dari AI berdasarkan judul.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                    <Timer className="h-5 w-5 mt-1 text-primary shrink-0"/>
+                    <div>
+                      <h4 className="font-semibold text-foreground">Manajemen Waktu</h4>
+                      <p><b>Time Estimate</b> adalah total perkiraan waktu (dalam jam). <b>Time Tracking</b> digunakan untuk mencatat sesi kerja manual dengan jam mulai/selesai, tanggal, dan catatan untuk setiap sesi.</p>
+                    </div>
+                  </div>
+                   <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                    <Users className="h-5 w-5 mt-1 text-primary shrink-0"/>
+                    <div>
+                      <h4 className="font-semibold text-foreground">Kolaborasi Tim</h4>
+                      <p>Bagikan tugas melalui tautan (publik/privat), undang anggota tim via email, atau tugaskan kepada anggota yang sudah ada.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                    <Blocks className="h-5 w-5 mt-1 text-primary shrink-0"/>
+                    <div>
+                      <h4 className="font-semibold text-foreground">Kustomisasi & Lampiran</h4>
+                      <p>Gunakan <b>Tags</b> untuk kategori. Lampirkan file dari <b>Local</b> atau <b>Google Drive</b>. Tambahkan <b>Custom Fields</b> (Teks, Angka, Tanggal, Dropdown) untuk data tambahan yang spesifik.</p>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+
+
             <Form {...form}>
               <form
                 id="add-task-form"
@@ -918,5 +962,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
 
     
