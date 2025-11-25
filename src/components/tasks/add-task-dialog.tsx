@@ -84,6 +84,7 @@ type CustomField = {
   name: string;
   type: CustomFieldType;
   value: string;
+  options?: string; // For dropdown options
 };
 
 
@@ -96,7 +97,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const { t } = useI18n();
   const { toast } = useToast();
 
-  // Time Tracking State
   const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
   const [timeTracked, setTimeTracked] = React.useState(0);
   const [logNote, setLogNote] = React.useState('');
@@ -104,7 +104,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [startTime, setStartTime] = React.useState(format(new Date(), 'HH:mm'));
   const [endTime, setEndTime] = React.useState(format(new Date(), 'HH:mm'));
   
-  // Custom Fields State
   const [customFields, setCustomFields] = React.useState<CustomField[]>([]);
 
 
@@ -137,10 +136,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const onSubmit = (data: TaskFormValues) => {
     const customFieldsData = customFields.reduce((acc, field) => {
       if (field.name) {
-        acc[field.name] = { type: field.type, value: field.value };
+        const fieldData: any = { type: field.type, value: field.value };
+        if (field.type === 'Dropdown') {
+          fieldData.options = field.options;
+        }
+        acc[field.name] = fieldData;
       }
       return acc;
-    }, {} as Record<string, { type: CustomFieldType; value: string }>);
+    }, {} as Record<string, { type: CustomFieldType; value: string; options?: string }>);
 
     console.log('New Task Data:', {
         ...data,
@@ -149,7 +152,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         timeTracked,
         customFields: customFieldsData,
     });
-    // Here you would typically call a server action or API to create the task
     setOpen(false);
     form.reset();
     setSelectedUsers([]);
@@ -187,7 +189,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     const newTimeTracked = timeTracked + (durationInSeconds / 3600);
     setTimeTracked(parseFloat(newTimeTracked.toFixed(2)));
     
-    // Reset inputs
     setLogNote('');
   };
 
@@ -224,10 +225,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
 
   const handleAddCustomField = (type: CustomFieldType) => {
-    setCustomFields([...customFields, { id: Date.now(), name: '', type, value: '' }]);
+    setCustomFields([...customFields, { id: Date.now(), name: '', type, value: '', options: '' }]);
   };
-
-  const handleCustomFieldChange = (id: number, field: 'name' | 'value', fieldValue: string) => {
+  
+  const handleCustomFieldChange = (id: number, field: 'name' | 'value' | 'options', fieldValue: string) => {
     setCustomFields(customFields.map(cf => cf.id === id ? { ...cf, [field]: fieldValue } : cf));
   };
 
@@ -242,7 +243,26 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       case 'Date':
         return <Input type="date" placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
       case 'Dropdown':
-          return <Input placeholder="Value (comma-separated)" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
+        const options = field.options?.split(',').map(o => o.trim()).filter(Boolean) || [];
+        return (
+          <div className="flex-1 grid grid-cols-2 gap-2">
+            <Input 
+              placeholder="Options (comma-separated)" 
+              value={field.options} 
+              onChange={(e) => handleCustomFieldChange(field.id, 'options', e.target.value)}
+            />
+            <Select onValueChange={(val) => handleCustomFieldChange(field.id, 'value', val)} value={field.value}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select value" />
+              </SelectTrigger>
+              <SelectContent>
+                {options.map((option, index) => (
+                  <SelectItem key={index} value={option}>{option}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
       case 'Text':
       default:
         return <Input placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
@@ -504,8 +524,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </div>
                 </div>
 
-
-                {/* --- Assignees / Members Section --- */}
                 <div className="space-y-4 rounded-lg border p-4">
                   <h3 className="text-sm font-medium flex items-center gap-2">
                     <Users className="h-4 w-4" />
@@ -620,7 +638,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </div>
                   )}
                 </div>
-                 {/* --- End Assignees Section --- */}
 
                 <FormField
                   control={form.control}
@@ -642,7 +659,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   )}
                 />
                 
-                {/* --- Time Tracking Section --- */}
                 <div className="space-y-4 rounded-lg border p-4">
                     <h3 className="text-sm font-medium flex items-center gap-2">
                         <Clock className="h-4 w-4" />
@@ -708,7 +724,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     )}
                 </div>
 
-                {/* --- Tags Section --- */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
                   <div className="flex flex-wrap gap-2">
@@ -746,7 +761,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   </div>
                 </div>
 
-                {/* --- Custom Fields Section --- */}
                 <div className="space-y-4 rounded-lg border p-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-sm font-medium flex items-center gap-2">
@@ -770,6 +784,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                 <DropdownMenuItem onSelect={() => handleAddCustomField('Date')}>
                                     <CalendarIcon className="mr-2 h-4 w-4" /> Date
                                 </DropdownMenuItem>
+
                                 <DropdownMenuItem onSelect={() => handleAddCustomField('Dropdown')}>
                                     <List className="mr-2 h-4 w-4" /> Dropdown
                                 </DropdownMenuItem>
@@ -808,7 +823,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    
-
-    
