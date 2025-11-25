@@ -34,7 +34,7 @@ import { users, tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Copy, Loader2, Mail, Repeat, Share, Tag, UserPlus, Users, Wand2, X } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, LogIn, Mail, PauseCircle, PlayCircle, Repeat, Share, Tag, UserPlus, Users, Wand2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -46,18 +46,19 @@ import {
 import { Label } from '../ui/label';
 import {
   addDays,
-  endOfWeek,
   format,
-  nextSaturday,
-  nextSunday,
+  formatDistanceToNow,
+  parseISO,
   startOfWeek,
+  nextSaturday
 } from 'date-fns';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
-import type { Tag as TagType } from '@/lib/types';
+import type { Tag as TagType, TimeLog } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Progress } from '../ui/progress';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -76,7 +77,12 @@ type TaskFormValues = z.infer<typeof taskSchema>;
 
 type ShareSetting = 'public' | 'private';
 
-
+const formatStopwatch = (time: number) => {
+  const hours = Math.floor(time / 3600);
+  const minutes = Math.floor((time % 3600) / 60);
+  const seconds = time % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
 
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
@@ -86,6 +92,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [isSuggesting, setIsSuggesting] = React.useState(false);
   const { t } = useI18n();
   const { toast } = useToast();
+
+  // Time Tracking State
+  const [elapsedTime, setElapsedTime] = React.useState(0);
+  const [isRunning, setIsRunning] = React.useState(false);
+  const [timerStartTime, setTimerStartTime] = React.useState<Date | null>(null);
+  const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
+  const [timeTracked, setTimeTracked] = React.useState(0);
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -114,12 +127,65 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   });
 
   const onSubmit = (data: TaskFormValues) => {
-    console.log('New Task Data:', data, 'Selected Users:', selectedUsers, 'Selected Tags:', selectedTags);
+    console.log('New Task Data:', {
+        ...data,
+        tags: selectedTags,
+        timeLogs,
+        timeTracked
+    });
     // Here you would typically call a server action or API to create the task
     setOpen(false);
     form.reset();
     setSelectedUsers([]);
     setSelectedTags([]);
+    setTimeLogs([]);
+    setTimeTracked(0);
+    setElapsedTime(0);
+    setIsRunning(false);
+  };
+  
+  React.useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isRunning) {
+      interval = setInterval(() => {
+        setElapsedTime(prevTime => prevTime + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRunning]);
+  
+  const handleStartStop = React.useCallback(() => {
+    if (isRunning) {
+      setIsRunning(false);
+    } else {
+      setIsRunning(true);
+      if (!timerStartTime) {
+        setTimerStartTime(new Date());
+      }
+    }
+  }, [isRunning, timerStartTime]);
+
+  const handleLogTime = () => {
+    if (elapsedTime === 0 && !isRunning) return;
+
+    const endTime = new Date();
+    const newLog: TimeLog = {
+      id: `log-${Date.now()}`,
+      startTime: timerStartTime?.toISOString() || new Date().toISOString(),
+      endTime: endTime.toISOString(),
+      duration: elapsedTime,
+    };
+    
+    setTimeLogs(prevLogs => [...prevLogs, newLog]);
+    const newTimeTracked = timeTracked + (elapsedTime / 3600);
+    setTimeTracked(parseFloat(newTimeTracked.toFixed(2)));
+    
+    // Reset timer
+    setIsRunning(false);
+    setElapsedTime(0);
+    setTimerStartTime(null);
   };
 
   const handleSelectUser = (user: (typeof users)[0]) => {
@@ -161,6 +227,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     weekly: t('addtask.form.recurring.weekly'),
     monthly: t('addtask.form.recurring.monthly'),
   };
+  
+  const timeEstimateValue = form.watch('timeEstimate') ?? 0;
+  const timeTrackingProgress = timeEstimateValue > 0
+    ? (timeTracked / timeEstimateValue) * 100
+    : 0;
 
   const handleSuggestPriority = async () => {
     const title = form.getValues('title');
@@ -522,7 +593,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                 </div>
                  {/* --- End Assignees Section --- */}
 
-                 <FormField
+                <FormField
                   control={form.control}
                   name="timeEstimate"
                   render={({ field }) => (
@@ -542,8 +613,55 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   )}
                 />
                 
+                {/* --- Time Tracking Section --- */}
+                <div className="space-y-4 rounded-lg border p-4">
+                    <div className='flex items-center justify-between'>
+                        <h3 className="text-sm font-medium flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            Time Tracking
+                        </h3>
+                        <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
+                    </div>
+                    <div className="space-y-2">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Progress</span>
+                        <span>{timeTracked}h / {timeEstimateValue}h</span>
+                    </div>
+                    <Progress value={timeTrackingProgress} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                    <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>
+                        {isRunning ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+                        {isRunning ? 'Pause Timer' : 'Start Timer'}
+                    </Button>
+                    <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}>
+                        <LogIn className="mr-2 h-4 w-4" />
+                        Log Time
+                    </Button>
+                    </div>
+                    {timeLogs.length > 0 && (
+                        <div className="space-y-3 pt-4">
+                            <h4 className='text-xs font-semibold text-muted-foreground'>History</h4>
+                            <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
+                            {timeLogs.map(log => (
+                                <div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'>
+                                    <div>
+                                        <p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p>
+                                        <p className='text-muted-foreground'>{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p>
+                                    </div>
+                                    <div className='font-semibold'>
+                                        {formatDistanceToNow(new Date(new Date().getTime() - log.duration * 1000), { includeSeconds: true, addSuffix: false })}
+                                    </div>
+                                </div>
+                            ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                {/* --- Tags Section --- */}
                 <div className="space-y-2">
-                  <Label>Tags</Label>
+                  <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
                   <div className="flex flex-wrap gap-2">
                     {selectedTags.map(tag => (
                       <div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>
