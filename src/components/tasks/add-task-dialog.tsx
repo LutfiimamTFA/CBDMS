@@ -30,11 +30,11 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { users } from '@/lib/data';
+import { users, tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Copy, Loader2, Mail, Repeat, Share, UserPlus, Users, Wand2, X } from 'lucide-react';
+import { Calendar, Copy, Loader2, Mail, Repeat, Share, Tag, UserPlus, Users, Wand2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -56,6 +56,8 @@ import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
+import type { Tag as TagType } from '@/lib/types';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -67,6 +69,7 @@ const taskSchema = z.object({
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
   recurring: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 type TaskFormValues = z.infer<typeof taskSchema>;
@@ -78,6 +81,7 @@ type ShareSetting = 'public' | 'private';
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
+  const [selectedTags, setSelectedTags] = React.useState<TagType[]>([]);
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('public');
   const [isSuggesting, setIsSuggesting] = React.useState(false);
   const { t } = useI18n();
@@ -105,15 +109,17 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       startDate: '',
       dueDate: '',
       timeEstimate: undefined,
+      tags: [],
     },
   });
 
   const onSubmit = (data: TaskFormValues) => {
-    console.log('New Task Data:', data, 'Selected Users:', selectedUsers);
+    console.log('New Task Data:', data, 'Selected Users:', selectedUsers, 'Selected Tags:', selectedTags);
     // Here you would typically call a server action or API to create the task
     setOpen(false);
     form.reset();
     setSelectedUsers([]);
+    setSelectedTags([]);
   };
 
   const handleSelectUser = (user: (typeof users)[0]) => {
@@ -130,6 +136,20 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
      form.setValue('assignees', currentAssignees.filter(id => id !== userId));
   };
   
+  const handleSelectTag = (tag: TagType) => {
+    if (!selectedTags.find(t => t.label === tag.label)) {
+      const newTags = [...selectedTags, tag];
+      setSelectedTags(newTags);
+      form.setValue('tags', newTags.map(t => t.label));
+    }
+  }
+
+  const handleRemoveTag = (tagLabel: string) => {
+    const newTags = selectedTags.filter(t => t.label !== tagLabel);
+    setSelectedTags(newTags);
+    form.setValue('tags', newTags.map(t => t.label));
+  }
+
   const setDateValue = (field: 'startDate' | 'dueDate', date: Date) => {
     form.setValue(field, format(date, 'yyyy-MM-dd'));
   };
@@ -521,6 +541,44 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </FormItem>
                   )}
                 />
+                
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTags.map(tag => (
+                      <div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>
+                        {tag.label}
+                        <button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                    <Popover>
+                        <PopoverTrigger asChild>
+                          <Button type="button" variant="outline" size="sm">+</Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-1">
+                          <div className="flex flex-col gap-1">
+                            {Object.values(allTags).map(tag => (
+                                <Button
+                                  key={tag.label}
+                                  variant="ghost"
+                                  size="sm"
+                                  className="justify-start"
+                                  onClick={() => handleSelectTag(tag)}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>
+                                    {tag.label}
+                                  </div>
+                                </Button>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                  </div>
+                </div>
+
               </form>
             </Form>
           </div>
