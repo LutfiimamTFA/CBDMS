@@ -784,7 +784,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                 <DropdownMenuItem onSelect={() => handleAddCustomField('Date')}>
                                     <CalendarIcon className="mr-2 h-4 w-4" /> Date
                                 </DropdownMenuItem>
-
                                 <DropdownMenuItem onSelect={() => handleAddCustomField('Dropdown')}>
                                     <List className="mr-2 h-4 w-4" /> Dropdown
                                 </DropdownMenuItem>
