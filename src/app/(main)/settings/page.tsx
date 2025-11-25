@@ -1,5 +1,4 @@
 import { Header } from '@/components/layout/header';
-import { UserNav } from '@/components/layout/user-nav';
 import {
   Card,
   CardContent,
@@ -11,7 +10,7 @@ import {
 export default function SettingsPage() {
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Settings" actions={<UserNav />} />
+      <Header title="Settings" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <Card>
           <CardHeader>

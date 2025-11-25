@@ -1,5 +1,4 @@
 import { Header } from '@/components/layout/header';
-import { UserNav } from '@/components/layout/user-nav';
 import { AddTaskDialog } from '@/components/tasks/add-task-dialog';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import { Button } from '@/components/ui/button';
@@ -18,7 +17,6 @@ export default function TasksPage() {
                 Create Task
               </Button>
             </AddTaskDialog>
-            <UserNav />
           </div>
         }
       />

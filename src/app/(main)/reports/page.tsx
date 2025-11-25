@@ -7,7 +7,6 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
-import { UserNav } from '@/components/layout/user-nav';
 import { tasks } from '@/lib/data';
 import { CheckCircle2, CircleDashed, Clock } from 'lucide-react';
 
@@ -18,7 +17,7 @@ export default function ReportsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Work Reports" actions={<UserNav />} />
+      <Header title="Work Reports" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <Card>

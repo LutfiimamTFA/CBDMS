@@ -1,7 +1,6 @@
 import { Header } from '@/components/layout/header';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { SmartSuggestions } from '@/components/tasks/smart-suggestions';
-import { UserNav } from '@/components/layout/user-nav';
 
 export default function DashboardPage() {
   return (
@@ -11,7 +10,6 @@ export default function DashboardPage() {
         actions={
           <div className="flex items-center gap-2">
             <SmartSuggestions />
-            <UserNav />
           </div>
         }
       />

@@ -4,6 +4,7 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { Button } from '../ui/button';
 import { Bell } from 'lucide-react';
 import { LanguageSwitcher } from '../language-switcher';
+import { UserNav } from './user-nav';
 
 interface HeaderProps {
   title: string;
@@ -28,6 +29,7 @@ export function Header({ title, actions }: HeaderProps) {
             <Bell className="h-[1.2rem] w-[1.2rem]" />
             <span className="sr-only">Toggle notifications</span>
           </Button>
+          <UserNav />
         </div>
       </div>
     </header>
