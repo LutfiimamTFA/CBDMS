@@ -72,9 +72,13 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
     setOpen(false);
   };
   
-  const timeTrackingProgress = task.timeEstimate && task.timeTracked
-    ? (task.timeTracked / task.timeEstimate) * 100
+  const timeEstimateValue = form.watch('timeEstimate') ?? task.timeEstimate ?? 0;
+  const timeTrackedValue = task.timeTracked ?? 0;
+  
+  const timeTrackingProgress = timeEstimateValue > 0
+    ? (timeTrackedValue / timeEstimateValue) * 100
     : 0;
+
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -229,7 +233,7 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
-                    <span>{task.timeTracked || 0}h / {form.getValues('timeEstimate') || task.timeEstimate || 0}h</span>
+                    <span>{timeTrackedValue}h / {timeEstimateValue}h</span>
                   </div>
                   <Progress value={timeTrackingProgress} />
                 </div>
