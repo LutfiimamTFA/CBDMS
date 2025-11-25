@@ -69,15 +69,6 @@ type TaskFormValues = z.infer<typeof taskSchema>;
 
 type ShareSetting = 'public' | 'private';
 
-const quickDateOptions = [
-    { label: 'Today', getValue: () => new Date() },
-    { label: 'Tomorrow', getValue: () => addDays(new Date(), 1) },
-    { label: 'This weekend', getValue: () => nextSaturday(new Date()) },
-    { label: 'Next week', getValue: () => addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 7) },
-    { label: 'Next weekend', getValue: () => addDays(nextSaturday(new Date()), 7) },
-    { label: '2 weeks', getValue: () => addDays(new Date(), 14) },
-    { label: '4 weeks', getValue: () => addDays(new Date(), 28) },
-];
 
 
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
@@ -85,6 +76,16 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('public');
   const { t } = useI18n();
+
+  const quickDateOptions = [
+      { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
+      { label: t('addtask.form.quickselect.tomorrow'), getValue: () => addDays(new Date(), 1) },
+      { label: t('addtask.form.quickselect.thisweekend'), getValue: () => nextSaturday(new Date()) },
+      { label: t('addtask.form.quickselect.nextweek'), getValue: () => addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 7) },
+      { label: t('addtask.form.quickselect.nextweekend'), getValue: () => addDays(nextSaturday(new Date()), 7) },
+      { label: t('addtask.form.quickselect.2weeks'), getValue: () => addDays(new Date(), 14) },
+      { label: t('addtask.form.quickselect.4weeks'), getValue: () => addDays(new Date(), 28) },
+  ];
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(taskSchema),
@@ -126,15 +127,21 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
 
   const recurringValue = form.watch('recurring');
+  const recurringOptions: Record<string, string> = {
+    never: t('addtask.form.recurring.never'),
+    daily: t('addtask.form.recurring.daily'),
+    weekly: t('addtask.form.recurring.weekly'),
+    monthly: t('addtask.form.recurring.monthly'),
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
         <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Add New Task</DialogTitle>
+          <DialogTitle>{t('addtask.title')}</DialogTitle>
           <DialogDescription>
-            Fill in the details below to create a new task.
+            {t('addtask.description')}
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="overflow-y-auto">
@@ -150,9 +157,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Title</FormLabel>
+                      <FormLabel>{t('addtask.form.title')}</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Design landing page" {...field} />
+                        <Input placeholder={t('addtask.form.title.placeholder')} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -164,14 +171,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Status</FormLabel>
+                        <FormLabel>{t('addtask.form.status')}</FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select a status" />
+                              <SelectValue placeholder={t('addtask.form.status.placeholder')} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -194,14 +201,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     name="priority"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Priority</FormLabel>
+                        <FormLabel>{t('addtask.form.priority')}</FormLabel>
                         <Select
                           onValueChange={field.onChange}
                           defaultValue={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select priority" />
+                              <SelectValue placeholder={t('addtask.form.priority.placeholder')} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
@@ -224,7 +231,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                 <div className="space-y-4 rounded-lg border p-4">
                     <h3 className="text-sm font-medium flex items-center gap-2">
                         <Calendar className="h-4 w-4" />
-                        Dates
+                        {t('addtask.form.dates')}
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
@@ -232,7 +239,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         name="startDate"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Start Date</FormLabel>
+                            <FormLabel>{t('addtask.form.startdate')}</FormLabel>
                             <FormControl>
                                 <Input type="date" {...field} value={field.value || ''} />
                             </FormControl>
@@ -245,7 +252,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         name="dueDate"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Due Date</FormLabel>
+                            <FormLabel>{t('addtask.form.duedate')}</FormLabel>
                             <FormControl>
                                 <Input type="date" {...field} value={field.value || ''} />
                             </FormControl>
@@ -255,7 +262,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         />
                     </div>
                      <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Quick Select Due Date</Label>
+                        <Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label>
                         <div className="flex flex-wrap gap-2">
                         {quickDateOptions.map(option => (
                             <Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>
@@ -263,7 +270,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             </Button>
                         ))}
                          <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', '')}>
-                            Clear
+                            {t('addtask.form.quickselect.clear')}
                         </Button>
                         </div>
                     </div>
@@ -271,7 +278,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Button type="button" variant="outline">
                             <svg className="mr-2" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.25 1.75H11.375V0.875H9.625V1.75H4.375V0.875H2.625V1.75H1.75C1.29688 1.75 1.00094 2.05188 1.00094 2.5L1 12.25C1 12.7 1.29688 13 1.75 13H12.25C12.7031 13 13 12.7 13 12.25V2.5C13 2.05188 12.7031 1.75 12.25 1.75ZM11.375 11.375H2.625V4.375H11.375V11.375Z" fill="#4285F4"/><path d="M4.375 6.125H6.125V7.875H4.375V6.125Z" fill="#34A853"/><path d="M7 6.125H8.75V7.875H7V6.125Z" fill="#FBBC05"/><path d="M9.625 6.125H11.375V7.875H9.625V6.125Z" fill="#EA4335"/><path d="M4.375 8.75H6.125V10.5H4.375V8.75Z" fill="#4285F4"/><path d="M7 8.75H8.75V10.5H7V8.75Z" fill="#34A853"/></svg>
-                            Add to Google Calendar
+                            {t('addtask.form.addtogoogle')}
                         </Button>
                         <FormField
                             control={form.control}
@@ -285,17 +292,17 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                                 <Repeat className="mr-2" />
                                                 <span className="capitalize">
                                                   {recurringValue === 'never'
-                                                    ? 'Set recurring task'
-                                                    : recurringValue}
+                                                    ? t('addtask.form.setrecurring')
+                                                    : recurringOptions[recurringValue]}
                                                 </span>
                                             </SelectTrigger>
                                         </Button>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value="never">Never</SelectItem>
-                                        <SelectItem value="daily">Daily</SelectItem>
-                                        <SelectItem value="weekly">Weekly</SelectItem>
-                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="never">{recurringOptions['never']}</SelectItem>
+                                        <SelectItem value="daily">{recurringOptions['daily']}</SelectItem>
+                                        <SelectItem value="weekly">{recurringOptions['weekly']}</SelectItem>
+                                        <SelectItem value="monthly">{recurringOptions['monthly']}</SelectItem>
                                     </SelectContent>
                                     </Select>
                                 </FormItem>
@@ -309,18 +316,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                 <div className="space-y-4 rounded-lg border p-4">
                   <h3 className="text-sm font-medium flex items-center gap-2">
                     <Users className="h-4 w-4" />
-                    Team Members
+                    {t('addtask.form.teammembers')}
                   </h3>
                   
                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 p-3">
                      <div className="flex items-center gap-3">
                         <Share className="h-8 w-8 text-primary" />
                         <div>
-                          <p className="text-sm font-medium">Share Link</p>
+                          <p className="text-sm font-medium">{t('addtask.form.sharelink')}</p>
                           <p className="text-xs text-muted-foreground">
                             {shareSetting === 'public'
-                              ? 'Anyone with the link can view'
-                              : 'Only members can access'}
+                              ? t('addtask.form.sharelink.public')
+                              : t('addtask.form.sharelink.private')}
                           </p>
                         </div>
                      </div>
@@ -333,13 +340,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="public">Public</SelectItem>
-                            <SelectItem value="private">Private</SelectItem>
+                            <SelectItem value="public">{t('addtask.form.sharelink.public.option')}</SelectItem>
+                            <SelectItem value="private">{t('addtask.form.sharelink.private.option')}</SelectItem>
                           </SelectContent>
                         </Select>
                         <Button variant="outline" size="sm" className="h-8" onClick={() => navigator.clipboard.writeText(window.location.href)}>
                             <Copy className="h-3 w-3 mr-2" />
-                            Copy link
+                            {t('addtask.form.copylink')}
                         </Button>
                      </div>
                   </div>
@@ -348,25 +355,25 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     <Mail className="h-4 w-4 text-muted-foreground" />
                     <Input
                       type="email"
-                      placeholder="Invite with email..."
+                      placeholder={t('addtask.form.inviteemail')}
                       className="flex-1"
                     />
                     <Button variant="outline" size="sm">
                       <UserPlus className="mr-2 h-4 w-4" />
-                      Invite
+                      {t('addtask.form.invite')}
                     </Button>
                   </div>
                   <div className="relative">
                     <Separator className="my-3" />
                     <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-                      OR
+                      {t('addtask.form.or')}
                     </span>
                   </div>
                   
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="w-full justify-start text-muted-foreground">
-                        Select team members...
+                        {t('addtask.form.selectmembers')}
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
@@ -387,7 +394,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
                   {selectedUsers.length > 0 && (
                     <div className="space-y-2">
-                      <Label>Selected Members</Label>
+                      <Label>{t('addtask.form.selectedmembers')}</Label>
                       {selectedUsers.map((user) => (
                         <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
                           <div className="flex items-center gap-2">
@@ -404,10 +411,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="full-access">Full Access</SelectItem>
-                                  <SelectItem value="edit">Can Edit</SelectItem>
-                                  <SelectItem value="comment">Can Comment</SelectItem>
-                                  <SelectItem value="view">View Only</SelectItem>
+                                  <SelectItem value="full-access">{t('addtask.form.access.full')}</SelectItem>
+                                  <SelectItem value="edit">{t('addtask.form.access.edit')}</SelectItem>
+                                  <SelectItem value="comment">{t('addtask.form.access.comment')}</SelectItem>
+                                  <SelectItem value="view">{t('addtask.form.access.view')}</SelectItem>
                                 </SelectContent>
                               </Select>
                             )}
@@ -428,9 +435,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   name="timeEstimate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Time Estimate (hours)</FormLabel>
+                      <FormLabel>{t('addtask.form.timeestimate')}</FormLabel>
                       <FormControl>
-                        <Input type="number" placeholder="e.g. 8" {...field} />
+                        <Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -442,7 +449,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         </ScrollArea>
         <DialogFooter className="p-6 pt-0">
           <Button type="submit" form="add-task-form">
-            Create Task
+            {t('addtask.form.create')}
           </Button>
         </DialogFooter>
       </DialogContent>
