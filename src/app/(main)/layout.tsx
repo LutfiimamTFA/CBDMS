@@ -12,6 +12,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarInset,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard,
@@ -20,12 +21,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
-
-const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/tasks', icon: ClipboardList, label: 'Tasks' },
-  { href: '/reports', icon: FileText, label: 'Reports' },
-];
+import { useI18n } from '@/context/i18n-provider';
 
 export default function MainLayout({
   children,
@@ -33,12 +29,22 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
+  const navItems = [
+    { href: '/dashboard', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { href: '/tasks', icon: ClipboardList, label: t('nav.tasks') },
+    { href: '/reports', icon: FileText, label: t('nav.reports') },
+  ];
+  
   return (
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader>
-          <Logo />
+          <div className='flex items-center justify-between'>
+            <Logo />
+            <SidebarTrigger />
+          </div>
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
@@ -63,10 +69,10 @@ export default function MainLayout({
               <Link href="/settings">
                 <SidebarMenuButton
                   isActive={pathname === '/settings'}
-                  tooltip="Settings"
+                  tooltip={t('nav.settings')}
                 >
                   <Settings />
-                  <span>Settings</span>
+                  <span>{t('nav.settings')}</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>

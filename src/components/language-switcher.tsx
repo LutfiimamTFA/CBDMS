@@ -7,29 +7,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
-
-const languages = [
-  { code: 'en', name: 'English', flag: '🇬🇧' },
-  { code: 'id', name: 'Indonesia', flag: '🇮🇩' },
-];
+import { useI18n } from '@/context/i18n-provider';
+import { languages } from '@/lib/i18n';
 
 export function LanguageSwitcher() {
-  const [currentLanguage, setCurrentLanguage] = useState(languages[0]);
+  const { language, setLanguage } = useI18n();
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon">
-          <span className="text-lg">{currentLanguage.flag}</span>
+          <span className="text-lg">{language.flag}</span>
           <span className="sr-only">Change language</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {languages.map((lang) => (
+        {Object.values(languages).map((lang) => (
           <DropdownMenuItem
             key={lang.code}
-            onClick={() => setCurrentLanguage(lang)}
+            onClick={() => setLanguage(lang.code)}
           >
             <span className="mr-2 text-lg">{lang.flag}</span>
             {lang.name}

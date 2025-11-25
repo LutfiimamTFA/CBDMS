@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
+import { I18nProvider } from '@/context/i18n-provider';
 
 export const metadata: Metadata = {
   title: 'WorkWise',
@@ -30,8 +31,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster />
+          <I18nProvider>
+            {children}
+            <Toaster />
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>
