@@ -16,6 +16,13 @@ export type Tag = {
   color: string;
 };
 
+export type TimeLog = {
+  id: string;
+  startTime: string;
+  endTime: string;
+  duration: number; // in seconds
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -25,8 +32,9 @@ export type Task = {
   assignees: User[];
   startDate?: string;
   dueDate?: string;
-  timeEstimate?: number;
-  timeTracked?: number; 
+  timeEstimate?: number; // in hours
+  timeTracked?: number; // in hours
+  timeLogs?: TimeLog[];
   dependencies?: string[];
   subtasks?: Partial<Task>[];
   recurring?: string;

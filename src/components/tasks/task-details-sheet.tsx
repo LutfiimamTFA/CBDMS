@@ -4,12 +4,10 @@ import {
   Sheet,
   SheetContent,
   SheetHeader,
-  SheetTitle,
-  SheetDescription,
   SheetTrigger,
   SheetFooter,
 } from '@/components/ui/sheet';
-import type { Task, User } from '@/lib/types';
+import type { Task, TimeLog } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,14 +29,14 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { users } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
-import React from 'react';
-import { CalendarIcon, Clock, LogIn, PlayCircle, Tag, Users } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { CalendarIcon, Clock, LogIn, PauseCircle, PlayCircle, Tag, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { Progress } from '../ui/progress';
+import { format, formatDistanceToNow, parseISO } from 'date-fns';
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -51,9 +49,21 @@ const taskDetailsSchema = z.object({
 
 type TaskDetailsFormValues = z.infer<typeof taskDetailsSchema>;
 
-export function TaskDetailsSheet({ task, children }: { task: Task; children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false);
+const formatStopwatch = (time: number) => {
+  const hours = Math.floor(time / 3600);
+  const minutes = Math.floor((time % 3600) / 60);
+  const seconds = time % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
+export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [task, setTask] = useState(initialTask);
   const { t } = useI18n();
+
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
+  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
 
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
@@ -67,8 +77,56 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
     },
   });
 
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isRunning) {
+      interval = setInterval(() => {
+        setElapsedTime(prevTime => prevTime + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isRunning]);
+  
+  const handleStartStop = useCallback(() => {
+    if (isRunning) {
+      setIsRunning(false);
+    } else {
+      setIsRunning(true);
+      if (!timerStartTime) {
+        setTimerStartTime(new Date());
+      }
+    }
+  }, [isRunning, timerStartTime]);
+
+  const handleLogTime = () => {
+    if (elapsedTime === 0 && !isRunning) return;
+
+    const endTime = new Date();
+    const newLog: TimeLog = {
+      id: `log-${Date.now()}`,
+      startTime: timerStartTime?.toISOString() || new Date().toISOString(),
+      endTime: endTime.toISOString(),
+      duration: elapsedTime,
+    };
+    
+    const newTimeTracked = (task.timeTracked || 0) + (elapsedTime / 3600);
+
+    setTask(prevTask => ({
+      ...prevTask,
+      timeTracked: parseFloat(newTimeTracked.toFixed(2)),
+      timeLogs: [...(prevTask.timeLogs || []), newLog]
+    }));
+    
+    // Reset timer
+    setIsRunning(false);
+    setElapsedTime(0);
+    setTimerStartTime(null);
+  };
+
   const onSubmit = (data: TaskDetailsFormValues) => {
-    console.log('Updated Task Data:', data);
+    console.log('Updated Task Data:', {...data, timeTracked: task.timeTracked, timeLogs: task.timeLogs});
     setOpen(false);
   };
   
@@ -239,10 +297,13 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                 />
 
               <div className="space-y-4 rounded-lg border p-4">
-                <h3 className="text-sm font-medium flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Time Tracking
-                </h3>
+                <div className='flex items-center justify-between'>
+                    <h3 className="text-sm font-medium flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        Time Tracking
+                    </h3>
+                    <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
+                </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
@@ -251,21 +312,34 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                   <Progress value={timeTrackingProgress} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                   <Button variant="outline" type="button">
-                      <PlayCircle className="mr-2 h-4 w-4" />
-                      Start Timer
+                   <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>
+                      {isRunning ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+                      {isRunning ? 'Pause Timer' : 'Start Timer'}
                    </Button>
-                   <Button variant="outline" type="button">
+                   <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0}>
                       <LogIn className="mr-2 h-4 w-4" />
                       Log Time
                    </Button>
                 </div>
-                <div className="text-xs text-muted-foreground text-center hover:underline cursor-pointer">
-                  View history
-                </div>
+                {task.timeLogs && task.timeLogs.length > 0 && (
+                    <div className="space-y-3 pt-4">
+                        <h4 className='text-xs font-semibold text-muted-foreground'>History</h4>
+                        <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
+                        {task.timeLogs.map(log => (
+                            <div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'>
+                                <div>
+                                    <p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p>
+                                    <p className='text-muted-foreground'>{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p>
+                                </div>
+                                <div className='font-semibold'>
+                                    {formatDistanceToNow(new Date().setSeconds(new Date().getSeconds() - log.duration), { includeSeconds: true, addSuffix: false })}
+                                </div>
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                )}
               </div>
-
-
             </div>
             <SheetFooter className="p-6 border-t">
               <Button type="submit">Save Changes</Button>

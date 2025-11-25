@@ -4,13 +4,12 @@ import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo } from '@/lib/utils';
-import { Clock, Calendar, Link as LinkIcon, ListTodo } from 'lucide-react';
+import { Calendar, Link as LinkIcon, ListTodo } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TaskDetailsSheet } from './task-details-sheet';
 import { Progress } from '../ui/progress';
 import { useI18n } from '@/context/i18n-provider';
-import { Badge } from '@/components/ui/badge';
 
 interface TaskCardProps {
   task: Task;

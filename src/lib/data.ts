@@ -1,6 +1,6 @@
 import type { User, Task, Tag } from './types';
 import { PlaceHolderImages } from './placeholder-images';
-import { addDays, formatISO } from 'date-fns';
+import { addDays, formatISO, subHours } from 'date-fns';
 
 const findImage = (id: string) => PlaceHolderImages.find(img => img.id === id)?.imageUrl || '';
 
@@ -37,6 +37,10 @@ export const tasks: Task[] = [
     description: 'Create a visually appealing and high-converting landing page for the upcoming Q3 marketing campaign. Focus on mobile-first design and clear calls-to-action.',
     subtasks: [{ id: 'sub-1', title: 'Create wireframes' }, { id: 'sub-2', title: 'Design mockups' }],
     tags: [tags.design, tags.feature],
+    timeLogs: [
+      { id: 'log-1', startTime: formatISO(subHours(today, 4)), endTime: formatISO(subHours(today, 2)), duration: 7200 },
+      { id: 'log-2', startTime: formatISO(subHours(today, 8)), endTime: formatISO(subHours(today, 7)), duration: 3600 },
+    ]
   },
   {
     id: 'task-2',
@@ -50,6 +54,7 @@ export const tasks: Task[] = [
     description: 'Implement the full user authentication (login, registration, password reset) using JWT and OAuth2.',
     dependencies: ['task-3'],
     tags: [tags.dev, tags.feature],
+    timeLogs: [],
   },
   {
     id: 'task-3',
