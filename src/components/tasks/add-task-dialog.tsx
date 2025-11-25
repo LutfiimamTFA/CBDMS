@@ -123,6 +123,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     form.setValue(field, format(date, 'yyyy-MM-dd'));
   };
 
+  const recurringValue = form.watch('recurring');
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -258,7 +260,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                 {option.label}
                             </Button>
                         ))}
-                         <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>
+                         <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', '')}>
                             Clear
                         </Button>
                         </div>
@@ -279,7 +281,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                         <Button variant="outline" asChild className="w-full">
                                             <SelectTrigger>
                                                 <Repeat className="mr-2" />
-                                                <SelectValue placeholder="Set recurring task" />
+                                                <span className="capitalize">
+                                                  {recurringValue === 'never'
+                                                    ? 'Set recurring task'
+                                                    : recurringValue}
+                                                </span>
                                             </SelectTrigger>
                                         </Button>
                                     </FormControl>
@@ -441,5 +447,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    
