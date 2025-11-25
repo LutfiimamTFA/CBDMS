@@ -1,6 +1,9 @@
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type React from 'react';
 import { ThemeSwitcher } from '@/components/theme-switcher';
+import { Button } from '../ui/button';
+import { Bell } from 'lucide-react';
+import { LanguageSwitcher } from '../language-switcher';
 
 interface HeaderProps {
   title: string;
@@ -18,7 +21,14 @@ export function Header({ title, actions }: HeaderProps) {
       </div>
       <div className="flex items-center gap-4">
         {actions}
-        <ThemeSwitcher />
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
+          <ThemeSwitcher />
+          <Button variant="ghost" size="icon">
+            <Bell className="h-[1.2rem] w-[1.2rem]" />
+            <span className="sr-only">Toggle notifications</span>
+          </Button>
+        </div>
       </div>
     </header>
   );
