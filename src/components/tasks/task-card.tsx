@@ -51,9 +51,9 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
               </div>
 
               {task.tags && task.tags.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-1">
                   {task.tags.map((tag) => (
-                    <div key={tag.label} className={`px-2 py-0.5 text-xs font-medium text-white rounded-full ${tag.color}`}>
+                    <div key={tag.label} className={`px-2 py-0.5 text-xs font-medium rounded-full ${tag.color}`}>
                       {tag.label}
                     </div>
                   ))}

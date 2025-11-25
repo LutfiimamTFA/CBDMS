@@ -21,7 +21,7 @@ const tags: Record<string, Tag> = {
   docs: { label: 'Documentation', color: 'bg-green-500' },
   research: { label: 'Research', color: 'bg-purple-500' },
   bug: { label: 'Bug Fix', color: 'bg-red-500' },
-  feature: { label: 'Feature', color: 'bg-yellow-500' },
+  feature: { label: 'Feature', color: 'bg-yellow-500 text-black' },
 }
 
 export const tasks: Task[] = [
