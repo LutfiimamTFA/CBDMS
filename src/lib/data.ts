@@ -16,11 +16,11 @@ export const currentUser: User = { id: 'user-5', name: 'Alex Doe', email: 'alex@
 const today = new Date();
 
 const tags: Record<string, Tag> = {
-  design: { label: 'Design', color: 'bg-pink-500' },
-  dev: { label: 'Development', color: 'bg-blue-500' },
-  docs: { label: 'Documentation', color: 'bg-green-500' },
-  research: { label: 'Research', color: 'bg-purple-500' },
-  bug: { label: 'Bug Fix', color: 'bg-red-500' },
+  design: { label: 'Design', color: 'bg-pink-500 text-white' },
+  dev: { label: 'Development', color: 'bg-blue-500 text-white' },
+  docs: { label: 'Documentation', color: 'bg-green-500 text-white' },
+  research: { label: 'Research', color: 'bg-purple-500 text-white' },
+  bug: { label: 'Bug Fix', color: 'bg-red-500 text-white' },
   feature: { label: 'Feature', color: 'bg-yellow-500 text-black' },
 }
 

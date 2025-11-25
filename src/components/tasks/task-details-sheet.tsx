@@ -179,7 +179,7 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                   <FormLabel className="flex items-center gap-2"><Tag className="w-4 h-4"/>Tags</FormLabel>
                   <div className="flex flex-wrap gap-2">
                     {task.tags.map((tag) => (
-                      <div key={tag.label} className={`px-2.5 py-1 text-sm font-medium text-white rounded-md ${tag.color}`}>
+                      <div key={tag.label} className={`px-2.5 py-1 text-sm font-medium rounded-md ${tag.color}`}>
                         {tag.label}
                       </div>
                     ))}
