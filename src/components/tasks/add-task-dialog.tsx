@@ -169,7 +169,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select an assignee" />
-                          </Trigger>
+                          </SelectTrigger>
                         </FormControl>
                         <SelectContent>
                           {users.map((user) => (
