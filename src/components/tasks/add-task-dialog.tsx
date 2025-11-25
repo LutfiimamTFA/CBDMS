@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -91,6 +92,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       priority: 'Normal',
       assignees: [],
       recurring: 'never',
+      startDate: '',
+      dueDate: '',
     },
   });
 
@@ -438,3 +441,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
