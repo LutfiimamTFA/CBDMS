@@ -20,6 +20,7 @@ import {
   ClipboardList,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
+import { useI18n } from '@/context/i18n-provider';
 
 export default function MainLayout({
   children,
@@ -27,11 +28,12 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   const navItems = [
-    { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { href: '/tasks', icon: ClipboardList, label: 'Tasks' },
-    { href: '/reports', icon: FileText, label: 'Reports' },
+    { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
+    { href: '/tasks', icon: ClipboardList, label: t('nav.list') },
+    { href: '/reports', icon: FileText, label: t('nav.reports') },
   ];
 
   return (
@@ -63,10 +65,10 @@ export default function MainLayout({
               <Link href="/settings">
                 <SidebarMenuButton
                   isActive={pathname === '/settings'}
-                  tooltip="Settings"
+                  tooltip={t('nav.settings')}
                 >
                   <Settings />
-                  <span>Settings</span>
+                  <span>{t('nav.settings')}</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>

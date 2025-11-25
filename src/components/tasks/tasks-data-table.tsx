@@ -50,7 +50,7 @@ export function TasksDataTable() {
   const columns: ColumnDef<Task>[] = [
     {
       accessorKey: 'title',
-      header: 'Title',
+      header: t('tasks.column.title'),
       cell: ({ row }) => {
         const task = row.original;
         return (
@@ -62,7 +62,7 @@ export function TasksDataTable() {
     },
     {
       accessorKey: 'status',
-      header: 'Status',
+      header: t('tasks.column.status'),
       cell: ({ row }) => {
         const status = row.getValue('status') as keyof typeof statusInfo;
         const Icon = statusInfo[status].icon;
@@ -78,7 +78,7 @@ export function TasksDataTable() {
     },
     {
       accessorKey: 'priority',
-      header: 'Priority',
+      header: t('tasks.column.priority'),
       cell: ({ row }) => {
         const priority = row.getValue('priority') as keyof typeof priorityInfo;
         const Icon = priorityInfo[priority].icon;
@@ -95,7 +95,7 @@ export function TasksDataTable() {
     },
     {
       accessorKey: 'assignees',
-      header: 'Assignees',
+      header: t('tasks.column.assignees'),
       cell: ({ row }) => {
         const assignees = row.getValue('assignees') as any[];
         return (
@@ -121,7 +121,7 @@ export function TasksDataTable() {
     },
     {
       accessorKey: 'dueDate',
-      header: 'Due Date',
+      header: t('tasks.column.duedate'),
       cell: ({ row }) => {
           const dueDate = row.getValue('dueDate') as string;
           return dueDate ? <div>{format(parseISO(dueDate), 'MMM d, yyyy')}</div> : <div className="text-muted-foreground">-</div>;
@@ -149,7 +149,7 @@ export function TasksDataTable() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <Input
-          placeholder="Filter tasks by title..."
+          placeholder={t('tasks.filter')}
           value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
           onChange={(event) =>
             table.getColumn('title')?.setFilterValue(event.target.value)
@@ -160,7 +160,7 @@ export function TasksDataTable() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="ml-auto">
-                Columns <ChevronDown className="ml-2 h-4 w-4" />
+                {t('tasks.columns')} <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -186,7 +186,7 @@ export function TasksDataTable() {
           <AddTaskDialog>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
-              Create Task
+              {t('tasks.createtask')}
             </Button>
           </AddTaskDialog>
         </div>
@@ -234,7 +234,7 @@ export function TasksDataTable() {
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  {t('tasks.noresults')}
                 </TableCell>
               </TableRow>
             )}
