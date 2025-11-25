@@ -12,7 +12,6 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarInset,
-  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard,
@@ -41,10 +40,7 @@ export default function MainLayout({
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader>
-          <div className='flex items-center justify-between'>
-            <Logo />
-            <SidebarTrigger />
-          </div>
+          <Logo />
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
