@@ -46,7 +46,7 @@ const taskDetailsSchema = z.object({
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assignees: z.array(z.string()).optional(),
-  timeEstimate: z.number().optional(),
+  timeEstimate: z.coerce.number().min(0).optional(),
 });
 
 type TaskDetailsFormValues = z.infer<typeof taskDetailsSchema>;
@@ -133,7 +133,7 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                   name="priority"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Priority</FormLabel>
+                      <FormLabel>{t('addtask.form.priority')}</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -161,9 +161,9 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                 name="description"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Description</FormLabel>
+                    <FormLabel>{t('addtask.form.description')}</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Add a more detailed description..." {...field} className="min-h-[100px]" />
+                      <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} className="min-h-[100px]" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -171,7 +171,7 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
               />
                 
               <div className="space-y-4">
-                <FormLabel className="flex items-center gap-2"><Users className="w-4 h-4"/> Assignees</FormLabel>
+                <FormLabel className="flex items-center gap-2"><Users className="w-4 h-4"/>{t('addtask.form.teammembers')}</FormLabel>
                 <div className="space-y-3">
                     {task.assignees.map(user => (
                         <div key={user.id} className="flex items-center justify-between gap-2 bg-secondary/50 p-2 rounded-lg">
@@ -194,6 +194,33 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                 </Button>
               </div>
 
+              <div className="grid grid-cols-1 gap-6">
+                <FormItem>
+                    <FormLabel className="flex items-center gap-2"><CalendarIcon className="w-4 h-4"/>{t('addtask.form.duedate')}</FormLabel>
+                    <Input type="date" defaultValue={task.dueDate ? task.dueDate.split('T')[0] : ''} />
+                </FormItem>
+              </div>
+
+               <FormField
+                  control={form.control}
+                  name="timeEstimate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('addtask.form.timeestimate')}</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder={t('addtask.form.timeestimate.placeholder')}
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)}
+                          value={field.value ?? ''}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
               <div className="space-y-4 rounded-lg border p-4">
                 <h3 className="text-sm font-medium flex items-center gap-2">
                   <Clock className="h-4 w-4" />
@@ -202,32 +229,25 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Progress</span>
-                    <span>{task.timeTracked || 0}h / {task.timeEstimate || 0}h</span>
+                    <span>{task.timeTracked || 0}h / {form.getValues('timeEstimate') || task.timeEstimate || 0}h</span>
                   </div>
                   <Progress value={timeTrackingProgress} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                   <Button variant="outline">
+                   <Button variant="outline" type="button">
                       <PlayCircle className="mr-2 h-4 w-4" />
                       Start Timer
                    </Button>
-                   <Button variant="outline">
+                   <Button variant="outline" type="button">
                       <LogIn className="mr-2 h-4 w-4" />
                       Log Time
                    </Button>
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground text-center hover:underline cursor-pointer">
                   View history
                 </div>
               </div>
 
-
-               <div className="grid grid-cols-1 gap-6">
-                <FormItem>
-                    <FormLabel className="flex items-center gap-2"><CalendarIcon className="w-4 h-4"/> Due Date</FormLabel>
-                    <Input type="date" defaultValue={task.dueDate ? task.dueDate.split('T')[0] : ''} />
-                </FormItem>
-               </div>
 
             </div>
             <SheetFooter className="p-6 border-t">
