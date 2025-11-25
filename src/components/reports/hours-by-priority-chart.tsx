@@ -21,7 +21,7 @@ const chartConfig = {
 
 
 export function HoursByPriorityChart() {
-  const data = (['Urgent', 'High', 'Normal', 'Low'] as Priority[]).map((priority) => ({
+  const data = (['Urgent', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => ({
     priority,
     hours: tasks
       .filter((task) => task.priority === priority)
@@ -32,7 +32,7 @@ export function HoursByPriorityChart() {
   const priorityColors: Record<Priority, string> = {
     Urgent: 'hsl(var(--chart-5))',
     High: 'hsl(var(--chart-4))',
-    Normal: 'hsl(var(--chart-1))',
+    Medium: 'hsl(var(--chart-1))',
     Low: 'hsl(var(--chart-2))',
   }
 

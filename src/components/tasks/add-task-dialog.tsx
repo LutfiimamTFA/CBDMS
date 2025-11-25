@@ -56,7 +56,7 @@ import {
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   status: z.enum(['To Do', 'Doing', 'Done']),
-  priority: z.enum(['Urgent', 'High', 'Normal', 'Low']),
+  priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assignees: z.array(z.string()).optional(),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
   startDate: z.string().optional(),
@@ -89,7 +89,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     defaultValues: {
       title: '',
       status: 'To Do',
-      priority: 'Normal',
+      priority: 'Medium',
       assignees: [],
       recurring: 'never',
       startDate: '',
@@ -232,7 +232,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <FormItem>
                             <FormLabel>Start Date</FormLabel>
                             <FormControl>
-                                <Input type="date" {...field} />
+                                <Input type="date" {...field} value={field.value || ''} />
                             </FormControl>
                             <FormMessage />
                             </FormItem>
@@ -245,7 +245,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <FormItem>
                             <FormLabel>Due Date</FormLabel>
                             <FormControl>
-                                <Input type="date" {...field} />
+                                <Input type="date" {...field} value={field.value || ''} />
                             </FormControl>
                             <FormMessage />
                             </FormItem>

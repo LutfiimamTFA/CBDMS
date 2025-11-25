@@ -41,7 +41,7 @@ const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
   status: z.enum(['To Do', 'Doing', 'Done']),
-  priority: z.enum(['Urgent', 'High', 'Normal', 'Low']),
+  priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assignees: z.array(z.string()).optional(),
   timeEstimate: z.number().optional(),
 });
