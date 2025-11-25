@@ -64,7 +64,7 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
                 <div className="mt-3 space-y-1">
                     <div className="flex justify-between text-xs text-muted-foreground">
                         <span>Time Tracking</span>
-                        <span>{task.timeTracked}h / {task.timeEstimate}h</span>
+                        <span>{task.timeTracked || 0}h / {task.timeEstimate}h</span>
                     </div>
                     <Progress value={timeTrackingProgress} className="h-1" />
                 </div>

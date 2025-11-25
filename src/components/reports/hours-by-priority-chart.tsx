@@ -1,3 +1,4 @@
+
 'use client';
 import { tasks } from '@/lib/data';
 import type { Priority } from '@/lib/types';
@@ -26,7 +27,6 @@ export function HoursByPriorityChart() {
     hours: tasks
       .filter((task) => task.priority === priority)
       .reduce((acc, task) => acc + (task.timeTracked || 0), 0),
-    fill: priorityInfo[priority].color
   }));
 
   const priorityColors: Record<Priority, string> = {
