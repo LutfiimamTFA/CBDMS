@@ -107,7 +107,12 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                         </FormControl>
                         <SelectContent>
                           {Object.values(statusInfo).map((s) => (
-                            <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                            <SelectItem key={s.value} value={s.value}>
+                                <div className="flex items-center gap-2">
+                                  <s.icon className="h-4 w-4" />
+                                  {s.label}
+                                </div>
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -128,7 +133,12 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                         </FormControl>
                         <SelectContent>
                           {Object.values(priorityInfo).map((p) => (
-                            <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>
+                            <SelectItem key={p.value} value={p.value}>
+                                <div className="flex items-center gap-2">
+                                  <p.icon className={`h-4 w-4 ${p.color}`} />
+                                  {p.label}
+                                </div>
+                            </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -151,19 +161,28 @@ export function TaskDetailsSheet({ task, children }: { task: Task; children: Rea
                 )}
               />
                 
-              <div className="space-y-2">
-                <FormLabel>Assignees</FormLabel>
-                <div className="flex items-center gap-2">
+              <div className="space-y-4">
+                <FormLabel className="flex items-center gap-2"><Users className="w-4 h-4"/> Assignees</FormLabel>
+                <div className="space-y-3">
                     {task.assignees.map(user => (
-                        <div key={user.id} className="flex items-center gap-2 bg-secondary p-2 rounded-lg">
-                            <Avatar className="h-6 w-6">
-                                <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium">{user.name}</span>
+                        <div key={user.id} className="flex items-center justify-between gap-2 bg-secondary/50 p-2 rounded-lg">
+                            <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                    <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <p className="text-sm font-medium">{user.name}</p>
+                                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                                </div>
+                            </div>
+                            <Button variant="outline" size="sm">Owner</Button>
                         </div>
                     ))}
                 </div>
+                 <Button variant="outline" className="w-full">
+                    Invite new member
+                </Button>
               </div>
 
                <div className="grid grid-cols-2 gap-6">
