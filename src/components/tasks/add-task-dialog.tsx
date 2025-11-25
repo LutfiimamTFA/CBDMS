@@ -34,7 +34,7 @@ import { users, tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Repeat, Share, Tag, UserPlus, Users, Wand2, X } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -78,6 +78,12 @@ type TaskFormValues = z.infer<typeof taskSchema>;
 
 type ShareSetting = 'public' | 'private';
 
+type CustomField = {
+  id: number;
+  name: string;
+  value: string;
+};
+
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
@@ -94,6 +100,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [logDate, setLogDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
   const [startTime, setStartTime] = React.useState(format(new Date(), 'HH:mm'));
   const [endTime, setEndTime] = React.useState(format(new Date(), 'HH:mm'));
+  
+  // Custom Fields State
+  const [customFields, setCustomFields] = React.useState<CustomField[]>([]);
 
 
   const quickDateOptions = [
@@ -123,11 +132,19 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   });
 
   const onSubmit = (data: TaskFormValues) => {
+    const customFieldsData = customFields.reduce((acc, field) => {
+      if (field.name) {
+        acc[field.name] = field.value;
+      }
+      return acc;
+    }, {} as Record<string, string>);
+
     console.log('New Task Data:', {
         ...data,
         tags: selectedTags,
         timeLogs,
-        timeTracked
+        timeTracked,
+        customFields: customFieldsData,
     });
     // Here you would typically call a server action or API to create the task
     setOpen(false);
@@ -137,6 +154,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setTimeLogs([]);
     setTimeTracked(0);
     setLogNote('');
+    setCustomFields([]);
   };
   
   const handleAddLogEntry = () => {
@@ -200,6 +218,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const setDateValue = (field: 'startDate' | 'dueDate', date: Date) => {
     form.setValue(field, format(date, 'yyyy-MM-dd'));
+  };
+
+  const handleAddCustomField = () => {
+    setCustomFields([...customFields, { id: Date.now(), name: '', value: '' }]);
+  };
+
+  const handleCustomFieldChange = (id: number, field: 'name' | 'value', fieldValue: string) => {
+    setCustomFields(customFields.map(cf => cf.id === id ? { ...cf, [field]: fieldValue } : cf));
+  };
+
+  const handleRemoveCustomField = (id: number) => {
+    setCustomFields(customFields.filter(cf => cf.id !== id));
   };
 
   const recurringValue = form.watch('recurring');
@@ -698,6 +728,40 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       </Popover>
                   </div>
                 </div>
+
+                {/* --- Custom Fields Section --- */}
+                <div className="space-y-4 rounded-lg border p-4">
+                    <h3 className="text-sm font-medium flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Custom Fields
+                    </h3>
+                    <div className="space-y-2">
+                      {customFields.map((field, index) => (
+                        <div key={field.id} className="flex items-center gap-2">
+                          <Input
+                            placeholder="Field Name"
+                            value={field.name}
+                            onChange={(e) => handleCustomFieldChange(field.id, 'name', e.target.value)}
+                            className="flex-1"
+                          />
+                          <Input
+                            placeholder="Field Value"
+                            value={field.value}
+                            onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)}
+                            className="flex-1"
+                          />
+                          <Button variant="ghost" size="icon" onClick={() => handleRemoveCustomField(field.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <Button type="button" variant="outline" onClick={handleAddCustomField} className="w-full">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Custom Field
+                    </Button>
+                </div>
+
 
               </form>
             </Form>
