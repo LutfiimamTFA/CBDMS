@@ -30,7 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { users, tags as allTags, tasks as allTasks } from '@/lib/data';
+import { users, tags as allTags, tasks as allTasks, currentUser } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
@@ -366,7 +366,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     if (!newComment.trim()) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
-      user: users[4], // Assuming current user
+      user: currentUser, // Assuming current user
       text: newComment,
       timestamp: new Date().toISOString(),
       replies: [],
@@ -612,7 +612,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           ))}
                         </div>
                         <div className="flex gap-3 pt-4 border-t">
-                             <Avatar className="h-8 w-8"><AvatarImage src={users[4].avatarUrl} /><AvatarFallback>{users[4].name.charAt(0)}</AvatarFallback></Avatar>
+                             <Avatar className="h-8 w-8"><AvatarImage src={currentUser.avatarUrl} /><AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback></Avatar>
                              <div className="flex-1 relative">
                                 <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-10" />
                                 <div className="absolute top-2 right-2 flex gap-1"><Button type="button" variant="ghost" size="icon" className="h-6 w-6"><AtSign className="h-4 w-4"/></Button><Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button></div>
