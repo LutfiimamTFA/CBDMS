@@ -41,6 +41,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { currentUser, users } from '@/lib/data';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
+import { useRouter } from 'next/navigation';
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -76,10 +77,11 @@ type Activity = {
 };
 
 
-export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = false, onOpenChange }: { task: Task; children: React.ReactNode, defaultOpen?: boolean, onOpenChange?: (open: boolean) => void; }) {
+  const [open, setOpen] = useState(defaultOpen);
   const [task, setTask] = useState(initialTask);
   const { t } = useI18n();
+  const router = useRouter();
 
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -108,6 +110,17 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
       timeEstimate: task.timeEstimate,
     },
   });
+
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (onOpenChange) {
+      onOpenChange(isOpen);
+    }
+    if (!isOpen && defaultOpen) {
+      router.push('/tasks');
+    }
+  }
+
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null;
@@ -186,7 +199,7 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
 
   const onSubmit = (data: TaskDetailsFormValues) => {
     console.log('Updated Task Data:', {...data, timeTracked: task.timeTracked, timeLogs: task.timeLogs, subtasks});
-    setOpen(false);
+    handleOpenChange(false);
   };
   
   const timeEstimateValue = form.watch('timeEstimate') ?? task.timeEstimate ?? 0;
@@ -198,7 +211,7 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
 
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent className="w-full sm:max-w-3xl grid grid-rows-[auto_1fr_auto] p-0">
         <Form {...form}>
@@ -431,5 +444,3 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
     </Sheet>
   );
 }
-
-    
