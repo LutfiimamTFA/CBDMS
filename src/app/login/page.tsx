@@ -26,8 +26,8 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
-import { Briefcase, Building, Shield, User as UserIcon, Users, Loader2 } from 'lucide-react';
-import { initiateEmailSignIn, useFirebase } from '@/firebase';
+import { Briefcase, Building, Shield, User as UserIcon, Loader2 } from 'lucide-react';
+import { initiateEmailSignIn, useUserProfile } from '@/firebase';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -64,7 +64,8 @@ export default function LoginPage() {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const { auth, user, isUserLoading, userError } = useFirebase();
+  // Use the main user profile hook to get the global auth state
+  const { auth, user, isLoading: isUserLoading, error: userError } = useUserProfile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -86,7 +87,8 @@ export default function LoginPage() {
     }
   }, [userError, toast]);
 
-  // Effect to handle successful login
+  // Effect to handle successful login based on the global user profile state
+  // This ensures we only redirect when the entire app knows the user is logged in
   useEffect(() => {
     if (user && !isUserLoading) {
       router.push('/dashboard');
@@ -95,10 +97,20 @@ export default function LoginPage() {
 
   const onSubmit = (data: LoginFormValues) => {
     setIsAuthLoading(true);
-    // The new initiateEmailSignIn will handle sign-in or sign-up.
+    // The initiateEmailSignIn function handles sign-in or sign-up.
     // We don't need a try-catch here, as errors are caught by the hook.
     initiateEmailSignIn(auth, data.email, data.password);
   };
+  
+  // While checking auth state on initial load, show a loading screen.
+  if (isUserLoading) {
+    return (
+      <div className="flex h-svh items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
 
   return (
     <div className="w-full h-svh lg:grid lg:min-h-[600px] lg:grid-cols-2 xl:min-h-[800px]">
