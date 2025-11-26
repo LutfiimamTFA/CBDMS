@@ -2,22 +2,27 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import serviceAccount from '../../../firebase/service-account.json';
 
-// Cast the imported JSON to the expected type
-const serviceAccountCert = serviceAccount as any;
+// Function to safely initialize Firebase Admin
+function initializeAdminApp(): App {
+  if (getApps().length > 0) {
+    return getApps()[0];
+  }
 
-let app: App;
-if (!getApps().length) {
-  app = initializeApp({
-    credential: cert(serviceAccountCert),
+  if (!process.env.FIREBASE_ADMIN_KEY) {
+    throw new Error('FIREBASE_ADMIN_KEY environment variable is not set.');
+  }
+
+  const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+
+  return initializeApp({
+    credential: cert(serviceAccount),
   });
-} else {
-  app = getApps()[0];
 }
 
 export async function POST(request: Request) {
   try {
+    const app = initializeAdminApp();
     const { name, email, password, role } = await request.json();
 
     if (!name || !email || !password || !role) {
@@ -59,8 +64,8 @@ export async function POST(request: Request) {
     } else if (error.code === 'auth/invalid-password') {
       errorMessage = 'The password must be a string with at least six characters.';
       statusCode = 400;
-    } else if (error.message?.includes('credential')) {
-        errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials.';
+    } else if (error.message?.includes('FIREBASE_ADMIN_KEY')) {
+        errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials in environment variables.';
     }
     
     return NextResponse.json({ message: errorMessage, error: error.message }, { status: statusCode });
