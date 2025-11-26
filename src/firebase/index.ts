@@ -34,3 +34,4 @@ export * from './firestore/use-doc';
 export * from './non-blocking-updates';
 export * from './errors';
 export * from './error-emitter';
+export * from './non-blocking-login';
