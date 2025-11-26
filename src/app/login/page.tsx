@@ -66,7 +66,7 @@ export default function LoginPage() {
   // useAuth provides a stable auth instance needed for sign-in calls.
   const auth = useAuth();
   // useUserProfile gives us the live auth state for redirection and error handling.
-  const { user, isLoading: isUserLoading, error: userError } = useUserProfile();
+  const { userError } = useUserProfile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -91,14 +91,6 @@ export default function LoginPage() {
     }
   }, [userError, toast]);
 
-  // Effect for redirection after successful login is confirmed globally.
-  // This logic is now primarily handled by MainLayout.tsx, but this is a good safeguard.
-  useEffect(() => {
-    if (user && !isUserLoading) {
-      router.push('/dashboard');
-    }
-  }, [user, isUserLoading, router]);
-
   const onSubmit = (data: LoginFormValues) => {
     // The initiateEmailSignIn function handles sign-in or sign-up.
     // It's a non-blocking call. We don't await it.
@@ -106,18 +98,6 @@ export default function LoginPage() {
     // in the `userError` object from the useUserProfile hook.
     initiateEmailSignIn(auth, data.email, data.password);
   };
-  
-  // While the global auth state is being determined on first load, show a spinner.
-  // If a user is already logged in, this prevents the login form from flashing
-  // before the redirect in the useEffect above happens.
-  if (isUserLoading) {
-    return (
-      <div className="flex h-svh items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
 
   return (
     <div className="w-full h-svh lg:grid lg:min-h-[600px] lg:grid-cols-2 xl:min-h-[800px]">
@@ -147,9 +127,9 @@ export default function LoginPage() {
       <div className="flex items-center justify-center py-12">
         <div className="mx-auto grid w-[350px] gap-6">
           <div className="grid gap-2 text-center">
-            <h1 className="text-3xl font-bold font-headline">Login or Sign Up</h1>
+            <h1 className="text-3xl font-bold font-headline">Login</h1>
             <p className="text-balance text-muted-foreground">
-              Enter your details to sign in or create a new account.
+              Enter your credentials to access your dashboard.
             </p>
           </div>
           <Form {...form}>
@@ -194,7 +174,7 @@ export default function LoginPage() {
               />
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In / Sign Up
+                Sign In
               </Button>
             </form>
           </Form>
