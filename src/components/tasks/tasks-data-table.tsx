@@ -32,7 +32,7 @@ import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon } from 'lucide-react';
 import { TaskDetailsSheet } from './task-details-sheet';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
@@ -47,6 +47,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { useToast } from '@/hooks/use-toast';
 
 
 export function TasksDataTable() {
@@ -56,6 +57,7 @@ export function TasksDataTable() {
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({})
   const { t } = useI18n();
+  const { toast } = useToast();
   
   const statusOptions = Object.values(statusInfo).map(s => ({
       value: s.value,
@@ -79,6 +81,15 @@ export function TasksDataTable() {
       setData(prevData => prevData.filter(task => task.id !== taskId));
   };
 
+  const copyTaskLink = (taskId: string) => {
+    const link = `${window.location.origin}/tasks/${taskId}`;
+    navigator.clipboard.writeText(link);
+    toast({
+        title: "Link Copied!",
+        description: "Task link has been copied to your clipboard.",
+    });
+  }
+
 
   const columns: ColumnDef<Task>[] = [
     {
@@ -96,15 +107,16 @@ export function TasksDataTable() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() => navigator.clipboard.writeText(task.id)}
-                >
-                  Copy task ID
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                 <TaskDetailsSheet task={task}>
+                <TaskDetailsSheet task={task}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
                 </TaskDetailsSheet>
+                <DropdownMenuItem
+                  onClick={() => copyTaskLink(task.id)}
+                >
+                  <LinkIcon className="mr-2 h-4 w-4" />
+                  Copy Link
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem 
                     className='text-destructive focus:text-destructive focus:bg-destructive/10'
                     onClick={() => handleDeleteTask(task.id)}
