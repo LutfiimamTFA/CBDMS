@@ -54,23 +54,36 @@ export default function LoginPage() {
   const {
     formState: { isSubmitting },
     getValues,
+    handleSubmit,
+    setError,
+    clearErrors
   } = form;
 
-  const onSignIn = () => {
-    const { email, password } = getValues();
+  const onSignIn = (values: LoginFormValues) => {
+    const { email, password } = values;
     if (!auth) {
-       toast({
+      toast({
         variant: 'destructive',
         title: 'Initialization Error',
         description: 'Firebase is not ready. Please try again in a moment.',
       });
       return;
     }
-    initiateEmailSignIn(auth, email, password);
+    clearErrors();
+    initiateEmailSignIn(auth, email, password)
+      .catch((error) => {
+        console.error("Sign-in Error:", error.code, error.message);
+        toast({
+            variant: "destructive",
+            title: "Sign-in Failed",
+            description: "Invalid credentials. Please check your email and password.",
+        });
+        setError("root", { type: "manual", message: "Invalid credentials" });
+      });
   };
 
-  const onSignUp = () => {
-     const { email, password } = getValues();
+  const onSignUp = (values: LoginFormValues) => {
+     const { email, password } = values;
      if (!auth || !firestore) {
       toast({
         variant: 'destructive',
@@ -79,7 +92,19 @@ export default function LoginPage() {
       });
       return;
     }
-    initiateEmailSignUp(auth, firestore, email, password);
+    clearErrors();
+    initiateEmailSignUp(auth, firestore, email, password)
+     .catch((error) => {
+        console.error("Sign-up Error:", error.code, error.message);
+         toast({
+            variant: "destructive",
+            title: "Sign-up Failed",
+            description: error.code === 'auth/email-already-in-use' 
+                ? "This email is already registered. Please sign in."
+                : "An unexpected error occurred during sign-up.",
+        });
+        setError("root", { type: "manual", message: "Sign-up failed" });
+      });
   }
 
   if (isUserLoading || user) {
@@ -140,7 +165,7 @@ export default function LoginPage() {
           </form>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <Button onClick={form.handleSubmit(onSignIn)} className="w-full" disabled={isSubmitting}>
+          <Button onClick={handleSubmit(onSignIn)} className="w-full" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign In
           </Button>
@@ -148,7 +173,7 @@ export default function LoginPage() {
             <Separator />
             <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">OR</span>
           </div>
-          <Button variant="secondary" onClick={form.handleSubmit(onSignUp)} className="w-full" disabled={isSubmitting}>
+          <Button variant="secondary" onClick={handleSubmit(onSignUp)} className="w-full" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign Up
           </Button>
