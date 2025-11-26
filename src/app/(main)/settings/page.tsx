@@ -103,7 +103,6 @@ export default function SettingsPage() {
         description: 'Your new profile picture has been saved.',
       });
     } catch (error) {
-      console.error("Photo upload error:", error);
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
