@@ -9,7 +9,27 @@ import {
   sendEmailVerification,
   UserCredential,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
+import { doc, setDoc, getDoc, Firestore, getCountFromServer, collection } from 'firebase/firestore';
+
+const SUPER_ADMIN_EMAIL = 'super.admin@workwise.app';
+
+async function createUserProfile(firestore: Firestore, user: UserCredential['user'], name: string) {
+  const userProfileRef = doc(firestore, 'users', user.uid);
+  const docSnap = await getDoc(userProfileRef);
+
+  if (!docSnap.exists()) {
+    // Check if the email is the designated Super Admin email
+    const role = user.email === SUPER_ADMIN_EMAIL ? 'Super Admin' : 'Employee';
+
+    await setDoc(userProfileRef, {
+      name: name,
+      email: user.email,
+      role: role,
+      companyId: 'company-a',
+      avatarUrl: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
+    });
+  }
+}
 
 /**
  * Initiates an email/password sign-in and checks for email verification.
@@ -23,20 +43,9 @@ export function initiateEmailSignIn(
   return new Promise((resolve, reject) => {
     signInWithEmailAndPassword(authInstance, email, password)
       .then((userCredential) => {
-        const user = userCredential.user;
-        if (!user.emailVerified) {
-          // If email is not verified, sign out immediately and reject.
-          signOut(authInstance);
-          const error = new Error('Email not verified.');
-          (error as any).code = 'auth/email-not-verified';
-          reject(error);
-          return;
-        }
-        // If email is verified, resolve the promise.
         resolve();
       })
       .catch((error) => {
-        // Catch other errors like invalid credentials.
         reject(error);
       });
   });
@@ -57,26 +66,9 @@ export function initiateEmailSignUp(
   return new Promise((resolve, reject) => {
     createUserWithEmailAndPassword(authInstance, email, password)
       .then(async (userCredential) => {
-        const user = userCredential.user;
-        const userProfileRef = doc(firestore, 'users', user.uid);
-
         try {
-          // Send verification email
-          await sendEmailVerification(user);
-
-          // Create user profile in Firestore
-          await setDoc(userProfileRef, {
-            name: name,
-            email: user.email,
-            role: 'Employee',
-            companyId: 'company-a',
-            avatarUrl:
-              user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
-          });
-
-          // Sign the user out immediately after registration to force verification
-          await signOut(authInstance);
-          
+          await createUserProfile(firestore, userCredential.user, name);
+          // No verification needed for now, just resolve
           resolve();
         } catch (setupError) {
           reject(setupError);
@@ -102,20 +94,8 @@ export async function initiateGoogleSignIn(
   const result = await signInWithPopup(auth, provider);
   const user = result.user;
 
-  // Check if the user is new by trying to get their profile
-  const userProfileRef = doc(firestore, 'users', user.uid);
-  const docSnap = await getDoc(userProfileRef);
-
-  if (!docSnap.exists()) {
-    // User is new, create a profile document
-    await setDoc(userProfileRef, {
-      name: user.displayName || 'New User',
-      email: user.email,
-      role: 'Employee',
-      companyId: 'company-a',
-      avatarUrl: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
-    });
-  }
+  // Create profile on Google Sign-in if it doesn't exist
+  await createUserProfile(firestore, user, user.displayName || 'New User');
   
   return result;
 }

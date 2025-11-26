@@ -6,6 +6,7 @@ export type User = {
   name: string;
   avatarUrl: string;
   email: string;
+  role: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
 };
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';

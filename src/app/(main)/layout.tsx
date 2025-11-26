@@ -19,10 +19,11 @@ import {
   User,
   ClipboardList,
   Loader2,
+  Users,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useFirebase } from '@/firebase';
+import { useUserProfile } from '@/firebase';
 import { useEffect } from 'react';
 
 export default function MainLayout({
@@ -33,13 +34,13 @@ export default function MainLayout({
   const pathname = usePathname();
   const { t } = useI18n();
   const router = useRouter();
-  const { user, isUserLoading } = useFirebase();
+  const { user, profile, isLoading } = useUserProfile();
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
+    if (!isLoading && !user) {
       router.push('/login');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isLoading, router]);
 
   const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
@@ -47,7 +48,11 @@ export default function MainLayout({
     { href: '/reports', icon: FileText, label: t('nav.reports') },
   ];
 
-  if (isUserLoading || !user) {
+  if (profile?.role === 'Super Admin') {
+    navItems.push({ href: '/users', icon: Users, label: 'Users' });
+  }
+
+  if (isLoading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />

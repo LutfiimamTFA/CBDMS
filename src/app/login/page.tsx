@@ -113,9 +113,6 @@ export default function LoginPage() {
       // Successful sign-in will be handled by the useEffect
     } catch (error: any) {
       let description = 'Invalid credentials. Please check your email and password.';
-      if (error.code === 'auth/email-not-verified') {
-        description = 'Your email is not verified. Please check your inbox for the verification link.';
-      }
       toast({
         variant: 'destructive',
         title: 'Sign-in Failed',
@@ -131,7 +128,11 @@ export default function LoginPage() {
     setIsSigningUp(true);
     try {
       await initiateEmailSignUp(auth, firestore, data.name, data.email, data.password);
-      router.push('/check-email');
+      // After successful sign up, the useEffect will redirect to dashboard on login
+       toast({
+        title: 'Account Created',
+        description: "You can now sign in with your new account.",
+      });
     } catch (error: any) {
       const description =
         error.code === 'auth/email-already-in-use'
@@ -170,11 +171,9 @@ export default function LoginPage() {
         variant: 'destructive',
         title: 'Sign-in Failed',
         description:
-          'Could not sign in with Google. Please try again.',
+          error.message || 'Could not sign in with Google. Please try again.',
       });
     } finally {
-        // This may run before the redirect is complete in some cases,
-        // but it's okay as the page will be left anyway.
         setIsGoogleSigningIn(false);
     }
   };
