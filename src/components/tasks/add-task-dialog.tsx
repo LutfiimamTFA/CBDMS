@@ -541,7 +541,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             </div>
                             {suggestionReason && (
                                 <div className="mt-2 text-xs text-muted-foreground p-2 bg-secondary/50 rounded-md animate-in fade-in-0 slide-in-from-top-2">
-                                    <span className='font-semibold text-primary'>AI says:</span> {suggestionReason}
+                                    <span className='font-semibold text-primary'>{t('addtask.form.priority.aisays')}</span> {suggestionReason}
                                 </div>
                             )}
                             <FormMessage />
