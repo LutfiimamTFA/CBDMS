@@ -1,27 +1,26 @@
 'use client';
 
 import { firebaseConfig } from '@/firebase/config';
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore'
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
+
+let firebaseApp: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let firestore: Firestore | null = null;
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
-  const isConfigured = getApps().length > 0;
-  const firebaseApp = isConfigured ? getApp() : initializeApp(firebaseConfig);
-  const auth = getAuth(firebaseApp);
-  const firestore = getFirestore(firebaseApp);
-
-  if (process.env.NODE_ENV !== 'production') {
-      // It's safe to use localhost here because the Workstation environment
-      // will port forward the domains automatically.
-      try {
-        connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
-        connectFirestoreEmulator(firestore, 'localhost', 8080);
-      } catch (e) {
-        //This can happen in cases of hot-reloading, page refreshes, etc.
-        //where the emulators are already connected.
-      }
+  if (getApps().length === 0) {
+    firebaseApp = initializeApp(firebaseConfig);
+    auth = getAuth(firebaseApp);
+    firestore = getFirestore(firebaseApp);
+  } else {
+    if (!firebaseApp) {
+      firebaseApp = getApp();
+      auth = getAuth(firebaseApp);
+      firestore = getFirestore(firebaseApp);
+    }
   }
 
   return { firebaseApp, auth, firestore };
