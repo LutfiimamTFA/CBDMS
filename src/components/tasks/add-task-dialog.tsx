@@ -138,7 +138,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
   }, [firestore, profile?.companyId]);
 
-  const { data: users = staticUsers } = useCollection<UserType>(usersQuery);
+  const { data: usersData } = useCollection<UserType>(usersQuery);
+  const users = usersData || staticUsers;
 
   
   const tasksQuery = useMemoFirebase(() => {
