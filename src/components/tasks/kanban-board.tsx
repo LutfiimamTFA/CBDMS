@@ -1,28 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './kanban-column';
 import type { Task, Status } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc, query, where } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc, updateDoc } from 'firebase/firestore';
 
 const statuses: Status[] = ['To Do', 'Doing', 'Done'];
 
 export function KanbanBoard() {
-  const { firestore, user, profile, isLoading: isUserLoading } = useUserProfile();
+  const firestore = useFirestore();
 
-  const tasksQuery = useMemoFirebase(() => {
-    if (!user || !profile) return null;
-
-    if (profile.role === 'Employee') {
-      // Employees only see tasks assigned to them
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
-    } else {
-      // Managers and Super Admins see all tasks in the company
-      return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
-    }
-  }, [firestore, user, profile]);
+  const tasksQuery = useMemoFirebase(() => 
+    firestore ? collection(firestore, 'tasks') : null,
+  [firestore]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   const [isClient, setIsClient] = useState(false);
@@ -38,13 +30,13 @@ export function KanbanBoard() {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>, newStatus: Status) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData('taskId');
-    if (!user || !taskId) return;
+    if (!firestore || !taskId) return;
     
     const taskRef = doc(firestore, 'tasks', taskId);
     updateDoc(taskRef, { status: newStatus }).catch(err => console.error(err));
   };
 
-  if (!isClient || isUserLoading || isTasksLoading) {
+  if (!isClient || isTasksLoading) {
     return (
        <div className="grid h-full auto-cols-[minmax(280px,1fr)] grid-flow-col gap-4 p-4 md:p-6">
         {statuses.map(status => (

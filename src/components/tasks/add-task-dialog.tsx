@@ -63,8 +63,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
-import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
-import { collection, query, where, serverTimestamp } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 
@@ -131,23 +131,16 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [comments, setComments] = React.useState<Comment[]>([]);
   const [newComment, setNewComment] = React.useState('');
   
-  const { firestore, user: authUser, profile } = useUserProfile();
-
-  const usersQuery = useMemoFirebase(() => {
-    if (!firestore || !profile?.companyId) return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
-  }, [firestore, profile?.companyId]);
-
-  const { data: usersData } = useCollection<UserType>(usersQuery);
-  const users = usersData || staticUsers;
+  const firestore = useFirestore();
+  const users = staticUsers; // Using static users for now
 
   
-  const tasksQuery = useMemoFirebase(() => {
-    if (!profile) return null;
+  const tasksCollectionRef = useMemoFirebase(() => {
+    if (!firestore) return null;
     return collection(firestore, 'tasks');
-  }, [firestore, profile]);
+  }, [firestore]);
 
-  const { data: allTasks } = useCollection<Task>(tasksQuery);
+  const { data: allTasks } = useCollection<Task>(tasksCollectionRef);
 
 
   const quickDateOptions = [
@@ -177,11 +170,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   });
 
   const onSubmit = (data: TaskFormValues) => {
-    if (!tasksQuery || !profile) return;
+    if (!tasksCollectionRef) return;
 
     const newTask = {
         ...data,
-        companyId: profile.companyId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         assignees: selectedUsers,
@@ -194,7 +186,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         comments,
     };
 
-    addDocumentNonBlocking(tasksQuery, newTask);
+    addDocumentNonBlocking(tasksCollectionRef, newTask);
 
     toast({
         title: 'Task Created',
@@ -387,11 +379,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }
   
   const handlePostComment = () => {
-    if (!newComment.trim() || !authUser || !users) return;
-    const currentUserForComment = users.find(u => u.id === authUser.uid) || staticCurrentUser;
+    if (!newComment.trim()) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
-      user: currentUserForComment,
+      user: staticCurrentUser,
       text: newComment,
       timestamp: new Date().toISOString(),
       replies: [],
@@ -454,12 +445,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const currentUser = useMemo(() => {
-    if (authUser && users) {
-      return users.find(u => u.id === authUser.uid) ?? staticCurrentUser;
-    }
-    return staticCurrentUser;
-  }, [authUser, users]);
+  const currentUser = staticCurrentUser;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

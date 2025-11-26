@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -14,9 +14,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, Loader2, Wand2 } from 'lucide-react';
 import { suggestTasks } from '@/ai/flows/smart-task-suggestions';
 import type { SmartTaskSuggestionsOutput } from '@/ai/flows/smart-task-suggestions';
-import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { Task } from '@/lib/types';
-import { collection, query, where } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 
 export function SmartSuggestions() {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,19 +25,13 @@ export function SmartSuggestions() {
   const [suggestions, setSuggestions] =
     useState<SmartTaskSuggestionsOutput['suggestedTasks'] | null>(null);
     
-  const { firestore, user, profile } = useUserProfile();
+  const firestore = useFirestore();
 
-  const tasksQuery = useMemoFirebase(() => {
-    if (!user || !profile) return null;
+  const tasksCollectionRef = useMemoFirebase(() => 
+    firestore ? collection(firestore, 'tasks') : null, 
+  [firestore]);
 
-    if (profile.role === 'Employee') {
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
-    } else {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
-    }
-  }, [firestore, user, profile]);
-
-  const { data: tasks } = useCollection<Task>(tasksQuery);
+  const { data: tasks } = useCollection<Task>(tasksCollectionRef);
 
 
   const handleGetSuggestions = async () => {
@@ -56,7 +50,7 @@ export function SmartSuggestions() {
 
       const result = await suggestTasks({
         pastTasks: pastTasksString,
-        userRole: profile?.role || 'Employee',
+        userRole: 'Employee', // Using a default role
       });
 
       setSuggestions(result.suggestedTasks);

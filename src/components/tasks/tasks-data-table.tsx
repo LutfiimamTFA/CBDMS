@@ -48,8 +48,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
-import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
-import { collection, doc, query, where } from 'firebase/firestore';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 type AIValidationState = {
@@ -71,17 +71,11 @@ const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
 
 
 export function TasksDataTable() {
-  const { firestore, user, profile, isLoading: isUserLoading } = useUserProfile();
+  const firestore = useFirestore();
   
-  const tasksQuery = useMemoFirebase(() => {
-    if (!user || !profile) return null;
-
-    if (profile.role === 'Employee') {
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
-    } else {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
-    }
-  }, [firestore, user, profile]);
+  const tasksQuery = useMemoFirebase(() => 
+    firestore ? collection(firestore, 'tasks') : null,
+  [firestore]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   const [data, setData] = React.useState<Task[]>([]);
@@ -125,7 +119,7 @@ export function TasksDataTable() {
   }));
 
   const handleStatusChange = (taskId: string, newStatus: Status) => {
-    if (!user) return;
+    if (!firestore) return;
     const taskToUpdate = data.find(task => task.id === taskId);
     if (!taskToUpdate) return;
     
@@ -149,7 +143,7 @@ export function TasksDataTable() {
   };
   
   const handleDeleteTask = (taskId: string) => {
-      if (!user) return;
+      if (!firestore) return;
       const taskRef = doc(firestore, 'tasks', taskId);
       deleteDocumentNonBlocking(taskRef);
   };
@@ -164,7 +158,7 @@ export function TasksDataTable() {
   }
   
   const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
-    if (!user) return;
+    if (!firestore) return;
     const task = data.find(t => t.id === taskId);
     if (!task) return;
 
@@ -494,7 +488,7 @@ export function TasksDataTable() {
                     colSpan={columns.length}
                     className="h-24 text-center"
                   >
-                    {isUserLoading || isTasksLoading ? 'Loading tasks...' : t('tasks.noresults')}
+                    {isTasksLoading ? 'Loading tasks...' : t('tasks.noresults')}
                   </TableCell>
                 </TableRow>
               )}

@@ -19,7 +19,7 @@ interface UseUserProfileResult {
   profile: WithId<UserProfile> | null;
   isLoading: boolean;
   error: Error | null;
-  firestore: ReturnType<typeof useFirebase>['firestore'];
+  firestore: ReturnType<typeof useFirebase>['firestore'] | null;
 }
 
 /**

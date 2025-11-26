@@ -7,15 +7,14 @@ import {
   onAuthStateChanged,
   User,
 } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
-import { getSdks } from '@/firebase';
+import { doc, setDoc, Firestore } from 'firebase/firestore';
 
 
 /**
  * Initiates an email/password sign-in. If the user does not exist, it automatically
  * creates a new account and a corresponding user profile in Firestore.
  */
-export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): void {
+export function initiateEmailSignIn(authInstance: Auth, firestore: Firestore, email: string, password: string): void {
   // Check if a user is already signed in. If so, do nothing.
   if (authInstance.currentUser) {
     return;
@@ -27,7 +26,6 @@ export function initiateEmailSignIn(authInstance: Auth, email: string, password:
       if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
         createUserWithEmailAndPassword(authInstance, email, password)
           .then(userCredential => {
-            const { firestore } = getSdks(authInstance.app);
             const user = userCredential.user;
             const userProfileRef = doc(firestore, 'users', user.uid);
             

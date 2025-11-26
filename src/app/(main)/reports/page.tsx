@@ -8,30 +8,21 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
-import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { Task } from '@/lib/types';
 import { CheckCircle2, CircleDashed, Clock, Loader2 } from 'lucide-react';
-import { collection, query, where } from 'firebase/firestore';
+import { collection } from 'firebase/firestore';
 
 export default function ReportsPage() {
-  const { firestore, user, profile, isLoading: isUserLoading } = useUserProfile();
+  const firestore = useFirestore();
 
-  const tasksQuery = useMemoFirebase(() => {
-    if (!user || !profile) return null;
-    
-    // Different queries based on user role
-    if (profile.role === 'Employee') {
-      // Employees only see tasks assigned to them
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
-    } else {
-      // Managers and Super Admins see all tasks in the company
-      return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
-    }
-  }, [firestore, user, profile]);
+  const tasksCollectionRef = useMemoFirebase(() => 
+    firestore ? collection(firestore, 'tasks') : null,
+  [firestore]);
 
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksCollectionRef);
   
-  if (isUserLoading || isTasksLoading) {
+  if (isTasksLoading) {
     return (
        <div className="flex h-svh flex-col bg-background">
         <Header title="Work Reports" />
