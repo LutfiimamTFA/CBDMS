@@ -27,12 +27,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { tasks as initialData } from '@/lib/data';
-import type { Task, Status } from '@/lib/types';
+import type { Task, Status, Priority } from '@/lib/types';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { TaskDetailsSheet } from './task-details-sheet';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
@@ -49,7 +49,15 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 
+
+type AIValidationState = {
+  isOpen: boolean;
+  isChecking: boolean;
+  reason: string;
+  onConfirm: () => void;
+};
 
 export function TasksDataTable() {
   const [data, setData] = React.useState<Task[]>(initialData);
@@ -65,6 +73,10 @@ export function TasksDataTable() {
     task?: Task;
     onConfirm?: () => void;
   }>({ isOpen: false });
+
+  const [aiValidation, setAiValidation] = React.useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
+  const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
+
 
   const statusOptions = Object.values(statusInfo).map(s => ({
       value: s.value,
@@ -114,6 +126,58 @@ export function TasksDataTable() {
         description: "Task link has been copied to your clipboard.",
     });
   }
+  
+  const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
+    const task = data.find(t => t.id === taskId);
+    if (!task) return;
+
+    const currentPriority = task.priority;
+    const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
+
+    const applyPriorityChange = (id: string, priority: Priority) => {
+        setData(prevData => prevData.map(d => d.id === id ? { ...d, priority } : d));
+    };
+
+    // If it's not an escalation, just apply it
+    if (priorityValues[newPriority] <= priorityValues[currentPriority]) {
+        applyPriorityChange(taskId, newPriority);
+        return;
+    }
+
+    setPendingPriorityChange({ taskId, newPriority });
+    setAiValidation({ ...aiValidation, isChecking: true });
+    try {
+        const result = await validatePriorityChange({
+            title: task.title,
+            description: task.description,
+            currentPriority,
+            requestedPriority: newPriority,
+        });
+
+        if (result.isApproved) {
+            applyPriorityChange(taskId, newPriority);
+            toast({ title: 'AI Agrees!', description: result.reason });
+        } else {
+            // AI disagrees, show confirmation dialog
+            setAiValidation({
+                isOpen: true,
+                isChecking: false,
+                reason: result.reason,
+                onConfirm: () => {
+                    applyPriorityChange(taskId, newPriority); // User overrides AI
+                    setAiValidation({ ...aiValidation, isOpen: false });
+                }
+            });
+        }
+    } catch (e) {
+        console.error(e);
+        toast({ variant: 'destructive', title: 'AI Validation Failed', description: 'Could not validate priority change. Applying directly.' });
+        applyPriorityChange(taskId, newPriority); // Apply directly on error
+    } finally {
+        setAiValidation(prev => ({ ...prev, isChecking: false }));
+        setPendingPriorityChange(null);
+    }
+  };
 
 
   const columns: ColumnDef<Task>[] = [
@@ -196,24 +260,42 @@ export function TasksDataTable() {
       },
     },
     {
-      accessorKey: 'priority',
-      header: t('tasks.column.priority'),
-      cell: ({ row }) => {
-        const priority = row.getValue('priority') as keyof typeof priorityInfo;
-        const Icon = priorityInfo[priority].icon;
-        const color = priorityInfo[priority].color;
-        const translationKey = `priority.${priority.toLowerCase()}` as any;
-        return (
-           <div className="flex w-[100px] items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm">
-              <Icon className={`h-4 w-4 ${color}`} />
-              <span>{t(translationKey)}</span>
-           </div>
-        );
+        accessorKey: 'priority',
+        header: t('tasks.column.priority'),
+        cell: ({ row }) => {
+          const task = row.original;
+          const currentPriority = row.getValue('priority') as Priority;
+          const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
+
+          return (
+            <div className="flex items-center gap-2">
+              {isChecking && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Select
+                value={currentPriority}
+                onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
+                disabled={isChecking}
+              >
+                <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(priorityInfo).map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex items-center gap-2">
+                        <p.icon className={`h-4 w-4 ${p.color}`} />
+                        <span>{t(`priority.${p.value.toLowerCase()}` as any)}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        },
+        filterFn: (row, id, value) => {
+          return value.includes(row.getValue(id));
+        },
       },
-       filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id))
-      },
-    },
     {
       accessorKey: 'assignees',
       header: t('tasks.column.assignees'),
@@ -447,9 +529,30 @@ export function TasksDataTable() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>AI Priority Guard</AlertDialogTitle>
+                <AlertDialogDescription>
+                    {aiValidation.reason}
+                    <br/><br/>
+                    Do you still want to set this task as Urgent?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => {
+                  aiValidation.onConfirm();
+                  setAiValidation(prev => ({ ...prev, isOpen: false }));
+                }}>Yes, set as Urgent</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
+    
+
     
 
     
