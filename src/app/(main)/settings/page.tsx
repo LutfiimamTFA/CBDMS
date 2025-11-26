@@ -105,7 +105,7 @@ export default function SettingsPage() {
   if (isProfileLoading) {
     return (
       <div className="flex h-svh flex-col bg-background">
-        <Header title="Settings" />
+        <Header title="Profile" />
         <main className="flex-1 overflow-auto p-4 md:p-6 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
         </main>
@@ -115,7 +115,7 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Settings" />
+      <Header title="Profile" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mx-auto max-w-3xl space-y-8">
           <Card>

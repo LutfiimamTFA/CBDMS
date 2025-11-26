@@ -16,7 +16,7 @@ import {
 import {
   LayoutDashboard,
   FileText,
-  Settings,
+  User,
   ClipboardList,
   Loader2,
 } from 'lucide-react';
@@ -84,10 +84,10 @@ export default function MainLayout({
               <Link href="/settings">
                 <SidebarMenuButton
                   isActive={pathname === '/settings'}
-                  tooltip={t('nav.settings')}
+                  tooltip={'Profile'}
                 >
-                  <Settings />
-                  <span>{t('nav.settings')}</span>
+                  <User />
+                  <span>{'Profile'}</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
