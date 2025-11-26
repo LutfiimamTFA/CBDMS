@@ -135,7 +135,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return collection(firestore, 'users', user.uid, 'tasks');
+    return collection(firestore, 'tasks');
   }, [firestore, user]);
 
   const { data: allTasks } = useCollection<Task>(tasksQuery);
@@ -168,10 +168,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   });
 
   const onSubmit = (data: TaskFormValues) => {
-    if (!tasksQuery) return;
+    if (!tasksQuery || !user) return;
 
     const newTask = {
         ...data,
+        companyId: 'company-a', // Hardcoded for now
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         assignees: selectedUsers,
@@ -768,3 +769,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    

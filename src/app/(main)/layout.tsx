@@ -21,8 +21,11 @@ import {
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useAuth, useUser } from '@/firebase';
+import { useAuth, useUser, setDocumentNonBlocking } from '@/firebase';
 import { useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc } from 'firebase/firestore';
+import { useFirebase } from '@/firebase';
 import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 
 export default function MainLayout({
@@ -32,14 +35,34 @@ export default function MainLayout({
 }) {
   const pathname = usePathname();
   const { t } = useI18n();
-  const auth = useAuth();
+  const { auth, firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
 
   useEffect(() => {
-    if (!user && !isUserLoading) {
-      initiateAnonymousSignIn(auth);
-    }
-  }, [user, isUserLoading, auth]);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        // User is signed in.
+        const userRef = doc(firestore, 'users', firebaseUser.uid);
+        
+        // For this simple case, we set a default role and companyId upon first login.
+        // In a real app, this would be managed by an admin.
+        setDocumentNonBlocking(userRef, {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || 'Anonymous User',
+            email: firebaseUser.email || `anon-${firebaseUser.uid}@example.com`,
+            role: 'Employee', // Assign a default role
+            companyId: 'company-a' // Assign a default company
+        }, { merge: true });
+
+      } else if (!isUserLoading) {
+        // User is signed out, and we are not in a loading state.
+        initiateAnonymousSignIn(auth);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [auth, firestore, isUserLoading]);
+
 
   const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
@@ -90,3 +113,5 @@ export default function MainLayout({
     </SidebarProvider>
   );
 }
+
+    

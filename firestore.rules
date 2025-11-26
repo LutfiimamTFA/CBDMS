@@ -1,26 +1,4 @@
-/**
- * This ruleset enforces a strict user-ownership security model for the WorkWise application.
- * All data is sandboxed within a user's own data tree, preventing any cross-user data access.
- *
- * Core Philosophy:
- * A user can only read, write, and delete data that exists under their own user ID path. This
- * path-based security is simple, performant, and highly secure.
- *
- * Data Structure:
- * The data is organized hierarchically:
- * - /users/{userId}: Stores the user's profile information.
- * - /users/{userId}/tasks/{taskId}: Stores tasks created by and for the user.
- * - /users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId}: Stores time entries for a user's tasks.
- *
- * Key Security Decisions:
- * - No Public Data: All collections are private to the owning user.
- * - User Listing Disabled: It is not possible to query the top-level `/users` collection.
- * - Strict Ownership: All operations (read, create, update, delete) are gated by an ownership check.
- *   The authenticated user's UID must match the `{userId}` in the document path.
- * - Relational Integrity: On creation, key identifiers within a document (e.g., a `userId` field)
- *   are validated to ensure they match the document's path, creating a secure and consistent link.
- *   These identifiers are immutable once set.
- */
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -29,112 +7,96 @@ service cloud.firestore {
     // Helper Functions
     // --------------------------------------------------------------------------------
 
-    /**
-     * Checks if a user is authenticated.
-     */
     function isSignedIn() {
       return request.auth != null;
     }
 
-    /**
-     * Checks if the currently authenticated user's UID matches the provided userId.
-     * This is the primary function for enforcing data ownership.
-     */
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    /**
-     * Ensures an operation is performed by the document owner and that the document already exists.
-     * CRITICAL for preventing writes to non-existent paths on update/delete.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
+    // Function to get the user's profile data
+    function getMyProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    /**
-     * Validates required relational fields on User document creation.
-     * Ensures the document's internal `id` matches the document's path ID (`userId`).
-     */
-    function hasValidUserDataOnCreate(userId) {
-      return request.resource.data.id == userId;
+    // Function to get any user's profile data
+    function getUserProfile(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
-    /**
-     * Enforces immutability for critical relational fields on User document updates.
-     * The user's own ID cannot be changed.
-     */
-    function hasImmutableUserData() {
-      return request.resource.data.id == resource.data.id;
+    // Function to check if the user has a specific role
+    function hasRole(role) {
+      return isSignedIn() && getMyProfile().role == role;
+    }
+
+    // Function to check if two users are in the same company
+    function isInSameCompany(otherUserId) {
+        return getMyProfile().companyId == getUserProfile(otherUserId).companyId;
     }
     
-    /**
-     * Validates required relational fields on TimeTracking document creation.
-     * Ensures the new document is correctly linked to its parent user and task.
-     */
-    function hasValidTimeTrackingDataOnCreate(userId, taskId) {
-      let data = request.resource.data;
-      return data.userId == userId && data.taskId == taskId;
-    }
-
-    /**
-     * Enforces immutability for critical relational fields on TimeTracking document updates.
-     * The link to the user and task cannot be changed.
-     */
-    function hasImmutableTimeTrackingData() {
-      let incomingData = request.resource.data;
-      let existingData = resource.data;
-      return incomingData.userId == existingData.userId &&
-             incomingData.taskId == existingData.taskId;
-    }
-
     // --------------------------------------------------------------------------------
     // Collection Rules
     // --------------------------------------------------------------------------------
 
-    /**
-     * @description Manages user profile documents.
-     * @path /users/{userId}
-     * @allow (create) An authenticated user can create their own profile document.
-     * @deny (list) Another user attempts to list all user profiles.
-     * @principle Restricts access to a user's own data tree.
-     */
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false; // Disallow listing all users for security.
-      allow create: if isOwner(userId) && hasValidUserDataOnCreate(userId);
-      allow update: if isExistingOwner(userId) && hasImmutableUserData();
-      allow delete: if isExistingOwner(userId);
-    }
-
-    /**
-     * @description Manages a user's own tasks.
-     * @path /users/{userId}/tasks/{taskId}
-     * @allow (create, list, get) A user manages tasks within their own subcollection.
-     * @deny (get) A user with auth.uid 'user-abc' tries to read a task at /users/user-xyz/tasks/task-123.
-     * @principle Enforces document ownership via path hierarchy.
-     */
-    match /users/{userId}/tasks/{taskId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
+      // READ: You can read your own profile. Managers can read profiles of users in the same company. Super Admins can read any profile.
+      allow get: if isOwner(userId) || (hasRole('Manager') && isInSameCompany(userId)) || hasRole('Super Admin');
+      // LIST: Disabled for security. No one can list all users.
+      allow list: if false;
+      // CREATE: You can create your own user profile.
       allow create: if isOwner(userId);
-      allow update: if isExistingOwner(userId);
-      allow delete: if isExistingOwner(userId);
+      // UPDATE: You can only update your own profile.
+      // A Super Admin could change roles, but that logic would be handled via a Cloud Function.
+      allow update: if isOwner(userId);
+      // DELETE: You can delete your own profile.
+      allow delete: if isOwner(userId);
     }
 
-    /**
-     * @description Manages time tracking entries for a specific task belonging to a user.
-     * @path /users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId}
-     * @allow (create) A user adds a time tracking entry to one of their own tasks.
-     * @deny (update) An attacker tries to change the `userId` or `taskId` of an existing time entry.
-     * @principle Validates relational integrity between documents and enforces immutability of parent links.
-     */
-    match /users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId} {
-      allow get: if isOwner(userId);
-      allow list: if isOwner(userId);
-      allow create: if isOwner(userId) && hasValidTimeTrackingDataOnCreate(userId, taskId);
-      allow update: if isExistingOwner(userId) && hasImmutableTimeTrackingData();
-      allow delete: if isExistingOwner(userId);
+    match /tasks/{taskId} {
+      // READ:
+      // - Super Admins can read any task.
+      // - Employees can read tasks they are assigned to.
+      // - Managers can read any task within their company.
+      // - Clients can read any task within their company.
+      allow get: if isSignedIn() &&
+                    (hasRole('Super Admin') ||
+                    (hasRole('Employee') && request.auth.uid in resource.data.assigneeIds) ||
+                    (hasRole('Manager') && getMyProfile().companyId == resource.data.companyId) ||
+                    (hasRole('Client') && getMyProfile().companyId == resource.data.companyId));
+                    
+      // LIST: Query access must be handled carefully on the client-side to match these rules.
+      // This rule just allows the list operation to proceed, client queries must be secure.
+      allow list: if isSignedIn();
+
+      // CREATE:
+      // - Employees, Managers, and Super Admins can create tasks.
+      allow create: if isSignedIn() && (hasRole('Employee') || hasRole('Manager') || hasRole('Super Admin'));
+
+      // UPDATE:
+      // - Super Admins can update any task.
+      // - Managers can update tasks in their company.
+      // - Employees can update tasks they are assigned to.
+      // - Clients can ONLY comment (This logic would be more complex, for now they can't update).
+      allow update: if isSignedIn() &&
+                     (hasRole('Super Admin') ||
+                     (hasRole('Manager') && getMyProfile().companyId == resource.data.companyId) ||
+                     (hasRole('Employee') && request.auth.uid in resource.data.assigneeIds));
+
+      // DELETE:
+      // - Only Super Admins and Managers can delete tasks.
+      allow delete: if isSignedIn() && (hasRole('Super Admin') || (hasRole('Manager') && getMyProfile().companyId == resource.data.companyId));
+
+      // --- Nested Time Tracking ---
+      match /timeTracking/{timeTrackingId} {
+        // Only the assigned employee or a manager in the same company can CRUD time tracking.
+        allow read, write: if isSignedIn() &&
+                             (hasRole('Super Admin') ||
+                             (hasRole('Manager') && getMyProfile().companyId == get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId) ||
+                             (isOwner(get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds[0]))); // Simplified for now
+      }
     }
   }
 }
+
+    

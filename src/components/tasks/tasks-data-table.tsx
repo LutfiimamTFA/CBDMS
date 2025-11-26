@@ -49,7 +49,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
-import { collection, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 type AIValidationState = {
@@ -74,7 +74,7 @@ export function TasksDataTable() {
   const { firestore, user } = useFirebase();
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return collection(firestore, 'users', user.uid, 'tasks');
+    return collection(firestore, 'tasks');
   }, [firestore, user]);
 
   const { data: tasks, isLoading } = useCollection<Task>(tasksQuery);
@@ -124,7 +124,7 @@ export function TasksDataTable() {
     if (!taskToUpdate) return;
     
     const performUpdate = () => {
-        const taskRef = doc(firestore, 'users', user.uid, 'tasks', taskId);
+        const taskRef = doc(firestore, 'tasks', taskId);
         updateDocumentNonBlocking(taskRef, { status: newStatus });
     };
 
@@ -144,7 +144,7 @@ export function TasksDataTable() {
   
   const handleDeleteTask = (taskId: string) => {
       if (!user) return;
-      const taskRef = doc(firestore, 'users', user.uid, 'tasks', taskId);
+      const taskRef = doc(firestore, 'tasks', taskId);
       deleteDocumentNonBlocking(taskRef);
   };
 
@@ -166,7 +166,7 @@ export function TasksDataTable() {
     const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
 
     const applyPriorityChange = (id: string, priority: Priority) => {
-        const taskRef = doc(firestore, 'users', user.uid, 'tasks', id);
+        const taskRef = doc(firestore, 'tasks', id);
         updateDocumentNonBlocking(taskRef, { priority: priority });
     };
 
@@ -582,3 +582,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    

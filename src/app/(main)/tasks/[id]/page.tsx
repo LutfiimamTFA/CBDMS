@@ -19,7 +19,7 @@ export default function TaskPage({ params }: { params: Promise<{ id: string }> }
 
   const taskRef = useMemoFirebase(() => {
     if (!user || !resolvedParams.id) return null;
-    return doc(firestore, 'users', user.uid, 'tasks', resolvedParams.id);
+    return doc(firestore, 'tasks', resolvedParams.id);
   }, [firestore, user, resolvedParams.id]);
 
   const { data: task, isLoading } = useDoc<Task>(taskRef);
@@ -69,3 +69,5 @@ export default function TaskPage({ params }: { params: Promise<{ id: string }> }
     </div>
   );
 }
+
+    

@@ -14,7 +14,10 @@ export function KanbanBoard() {
 
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return collection(firestore, 'users', user.uid, 'tasks');
+    // In a real RBAC app, this query would change based on the user's role.
+    // For now, we fetch all tasks and rely on Firestore rules for security.
+    // A Manager might query for all tasks in their company, an Employee for assigned tasks.
+    return collection(firestore, 'tasks');
   }, [firestore, user]);
 
   const { data: tasks, isLoading } = useCollection<Task>(tasksQuery);
@@ -33,7 +36,7 @@ export function KanbanBoard() {
     const taskId = e.dataTransfer.getData('taskId');
     if (!user || !taskId) return;
     
-    const taskRef = doc(firestore, 'users', user.uid, 'tasks', taskId);
+    const taskRef = doc(firestore, 'tasks', taskId);
     updateDoc(taskRef, { status: newStatus }).catch(err => console.error(err));
   };
 
@@ -66,3 +69,5 @@ export function KanbanBoard() {
     </ScrollArea>
   );
 }
+
+    

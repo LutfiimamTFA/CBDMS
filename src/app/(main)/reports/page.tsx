@@ -18,7 +18,7 @@ export default function ReportsPage() {
 
   const tasksQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return collection(firestore, 'users', user.uid, 'tasks');
+    return collection(firestore, 'tasks');
   }, [firestore, user]);
 
   const { data: tasks, isLoading } = useCollection<Task>(tasksQuery);
@@ -97,3 +97,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
