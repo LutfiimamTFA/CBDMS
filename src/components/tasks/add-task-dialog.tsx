@@ -30,11 +30,11 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { users, tags as allTags } from '@/lib/data';
+import { users, tags as allTags, tasks as allTasks } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, LogIn, Mail, Notebook, PauseCircle, PlayCircle, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Text, Hash, Calendar as CalendarIcon, Type, List, UploadCloud, Paperclip, FileText, FileUp, Link as LinkIcon, FileImage, HelpCircle, Workflow, Timer, Blocks, File, User, CalendarCheck2, Star, Edit } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -57,10 +57,12 @@ import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
-import type { Tag as TagType, TimeLog } from '@/lib/types';
+import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Progress } from '../ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Checkbox } from '../ui/checkbox';
 
 
 const taskSchema = z.object({
@@ -118,6 +120,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = React.useState('');
+  const [dependencies, setDependencies] = React.useState<string[]>([]);
+  const [blocking, setBlocking] = React.useState<string[]>([]);
+  const [comments, setComments] = React.useState<Comment[]>([]);
+  const [newComment, setNewComment] = React.useState('');
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -164,8 +172,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         timeTracked,
         customFields: customFieldsData,
         attachments,
+        subtasks,
+        dependencies,
+        blocking,
+        comments,
     });
     setOpen(false);
+    // Reset all states
     form.reset();
     setSelectedUsers([]);
     setSelectedTags([]);
@@ -174,6 +187,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setLogNote('');
     setCustomFields([]);
     setAttachments([]);
+    setSubtasks([]);
+    setDependencies([]);
+    setBlocking([]);
+    setComments([]);
   };
   
   const handleAddLogEntry = () => {
@@ -251,10 +268,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
 
   const getFileIcon = (fileName: string) => {
-    if (fileName.endsWith('.pdf')) return <FileText className="h-5 w-5 text-red-500" />;
-    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return <FileText className="h-5 w-5 text-blue-500" />;
+    if (fileName.endsWith('.pdf')) return <FileImage className="h-5 w-5 text-red-500" />;
+    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return <FileImage className="h-5 w-5 text-blue-500" />;
     if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')) return <FileImage className="h-5 w-5 text-green-500" />;
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
+    return <FileImage className="h-5 w-5 text-muted-foreground" />;
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -323,6 +340,47 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const handleAddSubtask = () => {
+    if (newSubtaskTitle.trim()) {
+      const newSubtask: Subtask = {
+        id: `sub-${Date.now()}`,
+        title: newSubtaskTitle,
+        completed: false,
+      };
+      setSubtasks([...subtasks, newSubtask]);
+      setNewSubtaskTitle('');
+    }
+  };
+
+  const handleToggleSubtask = (subtaskId: string) => {
+    setSubtasks(
+      subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st)
+    );
+  };
+  
+  const handleRemoveSubtask = (subtaskId: string) => {
+    setSubtasks(subtasks.filter(st => st.id !== subtaskId));
+  }
+  
+  const handlePostComment = () => {
+    if (!newComment.trim()) return;
+    const comment: Comment = {
+      id: `c-${Date.now()}`,
+      user: users[4], // Assuming current user
+      text: newComment,
+      timestamp: new Date().toISOString(),
+      replies: [],
+    };
+    setComments([...comments, comment]);
+    setNewComment('');
+  };
+
+  const subtaskProgress = useMemo(() => {
+    if (subtasks.length === 0) return 0;
+    const completedCount = subtasks.filter(st => st.completed).length;
+    return (completedCount / subtasks.length) * 100;
+  }, [subtasks]);
+
   const recurringValue = form.watch('recurring');
   const recurringOptions: Record<string, string> = {
     never: t('addtask.form.recurring.never'),
@@ -372,7 +430,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+      <DialogContent className="sm:max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>{t('addtask.title')}</DialogTitle>
           <DialogDescription>
@@ -381,7 +439,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         </DialogHeader>
         <ScrollArea className="px-6">
           <div className="pt-4">
-             <Accordion type="single" collapsible className="w-full mb-6">
+            <Accordion type="single" collapsible className="w-full mb-6">
               <AccordionItem value="item-1">
                 <AccordionTrigger>
                   <div className="flex items-center gap-2 text-sm font-medium">
@@ -404,11 +462,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       <p><b>Time Estimate</b> adalah total perkiraan waktu (dalam jam). <b>Time Tracking</b> digunakan untuk mencatat sesi kerja manual dengan jam mulai/selesai, tanggal, dan catatan untuk setiap sesi.</p>
                     </div>
                   </div>
-                   <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
+                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
                     <Users className="h-5 w-5 mt-1 text-primary shrink-0"/>
                     <div>
                       <h4 className="font-semibold text-foreground">Kolaborasi Tim</h4>
-                      <p>Bagikan tugas melalui tautan (publik/privat), undang anggota tim via email, atau tugaskan kepada anggota yang sudah ada.</p>
+                      <p>Bagikan tugas melalui tautan (publik/privat), undang anggota tim via email, atau tugaskan kepada anggota yang sudah ada. Tambahkan juga subtugas, dependensi, dan komentar.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
@@ -422,538 +480,194 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
               </AccordionItem>
             </Accordion>
 
-
             <Form {...form}>
               <form
                 id="add-task-form"
                 onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-4"
               >
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('addtask.form.title')}</FormLabel>
-                      <FormControl>
-                        <Input placeholder={t('addtask.form.title.placeholder')} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('addtask.form.description')}</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('addtask.form.status')}</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
-                        >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('addtask.form.title')}</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder={t('addtask.form.status.placeholder')} />
-                            </SelectTrigger>
+                            <Input placeholder={t('addtask.form.title.placeholder')} {...field} />
                           </FormControl>
-                          <SelectContent>
-                            {Object.values(statusInfo).map((s) => (
-                              <SelectItem key={s.value} value={s.value}>
-                                <div className="flex items-center gap-2">
-                                  <s.icon className="h-4 w-4" />
-                                  {t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{t('addtask.form.priority')}</FormLabel>
-                         <div className="flex items-center gap-2">
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder={t('addtask.form.priority.placeholder')} />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {Object.values(priorityInfo).map((p) => (
-                                <SelectItem key={p.value} value={p.value}>
-                                  <div className="flex items-center gap-2">
-                                    <p.icon className={`h-4 w-4 ${p.color}`} />
-                                    {t(`priority.${p.value.toLowerCase()}` as any)}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                           <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={handleSuggestPriority}
-                            disabled={isSuggesting}
-                            className="shrink-0"
-                          >
-                            {isSuggesting ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Wand2 className="h-4 w-4" />
-                            )}
-                            <span className="sr-only">Suggest Priority</span>
-                          </Button>
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-
-                <div className="space-y-4 rounded-lg border p-4">
-                    <h3 className="text-sm font-medium flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        {t('addtask.form.dates')}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
-                        control={form.control}
-                        name="startDate"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>{t('addtask.form.startdate')}</FormLabel>
-                            <FormControl>
-                                <Input type="date" {...field} value={field.value || ''} />
-                            </FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                        <FormField
-                        control={form.control}
-                        name="dueDate"
-                        render={({ field }) => (
-                            <FormItem>
-                            <FormLabel>{t('addtask.form.duedate')}</FormLabel>
-                            <FormControl>
-                                <Input type="date" {...field} value={field.value || ''} />
-                            </FormControl>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                    </div>
-                     <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label>
-                        <div className="flex flex-wrap gap-2">
-                        {quickDateOptions.map(option => (
-                            <Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>
-                                {option.label}
-                            </Button>
-                        ))}
-                         <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', '')}>
-                            {t('addtask.form.quickselect.clear')}
-                        </Button>
-                        </div>
-                    </div>
-                    <Separator />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Button type="button" variant="outline">
-                            <svg className="mr-2" width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12.25 1.75H11.375V0.875H9.625V1.75H4.375V0.875H2.625V1.75H1.75C1.29688 1.75 1.00094 2.05188 1.00094 2.5L1 12.25C1 12.7 1.29688 13 1.75 13H12.25C12.7031 13 13 12.7 13 12.25V2.5C13 2.05188 12.7031 1.75 12.25 1.75ZM11.375 11.375H2.625V4.375H11.375V11.375Z" fill="#4285F4"/><path d="M4.375 6.125H6.125V7.875H4.375V6.125Z" fill="#34A853"/><path d="M7 6.125H8.75V7.875H7V6.125Z" fill="#FBBC05"/><path d="M9.625 6.125H11.375V7.875H9.625V6.125Z" fill="#EA4335"/><path d="M4.375 8.75H6.125V10.5H4.375V8.75Z" fill="#4285F4"/><path d="M7 8.75H8.75V10.5H7V8.75Z" fill="#34A853"/></svg>
-                            {t('addtask.form.addtogoogle')}
-                        </Button>
-                        <FormField
-                            control={form.control}
-                            name="recurring"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                    <FormControl>
-                                        <Button variant="outline" asChild className="w-full">
-                                            <SelectTrigger>
-                                                <Repeat className="mr-2" />
-                                                <span className="capitalize">
-                                                  {recurringValue === 'never'
-                                                    ? t('addtask.form.setrecurring')
-                                                    : recurringOptions[recurringValue]}
-                                                </span>
-                                            </SelectTrigger>
-                                        </Button>
-                                    </FormControl>
-                                    <SelectContent>
-                                        <SelectItem value="never">{recurringOptions['never']}</SelectItem>
-                                        <SelectItem value="daily">{recurringOptions['daily']}</SelectItem>
-                                        <SelectItem value="weekly">{recurringOptions['weekly']}</SelectItem>
-                                        <SelectItem value="monthly">{recurringOptions['monthly']}</SelectItem>
-                                    </SelectContent>
-                                    </Select>
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                </div>
-
-                <div className="space-y-4 rounded-lg border p-4">
-                  <h3 className="text-sm font-medium flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    {t('addtask.form.teammembers')}
-                  </h3>
-                  
-                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/50 p-3">
-                     <div className="flex items-center gap-3">
-                        <Share className="h-8 w-8 text-primary" />
-                        <div>
-                          <p className="text-sm font-medium">{t('addtask.form.sharelink')}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {shareSetting === 'public'
-                              ? t('addtask.form.sharelink.public')
-                              : t('addtask.form.sharelink.private')}
-                          </p>
-                        </div>
-                     </div>
-                     <div className="flex items-center gap-2">
-                        <Select
-                          defaultValue={shareSetting}
-                          onValueChange={(value: ShareSetting) => setShareSetting(value)}
-                        >
-                          <SelectTrigger className="h-8 w-[100px] text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="public">{t('addtask.form.sharelink.public.option')}</SelectItem>
-                            <SelectItem value="private">{t('addtask.form.sharelink.private.option')}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <Button variant="outline" size="sm" className="h-8" onClick={() => navigator.clipboard.writeText(window.location.href)}>
-                            <Copy className="mr-2 h-3 w-3" />
-                            {t('addtask.form.copylink')}
-                        </Button>
-                     </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <Input
-                      type="email"
-                      placeholder={t('addtask.form.inviteemail')}
-                      className="flex-1"
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
-                    <Button variant="outline" size="sm">
-                      <UserPlus className="mr-2 h-4 w-4" />
-                      {t('addtask.form.invite')}
-                    </Button>
-                  </div>
-                  <div className="relative">
-                    <Separator className="my-3" />
-                    <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">
-                      {t('addtask.form.or')}
-                    </span>
-                  </div>
-                  
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-muted-foreground">
-                        {t('addtask.form.selectmembers')}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                      {users.map((user) => (
-                        <DropdownMenuItem
-                          key={user.id}
-                          onSelect={() => handleSelectUser(user)}
-                        >
-                          <Avatar className="h-6 w-6 mr-2">
-                              <AvatarImage src={user.avatarUrl} alt={user.name} />
-                              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <span>{user.name}</span>
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
 
-                  {selectedUsers.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>{t('addtask.form.selectedmembers')}</Label>
-                      {selectedUsers.map((user) => (
-                        <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-7 w-7">
-                                <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-medium">{user.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {shareSetting === 'private' && (
-                              <Select defaultValue="full-access">
-                                <SelectTrigger className="h-8 w-[120px] text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="full-access">{t('addtask.form.access.full')}</SelectItem>
-                                  <SelectItem value="edit">{t('addtask.form.access.edit')}</SelectItem>
-                                  <SelectItem value="comment">{t('addtask.form.access.comment')}</SelectItem>
-                                  <SelectItem value="view">{t('addtask.form.access.view')}</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            )}
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}>
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <FormField
-                  control={form.control}
-                  name="timeEstimate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('addtask.form.timeestimate')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder={t('addtask.form.timeestimate.placeholder')}
-                          {...field}
-                          onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)}
-                          value={field.value ?? ''}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="space-y-4 rounded-lg border p-4">
-                    <h3 className="text-sm font-medium flex items-center gap-2">
-                        <Clock className="h-4 w-4" />
-                        Time Tracking
-                    </h3>
+                    <FormField
+                      control={form.control}
+                      name="description"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('addtask.form.description')}</FormLabel>
+                          <FormControl>
+                            <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} rows={5}/>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     
-                    <div className="space-y-2">
-                        <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Progress</span>
-                            <span>{timeTracked.toFixed(2)}h / {timeEstimateValue}h</span>
-                        </div>
-                        <Progress value={timeTrackingProgress} />
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="status" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>{t('addtask.form.status')}</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.status.placeholder')} /></SelectTrigger></FormControl>
+                              <SelectContent>{Object.values(statusInfo).map((s) => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}</div></SelectItem>))}</SelectContent>
+                              </Select><FormMessage />
+                          </FormItem>
+                      )}/>
+                      <FormField control={form.control} name="priority" render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>{t('addtask.form.priority')}</FormLabel>
+                              <div className="flex items-center gap-2">
+                                  <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.priority.placeholder')} /></SelectTrigger></FormControl>
+                                  <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{t(`priority.${p.value.toLowerCase()}` as any)}</div></SelectItem>))}</SelectContent>
+                                  </Select>
+                                  <Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting} className="shrink-0">{isSuggesting ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Wand2 className="h-4 w-4" />)}<span className="sr-only">Suggest Priority</span></Button>
+                              </div><FormMessage />
+                          </FormItem>
+                      )}/>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4">
-                        <div className="grid grid-cols-2 gap-4">
-                           <div>
-                                <Label htmlFor="log-date" className="text-xs">Date</Label>
-                                <Input id="log-date" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} />
-                           </div>
-                           <div>
-                                <Label htmlFor="log-note" className="text-xs">Note</Label>
-                                <Input id="log-note" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What did you work on?"/>
-                           </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                           <div>
-                                <Label htmlFor="start-time" className="text-xs">Start Time</Label>
-                                <Input id="start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-                           </div>
-                           <div>
-                                <Label htmlFor="end-time" className="text-xs">End Time</Label>
-                                <Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-                           </div>
-                        </div>
+                    <div className="space-y-4 rounded-lg border p-4">
+                        <h3 className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4" />{t('addtask.form.teammembers')}</h3>
+                        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-start text-muted-foreground">{t('addtask.form.selectmembers')}</Button></DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">{users.map((user) => (<DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}><Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span>{user.name}</span></DropdownMenuItem>))}</DropdownMenuContent>
+                        </DropdownMenu>
+                        {selectedUsers.length > 0 && (<div className="space-y-2"><Label>{t('addtask.form.selectedmembers')}</Label>{selectedUsers.map((user) => (<div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2"><div className="flex items-center gap-2"><Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="text-sm font-medium">{user.name}</span></div><div className="flex items-center gap-2">{shareSetting === 'private' && (<Select defaultValue="full-access"><SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="full-access">{t('addtask.form.access.full')}</SelectItem><SelectItem value="edit">{t('addtask.form.access.edit')}</SelectItem><SelectItem value="comment">{t('addtask.form.access.comment')}</SelectItem><SelectItem value="view">{t('addtask.form.access.view')}</SelectItem></SelectContent></Select>)}<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button></div></div>))}</div>)}
                     </div>
 
-                    <Button variant="outline" type="button" onClick={handleAddLogEntry} className="w-full">
-                        <LogIn className="mr-2 h-4 w-4" />
-                        Add Time Entry
-                    </Button>
+                    <div className="space-y-4 rounded-lg border p-4">
+                        <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.startdate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
+                            <FormField control={form.control} name="dueDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.duedate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
+                        </div>
+                        <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', '')}>{t('addtask.form.quickselect.clear')}</Button></div></div>
+                    </div>
+                  </div>
 
-                    {timeLogs.length > 0 && (
-                        <div className="space-y-3 pt-4">
-                            <h4 className='text-xs font-semibold text-muted-foreground'>History</h4>
-                            <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
-                            {timeLogs.map(log => (
-                                <div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'>
-                                    <div>
-                                        <p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p>
-                                        <p className='text-muted-foreground'>
-                                          {log.description ? `${log.description} - ` : ''}
-                                          {format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}
-                                        </p>
-                                    </div>
-                                    <div className='font-semibold'>
-                                        {formatDistanceToNow(new Date().getTime() - log.duration * 1000, { includeSeconds: true, addSuffix: false, unit: 'hour' })}
-                                    </div>
+                  <div className="space-y-4">
+                     <Tabs defaultValue="subtasks" className="w-full">
+                      <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                        <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                        <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                      </TabsList>
+                      <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                        <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
+                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                            {subtasks.map((subtask) => (
+                                <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md">
+                                    <Checkbox id={`subtask-create-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
+                                    <label htmlFor={`subtask-create-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveSubtask(subtask.id)}><Trash2 className="h-4 w-4"/></Button>
                                 </div>
                             ))}
-                            </div>
                         </div>
-                    )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedTags.map(tag => (
-                      <div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>
-                        {tag.label}
-                        <button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                    <Popover>
-                        <PopoverTrigger asChild>
-                          <Button type="button" variant="outline" size="sm">+</Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-1">
-                          <div className="flex flex-col gap-1">
-                            {Object.values(allTags).map(tag => (
-                                <Button
-                                  key={tag.label}
-                                  variant="ghost"
-                                  size="sm"
-                                  className="justify-start"
-                                  onClick={() => handleSelectTag(tag)}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>
-                                    {tag.label}
+                        <div className="flex items-center gap-2">
+                            <Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                            <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
+                        </div>
+                      </TabsContent>
+                       <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
+                          <div className="space-y-2">
+                              <h4 className="font-semibold text-sm flex items-center gap-2">Waiting On ({dependencies.length})</h4>
+                              <p className="text-xs text-muted-foreground">This task can't start until these tasks are done.</p>
+                               <Popover>
+                                <PopoverTrigger asChild><Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Dependency</Button></PopoverTrigger>
+                                <PopoverContent className="w-80"><div className="space-y-2">{allTasks.map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setDependencies(d => [...d, task.id])}>{task.title}</Button>))}</div></PopoverContent>
+                              </Popover>
+                              <div className="space-y-2">{dependencies.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDependencies(d => d.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
+                          </div>
+                           <div className="space-y-2">
+                              <h4 className="font-semibold text-sm flex items-center gap-2">Blocking ({blocking.length})</h4>
+                              <p className="text-xs text-muted-foreground">These tasks can't start until this task is done.</p>
+                              <Popover>
+                                <PopoverTrigger asChild><Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Blocking Task</Button></PopoverTrigger>
+                                <PopoverContent className="w-80"><div className="space-y-2">{allTasks.map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setBlocking(b => [...b, task.id])}>{task.title}</Button>))}</div></PopoverContent>
+                              </Popover>
+                               <div className="space-y-2">{blocking.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setBlocking(b => b.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
+                          </div>
+                      </TabsContent>
+                      <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4">
+                        <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
+                          {comments.map(comment => (
+                              <div key={comment.id} className="flex gap-3">
+                                  <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar>
+                                  <div className="flex-1">
+                                      <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
+                                      <p className="text-sm bg-secondary/50 p-3 rounded-lg mt-1">{comment.text}</p>
                                   </div>
-                                </Button>
-                            ))}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                              </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-3 pt-4 border-t">
+                             <Avatar className="h-8 w-8"><AvatarImage src={users[4].avatarUrl} /><AvatarFallback>{users[4].name.charAt(0)}</AvatarFallback></Avatar>
+                             <div className="flex-1 relative">
+                                <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-10" />
+                                <div className="absolute top-2 right-2 flex gap-1"><Button type="button" variant="ghost" size="icon" className="h-6 w-6"><AtSign className="h-4 w-4"/></Button><Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button></div>
+                             </div>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 </div>
-
-                <div className="space-y-4 rounded-lg border p-4">
-                  <h3 className="text-sm font-medium flex items-center gap-2">
-                    <Paperclip className="h-4 w-4" />
-                    Attachments
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      multiple
-                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                      className="hidden"
-                    />
-                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
-                      <FileUp className="mr-2 h-4 w-4" />
-                      Upload from Local
-                    </Button>
-                    <Button type="button" variant="outline" onClick={handleAddGdriveLink}>
-                       <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
-                      Link from Google Drive
-                    </Button>
-                  </div>
-                  {attachments.length > 0 && (
-                    <div className="space-y-2">
-                      <Label>Attached Files</Label>
-                      <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
-                        {attachments.map(att => (
-                          <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                            <div className="flex items-center gap-2 truncate">
-                              {att.icon}
-                              <span className="truncate" title={att.name}>{att.name}</span>
-                            </div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
+                
+                <Separator />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
+                      <FormField control={form.control} name="timeEstimate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.timeestimate')}</FormLabel><FormControl><Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)}/>
+                       <div className="space-y-2">
+                        <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
+                        <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-10">
+                          {selectedTags.map(tag => (<div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>{tag.label}<button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100"><X className="h-3 w-3" /></button></div>))}
+                          <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 w-6 p-0">+</Button></PopoverTrigger>
+                              <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
+                          </Popover>
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-
-
-                <div className="space-y-4 rounded-lg border p-4">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium flex items-center gap-2">
-                            <Plus className="h-4 w-4" />
-                            Custom Fields
-                        </h3>
-                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                    <Plus className="mr-2 h-4 w-4" />
-                                    Add Field
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent>
-                                <DropdownMenuItem onSelect={() => handleAddCustomField('Text')}>
-                                    <Type className="mr-2 h-4 w-4" /> Text
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleAddCustomField('Number')}>
-                                    <Hash className="mr-2 h-4 w-4" /> Number
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleAddCustomField('Date')}>
-                                    <CalendarIcon className="mr-2 h-4 w-4" /> Date
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={() => handleAddCustomField('Dropdown')}>
-                                    <List className="mr-2 h-4 w-4" /> Dropdown
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                    <div className="space-y-2">
-                      {customFields.map((field) => (
-                        <div key={field.id} className="flex items-center gap-2">
-                          <Input
-                            placeholder="Field Name"
-                            value={field.name}
-                            onChange={(e) => handleCustomFieldChange(field.id, 'name', e.target.value)}
-                            className="flex-1"
-                          />
-                          {renderCustomFieldInput(field)}
-                          <Button variant="ghost" size="icon" onClick={() => handleRemoveCustomField(field.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                     <div className="space-y-4 rounded-lg border p-4">
+                        <h3 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Time Tracking</h3>
+                        <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{timeTracked.toFixed(2)}h / {timeEstimateValue}h</span></div><Progress value={timeTrackingProgress} /></div>
+                        <div className="grid grid-cols-1 gap-4">
+                            <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="log-date" className="text-xs">Date</Label><Input id="log-date" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} /></div><div><Label htmlFor="log-note" className="text-xs">Note</Label><Input id="log-note" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What did you work on?"/></div></div>
+                            <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="start-time" className="text-xs">Start Time</Label><Input id="start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div><div><Label htmlFor="end-time" className="text-xs">End Time</Label><Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div></div>
                         </div>
-                      ))}
+                        <Button variant="outline" type="button" onClick={handleAddLogEntry} className="w-full">Add Time Entry</Button>
+                        {timeLogs.length > 0 && (<div className="space-y-3 pt-4"><h4 className='text-xs font-semibold text-muted-foreground'>History</h4><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{timeLogs.map(log => (<div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'><div><p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p><p className='text-muted-foreground'>{log.description ? `${log.description} - ` : ''}{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p></div><div className='font-semibold'>{formatDistanceToNow(new Date().getTime() - log.duration * 1000, { includeSeconds: true, addSuffix: false, unit: 'hour' })}</div></div>))}</div></div>)}
                     </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4 rounded-lg border p-4">
+                    <h3 className="text-sm font-medium flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h3>
+                    <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="mr-2 h-4 w-4" />Upload from Local</Button><Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
+                    {attachments.length > 0 && (<div className="space-y-2"><Label>Attached Files</Label><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{attachments.map(att => (<div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><div className="flex items-center gap-2 truncate">{att.icon}<span className="truncate" title={att.name}>{att.name}</span></div><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}><X className="h-4 w-4" /></Button></div>))}</div></div>)}
+                  </div>
+
+                  <div className="space-y-4 rounded-lg border p-4">
+                      <div className="flex items-center justify-between"><h3 className="text-sm font-medium flex items-center gap-2"><Plus className="h-4 w-4" />Custom Fields</h3><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" />Add Field</Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={() => handleAddCustomField('Text')}><Type className="mr-2 h-4 w-4" /> Text</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Number')}><Hash className="mr-2 h-4 w-4" /> Number</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Date')}><CalendarIcon className="mr-2 h-4 w-4" /> Date</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Dropdown')}><List className="mr-2 h-4 w-4" /> Dropdown</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">{customFields.map((field) => (<div key={field.id} className="flex items-center gap-2"><Input placeholder="Field Name" value={field.name} onChange={(e) => handleCustomFieldChange(field.id, 'name', e.target.value)} className="flex-1" />{renderCustomFieldInput(field)}<Button variant="ghost" size="icon" onClick={() => handleRemoveCustomField(field.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>))}</div>
+                  </div>
+                </div>
 
               </form>
             </Form>
           </div>
         </ScrollArea>
-        <DialogFooter className="p-6 pt-0 border-t">
+        <DialogFooter className="p-6 pt-4 border-t">
           <Button type="submit" form="add-task-form">
             {t('addtask.form.create')}
           </Button>

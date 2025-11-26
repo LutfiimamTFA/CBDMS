@@ -25,6 +25,20 @@ export type TimeLog = {
   description?: string;
 };
 
+export type Subtask = {
+  id: string;
+  title: string;
+  completed: boolean;
+};
+
+export type Comment = {
+    id: string;
+    user: User;
+    text: string;
+    timestamp: string;
+    replies: Comment[];
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -38,9 +52,10 @@ export type Task = {
   timeTracked?: number; // in hours
   timeLogs?: TimeLog[];
   dependencies?: string[];
-  subtasks?: Partial<Task>[];
+  subtasks?: Subtask[];
   recurring?: string;
   tags?: Tag[];
+  comments?: Comment[];
 };
 
 export type PriorityInfo = {
@@ -55,5 +70,3 @@ export type StatusInfo = {
   value: Status;
   icon: LucideIcon;
 };
-
-  
