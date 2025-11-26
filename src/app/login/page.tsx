@@ -27,7 +27,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import { Briefcase, Building, Shield, User as UserIcon, Loader2 } from 'lucide-react';
-import { initiateEmailSignIn, useUserProfile } from '@/firebase';
+import { initiateEmailSignIn, useAuth, useUserProfile } from '@/firebase';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -64,8 +64,10 @@ export default function LoginPage() {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  // Use the main user profile hook to get the global auth state
-  const { auth, user, isLoading: isUserLoading, error: userError } = useUserProfile();
+  // Use useAuth to get a stable auth instance for login actions
+  const auth = useAuth();
+  // Use useUserProfile to react to the global user state for redirection
+  const { user, isLoading: isUserLoading, error: userError } = useUserProfile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -81,7 +83,7 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: 'Invalid credentials. Please check your email and password.',
+        description: userError.message || 'An unexpected error occurred.',
       });
       setIsAuthLoading(false); // Stop loading on error
     }
@@ -98,7 +100,7 @@ export default function LoginPage() {
   const onSubmit = (data: LoginFormValues) => {
     setIsAuthLoading(true);
     // The initiateEmailSignIn function handles sign-in or sign-up.
-    // We don't need a try-catch here, as errors are caught by the hook.
+    // Errors are caught and handled by the global useUserProfile hook.
     initiateEmailSignIn(auth, data.email, data.password);
   };
   
