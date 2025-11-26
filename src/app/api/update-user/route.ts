@@ -9,11 +9,12 @@ function initializeAdminApp(): App {
     return getApps()[0];
   }
 
-  if (!process.env.FIREBASE_ADMIN_KEY) {
+  const firebaseKey = process.env.FIREBASE_ADMIN_KEY;
+  if (!firebaseKey) {
     throw new Error('FIREBASE_ADMIN_KEY environment variable is not set.');
   }
 
-  const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_KEY);
+  const serviceAccount = JSON.parse(firebaseKey);
 
   return initializeApp({
     credential: cert(serviceAccount),
