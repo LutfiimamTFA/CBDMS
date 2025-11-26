@@ -9,10 +9,11 @@ interface FirebaseClientProviderProps {
 }
 
 export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
+  // Memoize the Firebase services to ensure they are initialized only once.
+  // This is critical to prevent re-renders and infinite loops in consuming hooks.
   const firebaseServices = useMemo(() => {
-    // Initialize Firebase on the client side, once per component mount.
     return initializeFirebase();
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []); // Empty dependency array ensures this runs only once on mount.
 
   return (
     <FirebaseProvider

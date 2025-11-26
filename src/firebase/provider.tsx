@@ -84,7 +84,8 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     return () => unsubscribe();
   }, [auth]); // Depends on the auth instance
 
-  // Memoize the context value
+  // Memoize the context value to prevent unnecessary re-renders in consumers.
+  // This is crucial for preventing infinite loops in hooks that depend on this context.
   const contextValue = useMemo((): FirebaseContextState => {
     const servicesAvailable = !!(firebaseApp && firestore && auth && storage);
     return {
@@ -156,6 +157,7 @@ export const useFirebaseApp = (): FirebaseApp | null => {
 type MemoFirebase <T> = T & {__memo?: boolean};
 
 export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | (MemoFirebase<T>) | null {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const memoized = useMemo(factory, deps);
   
   if(typeof memoized !== 'object' || memoized === null) return memoized;
