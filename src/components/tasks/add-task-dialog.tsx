@@ -63,6 +63,7 @@ import { Progress } from '../ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
+import { Switch } from '../ui/switch';
 
 
 const taskSchema = z.object({
@@ -104,7 +105,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
   const [selectedTags, setSelectedTags] = React.useState<TagType[]>([]);
-  const [shareSetting, setShareSetting] = React.useState<ShareSetting>('public');
+  const [shareSetting, setShareSetting] = React.useState<ShareSetting>('private');
   const [isSuggesting, setIsSuggesting] = React.useState(false);
   const { t } = useI18n();
   const { toast } = useToast();
@@ -466,7 +467,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     <Users className="h-5 w-5 mt-1 text-primary shrink-0"/>
                     <div>
                       <h4 className="font-semibold text-foreground">Kolaborasi Tim</h4>
-                      <p>Bagikan tugas melalui tautan (publik/privat), undang anggota tim via email, atau tugaskan kepada anggota yang sudah ada. Tambahkan juga subtugas, dependensi, dan komentar.</p>
+                      <p>Bagikan tugas melalui tautan (publik/privat), undang anggota tim via email, atau tugaskan kepada anggota yang sudah ada. Atur juga izin akses untuk setiap anggota (misal: hanya bisa melihat atau mengedit). Tambahkan juga subtugas, dependensi, dan komentar.</p>
                     </div>
                   </div>
                   <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
@@ -539,13 +540,81 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </div>
 
                     <div className="space-y-4 rounded-lg border p-4">
+                        <div className='flex items-center justify-between'>
+                            <h3 className="text-sm font-medium flex items-center gap-2"><Share className="h-4 w-4" />{t('addtask.form.sharelink')}</h3>
+                            <div className="flex items-center space-x-2">
+                                <Label htmlFor="share-setting" className="text-xs text-muted-foreground">{t(`addtask.form.sharelink.${shareSetting}.option`)}</Label>
+                                <Switch id="share-setting" checked={shareSetting === 'public'} onCheckedChange={(checked) => setShareSetting(checked ? 'public' : 'private')} />
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground -mt-2">
+                          {t(`addtask.form.sharelink.${shareSetting}`)}
+                        </p>
+                         {shareSetting === 'public' && (
+                            <div className="flex gap-2">
+                                <Input value="https://workwise.app/task/share-link-placeholder" readOnly />
+                                <Button variant="outline" size="icon" onClick={() => toast({title: "Link copied!"})}>
+                                    <Copy className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                        <Separator />
                         <h3 className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4" />{t('addtask.form.teammembers')}</h3>
-                        <DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" className="w-full justify-start text-muted-foreground">{t('addtask.form.selectmembers')}</Button></DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">{users.map((user) => (<DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}><Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span>{user.name}</span></DropdownMenuItem>))}</DropdownMenuContent>
+                        <div className="flex gap-2">
+                            <Input placeholder={t('addtask.form.inviteemail')} />
+                            <Button variant="outline">{t('addtask.form.invite')}</Button>
+                        </div>
+                        <p className="text-center text-xs text-muted-foreground">{t('addtask.form.or').toUpperCase()}</p>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" className="w-full justify-start text-muted-foreground">
+                                <UserPlus className="mr-2 h-4 w-4" />{t('addtask.form.selectmembers')}
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                {users.map((user) => (
+                                    <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                        <Avatar className="h-6 w-6 mr-2">
+                                            <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                        <span>{user.name}</span>
+                                    </DropdownMenuItem>
+                                ))}
+                            </DropdownMenuContent>
                         </DropdownMenu>
-                        {selectedUsers.length > 0 && (<div className="space-y-2"><Label>{t('addtask.form.selectedmembers')}</Label>{selectedUsers.map((user) => (<div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2"><div className="flex items-center gap-2"><Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="text-sm font-medium">{user.name}</span></div><div className="flex items-center gap-2">{shareSetting === 'private' && (<Select defaultValue="full-access"><SelectTrigger className="h-8 w-[120px] text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="full-access">{t('addtask.form.access.full')}</SelectItem><SelectItem value="edit">{t('addtask.form.access.edit')}</SelectItem><SelectItem value="comment">{t('addtask.form.access.comment')}</SelectItem><SelectItem value="view">{t('addtask.form.access.view')}</SelectItem></SelectContent></Select>)}<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button></div></div>))}</div>)}
-                    </div>
 
+                        {selectedUsers.length > 0 && (
+                            <div className="space-y-2">
+                                <Label>{t('addtask.form.selectedmembers')}</Label>
+                                {selectedUsers.map((user) => (
+                                    <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
+                                        <div className="flex items-center gap-2">
+                                            <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                            <span className="text-sm font-medium">{user.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {shareSetting === 'private' && (
+                                                <Select defaultValue="full-access">
+                                                    <SelectTrigger className="h-8 w-[120px] text-xs">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="full-access">{t('addtask.form.access.full')}</SelectItem>
+                                                        <SelectItem value="edit">{t('addtask.form.access.edit')}</SelectItem>
+                                                        <SelectItem value="comment">{t('addtask.form.access.comment')}</SelectItem>
+                                                        <SelectItem value="view">{t('addtask.form.access.view')}</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    
                     <div className="space-y-4 rounded-lg border p-4">
                         <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
