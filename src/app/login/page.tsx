@@ -88,9 +88,7 @@ export default function LoginPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
-  const [activeTab, setActiveTab] = useState('signin');
-
-
+  
   const signInForm = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: '', password: '' },
@@ -134,12 +132,7 @@ export default function LoginPage() {
     setIsSigningUp(true);
     try {
       await initiateEmailSignUp(auth, firestore, data.name, data.email, data.password);
-      toast({
-        title: 'Registration Successful!',
-        description: 'Please check your email for a verification link to complete your registration.',
-      });
-      setActiveTab('signin'); // Switch to sign-in tab after successful registration
-      signUpForm.reset();
+      router.push('/check-email');
     } catch (error: any) {
       console.error('Sign-up Error:', error);
       const description =
@@ -201,7 +194,7 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
