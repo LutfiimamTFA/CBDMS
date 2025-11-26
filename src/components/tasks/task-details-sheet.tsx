@@ -82,6 +82,7 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
   const [task, setTask] = useState(initialTask);
   const { t } = useI18n();
   const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
 
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -101,18 +102,23 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
 
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
-    defaultValues: {
+  });
+  
+  useEffect(() => {
+    form.reset({
       title: task.title,
       description: task.description || '',
       status: task.status,
       priority: task.priority,
       assignees: task.assignees.map(a => a.id),
       timeEstimate: task.timeEstimate,
-    },
-  });
+    });
+  }, [task, form]);
+
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
+    setIsEditing(false); // Reset to view mode when opening/closing
     if (onOpenChange) {
       onOpenChange(isOpen);
     }
@@ -199,7 +205,12 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
 
   const onSubmit = (data: TaskDetailsFormValues) => {
     console.log('Updated Task Data:', {...data, timeTracked: task.timeTracked, timeLogs: task.timeLogs, subtasks});
-    handleOpenChange(false);
+    setTask(currentTask => ({
+        ...currentTask,
+        ...data,
+        assignees: users.filter(u => data.assignees?.includes(u.id))
+    }));
+    setIsEditing(false); // Exit edit mode on save
   };
   
   const timeEstimateValue = form.watch('timeEstimate') ?? task.timeEstimate ?? 0;
@@ -209,6 +220,17 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
     ? (timeTrackedValue / timeEstimateValue) * 100
     : 0;
 
+  const getStatusDisplay = (status: Task['status']) => {
+    const info = statusInfo[status];
+    const Icon = info.icon;
+    return <div className="flex items-center gap-2"><Icon className="h-4 w-4 text-muted-foreground" />{t(`status.${status.toLowerCase().replace(' ', '')}` as any)}</div>;
+  };
+  
+  const getPriorityDisplay = (priority: Task['priority']) => {
+    const info = priorityInfo[priority];
+    const Icon = info.icon;
+    return <div className="flex items-center gap-2"><Icon className={`h-4 w-4 ${info.color}`} />{t(`priority.${priority.toLowerCase()}` as any)}</div>;
+  };
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
@@ -217,22 +239,26 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
             <SheetHeader className="p-6">
-               <SheetTitle className="sr-only">{task.title}</SheetTitle>
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
+                <SheetTitle className="sr-only">{task.title}</SheetTitle>
+                 {isEditing ? (
+                     <FormField
+                        control={form.control}
+                        name="title"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                 ) : (
+                    <h2 className="text-2xl font-headline font-bold">{task.title}</h2>
+                 )}
             </SheetHeader>
             <Separator />
             <div className="flex-1 overflow-y-auto px-6">
@@ -247,33 +273,44 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
                   
                   <TabsContent value="details" className="space-y-6 mt-4">
                     <div className="grid grid-cols-2 gap-6">
-                        <FormField control={form.control} name="status" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Status</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                <SelectContent>{Object.values(statusInfo).map((s) => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}</div></SelectItem>))}</SelectContent>
-                                </Select>
-                            </FormItem>
-                        )}/>
-                        <FormField control={form.control} name="priority" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>{t('addtask.form.priority')}</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{t(`priority.${p.value.toLowerCase()}` as any)}</div></SelectItem>))}</SelectContent>
-                                </Select>
-                            </FormItem>
-                        )}/>
+                        <FormItem>
+                            <FormLabel>Status</FormLabel>
+                            {isEditing ? (
+                                <FormField control={form.control} name="status" render={({ field }) => (
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                    <SelectContent>{Object.values(statusInfo).map((s) => (<SelectItem key={s.value} value={s.value}>{getStatusDisplay(s.value)}</SelectItem>))}</SelectContent>
+                                    </Select>
+                                )}/>
+                            ) : (
+                                <div className="flex items-center h-10 px-3 py-2 text-sm rounded-md border border-input">{getStatusDisplay(task.status)}</div>
+                            )}
+                        </FormItem>
+                        <FormItem>
+                            <FormLabel>{t('addtask.form.priority')}</FormLabel>
+                            {isEditing ? (
+                                <FormField control={form.control} name="priority" render={({ field }) => (
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                                    <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}>{getPriorityDisplay(p.value)}</SelectItem>))}</SelectContent>
+                                    </Select>
+                                )}/>
+                            ): (
+                                <div className="flex items-center h-10 px-3 py-2 text-sm rounded-md border border-input">{getPriorityDisplay(task.priority)}</div>
+                            )}
+                        </FormItem>
                     </div>
 
-                    <FormField control={form.control} name="description" render={({ field }) => (
-                        <FormItem>
+                     <FormItem>
                         <FormLabel>{t('addtask.form.description')}</FormLabel>
-                        <FormControl><Textarea placeholder={t('addtask.form.description.placeholder')} {...field} className="min-h-[100px]" /></FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}/>
+                         {isEditing ? (
+                            <FormField control={form.control} name="description" render={({ field }) => (
+                                <FormControl><Textarea placeholder={t('addtask.form.description.placeholder')} {...field} className="min-h-[100px]" /></FormControl>
+                            )}/>
+                         ): (
+                            <p className="text-sm text-muted-foreground min-h-[100px] p-3 border rounded-md">{task.description || 'No description provided.'}</p>
+                         )}
+                    </FormItem>
 
                     {task.tags && task.tags.length > 0 && (
                         <div className="space-y-2">
@@ -297,24 +334,30 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
                                         <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
                                         <div><p className="text-sm font-medium">{user.name}</p><p className="text-xs text-muted-foreground">{user.email}</p></div>
                                     </div>
-                                    <Button variant="outline" size="sm">Owner</Button>
+                                    <Button variant="outline" size="sm" disabled={!isEditing}>Owner</Button>
                                 </div>
                             ))}
                         </div>
-                        <Button variant="outline" className="w-full">Invite new member</Button>
+                        {isEditing && <Button variant="outline" className="w-full">Invite new member</Button>}
                     </div>
 
                     <div className="grid grid-cols-1 gap-6">
-                        <FormItem><FormLabel className="flex items-center gap-2"><CalendarIcon className="w-4 h-4"/>{t('addtask.form.duedate')}</FormLabel><Input type="date" defaultValue={task.dueDate ? task.dueDate.split('T')[0] : ''} /></FormItem>
+                        <FormItem><FormLabel className="flex items-center gap-2"><CalendarIcon className="w-4 h-4"/>{t('addtask.form.duedate')}</FormLabel><Input type="date" defaultValue={task.dueDate ? task.dueDate.split('T')[0] : ''} readOnly={!isEditing} /></FormItem>
                     </div>
-
-                    <FormField control={form.control} name="timeEstimate" render={({ field }) => (
-                        <FormItem>
+                     <FormItem>
                         <FormLabel>{t('addtask.form.timeestimate')}</FormLabel>
-                        <FormControl><Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} value={field.value ?? ''}/></FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}/>
+                        {isEditing ? (
+                            <FormField control={form.control} name="timeEstimate" render={({ field }) => (
+                                <>
+                                <FormControl><Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} value={field.value ?? ''}/></FormControl>
+                                <FormMessage />
+                                </>
+                            )}/>
+                        ) : (
+                            <div className="flex items-center h-10 px-3 py-2 text-sm rounded-md border border-input">{task.timeEstimate ? `${task.timeEstimate} hours` : 'Not set'}</div>
+                        )}
+                    </FormItem>
+
 
                     <div className="space-y-4 rounded-lg border p-4">
                         <div className='flex items-center justify-between'>
@@ -436,7 +479,17 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
                 </Tabs>
             </div>
             <SheetFooter className="p-6 border-t">
-              <Button type="submit">Save Changes</Button>
+              {isEditing ? (
+                <div className="flex justify-end gap-2">
+                    <Button variant="ghost" type="button" onClick={() => {setIsEditing(false); form.reset();}}>Cancel</Button>
+                    <Button type="submit">Save Changes</Button>
+                </div>
+              ) : (
+                <Button type="button" onClick={() => setIsEditing(true)}>
+                    <Edit className="mr-2 h-4 w-4"/>
+                    Edit Task
+                </Button>
+              )}
             </SheetFooter>
           </form>
         </Form>
