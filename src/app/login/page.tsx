@@ -1,34 +1,30 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
-import { initiateEmailSignIn, initiateEmailSignUp } from '@/firebase';
+import { initiateGoogleSignIn } from '@/firebase/non-blocking-login';
 import { useAuth, useFirebase, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
-import { Separator } from '@/components/ui/separator';
 
-const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address.'),
-  password: z.string().min(6, 'Password must be at least 6 characters.'),
-});
+const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="24px" height="24px" {...props}>
+        <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z" />
+        <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z" />
+        <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.222,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z" />
+        <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.574l6.19,5.238C44.57,34.637,48,29.692,48,24C48,22.659,47.862,21.35,47.611,20.083z" />
+    </svg>
+);
 
-type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,6 +32,7 @@ export default function LoginPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
   const { user, isUserLoading } = useFirebase();
+  const [isSigningIn, setIsSigningIn] = useState(false);
 
   useEffect(() => {
     if (!isUserLoading && user) {
@@ -43,25 +40,9 @@ export default function LoginPage() {
     }
   }, [user, isUserLoading, router]);
 
-  const form = useForm<LoginFormValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
-  });
 
-  const {
-    formState: { isSubmitting },
-    getValues,
-    handleSubmit,
-    setError,
-    clearErrors
-  } = form;
-
-  const onSignIn = (values: LoginFormValues) => {
-    const { email, password } = values;
-    if (!auth) {
+  const onGoogleSignIn = () => {
+    if (!auth || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Initialization Error',
@@ -69,43 +50,21 @@ export default function LoginPage() {
       });
       return;
     }
-    clearErrors();
-    initiateEmailSignIn(auth, email, password)
+    setIsSigningIn(true);
+    initiateGoogleSignIn(auth, firestore)
       .catch((error) => {
-        console.error("Sign-in Error:", error.code, error.message);
+        console.error("Google Sign-in Error:", error);
         toast({
             variant: "destructive",
             title: "Sign-in Failed",
-            description: "Invalid credentials. Please check your email and password.",
+            description: "Could not sign in with Google. Please try again.",
         });
-        setError("root", { type: "manual", message: "Invalid credentials" });
-      });
+      })
+      .finally(() => {
+        setIsSigningIn(false);
+      })
   };
 
-  const onSignUp = (values: LoginFormValues) => {
-     const { email, password } = values;
-     if (!auth || !firestore) {
-      toast({
-        variant: 'destructive',
-        title: 'Initialization Error',
-        description: 'Firebase is not ready. Please try again in a moment.',
-      });
-      return;
-    }
-    clearErrors();
-    initiateEmailSignUp(auth, firestore, email, password)
-     .catch((error) => {
-        console.error("Sign-up Error:", error.code, error.message);
-         toast({
-            variant: "destructive",
-            title: "Sign-up Failed",
-            description: error.code === 'auth/email-already-in-use' 
-                ? "This email is already registered. Please sign in."
-                : "An unexpected error occurred during sign-up.",
-        });
-        setError("root", { type: "manual", message: "Sign-up failed" });
-      });
-  }
 
   if (isUserLoading || user) {
      return (
@@ -124,59 +83,28 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl">Welcome</CardTitle>
           <CardDescription>
-            Sign in or create an account to continue.
+            Sign in to continue to WorkWise.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form id="login-form">
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="name@example.com"
-                  {...form.register('email')}
-                  disabled={isSubmitting}
-                />
-                {form.formState.errors.email && (
-                  <p className="text-xs text-destructive">
-                    {form.formState.errors.email.message}
-                  </p>
+            <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={onGoogleSignIn}
+                disabled={isSigningIn}
+            >
+                {isSigningIn ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                    <GoogleIcon className="mr-2 h-5 w-5" />
                 )}
-              </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  {...form.register('password')}
-                  disabled={isSubmitting}
-                />
-                 {form.formState.errors.password && (
-                  <p className="text-xs text-destructive">
-                    {form.formState.errors.password.message}
-                  </p>
-                )}
-              </div>
-            </div>
-          </form>
+                Sign in with Google
+            </Button>
         </CardContent>
-        <CardFooter className="flex flex-col gap-4">
-          <Button onClick={handleSubmit(onSignIn)} className="w-full" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign In
-          </Button>
-           <div className="relative w-full">
-            <Separator />
-            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">OR</span>
-          </div>
-          <Button variant="secondary" onClick={handleSubmit(onSignUp)} className="w-full" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Sign Up
-          </Button>
+        <CardFooter>
+             <p className="text-xs text-muted-foreground text-center w-full">
+                By continuing, you agree to our Terms of Service and Privacy Policy.
+            </p>
         </CardFooter>
       </Card>
     </div>
