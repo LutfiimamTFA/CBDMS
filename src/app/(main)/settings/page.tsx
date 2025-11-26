@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Header } from '@/components/layout/header';
 import {
   Card,
@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useUserProfile } from '@/firebase';
+import { useUserProfile, useAuth, useFirestore, useStorage } from '@/firebase';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -27,7 +27,10 @@ import {
 } from '@/components/ui/form';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Separator } from '@/components/ui/separator';
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import { doc, updateDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { updateProfile } from 'firebase/auth';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -48,10 +51,17 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function SettingsPage() {
-  const { profile, isLoading: isProfileLoading } = useUserProfile();
+  const { user, profile, isLoading: isProfileLoading } = useUserProfile();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const storage = useStorage();
   const { toast } = useToast();
+  
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -69,29 +79,99 @@ export default function SettingsPage() {
     },
   });
 
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user || !storage || !firestore) return;
+
+    setIsUploadingPhoto(true);
+    try {
+      const storageRef = ref(storage, `avatars/${user.uid}`);
+      await uploadBytes(storageRef, file);
+      const photoURL = await getDownloadURL(storageRef);
+
+      // Update Firestore
+      const userDocRef = doc(firestore, 'users', user.uid);
+      await updateDoc(userDocRef, { avatarUrl: photoURL });
+      
+      // Update Auth profile
+      if (auth?.currentUser) {
+        await updateProfile(auth.currentUser, { photoURL });
+      }
+
+      toast({
+        title: 'Photo Updated',
+        description: 'Your new profile picture has been saved.',
+      });
+    } catch (error) {
+      console.error("Photo upload error:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: 'Could not upload your new photo. Please try again.',
+      });
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
   const onProfileSubmit = async (data: ProfileFormValues) => {
+    if (!user || !firestore) return;
     setIsSavingProfile(true);
-    // Placeholder for actual update logic
-    console.log('Updating profile:', data);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    toast({
-      title: 'Profile Updated',
-      description: 'Your name has been successfully updated.',
-    });
-    setIsSavingProfile(false);
+    try {
+      const userDocRef = doc(firestore, 'users', user.uid);
+      await updateDoc(userDocRef, { name: data.name });
+
+      if (auth?.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: data.name });
+      }
+
+      toast({
+        title: 'Profile Updated',
+        description: 'Your name has been successfully updated.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: 'Could not update your profile. Please try again.',
+      });
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   const onPasswordSubmit = async (data: PasswordFormValues) => {
+    if (!auth?.currentUser || !auth.currentUser.email) {
+        toast({ variant: 'destructive', title: 'Error', description: 'User not found or email is missing.' });
+        return;
+    }
     setIsSavingPassword(true);
-    // Placeholder for actual update logic
-    console.log('Changing password...');
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    toast({
-      title: 'Password Changed',
-      description: 'Your password has been successfully updated.',
-    });
-    setIsSavingPassword(false);
-    passwordForm.reset();
+
+    try {
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, data.currentPassword);
+        // Re-authenticate user before changing password
+        await reauthenticateWithCredential(auth.currentUser, credential);
+        
+        await updatePassword(auth.currentUser, data.newPassword);
+
+        toast({
+            title: 'Password Changed',
+            description: 'Your password has been successfully updated.',
+        });
+        passwordForm.reset();
+    } catch (error: any) {
+        let description = 'Could not change your password. Please try again.';
+        if (error.code === 'auth/wrong-password') {
+            description = 'The current password you entered is incorrect.';
+        }
+        toast({
+            variant: 'destructive',
+            title: 'Password Change Failed',
+            description: description,
+        });
+    } finally {
+        setIsSavingPassword(false);
+    }
   };
 
   const getInitials = (name?: string | null) => {
@@ -127,15 +207,34 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center gap-6">
-                <Avatar className="h-20 w-20">
-                  <AvatarImage src={profile?.avatarUrl} />
-                  <AvatarFallback>{getInitials(profile?.name)}</AvatarFallback>
-                </Avatar>
+                 <div className="relative">
+                    <Avatar className="h-20 w-20">
+                      <AvatarImage src={profile?.avatarUrl} />
+                      <AvatarFallback>{getInitials(profile?.name)}</AvatarFallback>
+                    </Avatar>
+                    {isUploadingPhoto && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+                        <Loader2 className="h-8 w-8 animate-spin text-white" />
+                      </div>
+                    )}
+                 </div>
                 <div className="space-y-2">
                     <h3 className="font-semibold">{profile?.name}</h3>
                     <p className="text-sm text-muted-foreground">{profile?.email}</p>
-                    <Button variant="outline" size="sm">
-                        Change Photo
+                    <input 
+                      type="file" 
+                      ref={fileInputRef}
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                      accept="image/png, image/jpeg"
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                    >
+                        {isUploadingPhoto ? 'Uploading...' : 'Change Photo'}
                     </Button>
                 </div>
               </div>
