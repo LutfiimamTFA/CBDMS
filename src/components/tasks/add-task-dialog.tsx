@@ -177,9 +177,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const onSubmit = (data: TaskFormValues) => {
     if (!tasksCollectionRef) return;
+    
+    // Remove undefined properties from data to prevent Firestore errors
+    const cleanedData = Object.entries(data).reduce((acc, [key, value]) => {
+      if (value !== undefined) {
+        (acc as any)[key] = value;
+      }
+      return acc;
+    }, {} as TaskFormValues);
+
 
     const newTask = {
-        ...data,
+        ...cleanedData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         assignees: selectedUsers,
