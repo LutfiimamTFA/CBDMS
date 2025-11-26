@@ -64,7 +64,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
 import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 
@@ -134,11 +134,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const { firestore, user: authUser, profile } = useUserProfile();
 
   const usersQuery = useMemoFirebase(() => {
-    if (!profile) return null;
-    // For now, let's assume we can query all users in the company.
-    // In a real app, this might need more specific rules.
-    return collection(firestore, 'users');
-  }, [firestore, profile]);
+    if (!firestore || !profile?.companyId) return null;
+    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
+  }, [firestore, profile?.companyId]);
 
   const { data: users = staticUsers } = useCollection<UserType>(usersQuery);
 
@@ -457,7 +455,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const currentUser = useMemo(() => {
     if (authUser && users) {
-      return users.find(u => u.id === authUser.uid) || staticCurrentUser;
+      return users.find(u => u.id === authUser.uid) ?? staticCurrentUser;
     }
     return staticCurrentUser;
   }, [authUser, users]);

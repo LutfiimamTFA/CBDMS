@@ -42,8 +42,18 @@ service cloud.firestore {
     match /users/{userId} {
       // READ: You can read your own profile. Managers can read profiles of users in the same company. Super Admins can read any profile.
       allow get: if isOwner(userId) || (hasRole('Manager') && isInSameCompany(userId)) || hasRole('Super Admin');
-      // LIST: Disabled for security. No one can list all users.
-      allow list: if false;
+      
+      // LIST: Employees and Managers can list users within their own company. Super Admins can list all users.
+      // This is necessary for features like assigning tasks to colleagues.
+      allow list: if isSignedIn() && 
+                    (
+                      (hasRole('Employee') || hasRole('Manager')) &&
+                      request.query.where.size() == 1 &&
+                      request.query.where[0][0] == 'companyId' &&
+                      request.query.where[0][1] == '==' &&
+                      request.query.where[0][2] == getMyProfile().companyId
+                    ) || hasRole('Super Admin');
+
       // CREATE: Anyone can create their own user profile document.
       // This is necessary for the sign-up flow. The user ID must match the authenticated user's ID.
       allow create: if isOwner(userId);
@@ -85,7 +95,7 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                      (hasRole('Super Admin') ||
                      (hasRole('Manager') && getMyProfile().companyId == resource.data.companyId) ||
-                     (request.auth.uid in resource.data.assigneeIds));
+                     (request.auth.uid in resource.data.assigneesIds));
 
       // DELETE:
       // - Only Super Admins and Managers can delete tasks.
