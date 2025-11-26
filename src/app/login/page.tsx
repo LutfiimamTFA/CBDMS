@@ -63,12 +63,17 @@ const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 const signInSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  password: z
+    .string()
+    .min(6, { message: 'Password must be at least 6 characters.' }),
 });
 
 const signUpSchema = z.object({
+  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  password: z
+    .string()
+    .min(6, { message: 'Password must be at least 6 characters.' }),
 });
 
 type SignInFormValues = z.infer<typeof signInSchema>;
@@ -83,6 +88,8 @@ export default function LoginPage() {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+  const [activeTab, setActiveTab] = useState('signin');
+
 
   const signInForm = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -91,7 +98,7 @@ export default function LoginPage() {
 
   const signUpForm = useForm<SignUpFormValues>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { name: '', email: '', password: '' },
   });
 
   useEffect(() => {
@@ -123,8 +130,13 @@ export default function LoginPage() {
     if (!auth || !firestore) return;
     setIsSigningUp(true);
     try {
-      await initiateEmailSignUp(auth, firestore, data.email, data.password);
-      // Successful sign-up will be handled by the useEffect
+      await initiateEmailSignUp(auth, firestore, data.name, data.email, data.password);
+      toast({
+        title: 'Registration Successful!',
+        description: 'Please check your email for a verification link to complete your registration.',
+      });
+      setActiveTab('signin'); // Switch to sign-in tab after successful registration
+      signUpForm.reset();
     } catch (error: any) {
       console.error('Sign-up Error:', error);
       const description =
@@ -186,7 +198,7 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -224,7 +236,11 @@ export default function LoginPage() {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" className="w-full" disabled={isSigningIn}>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isSigningIn}
+                  >
                     {isSigningIn && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
@@ -239,6 +255,22 @@ export default function LoginPage() {
                   onSubmit={signUpForm.handleSubmit(onSignUp)}
                   className="space-y-4 pt-4"
                 >
+                  <FormField
+                    control={signUpForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label htmlFor="name-signup">Full Name</Label>
+                        <Input
+                          id="name-signup"
+                          type="text"
+                          placeholder="John Doe"
+                          {...field}
+                        />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                   <FormField
                     control={signUpForm.control}
                     name="email"
@@ -266,11 +298,15 @@ export default function LoginPage() {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" className="w-full" disabled={isSigningUp}>
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isSigningUp}
+                  >
                     {isSigningUp && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
-                    Sign Up
+                    Create Account
                   </Button>
                 </form>
               </Form>

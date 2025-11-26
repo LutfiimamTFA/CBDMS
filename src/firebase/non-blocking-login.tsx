@@ -6,58 +6,77 @@ import {
   signOut,
   signInWithPopup,
   GoogleAuthProvider,
-  User,
+  sendEmailVerification,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
-
 
 /**
  * Initiates an email/password sign-in. This function ONLY attempts to sign in.
  * Returns a promise that resolves on success and rejects on failure.
  */
-export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): Promise<void> {
+export function initiateEmailSignIn(
+  authInstance: Auth,
+  email: string,
+  password: string
+): Promise<void> {
   return new Promise((resolve, reject) => {
-      signInWithEmailAndPassword(authInstance, email, password)
-        .then(() => {
-          resolve();
-        })
-        .catch((error) => {
-          console.error("Sign-in Error:", error.code, error.message);
-          reject(error);
-        });
+    signInWithEmailAndPassword(authInstance, email, password)
+      .then(() => {
+        resolve();
+      })
+      .catch((error) => {
+        console.error('Sign-in Error:', error);
+        reject(error);
+      });
   });
 }
 
 /**
- * Initiates an email/password sign-up. Creates a new user and a corresponding
- * user profile in Firestore.
+ * Initiates an email/password sign-up, creates a user profile in Firestore,
+ * and sends a verification email.
  * Returns a promise that resolves on success and rejects on failure.
  */
-export function initiateEmailSignUp(authInstance: Auth, firestore: Firestore, email: string, password: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-        createUserWithEmailAndPassword(authInstance, email, password)
-        .then(userCredential => {
-            const user = userCredential.user;
-            const userProfileRef = doc(firestore, 'users', user.uid);
-            
-            setDoc(userProfileRef, {
-                name: user.displayName || email.split('@')[0], 
-                email: user.email,
-                role: 'Employee', 
-                companyId: 'company-a', 
-                avatarUrl: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`
-            }).then(() => {
-                resolve();
-            }).catch(profileError => {
-                console.error("Error creating user profile:", profileError);
-                reject(profileError);
-            });
-        })
-        .catch(createError => {
-            console.error("Sign-up Error:", createError.code, createError.message);
-            reject(createError);
-        });
-    });
+export function initiateEmailSignUp(
+  authInstance: Auth,
+  firestore: Firestore,
+  name: string,
+  email: string,
+  password: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    createUserWithEmailAndPassword(authInstance, email, password)
+      .then(async (userCredential) => {
+        const user = userCredential.user;
+        const userProfileRef = doc(firestore, 'users', user.uid);
+
+        try {
+          // Send verification email
+          await sendEmailVerification(user);
+
+          // Create user profile in Firestore
+          await setDoc(userProfileRef, {
+            name: name,
+            email: user.email,
+            role: 'Employee',
+            companyId: 'company-a',
+            avatarUrl:
+              user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
+          });
+
+          resolve();
+        } catch (setupError) {
+          console.error(
+            'Error sending verification or creating profile:',
+            setupError
+          );
+          reject(setupError);
+        }
+      })
+      .catch((createError) => {
+        console.error('Sign-up Error:', createError);
+        reject(createError);
+      });
+  });
 }
 
 /**
@@ -65,7 +84,10 @@ export function initiateEmailSignUp(authInstance: Auth, firestore: Firestore, em
  * profile in Firestore.
  * Returns a promise that resolves on success and rejects on failure.
  */
-export function initiateGoogleSignIn(auth: Auth, firestore: Firestore): Promise<void> {
+export function initiateGoogleSignIn(
+  auth: Auth,
+  firestore: Firestore
+): Promise<void> {
   const provider = new GoogleAuthProvider();
   return new Promise((resolve, reject) => {
     signInWithPopup(auth, provider)
@@ -82,11 +104,15 @@ export function initiateGoogleSignIn(auth: Auth, firestore: Firestore): Promise<
               email: user.email,
               role: 'Employee',
               companyId: 'company-a',
-              avatarUrl: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
+              avatarUrl:
+                user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
             });
             resolve();
           } catch (profileError) {
-            console.error("Error creating user profile after Google sign-in:", profileError);
+            console.error(
+              'Error creating user profile after Google sign-in:',
+              profileError
+            );
             reject(profileError);
           }
         } else {
@@ -96,7 +122,7 @@ export function initiateGoogleSignIn(auth: Auth, firestore: Firestore): Promise<
       })
       .catch((error) => {
         // Handle Errors here.
-        console.error("Google Sign-In Error:", error.code, error.message);
+        console.error('Google Sign-In Error:', error.code, error.message);
         reject(error);
       });
   });
@@ -104,7 +130,7 @@ export function initiateGoogleSignIn(auth: Auth, firestore: Firestore): Promise<
 
 /** Initiate sign-out (non-blocking). */
 export function initiateSignOut(authInstance: Auth): void {
-  signOut(authInstance).catch(error => {
-      console.error("Sign-out Error:", error);
+  signOut(authInstance).catch((error) => {
+    console.error('Sign-out Error:', error);
   });
 }
