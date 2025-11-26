@@ -1,7 +1,5 @@
-
 'use client';
-import { tasks } from '@/lib/data';
-import type { Priority } from '@/lib/types';
+import type { Task, Priority } from '@/lib/types';
 import {
   ChartContainer,
   ChartTooltip,
@@ -21,7 +19,7 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 
-export function HoursByPriorityChart() {
+export function HoursByPriorityChart({ tasks }: { tasks: Task[] }) {
   const data = (['Urgent', 'High', 'Medium', 'Low'] as Priority[]).map((priority) => ({
     priority,
     hours: tasks

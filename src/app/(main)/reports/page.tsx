@@ -1,3 +1,4 @@
+'use client';
 import { Header } from '@/components/layout/header';
 import {
   Card,
@@ -7,13 +8,35 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
-import { tasks } from '@/lib/data';
-import { CheckCircle2, CircleDashed, Clock } from 'lucide-react';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import type { Task } from '@/lib/types';
+import { CheckCircle2, CircleDashed, Clock, Loader2 } from 'lucide-react';
+import { collection } from 'firebase/firestore';
 
 export default function ReportsPage() {
-  const completedTasks = tasks.filter((t) => t.status === 'Done').length;
-  const inProgressTasks = tasks.filter((t) => t.status === 'Doing').length;
-  const totalHoursTracked = tasks.reduce((acc, t) => acc + (t.timeTracked || 0), 0);
+  const { firestore, user } = useFirebase();
+
+  const tasksQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return collection(firestore, 'users', user.uid, 'tasks');
+  }, [firestore, user]);
+
+  const { data: tasks, isLoading } = useCollection<Task>(tasksQuery);
+  
+  if (isLoading) {
+    return (
+       <div className="flex h-svh flex-col bg-background">
+        <Header title="Work Reports" />
+        <main className="flex-1 overflow-auto p-4 md:p-6 flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </main>
+      </div>
+    )
+  }
+
+  const completedTasks = (tasks || []).filter((t) => t.status === 'Done').length;
+  const inProgressTasks = (tasks || []).filter((t) => t.status === 'Doing').length;
+  const totalHoursTracked = (tasks || []).reduce((acc, t) => acc + (t.timeTracked || 0), 0);
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -50,7 +73,7 @@ export default function ReportsPage() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{totalHoursTracked}h</div>
+              <div className="text-2xl font-bold">{totalHoursTracked.toFixed(2)}h</div>
               <p className="text-xs text-muted-foreground">
                 across all tasks
               </p>
@@ -66,7 +89,7 @@ export default function ReportsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <HoursByPriorityChart />
+              <HoursByPriorityChart tasks={tasks || []} />
             </CardContent>
           </Card>
         </div>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -30,7 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { users, tags as allTags, tasks as allTasks, currentUser } from '@/lib/data';
+import { users, tags as allTags, currentUser } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
@@ -64,6 +63,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { collection, serverTimestamp } from 'firebase/firestore';
+import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 
 const taskSchema = z.object({
@@ -71,7 +73,7 @@ const taskSchema = z.object({
   description: z.string().optional(),
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
-  assignees: z.array(z.string()).optional(),
+  assigneeIds: z.array(z.string()).optional(),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
@@ -103,7 +105,7 @@ type Attachment = {
 
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
-  const [selectedUsers, setSelectedUsers] = React.useState<typeof users>([]);
+  const [selectedUsers, setSelectedUsers] = React.useState<UserType[]>([]);
   const [selectedTags, setSelectedTags] = React.useState<TagType[]>([]);
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('private');
   const [isSuggesting, setIsSuggesting] = React.useState(false);
@@ -128,6 +130,16 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [blocking, setBlocking] = React.useState<string[]>([]);
   const [comments, setComments] = React.useState<Comment[]>([]);
   const [newComment, setNewComment] = React.useState('');
+  
+  const { firestore, user } = useFirebase();
+  
+  const tasksQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return collection(firestore, 'users', user.uid, 'tasks');
+  }, [firestore, user]);
+
+  const { data: allTasks } = useCollection<Task>(tasksQuery);
+
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -146,7 +158,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       description: '',
       status: 'To Do',
       priority: 'Medium',
-      assignees: [],
+      assigneeIds: [],
       recurring: 'never',
       startDate: '',
       dueDate: '',
@@ -156,31 +168,30 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   });
 
   const onSubmit = (data: TaskFormValues) => {
-    const customFieldsData = customFields.reduce((acc, field) => {
-      if (field.name) {
-        const fieldData: any = { type: field.type, value: field.value };
-        if (field.type === 'Dropdown') {
-          fieldData.options = field.options;
-        }
-        acc[field.name] = fieldData;
-      }
-      return acc;
-    }, {} as Record<string, { type: CustomFieldType; value: string; options?: string }>);
+    if (!tasksQuery) return;
 
-    console.log('New Task Data:', {
+    const newTask = {
         ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        assignees: selectedUsers,
         tags: selectedTags,
         timeLogs,
         timeTracked,
-        customFields: customFieldsData,
-        attachments,
         subtasks,
         dependencies,
         blocking,
         comments,
-    });
+    };
+
+    addDocumentNonBlocking(tasksQuery, newTask);
+
+    toast({
+        title: 'Task Created',
+        description: `${data.title} has been added to your board.`
+    })
+
     setOpen(false);
-    // Reset all states
     form.reset();
     setSelectedUsers([]);
     setSelectedTags([]);
@@ -226,18 +237,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setLogNote('');
   };
 
-  const handleSelectUser = (user: (typeof users)[0]) => {
+  const handleSelectUser = (user: UserType) => {
     if (!selectedUsers.find((u) => u.id === user.id)) {
       setSelectedUsers([...selectedUsers, user]);
-      const currentAssignees = form.getValues('assignees') || [];
-      form.setValue('assignees', [...currentAssignees, user.id]);
+      const currentAssignees = form.getValues('assigneeIds') || [];
+      form.setValue('assigneeIds', [...currentAssignees, user.id]);
     }
   };
 
   const handleRemoveUser = (userId: string) => {
     setSelectedUsers(selectedUsers.filter((u) => u.id !== userId));
-     const currentAssignees = form.getValues('assignees') || [];
-     form.setValue('assignees', currentAssignees.filter(id => id !== userId));
+     const currentAssignees = form.getValues('assigneeIds') || [];
+     form.setValue('assigneeIds', currentAssignees.filter(id => id !== userId));
   };
   
   const handleSelectTag = (tag: TagType) => {
@@ -686,18 +697,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                               <p className="text-xs text-muted-foreground">This task can't start until these tasks are done.</p>
                                <Popover>
                                 <PopoverTrigger asChild><Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Dependency</Button></PopoverTrigger>
-                                <PopoverContent className="w-80"><div className="space-y-2">{allTasks.map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setDependencies(d => [...d, task.id])}>{task.title}</Button>))}</div></PopoverContent>
+                                <PopoverContent className="w-80"><div className="space-y-2">{(allTasks || []).map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setDependencies(d => [...d, task.id])}>{task.title}</Button>))}</div></PopoverContent>
                               </Popover>
-                              <div className="space-y-2">{dependencies.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDependencies(d => d.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
+                              <div className="space-y-2">{dependencies.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks?.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDependencies(d => d.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
                           </div>
                            <div className="space-y-2">
                               <h4 className="font-semibold text-sm flex items-center gap-2">Blocking ({blocking.length})</h4>
                               <p className="text-xs text-muted-foreground">These tasks can't start until this task is done.</p>
                               <Popover>
                                 <PopoverTrigger asChild><Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Blocking Task</Button></PopoverTrigger>
-                                <PopoverContent className="w-80"><div className="space-y-2">{allTasks.map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setBlocking(b => [...b, task.id])}>{task.title}</Button>))}</div></PopoverContent>
+                                <PopoverContent className="w-80"><div className="space-y-2">{(allTasks || []).map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setBlocking(b => [...b, task.id])}>{task.title}</Button>))}</div></PopoverContent>
                               </Popover>
-                               <div className="space-y-2">{blocking.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setBlocking(b => b.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
+                               <div className="space-y-2">{blocking.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks?.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setBlocking(b => b.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
                           </div>
                       </TabsContent>
                       <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4">
@@ -757,7 +768,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    
-
-    

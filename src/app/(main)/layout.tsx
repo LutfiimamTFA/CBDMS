@@ -21,6 +21,9 @@ import {
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
+import { useAuth, useUser } from '@/firebase';
+import { useEffect } from 'react';
+import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
 
 export default function MainLayout({
   children,
@@ -29,6 +32,14 @@ export default function MainLayout({
 }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const auth = useAuth();
+  const { user, isUserLoading } = useUser();
+
+  useEffect(() => {
+    if (!user && !isUserLoading) {
+      initiateAnonymousSignIn(auth);
+    }
+  }, [user, isUserLoading, auth]);
 
   const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },

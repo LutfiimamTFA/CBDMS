@@ -1,4 +1,3 @@
-
 'use client';
 import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
@@ -10,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { TaskDetailsSheet } from './task-details-sheet';
 import { Progress } from '../ui/progress';
 import { useI18n } from '@/context/i18n-provider';
+import Link from 'next/link';
 
 interface TaskCardProps {
   task: Task;
@@ -28,11 +28,11 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
   const priorityTranslationKey = `priority.${task.priority.toLowerCase()}` as any;
 
   return (
-    <TaskDetailsSheet task={task}>
+    <Link href={`/tasks/${task.id}`} className='w-full'>
         <Card
             draggable
             onDragStart={(e) => onDragStart(e, task.id)}
-            className="cursor-pointer transition-shadow duration-200 hover:shadow-lg"
+            className="cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full"
         >
             <CardContent className="p-4">
               <div className="flex items-start justify-between">
@@ -72,7 +72,7 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
             <div className="mt-4 flex items-center justify-between">
                 <div className="flex items-center -space-x-2">
                 <TooltipProvider>
-                    {task.assignees.map((assignee) => (
+                    {task.assignees?.map((assignee) => (
                     <Tooltip key={assignee.id}>
                         <TooltipTrigger asChild>
                         <Avatar className="h-7 w-7 border-2 border-background">
@@ -108,6 +108,6 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
             </div>
             </CardContent>
         </Card>
-    </TaskDetailsSheet>
+    </Link>
   );
 }

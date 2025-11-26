@@ -1,44 +1,50 @@
-
 'use client';
 
 import React, { useEffect, useState, use } from 'react';
-import { tasks as allTasks } from '@/lib/data';
 import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
 import { notFound, useRouter } from 'next/navigation';
 import type { Task } from '@/lib/types';
 import { useI18n } from '@/context/i18n-provider';
+import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import { Loader2 } from 'lucide-react';
 
 export default function TaskPage({ params }: { params: Promise<{ id: string }> }) {
-  const [task, setTask] = useState<Task | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const { t } = useI18n();
   const resolvedParams = use(params);
 
+  const { firestore, user } = useFirebase();
+
+  const taskRef = useMemoFirebase(() => {
+    if (!user || !resolvedParams.id) return null;
+    return doc(firestore, 'users', user.uid, 'tasks', resolvedParams.id);
+  }, [firestore, user, resolvedParams.id]);
+
+  const { data: task, isLoading } = useDoc<Task>(taskRef);
+
   useEffect(() => {
-    const foundTask = allTasks.find((t) => t.id === resolvedParams.id);
-    if (foundTask) {
-      setTask(foundTask);
-      setIsOpen(true);
-    } else {
-      // If no task is found, trigger a 404
-      notFound();
+    if (!isLoading) {
+      if (task) {
+        setIsOpen(true);
+      } else {
+        notFound();
+      }
     }
-  }, [resolvedParams.id]);
+  }, [isLoading, task]);
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
-      // When the sheet is closed, navigate back to the main tasks list.
       router.push('/tasks');
     }
   };
 
-  // Render a loading state or null while we wait for the client-side effect to run.
-  if (!task) {
+  if (isLoading || !task) {
     return (
       <div className="flex h-svh items-center justify-center">
-        <p>{t('tasks.noresults')}</p>
+        {isLoading ? <Loader2 className="h-8 w-8 animate-spin" /> : <p>{t('tasks.noresults')}</p>}
       </div>
     );
   }
@@ -49,7 +55,6 @@ export default function TaskPage({ params }: { params: Promise<{ id: string }> }
         open={isOpen}
         onOpenChange={handleOpenChange}
     >
-        {/* The trigger is visually hidden but required for the Sheet component */}
         <div className="sr-only" />
     </TaskDetailsSheet>
   );

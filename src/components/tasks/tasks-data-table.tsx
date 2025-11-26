@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -15,7 +14,6 @@ import {
   getFacetedRowModel,
   getFacetedUniqueValues,
   getPaginationRowModel,
-  sortingFns,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -27,7 +25,6 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { tasks as initialData } from '@/lib/data';
 import type { Task, Status, Priority } from '@/lib/types';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -51,7 +48,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
-
+import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { collection, doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -72,7 +71,19 @@ const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
 
 
 export function TasksDataTable() {
-  const [data, setData] = React.useState<Task[]>(initialData);
+  const { firestore, user } = useFirebase();
+  const tasksQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return collection(firestore, 'users', user.uid, 'tasks');
+  }, [firestore, user]);
+
+  const { data: tasks, isLoading } = useCollection<Task>(tasksQuery);
+  const [data, setData] = React.useState<Task[]>([]);
+
+  React.useEffect(() => {
+    setData(tasks || []);
+  }, [tasks]);
+
   const [sorting, setSorting] = React.useState<SortingState>([
     {
       id: 'priority',
@@ -108,13 +119,13 @@ export function TasksDataTable() {
   }));
 
   const handleStatusChange = (taskId: string, newStatus: Status) => {
+    if (!user) return;
     const taskToUpdate = data.find(task => task.id === taskId);
     if (!taskToUpdate) return;
     
     const performUpdate = () => {
-        setData(prevData => prevData.map(task => 
-          task.id === taskId ? { ...task, status: newStatus } : task
-        ));
+        const taskRef = doc(firestore, 'users', user.uid, 'tasks', taskId);
+        updateDocumentNonBlocking(taskRef, { status: newStatus });
     };
 
     if (newStatus === 'Done') {
@@ -132,7 +143,9 @@ export function TasksDataTable() {
   };
   
   const handleDeleteTask = (taskId: string) => {
-      setData(prevData => prevData.filter(task => task.id !== taskId));
+      if (!user) return;
+      const taskRef = doc(firestore, 'users', user.uid, 'tasks', taskId);
+      deleteDocumentNonBlocking(taskRef);
   };
 
   const copyTaskLink = (taskId: string) => {
@@ -145,6 +158,7 @@ export function TasksDataTable() {
   }
   
   const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
+    if (!user) return;
     const task = data.find(t => t.id === taskId);
     if (!task) return;
 
@@ -152,10 +166,10 @@ export function TasksDataTable() {
     const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
 
     const applyPriorityChange = (id: string, priority: Priority) => {
-        setData(prevData => prevData.map(d => d.id === id ? { ...d, priority } : d));
+        const taskRef = doc(firestore, 'users', user.uid, 'tasks', id);
+        updateDocumentNonBlocking(taskRef, { priority: priority });
     };
 
-    // If it's not an escalation, just apply it
     if (priorityValues[newPriority] <= priorityValues[currentPriority]) {
         applyPriorityChange(taskId, newPriority);
         return;
@@ -175,13 +189,12 @@ export function TasksDataTable() {
             applyPriorityChange(taskId, newPriority);
             toast({ title: 'AI Agrees!', description: result.reason });
         } else {
-            // AI disagrees, show confirmation dialog
             setAiValidation({
                 isOpen: true,
                 isChecking: false,
                 reason: result.reason,
                 onConfirm: () => {
-                    applyPriorityChange(taskId, newPriority); // User overrides AI
+                    applyPriorityChange(taskId, newPriority); 
                     setAiValidation({ ...aiValidation, isOpen: false });
                 }
             });
@@ -189,7 +202,7 @@ export function TasksDataTable() {
     } catch (e) {
         console.error(e);
         toast({ variant: 'destructive', title: 'AI Validation Failed', description: 'Could not validate priority change. Applying directly.' });
-        applyPriorityChange(taskId, newPriority); // Apply directly on error
+        applyPriorityChange(taskId, newPriority);
     } finally {
         setAiValidation(prev => ({ ...prev, isChecking: false }));
         setPendingPriorityChange(null);
@@ -318,11 +331,11 @@ export function TasksDataTable() {
       accessorKey: 'assignees',
       header: t('tasks.column.assignees'),
       cell: ({ row }) => {
-        const assignees = row.getValue('assignees') as any[];
+        const assignees = row.getValue('assignees') as any[] | undefined;
         return (
           <div className="flex -space-x-2">
             <TooltipProvider>
-              {assignees.map((assignee) => (
+              {assignees?.map((assignee) => (
                 <Tooltip key={assignee.id}>
                   <TooltipTrigger asChild>
                     <Avatar className="h-7 w-7 border-2 border-background">
@@ -475,7 +488,7 @@ export function TasksDataTable() {
                     colSpan={columns.length}
                     className="h-24 text-center"
                   >
-                    {t('tasks.noresults')}
+                    {isLoading ? 'Loading tasks...' : t('tasks.noresults')}
                   </TableCell>
                 </TableRow>
               )}
@@ -569,10 +582,3 @@ export function TasksDataTable() {
     </>
   );
 }
-    
-
-    
-
-    
-
-    

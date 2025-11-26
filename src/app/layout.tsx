@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/theme-provider';
 import { I18nProvider } from '@/context/i18n-provider';
+import { FirebaseClientProvider } from '@/firebase';
 
 export const metadata: Metadata = {
   title: 'WorkWise',
@@ -32,7 +33,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <I18nProvider>
-            {children}
+            <FirebaseClientProvider>
+              {children}
+            </FirebaseClientProvider>
             <Toaster />
           </I18nProvider>
         </ThemeProvider>
