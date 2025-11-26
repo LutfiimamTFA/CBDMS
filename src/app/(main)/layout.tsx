@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -21,12 +21,9 @@ import {
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useAuth, useUser, setDocumentNonBlocking } from '@/firebase';
+import { useUser } from '@/firebase';
 import { useEffect } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc } from 'firebase/firestore';
-import { useFirebase } from '@/firebase';
-import { initiateAnonymousSignIn } from '@/firebase/non-blocking-login';
+import { Loader2 } from 'lucide-react';
 
 export default function MainLayout({
   children,
@@ -34,35 +31,31 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { t } = useI18n();
-  const { auth, firestore } = useFirebase();
   const { user, isUserLoading } = useUser();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        // User is signed in.
-        const userRef = doc(firestore, 'users', firebaseUser.uid);
-        
-        // For this simple case, we set a default role and companyId upon first login.
-        // In a real app, this would be managed by an admin.
-        setDocumentNonBlocking(userRef, {
-            id: firebaseUser.uid,
-            name: firebaseUser.displayName || 'Anonymous User',
-            email: firebaseUser.email || `anon-${firebaseUser.uid}@example.com`,
-            role: 'Employee', // Assign a default role
-            companyId: 'company-a' // Assign a default company
-        }, { merge: true });
+    // If auth state is not loading and there is no user, redirect to login page.
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [isUserLoading, user, router]);
 
-      } else if (!isUserLoading) {
-        // User is signed out, and we are not in a loading state.
-        initiateAnonymousSignIn(auth);
-      }
-    });
+  // While checking auth state, show a loading screen.
+  if (isUserLoading) {
+    return (
+      <div className="flex h-svh items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
-    return () => unsubscribe();
-  }, [auth, firestore, isUserLoading]);
-
+  // If there's no user after loading, children won't be rendered due to redirect.
+  // This avoids flashing the layout before redirecting.
+  if (!user) {
+    return null; 
+  }
 
   const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
@@ -113,5 +106,3 @@ export default function MainLayout({
     </SidebarProvider>
   );
 }
-
-    
