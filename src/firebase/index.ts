@@ -18,8 +18,8 @@ export function initializeFirebase() {
 
     if (process.env.NODE_ENV === 'development') {
         try {
-            connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
-            connectFirestoreEmulator(firestore, "localhost", 8080);
+            connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+            connectFirestoreEmulator(firestore, "127.0.0.1", 8080);
         } catch (e) {
             console.error(e)
         }
