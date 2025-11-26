@@ -38,7 +38,6 @@ import { useI18n } from '@/context/i18n-provider';
 import { Progress } from '../ui/progress';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { currentUser, users } from '@/lib/data';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { useRouter } from 'next/navigation';
@@ -46,6 +45,8 @@ import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Loader2 } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
+import { collection } from 'firebase/firestore';
 
 
 const taskDetailsSchema = z.object({
@@ -113,14 +114,20 @@ export function TaskDetailsSheet({
   const [comments, setComments] = useState<Comment[]>(task.comments || []);
   const [newComment, setNewComment] = useState('');
 
-  const [activities, setActivities] = useState<Activity[]>([
-      { id: 'a1', user: users[1], action: 'changed status from "To Do" to "Doing"', timestamp: new Date(Date.now() - 7200000).toISOString()},
-      { id: 'a2', user: currentUser, action: 'updated the description', timestamp: new Date(Date.now() - 86400000).toISOString()},
-  ]);
+  const [activities, setActivities] = useState<Activity[]>([]);
   
   const [subtasks, setSubtasks] = useState(task.subtasks || []);
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
+
+  const firestore = useFirestore();
+  const usersCollectionRef = useMemoFirebase(() => 
+    firestore ? collection(firestore, 'users') : null,
+  [firestore]);
+
+  const { data: users } = useCollection<User>(usersCollectionRef);
+
+  const { profile: currentUser } = useUserProfile();
 
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
@@ -243,16 +250,21 @@ export function TaskDetailsSheet({
   };
   
   const handlePostComment = () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !currentUser) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
-      user: currentUser,
+      user: {
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        avatarUrl: currentUser.avatarUrl || '',
+      },
       text: newComment,
       timestamp: new Date().toISOString(),
       replies: [],
     };
     setComments([...comments, comment]);
-    setActivities(prev => [{id: `a-${Date.now()}`, user: currentUser, action: `commented: "${newComment.substring(0, 30)}..."`, timestamp: new Date().toISOString()}, ...prev]);
+    setActivities(prev => [{id: `a-${Date.now()}`, user: comment.user, action: `commented: "${newComment.substring(0, 30)}..."`, timestamp: new Date().toISOString()}, ...prev]);
     setNewComment('');
   };
 
@@ -271,6 +283,7 @@ export function TaskDetailsSheet({
 
   const onSubmit = (data: TaskDetailsFormValues) => {
     console.log('Updated Task Data:', {...data, timeTracked: task.timeTracked, timeLogs: task.timeLogs, subtasks});
+    if (!users) return;
     setTask(currentTask => ({
         ...currentTask,
         ...data,
@@ -401,7 +414,7 @@ export function TaskDetailsSheet({
                               {task.assignees.map(user => (
                                   <div key={user.id} className="flex items-center justify-between gap-2 bg-secondary/50 p-2 rounded-lg">
                                       <div className="flex items-center gap-3">
-                                          <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                          <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                           <div><p className="text-sm font-medium">{user.name}</p><p className="text-xs text-muted-foreground">{user.email}</p></div>
                                       </div>
                                       <Button variant="outline" size="sm" disabled={!isEditing}>Owner</Button>
@@ -459,7 +472,7 @@ export function TaskDetailsSheet({
                       <div className="space-y-6">
                           {comments.map(comment => (
                               <div key={comment.id} className="flex gap-3">
-                                  <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar>
+                                  <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
                                   <div className="flex-1">
                                       <div className="flex items-center gap-2">
                                           <span className="font-semibold text-sm">{comment.user.name}</span>
@@ -470,7 +483,7 @@ export function TaskDetailsSheet({
                               </div>
                           ))}
                           <div className="flex gap-3">
-                               <Avatar className="h-8 w-8"><AvatarImage src={currentUser.avatarUrl} /><AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback></Avatar>
+                               <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
                                <div className="flex-1 relative">
                                   <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-10" />
                                   <div className="absolute top-2 right-2 flex gap-1">
@@ -534,7 +547,7 @@ export function TaskDetailsSheet({
                           <div className="space-y-6">
                               {activities.map(activity => (
                                   <div key={activity.id} className="flex gap-3 text-sm">
-                                      <Avatar className="h-8 w-8"><AvatarImage src={activity.user.avatarUrl}/><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar>
+                                      <Avatar className="h-8 w-8"><AvatarImage src={activity.user.avatarUrl}/><AvatarFallback>{activity.user.name?.charAt(0)}</AvatarFallback></Avatar>
                                       <div>
                                           <span className="font-semibold">{activity.user.name}</span>
                                           <span className="text-muted-foreground"> {activity.action}</span>
@@ -584,5 +597,3 @@ export function TaskDetailsSheet({
     </>
   );
 }
-
-    

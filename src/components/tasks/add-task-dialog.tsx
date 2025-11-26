@@ -29,7 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { users as staticUsers, tags as allTags, currentUser as staticCurrentUser } from '@/lib/data';
+import { tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
@@ -63,7 +63,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
@@ -132,7 +132,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [newComment, setNewComment] = React.useState('');
   
   const firestore = useFirestore();
-  const users = staticUsers; // Using static users for now
+
+  const usersCollectionRef = useMemoFirebase(() => 
+    firestore ? collection(firestore, 'users') : null, 
+  [firestore]);
+  const { data: users } = useCollection<UserType>(usersCollectionRef);
+
+  const { profile: currentUser } = useUserProfile();
 
   
   const tasksCollectionRef = useMemoFirebase(() => {
@@ -379,10 +385,15 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }
   
   const handlePostComment = () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !currentUser) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
-      user: staticCurrentUser,
+      user: {
+        id: currentUser.id,
+        name: currentUser.name || '',
+        email: currentUser.email || '',
+        avatarUrl: currentUser.avatarUrl || '',
+      },
       text: newComment,
       timestamp: new Date().toISOString(),
       replies: [],
@@ -444,8 +455,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       setIsSuggesting(false);
     }
   };
-
-  const currentUser = staticCurrentUser;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -631,11 +640,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                        {users.map((user) => (
+                                        {(users || []).map((user) => (
                                             <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
                                                 <Avatar className="h-6 w-6 mr-2">
                                                     <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                                    <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
                                                 </Avatar>
                                                 <span>{user.name}</span>
                                             </DropdownMenuItem>
@@ -648,7 +657,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                         {selectedUsers.map((user) => (
                                             <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
                                                 <div className="flex items-center gap-2">
-                                                    <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                    <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                                     <span className="text-sm font-medium">{user.name}</span>
                                                 </div>
                                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
@@ -707,7 +716,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
                           {comments.map(comment => (
                               <div key={comment.id} className="flex gap-3">
-                                  <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar>
+                                  <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
                                   <div className="flex-1">
                                       <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
                                       <p className="text-sm bg-secondary/50 p-3 rounded-lg mt-1">{comment.text}</p>
@@ -716,7 +725,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           ))}
                         </div>
                         <div className="flex gap-3 pt-4 border-t">
-                             <Avatar className="h-8 w-8"><AvatarImage src={currentUser.avatarUrl} /><AvatarFallback>{currentUser.name.charAt(0)}</AvatarFallback></Avatar>
+                             <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
                              <div className="flex-1 relative">
                                 <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-10" />
                                 <div className="absolute top-2 right-2 flex gap-1"><Button type="button" variant="ghost" size="icon" className="h-6 w-6"><AtSign className="h-4 w-4"/></Button><Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button></div>
