@@ -62,9 +62,21 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 
   // Effect to subscribe to Firebase auth state changes
   useEffect(() => {
-    // For the simplified version, we are not using auth.
-    // We'll set a default non-loading state.
-    setUserAuthState({ user: null, isUserLoading: false, userError: null });
+    if (!auth) {
+        setUserAuthState({ user: null, isUserLoading: false, userError: null });
+        return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, 
+      (user) => {
+          setUserAuthState({ user, isUserLoading: false, userError: null });
+      }, 
+      (error) => {
+          setUserAuthState({ user: null, isUserLoading: false, userError: error });
+      }
+    );
+
+    return () => unsubscribe();
   }, [auth]); // Depends on the auth instance
 
   // Memoize the context value

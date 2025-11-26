@@ -16,22 +16,31 @@ import Link from 'next/link';
 import { useUserProfile, useAuth, initiateSignOut } from '@/firebase';
 import { Skeleton } from '../ui/skeleton';
 import { useRouter } from 'next/navigation';
-import { currentUser } from '@/lib/data'; // Using static data for now
 
 export function UserNav() {
   const router = useRouter();
+  const auth = useAuth();
+  const { user, profile, isLoading } = useUserProfile();
 
   const handleLogout = () => {
-    // This will be implemented later
-    router.push('/');
+    if (auth) {
+      initiateSignOut(auth);
+      router.push('/login');
+    }
   };
 
   const getInitials = (name?: string | null) => {
     if (!name) return 'A';
     return name.split(' ').map(n => n[0]).join('');
   }
-
-  const profile = currentUser; // Use static user data
+  
+  if (isLoading) {
+    return <Skeleton className="h-10 w-10 rounded-full" />;
+  }
+  
+  if (!user) {
+    return null;
+  }
 
   return (
     <DropdownMenu>

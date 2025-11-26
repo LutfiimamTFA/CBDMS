@@ -2,8 +2,8 @@
 
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getAuth, type Auth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, type Firestore, connectFirestoreEmulator } from 'firebase/firestore';
 
 let firebaseApp: FirebaseApp | null = null;
 let auth: Auth | null = null;
@@ -15,6 +15,16 @@ export function initializeFirebase() {
     firebaseApp = initializeApp(firebaseConfig);
     auth = getAuth(firebaseApp);
     firestore = getFirestore(firebaseApp);
+
+    if (process.env.NODE_ENV === 'development') {
+        try {
+            connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
+            connectFirestoreEmulator(firestore, "localhost", 8080);
+        } catch (e) {
+            console.error(e)
+        }
+    }
+
   } else {
     if (!firebaseApp) {
       firebaseApp = getApp();
@@ -34,3 +44,4 @@ export * from './non-blocking-updates';
 export * from './errors';
 export * from './error-emitter';
 export * from './non-blocking-login';
+export * from './auth/use-user';

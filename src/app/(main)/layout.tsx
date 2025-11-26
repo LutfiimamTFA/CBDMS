@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -18,9 +18,12 @@ import {
   FileText,
   Settings,
   ClipboardList,
+  Loader2,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
+import { useFirebase } from '@/firebase';
+import { useEffect } from 'react';
 
 export default function MainLayout({
   children,
@@ -29,12 +32,28 @@ export default function MainLayout({
 }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const router = useRouter();
+  const { user, isUserLoading } = useFirebase();
+
+  useEffect(() => {
+    if (!isUserLoading && !user) {
+      router.push('/login');
+    }
+  }, [user, isUserLoading, router]);
 
   const navItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
     { href: '/tasks', icon: ClipboardList, label: t('nav.list') },
     { href: '/reports', icon: FileText, label: t('nav.reports') },
   ];
+
+  if (isUserLoading || !user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>

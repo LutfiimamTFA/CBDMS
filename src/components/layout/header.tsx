@@ -31,7 +31,7 @@ export function Header({ title, actions }: HeaderProps) {
             <Bell className="h-[1.2rem] w-[1.2rem]" />
             <span className="sr-only">Toggle notifications</span>
           </Button>
-          {/* UserNav is removed for now to simplify */}
+          <UserNav />
         </div>
       </div>
     </header>
