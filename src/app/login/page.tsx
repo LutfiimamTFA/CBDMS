@@ -161,6 +161,11 @@ export default function LoginPage() {
     setIsGoogleSigningIn(true);
     initiateGoogleSignIn(auth, firestore)
       .catch((error) => {
+        // Don't show a toast if the user closes the popup
+        if (error.code === 'auth/popup-closed-by-user') {
+          console.log('Google Sign-in cancelled by user.');
+          return;
+        }
         console.error('Google Sign-in Error:', error);
         toast({
           variant: 'destructive',
