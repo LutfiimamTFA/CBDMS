@@ -306,8 +306,8 @@ export function TaskDetailsSheet({
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
               <SheetHeader className="p-6">
-                <SheetTitle className={isEditing ? 'sr-only' : ''}>{task.title}</SheetTitle>
-                   {isEditing && (
+                <SheetTitle className="sr-only">{task.title}</SheetTitle>
+                   {isEditing ? (
                        <FormField
                           control={form.control}
                           name="title"
@@ -323,6 +323,8 @@ export function TaskDetailsSheet({
                             </FormItem>
                           )}
                         />
+                   ) : (
+                     <h2 className="text-2xl font-headline font-bold">{task.title}</h2>
                    )}
               </SheetHeader>
               <Separator />
@@ -582,3 +584,5 @@ export function TaskDetailsSheet({
     </>
   );
 }
+
+    
