@@ -138,7 +138,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   [firestore]);
   const { data: users } = useCollection<UserType>(usersCollectionRef);
 
-  const { profile: currentUserProfile } = useUserProfile();
+  const { user, profile: currentUserProfile } = useUserProfile();
 
   const tasksCollectionRef = useMemoFirebase(() => {
     if (!firestore) return null;
@@ -176,21 +176,23 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   // Effect to auto-assign task to current user if their role is 'Employee'
   useEffect(() => {
-    if (currentUserProfile && currentUserProfile.role === 'Employee') {
-      const selfUser = {
-        id: currentUserProfile.id,
-        name: currentUserProfile.name,
-        email: currentUserProfile.email,
-        avatarUrl: currentUserProfile.avatarUrl || '',
-      };
-      setSelectedUsers([selfUser]);
-      form.setValue('assigneeIds', [selfUser.id]);
-    } else {
-        // Reset if the user is not an employee or profile changes
+    if (currentUserProfile && user && open) {
+      if (currentUserProfile.role === 'Employee') {
+        const selfUser = {
+          id: user.uid,
+          name: currentUserProfile.name,
+          email: currentUserProfile.email,
+          avatarUrl: currentUserProfile.avatarUrl || '',
+          role: currentUserProfile.role,
+        };
+        setSelectedUsers([selfUser]);
+        form.setValue('assigneeIds', [selfUser.id]);
+      } else {
         setSelectedUsers([]);
         form.setValue('assigneeIds', []);
+      }
     }
-  }, [currentUserProfile, form, open]);
+  }, [currentUserProfile, user, form, open]);
 
 
   const onSubmit = (data: TaskFormValues) => {
@@ -281,6 +283,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
 
   const handleRemoveUser = (userId: string) => {
+    // Employees cannot remove themselves
+    if (currentUserProfile?.role === 'Employee') return;
+    
     const newSelectedUsers = selectedUsers.filter((u) => u.id !== userId);
     setSelectedUsers(newSelectedUsers);
     form.setValue('assigneeIds', newSelectedUsers.map(u => u.id));
@@ -412,14 +417,15 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }
   
   const handlePostComment = () => {
-    if (!newComment.trim() || !currentUserProfile) return;
+    if (!newComment.trim() || !currentUserProfile || !user) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
       user: {
-        id: currentUserProfile.id,
-        name: currentUserProfile.name || '',
+        id: user.uid,
+        name: currentUserProfile.name || 'Unknown User',
         email: currentUserProfile.email || '',
         avatarUrl: currentUserProfile.avatarUrl || '',
+        role: currentUserProfile.role,
       },
       text: newComment,
       timestamp: new Date().toISOString(),
@@ -482,6 +488,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       setIsSuggesting(false);
     }
   };
+
+  const isEmployee = currentUserProfile?.role === 'Employee';
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -660,10 +669,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>{t('addtask.form.teammembers')}</FormLabel>
-                                {currentUserProfile?.role !== 'Employee' && (
                                   <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
-                                          <Button variant="outline" className="w-full justify-start text-muted-foreground">
+                                          <Button variant="outline" className="w-full justify-start text-muted-foreground" disabled={isEmployee}>
                                           <UserPlus className="mr-2 h-4 w-4" />{t('addtask.form.selectmembers')}
                                           </Button>
                                       </DropdownMenuTrigger>
@@ -679,7 +687,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                           ))}
                                       </DropdownMenuContent>
                                   </DropdownMenu>
-                                )}
                                 {selectedUsers.length > 0 && (
                                     <div className="space-y-2 pt-2">
                                         <Label>{t('addtask.form.selectedmembers')}</Label>
@@ -689,7 +696,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                                     <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                                     <span className="text-sm font-medium">{user.name}</span>
                                                 </div>
-                                                {currentUserProfile?.role !== 'Employee' && (
+                                                {!isEmployee && (
                                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
                                                 )}
                                             </div>

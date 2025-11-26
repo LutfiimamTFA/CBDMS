@@ -45,11 +45,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useUserProfile, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import type { User } from '@/lib/types';
-import { collection } from 'firebase/firestore';
-import { initiateEmailSignUp } from '@/firebase/non-blocking-login';
+import { collection, doc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/firebase';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 
 
 const newUserSchema = z.object({
@@ -87,7 +87,8 @@ export default function UsersPage() {
   });
 
   useEffect(() => {
-    if (!isProfileLoading && profile?.role !== 'Super Admin') {
+    // Only redirect if loading is complete and the profile is loaded but the role is not Super Admin
+    if (!isProfileLoading && profile && profile.role !== 'Super Admin') {
       router.push('/dashboard');
       toast({
         variant: 'destructive',
@@ -103,29 +104,24 @@ export default function UsersPage() {
       return;
     }
     setIsCreating(true);
-    
-    // We'll use a temporary Auth instance to create the user without signing out the admin
-    // This is a simplified approach for client-side only logic.
-    // A more robust solution would use Firebase Functions (server-side).
+
     try {
-        // This is a workaround. In a real app, you'd use a server-side function
-        // to create users. This temporarily uses the admin's auth context.
-        // The role will be set correctly in the user's Firestore document.
-        
-        // This is not ideal as it creates the user under the admin's session, but it works for a prototype.
-        // We will create a separate function to handle this later. For now, let's just create the document.
-        
-        // Let's create a placeholder user in firestore for now. This won't create an auth user.
-        const userDocRef = doc(collection(firestore, 'users'));
-        await fetch('/api/create-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(data),
-        });
+      const response = await fetch('/api/create-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create user.');
+      }
 
       toast({
         title: 'User Created',
-        description: `Account for ${data.name} has been created.`,
+        description: `An invitation has been sent to ${data.name}.`,
       });
       setIsDialogOpen(false);
       form.reset();
@@ -141,12 +137,18 @@ export default function UsersPage() {
     }
   };
 
-  if (isProfileLoading || profile?.role !== 'Super Admin') {
+  // Show a loading screen while the profile is loading or if the role is not yet confirmed.
+  if (isProfileLoading || !profile) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
+  }
+
+  // A secondary check to prevent rendering for non-admins, even if useEffect is slow
+  if (profile.role !== 'Super Admin') {
+    return null; // or a redirect, but useEffect handles that
   }
 
   return (

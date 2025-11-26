@@ -48,12 +48,21 @@ export default function MainLayout({
     { href: '/reports', icon: FileText, label: t('nav.reports') },
   ];
 
-  if (profile?.role === 'Super Admin') {
+  // Conditionally add the "Users" nav item only after profile has loaded and role is checked.
+  if (!isLoading && profile?.role === 'Super Admin') {
     navItems.push({ href: '/users', icon: Users, label: 'Users' });
   }
 
-  if (isLoading || !user) {
+  if (isLoading) {
     return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
