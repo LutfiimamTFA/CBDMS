@@ -89,11 +89,11 @@ export default function SettingsPage() {
       await uploadBytes(storageRef, file);
       const photoURL = await getDownloadURL(storageRef);
 
-      // Update Firestore
+      // Update Firestore - useUserProfile hook will react to this change
       const userDocRef = doc(firestore, 'users', user.uid);
       await updateDoc(userDocRef, { avatarUrl: photoURL });
       
-      // Update Auth profile
+      // Also update Auth profile if you need it synced elsewhere in Firebase
       if (auth?.currentUser) {
         await updateProfile(auth.currentUser, { photoURL });
       }
@@ -103,6 +103,7 @@ export default function SettingsPage() {
         description: 'Your new profile picture has been saved.',
       });
     } catch (error) {
+      console.error('Photo Upload Error:', error);
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
@@ -129,6 +130,7 @@ export default function SettingsPage() {
         description: 'Your name has been successfully updated.',
       });
     } catch (error) {
+       console.error('Profile Update Error:', error);
       toast({
         variant: 'destructive',
         title: 'Update Failed',
@@ -208,7 +210,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-6">
                  <div className="relative">
                     <Avatar className="h-20 w-20">
-                      <AvatarImage src={profile?.avatarUrl} />
+                      <AvatarImage src={profile?.avatarUrl} key={profile?.avatarUrl} />
                       <AvatarFallback>{getInitials(profile?.name)}</AvatarFallback>
                     </Avatar>
                     {isUploadingPhoto && (
