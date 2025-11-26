@@ -1,0 +1,140 @@
+/**
+ * This ruleset enforces a strict user-ownership security model for the WorkWise application.
+ * All data is sandboxed within a user's own data tree, preventing any cross-user data access.
+ *
+ * Core Philosophy:
+ * A user can only read, write, and delete data that exists under their own user ID path. This
+ * path-based security is simple, performant, and highly secure.
+ *
+ * Data Structure:
+ * The data is organized hierarchically:
+ * - /users/{userId}: Stores the user's profile information.
+ * - /users/{userId}/tasks/{taskId}: Stores tasks created by and for the user.
+ * - /users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId}: Stores time entries for a user's tasks.
+ *
+ * Key Security Decisions:
+ * - No Public Data: All collections are private to the owning user.
+ * - User Listing Disabled: It is not possible to query the top-level `/users` collection.
+ * - Strict Ownership: All operations (read, create, update, delete) are gated by an ownership check.
+ *   The authenticated user's UID must match the `{userId}` in the document path.
+ * - Relational Integrity: On creation, key identifiers within a document (e.g., a `userId` field)
+ *   are validated to ensure they match the document's path, creating a secure and consistent link.
+ *   These identifiers are immutable once set.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --------------------------------------------------------------------------------
+    // Helper Functions
+    // --------------------------------------------------------------------------------
+
+    /**
+     * Checks if a user is authenticated.
+     */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /**
+     * Checks if the currently authenticated user's UID matches the provided userId.
+     * This is the primary function for enforcing data ownership.
+     */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /**
+     * Ensures an operation is performed by the document owner and that the document already exists.
+     * CRITICAL for preventing writes to non-existent paths on update/delete.
+     */
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    /**
+     * Validates required relational fields on User document creation.
+     * Ensures the document's internal `id` matches the document's path ID (`userId`).
+     */
+    function hasValidUserDataOnCreate(userId) {
+      return request.resource.data.id == userId;
+    }
+
+    /**
+     * Enforces immutability for critical relational fields on User document updates.
+     * The user's own ID cannot be changed.
+     */
+    function hasImmutableUserData() {
+      return request.resource.data.id == resource.data.id;
+    }
+    
+    /**
+     * Validates required relational fields on TimeTracking document creation.
+     * Ensures the new document is correctly linked to its parent user and task.
+     */
+    function hasValidTimeTrackingDataOnCreate(userId, taskId) {
+      let data = request.resource.data;
+      return data.userId == userId && data.taskId == taskId;
+    }
+
+    /**
+     * Enforces immutability for critical relational fields on TimeTracking document updates.
+     * The link to the user and task cannot be changed.
+     */
+    function hasImmutableTimeTrackingData() {
+      let incomingData = request.resource.data;
+      let existingData = resource.data;
+      return incomingData.userId == existingData.userId &&
+             incomingData.taskId == existingData.taskId;
+    }
+
+    // --------------------------------------------------------------------------------
+    // Collection Rules
+    // --------------------------------------------------------------------------------
+
+    /**
+     * @description Manages user profile documents.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user can create their own profile document.
+     * @deny (list) Another user attempts to list all user profiles.
+     * @principle Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Disallow listing all users for security.
+      allow create: if isOwner(userId) && hasValidUserDataOnCreate(userId);
+      allow update: if isExistingOwner(userId) && hasImmutableUserData();
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Manages a user's own tasks.
+     * @path /users/{userId}/tasks/{taskId}
+     * @allow (create, list, get) A user manages tasks within their own subcollection.
+     * @deny (get) A user with auth.uid 'user-abc' tries to read a task at /users/user-xyz/tasks/task-123.
+     * @principle Enforces document ownership via path hierarchy.
+     */
+    match /users/{userId}/tasks/{taskId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isExistingOwner(userId);
+      allow delete: if isExistingOwner(userId);
+    }
+
+    /**
+     * @description Manages time tracking entries for a specific task belonging to a user.
+     * @path /users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId}
+     * @allow (create) A user adds a time tracking entry to one of their own tasks.
+     * @deny (update) An attacker tries to change the `userId` or `taskId` of an existing time entry.
+     * @principle Validates relational integrity between documents and enforces immutability of parent links.
+     */
+    match /users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId} {
+      allow get: if isOwner(userId);
+      allow list: if isOwner(userId);
+      allow create: if isOwner(userId) && hasValidTimeTrackingDataOnCreate(userId, taskId);
+      allow update: if isExistingOwner(userId) && hasImmutableTimeTrackingData();
+      allow delete: if isExistingOwner(userId);
+    }
+  }
+}

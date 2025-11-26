@@ -1,0 +1,210 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the WorkWise application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email"
+      ]
+    },
+    "Task": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Task",
+      "type": "object",
+      "description": "Represents a task within the WorkWise application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Task entity."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the task."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the task."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the task (e.g., To Do, Doing, Done)."
+        },
+        "assigneeIds": {
+          "type": "array",
+          "description": "References to Users assigned to this task. (Relationship: Task N:N User)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The start date of the task.",
+          "format": "date-time"
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "The due date or deadline of the task.",
+          "format": "date-time"
+        },
+        "priority": {
+          "type": "string",
+          "description": "The priority level of the task (e.g., Urgent, High, Normal, Low)."
+        },
+        "timeEstimate": {
+          "type": "number",
+          "description": "The estimated time in hours to complete the task."
+        },
+        "taskDependencyIds": {
+          "type": "array",
+          "description": "References to other Tasks that this Task depends on. (Relationship: Task 1:N Task)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "status",
+        "assigneeIds",
+        "startDate",
+        "dueDate",
+        "priority",
+        "timeEstimate"
+      ]
+    },
+    "TimeTracking": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "TimeTracking",
+      "type": "object",
+      "description": "Represents the time tracked for a specific task by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the TimeTracking entity."
+        },
+        "taskId": {
+          "type": "string",
+          "description": "Reference to the Task being tracked. (Relationship: Task 1:N TimeTracking)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who is tracking time. (Relationship: User 1:N TimeTracking)"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The start time of the time tracking session.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The end time of the time tracking session.",
+          "format": "date-time"
+        },
+        "duration": {
+          "type": "number",
+          "description": "The total duration of the time tracking session in hours."
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "userId",
+        "startTime",
+        "endTime",
+        "duration"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles. Uses path-based ownership.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/tasks/{taskId}",
+        "definition": {
+          "entityName": "Task",
+          "schema": {
+            "$ref": "#/backend/entities/Task"
+          },
+          "description": "Stores tasks associated with a specific user. Uses path-based ownership. This structure indicates a `User 1:N Task` relationship.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "taskId",
+              "description": "The unique identifier for the task."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId}",
+        "definition": {
+          "entityName": "TimeTracking",
+          "schema": {
+            "$ref": "#/backend/entities/TimeTracking"
+          },
+          "description": "Stores time tracking entries for a specific task by a specific user. This structure creates a nested `1:N` relationship from `User -> Task -> TimeTracking`.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "taskId",
+              "description": "The unique identifier for the task."
+            },
+            {
+              "name": "timeTrackingId",
+              "description": "The unique identifier for the time tracking entry."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support the core features of WorkWise: Task Management, Time Tracking, and Work Reporting, while adhering to the principles of Authorization Independence, Structural Segregation, and Access Modeling.  It leverages path-based ownership for user-specific data and denormalization to eliminate `get()` calls in security rules.  This architecture prioritizes secure `list` operations and enforces invariants for data integrity.\n\n*   **Users:** User data is stored in a dedicated `/users` collection, with each document representing a single user. This structure supports basic user management and authentication.\n*   **Tasks:** Task data is stored in `/users/{userId}/tasks/{taskId}` using hierarchical paths for user-owned data. This path indicates a `User 1:N Task` relationship. This enables simple path based security rules, securing tasks to the owning user.\n*   **Time Tracking:** Time tracking data is stored in `/users/{userId}/tasks/{taskId}/timeTracking/{timeTrackingId}`. This is a nested `1:N` relationship from `User -> Task -> TimeTracking`. This enables simple path based security rules, securing time tracking to the owning user.\n\n**Authorization Independence (Denormalization):**\n\n*   The structure relies on path-based ownership (`/users/{userId}/tasks/{taskId}`) to establish a clear ownership model, thus avoiding the need for `get()` calls in security rules to verify ownership. All authorization checks are performed directly on the request path, ensuring atomic operations and improved security.\n\n**QAPs (Rules are not Filters):**\n\n*   The segregation of tasks by user ID (`/users/{userId}/tasks/{taskId}`) allows for secure `list` operations.  A user can only list tasks under their own user ID, as enforced by the security rules.\n\n**Invariants:**\n\n*   The hierarchical structure helps enforce invariants such as ownership. Each task and time tracking entry is tied to a specific user, preventing orphaned data.\n\nThe design ensures a scalable, secure, and debuggable Firestore structure that aligns with the application's requirements and best practices for Firebase development."
+  }
+}
