@@ -161,15 +161,12 @@ export default function LoginPage() {
     setIsGoogleSigningIn(true);
     initiateGoogleSignIn(auth, firestore)
       .catch((error) => {
-        setIsGoogleSigningIn(false);
         // Don't show a toast if the user closes the popup
         if (error.code === 'auth/popup-closed-by-user') {
-          console.log('Google Sign-in cancelled by user.');
           return;
         }
 
         if (error.code === 'auth/operation-not-allowed') {
-          console.error('Google Sign-in Error:', error);
           toast({
             variant: 'destructive',
             title: 'Sign-in Method Disabled',
@@ -178,7 +175,6 @@ export default function LoginPage() {
           return;
         }
         
-        console.error('Google Sign-in Error:', error);
         toast({
           variant: 'destructive',
           title: 'Sign-in Failed',
@@ -186,11 +182,7 @@ export default function LoginPage() {
         });
       })
       .finally(() => {
-        // This might run before the user is redirected on success,
-        // but it's okay as the loading screen will cover it.
-        if (isGoogleSigningIn) {
-            setIsGoogleSigningIn(false);
-        }
+        setIsGoogleSigningIn(false);
       });
   };
 

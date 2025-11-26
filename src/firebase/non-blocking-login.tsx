@@ -36,7 +36,6 @@ export function initiateEmailSignIn(
       })
       .catch((error) => {
         // Catch other errors like invalid credentials.
-        console.error('Sign-in Error:', error);
         reject(error);
       });
   });
@@ -87,7 +86,6 @@ export function initiateEmailSignUp(
         }
       })
       .catch((createError) => {
-        console.error('Sign-up Error:', createError);
         reject(createError);
       });
   });
@@ -123,10 +121,6 @@ export function initiateGoogleSignIn(
             });
             resolve();
           } catch (profileError) {
-            console.error(
-              'Error creating user profile after Google sign-in:',
-              profileError
-            );
             reject(profileError);
           }
         } else {
@@ -135,8 +129,7 @@ export function initiateGoogleSignIn(
         }
       })
       .catch((error) => {
-        // Handle Errors here.
-        console.error('Google Sign-In Error:', error.code, error.message);
+        // Reject the promise to be handled by the caller
         reject(error);
       });
   });
