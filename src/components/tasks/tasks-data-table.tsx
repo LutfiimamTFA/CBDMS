@@ -12,6 +12,8 @@ import {
   ColumnFiltersState,
   getFilteredRowModel,
   VisibilityState,
+  getFacetedRowModel,
+  getFacetedUniqueValues,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -35,10 +37,11 @@ import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, Plus } from 'lucide-react';
+import { ChevronDown, Plus, X as XIcon } from 'lucide-react';
 import { TaskDetailsSheet } from './task-details-sheet';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
+import { DataTableFacetedFilter } from './data-table-faceted-filter';
 
 
 export function TasksDataTable() {
@@ -46,6 +49,19 @@ export function TasksDataTable() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const { t } = useI18n();
+  
+  const statusOptions = Object.values(statusInfo).map(s => ({
+      value: s.value,
+      label: t(`status.${s.value.toLowerCase().replace(' ', '')}` as any),
+      icon: s.icon
+  }));
+
+  const priorityOptions = Object.values(priorityInfo).map(p => ({
+      value: p.value,
+      label: t(`priority.${p.value.toLowerCase()}` as any),
+      icon: p.icon
+  }));
+
 
   const columns: ColumnDef<Task>[] = [
     {
@@ -67,10 +83,12 @@ export function TasksDataTable() {
         const status = row.getValue('status') as keyof typeof statusInfo;
         const Icon = statusInfo[status].icon;
         const translationKey = `status.${status.toLowerCase().replace(' ', '')}` as any;
-        return <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-          {t(translationKey)}
-        </div>;
+        return (
+          <div className="flex w-[120px] items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm">
+            <Icon className="h-4 w-4 text-muted-foreground" />
+            <span>{t(translationKey)}</span>
+          </div>
+        );
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
@@ -84,10 +102,12 @@ export function TasksDataTable() {
         const Icon = priorityInfo[priority].icon;
         const color = priorityInfo[priority].color;
         const translationKey = `priority.${priority.toLowerCase()}` as any;
-        return <div className="flex items-center gap-2">
-          <Icon className={`h-4 w-4 ${color}`} />
-          {t(translationKey)}
-          </div>;
+        return (
+           <div className="flex w-[100px] items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm">
+              <Icon className={`h-4 w-4 ${color}`} />
+              <span>{t(translationKey)}</span>
+           </div>
+        );
       },
        filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
@@ -138,6 +158,8 @@ export function TasksDataTable() {
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
+    getFacetedRowModel: getFacetedRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     state: {
       sorting,
       columnFilters,
@@ -145,21 +167,49 @@ export function TasksDataTable() {
     },
   });
 
+  const isFiltered = table.getState().columnFilters.length > 0
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Input
-          placeholder={t('tasks.filter')}
-          value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
-          onChange={(event) =>
-            table.getColumn('title')?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
+        <div className="flex flex-1 items-center space-x-2">
+          <Input
+            placeholder={t('tasks.filter')}
+            value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
+            onChange={(event) =>
+              table.getColumn('title')?.setFilterValue(event.target.value)
+            }
+            className="h-8 w-[150px] lg:w-[250px]"
+          />
+          {table.getColumn("status") && (
+            <DataTableFacetedFilter
+              column={table.getColumn("status")}
+              title={t('tasks.column.status')}
+              options={statusOptions}
+            />
+          )}
+          {table.getColumn("priority") && (
+            <DataTableFacetedFilter
+              column={table.getColumn("priority")}
+              title={t('tasks.column.priority')}
+              options={priorityOptions}
+            />
+          )}
+          {isFiltered && (
+            <Button
+              variant="ghost"
+              onClick={() => table.resetColumnFilters()}
+              className="h-8 px-2 lg:px-3"
+            >
+              Reset
+              <XIcon className="ml-2 h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="ml-auto">
+              <Button variant="outline" className="ml-auto h-8">
                 {t('tasks.columns')} <ChevronDown className="ml-2 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -184,7 +234,7 @@ export function TasksDataTable() {
             </DropdownMenuContent>
           </DropdownMenu>
           <AddTaskDialog>
-            <Button>
+            <Button size="sm" className="h-8">
               <Plus className="mr-2 h-4 w-4" />
               {t('tasks.createtask')}
             </Button>
