@@ -6,6 +6,7 @@ import {
   SheetHeader,
   SheetTrigger,
   SheetFooter,
+  SheetTitle,
 } from '@/components/ui/sheet';
 import type { Task, TimeLog, User } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -210,10 +211,12 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <Input
-                        {...field}
-                        className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
-                      />
+                      <SheetTitle asChild>
+                        <Input
+                          {...field}
+                          className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
+                        />
+                      </SheetTitle>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
