@@ -108,7 +108,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('private');
   const [isSuggesting, setIsSuggesting] = React.useState(false);
   const [suggestionReason, setSuggestionReason] = React.useState<string | null>(null);
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { toast } = useToast();
 
   const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
@@ -413,6 +413,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       const result = await suggestPriority({
         title,
         description: form.getValues('description'),
+        language: language.name,
       });
       form.setValue('priority', result.priority);
       setSuggestionReason(result.reason);

@@ -14,6 +14,7 @@ import {z} from 'genkit';
 const SuggestPriorityInputSchema = z.object({
   title: z.string().describe('The title of the task.'),
   description: z.string().optional().describe('The description of the task.'),
+  language: z.string().optional().describe('The language to use for the response reason. e.g., "English", "Indonesia"'),
 });
 export type SuggestPriorityInput = z.infer<typeof SuggestPriorityInputSchema>;
 
@@ -33,6 +34,8 @@ const prompt = ai.definePrompt({
   output: {schema: SuggestPriorityOutputSchema},
   prompt: `You are an expert project manager. Your task is to suggest a priority level for a given task based on its title and description.
 Analyze the task for keywords indicating urgency, importance, and impact.
+
+Respond with your reason in the following language: {{{language}}}.
 
 Task Title: {{{title}}}
 Task Description: {{{description}}}
