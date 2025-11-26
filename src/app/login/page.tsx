@@ -26,7 +26,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import { Briefcase, Building, Shield, User as UserIcon, Loader2 } from 'lucide-react';
-import { initiateEmailSignIn, useAuth, useUserProfile } from '@/firebase';
+import { useUserProfile } from '@/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -62,8 +65,7 @@ const roles = [
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const auth = useAuth();
-  const { user, userError, isUserLoading } = useUserProfile();
+  const { auth, firestore, user, isUserLoading } = useUserProfile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -75,34 +77,59 @@ export default function LoginPage() {
   
   const { formState: { isSubmitting } } = form;
 
-  // This effect handles redirection after a successful login.
-  // When the global user state is available, we redirect.
   useEffect(() => {
     if (!isUserLoading && user) {
       router.push('/dashboard');
     }
   }, [user, isUserLoading, router]);
 
-  // This effect handles displaying login errors.
-  useEffect(() => {
-    if (userError) {
-      toast({
-        variant: 'destructive',
-        title: 'Login Failed',
-        description: userError.code === 'auth/invalid-credential' 
-          ? 'Invalid email or password. Please try again.'
-          : userError.message || 'An unexpected error occurred.',
-      });
+
+  const onSubmit = async (data: LoginFormValues) => {
+    if (!auth || !firestore) {
+        toast({
+            variant: "destructive",
+            title: "Initialization Error",
+            description: "Firebase services are not ready. Please try again in a moment.",
+        });
+        return;
     }
-  }, [userError, toast]);
 
-  const onSubmit = (data: LoginFormValues) => {
-    // We don't need to manually set loading state. `react-hook-form`'s `isSubmitting` handles it.
-    // The initiateEmailSignIn function is non-blocking. Errors/success are handled by the effects above.
-    initiateEmailSignIn(auth, data.email, data.password);
+    try {
+        await signInWithEmailAndPassword(auth, data.email, data.password);
+        // Successful login is handled by the useEffect redirecting to /dashboard
+    } catch (error: any) {
+        if (error.code === 'auth/user-not-found') {
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+                const newUser = userCredential.user;
+                const userProfileRef = doc(firestore, 'users', newUser.uid);
+                await setDoc(userProfileRef, {
+                    name: data.email.split('@')[0],
+                    email: newUser.email,
+                    role: 'Employee',
+                    companyId: 'company-a',
+                    avatarUrl: `https://i.pravatar.cc/150?u=${newUser.uid}`
+                });
+                // After user creation, the onAuthStateChanged listener will trigger the redirect
+            } catch (createError: any) {
+                toast({
+                    variant: "destructive",
+                    title: "Sign Up Failed",
+                    description: createError.message || "Could not create a new account.",
+                });
+            }
+        } else {
+            toast({
+                variant: "destructive",
+                title: "Login Failed",
+                description: error.code === 'auth/invalid-credential' 
+                    ? 'Invalid email or password. Please try again.'
+                    : error.message || "An unexpected error occurred.",
+            });
+        }
+    }
   };
-
-  // While checking auth state on page load, show a loader
+  
   if (isUserLoading) {
     return (
       <div className="flex h-svh items-center justify-center bg-background">
@@ -111,6 +138,11 @@ export default function LoginPage() {
     );
   }
 
+  // If user is already logged in, they will be redirected by the useEffect.
+  // This prevents the login form from flashing.
+  if (user) {
+    return null;
+  }
 
   return (
     <div className="w-full h-svh lg:grid lg:min-h-[600px] lg:grid-cols-2 xl:min-h-[800px]">
