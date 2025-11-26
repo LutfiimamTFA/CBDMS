@@ -1,17 +1,16 @@
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App } from 'firebase-admin/app';
+import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
+import serviceAccount from '../../../firebase/service-account.json';
+
+// Cast the imported JSON to the expected type
+const serviceAccountCert = serviceAccount as any;
 
 let app: App;
 if (!getApps().length) {
   app = initializeApp({
-    credential: {
-      projectId: serviceAccount.project_id,
-      clientEmail: serviceAccount.client_email,
-      privateKey: serviceAccount.private_key,
-    },
+    credential: cert(serviceAccountCert),
   });
 } else {
   app = getApps()[0];
@@ -37,6 +36,7 @@ export async function POST(request: Request) {
 
     // Create user profile in Firestore
     await firestore.collection('users').doc(userRecord.uid).set({
+      id: userRecord.uid,
       name,
       email,
       role,
@@ -59,8 +59,10 @@ export async function POST(request: Request) {
     } else if (error.code === 'auth/invalid-password') {
       errorMessage = 'The password must be a string with at least six characters.';
       statusCode = 400;
+    } else if (error.message?.includes('credential')) {
+        errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials.';
     }
     
-    return NextResponse.json({ message: errorMessage }, { status: statusCode });
+    return NextResponse.json({ message: errorMessage, error: error.message }, { status: statusCode });
   }
 }
