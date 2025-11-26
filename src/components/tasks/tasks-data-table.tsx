@@ -15,6 +15,7 @@ import {
   getFacetedRowModel,
   getFacetedUniqueValues,
   getPaginationRowModel,
+  sortingFns,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -59,9 +60,25 @@ type AIValidationState = {
   onConfirm: () => void;
 };
 
+// Custom sorting function for priorities
+const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
+    const priorityOrder: Record<Priority, number> = { 'Urgent': 3, 'High': 2, 'Medium': 1, 'Low': 0 };
+    const priorityA = priorityOrder[rowA.getValue(columnId) as Priority];
+    const priorityB = priorityOrder[rowB.getValue(columnId) as Priority];
+    if (priorityA > priorityB) return 1;
+    if (priorityA < priorityB) return -1;
+    return 0;
+};
+
+
 export function TasksDataTable() {
   const [data, setData] = React.useState<Task[]>(initialData);
-  const [sorting, setSorting] = React.useState<SortingState>([]);
+  const [sorting, setSorting] = React.useState<SortingState>([
+    {
+      id: 'priority',
+      desc: true,
+    },
+  ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({})
@@ -262,6 +279,7 @@ export function TasksDataTable() {
     {
         accessorKey: 'priority',
         header: t('tasks.column.priority'),
+        sortingFn: prioritySortingFn,
         cell: ({ row }) => {
           const task = row.original;
           const currentPriority = row.getValue('priority') as Priority;
@@ -349,10 +367,10 @@ export function TasksDataTable() {
         pagination: {
             pageSize: 5,
         },
-        columnFilters: [
+        sorting: [
             {
-                id: 'status',
-                value: ['To Do', 'Doing']
+                id: 'priority',
+                desc: true
             }
         ]
     },
@@ -551,6 +569,8 @@ export function TasksDataTable() {
     </>
   );
 }
+    
+
     
 
     
