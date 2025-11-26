@@ -16,8 +16,8 @@ export function initializeFirebase() {
       // It's safe to use localhost here because the Workstation environment
       // will port forward the domains automatically.
       try {
-        connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
-        connectFirestoreEmulator(firestore, '127.0.0.1', 8080);
+        connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+        connectFirestoreEmulator(firestore, 'localhost', 8080);
       } catch (e) {
         //This can happen in cases of hot-reloading, page refreshes, etc.
         //where the emulators are already connected.
@@ -31,8 +31,6 @@ export * from './provider';
 export * from './client-provider';
 export * from './firestore/use-collection';
 export * from './firestore/use-doc';
-export * from './auth/use-user';
 export * from './non-blocking-updates';
-export * from './non-blocking-login';
 export * from './errors';
 export * from './error-emitter';
