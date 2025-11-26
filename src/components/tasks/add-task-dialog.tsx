@@ -388,11 +388,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }
   
   const handlePostComment = () => {
-    if (!newComment.trim() || !authUser) return;
-    const currentUser = users.find(u => u.id === authUser.uid) || staticCurrentUser;
+    if (!newComment.trim() || !authUser || !users) return;
+    const currentUserForComment = users.find(u => u.id === authUser.uid) || staticCurrentUser;
     const comment: Comment = {
       id: `c-${Date.now()}`,
-      user: currentUser,
+      user: currentUserForComment,
       text: newComment,
       timestamp: new Date().toISOString(),
       replies: [],
@@ -455,7 +455,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const currentUser = authUser ? users.find(u => u.id === authUser.uid) || staticCurrentUser : staticCurrentUser;
+  const currentUser = useMemo(() => {
+    if (authUser && users) {
+      return users.find(u => u.id === authUser.uid) || staticCurrentUser;
+    }
+    return staticCurrentUser;
+  }, [authUser, users]);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
