@@ -48,8 +48,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
+import { collection, doc, query, where } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 type AIValidationState = {
@@ -71,13 +71,19 @@ const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
 
 
 export function TasksDataTable() {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, profile, isLoading: isUserLoading } = useUserProfile();
+  
   const tasksQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    return collection(firestore, 'tasks');
-  }, [firestore, user]);
+    if (!user || !profile) return null;
 
-  const { data: tasks, isLoading } = useCollection<Task>(tasksQuery);
+    if (profile.role === 'Employee') {
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
+    } else {
+      return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
+    }
+  }, [firestore, user, profile]);
+
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   const [data, setData] = React.useState<Task[]>([]);
 
   React.useEffect(() => {
@@ -488,7 +494,7 @@ export function TasksDataTable() {
                     colSpan={columns.length}
                     className="h-24 text-center"
                   >
-                    {isLoading ? 'Loading tasks...' : t('tasks.noresults')}
+                    {isUserLoading || isTasksLoading ? 'Loading tasks...' : t('tasks.noresults')}
                   </TableCell>
                 </TableRow>
               )}
@@ -582,5 +588,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-    

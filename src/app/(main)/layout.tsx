@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useUser } from '@/firebase';
+import { useUserProfile } from '@/firebase';
 import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
@@ -33,7 +33,7 @@ export default function MainLayout({
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
-  const { user, isUserLoading } = useUser();
+  const { user, isLoading: isUserLoading } = useUserProfile();
 
   useEffect(() => {
     // If auth state is not loading and there is no user, redirect to login page.

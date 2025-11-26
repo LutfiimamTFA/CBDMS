@@ -13,12 +13,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User as UserIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useUser, useAuth, initiateSignOut } from '@/firebase';
+import { useUserProfile, useAuth, initiateSignOut } from '@/firebase';
 import { Skeleton } from '../ui/skeleton';
 import { useRouter } from 'next/navigation';
 
 export function UserNav() {
-  const { user, isUserLoading } = useUser();
+  const { user, profile, isLoading } = useUserProfile();
   const auth = useAuth();
   const router = useRouter();
 
@@ -28,7 +28,7 @@ export function UserNav() {
     router.push('/login');
   };
 
-  if (isUserLoading || !user) {
+  if (isLoading || !user) {
     return <Skeleton className="h-10 w-10 rounded-full" />;
   }
   
@@ -43,17 +43,17 @@ export function UserNav() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-10 w-10 rounded-full">
           <Avatar className="h-10 w-10 border-2 border-primary">
-            {user.photoURL && <AvatarImage src={user.photoURL} alt={user.displayName || 'User'} />}
-            <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
+            {profile?.avatarUrl && <AvatarImage src={profile.avatarUrl} alt={profile.name || 'User'} />}
+            <AvatarFallback>{getInitials(profile?.name)}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.displayName || 'Anonymous User'}</p>
+            <p className="text-sm font-medium leading-none">{profile?.name || 'Anonymous User'}</p>
             <p className="text-xs leading-none text-muted-foreground">
-              {user.email || 'No email associated'}
+              {profile?.email || 'No email associated'}
             </p>
           </div>
         </DropdownMenuLabel>

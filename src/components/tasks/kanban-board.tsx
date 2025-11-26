@@ -4,23 +4,27 @@ import { useState, useEffect } from 'react';
 import { KanbanColumn } from './kanban-column';
 import type { Task, Status } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc } from 'firebase/firestore';
+import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
+import { collection, doc, updateDoc, query, where } from 'firebase/firestore';
 
 const statuses: Status[] = ['To Do', 'Doing', 'Done'];
 
 export function KanbanBoard() {
-  const { firestore, user } = useFirebase();
+  const { firestore, user, profile, isLoading: isUserLoading } = useUserProfile();
 
   const tasksQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    // In a real RBAC app, this query would change based on the user's role.
-    // For now, we fetch all tasks and rely on Firestore rules for security.
-    // A Manager might query for all tasks in their company, an Employee for assigned tasks.
-    return collection(firestore, 'tasks');
-  }, [firestore, user]);
+    if (!user || !profile) return null;
 
-  const { data: tasks, isLoading } = useCollection<Task>(tasksQuery);
+    if (profile.role === 'Employee') {
+      // Employees only see tasks assigned to them
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
+    } else {
+      // Managers and Super Admins see all tasks in the company
+      return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
+    }
+  }, [firestore, user, profile]);
+
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -40,7 +44,7 @@ export function KanbanBoard() {
     updateDoc(taskRef, { status: newStatus }).catch(err => console.error(err));
   };
 
-  if (!isClient || isLoading) {
+  if (!isClient || isUserLoading || isTasksLoading) {
     return (
        <div className="grid h-full auto-cols-[minmax(280px,1fr)] grid-flow-col gap-4 p-4 md:p-6">
         {statuses.map(status => (
@@ -69,5 +73,3 @@ export function KanbanBoard() {
     </ScrollArea>
   );
 }
-
-    

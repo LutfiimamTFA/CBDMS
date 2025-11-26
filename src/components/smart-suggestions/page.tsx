@@ -14,9 +14,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, Loader2, Wand2 } from 'lucide-react';
 import { suggestTasks } from '@/ai/flows/smart-task-suggestions';
 import type { SmartTaskSuggestionsOutput } from '@/ai/flows/smart-task-suggestions';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
 import type { Task } from '@/lib/types';
-import { collection } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 
 export function SmartSuggestions() {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,12 +25,17 @@ export function SmartSuggestions() {
   const [suggestions, setSuggestions] =
     useState<SmartTaskSuggestionsOutput['suggestedTasks'] | null>(null);
     
-  const { firestore, user } = useFirebase();
+  const { firestore, user, profile } = useUserProfile();
 
   const tasksQuery = useMemoFirebase(() => {
-    if (!user) return null;
-    return collection(firestore, 'users', user.uid, 'tasks');
-  }, [firestore, user]);
+    if (!user || !profile) return null;
+
+    if (profile.role === 'Employee') {
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
+    } else {
+      return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
+    }
+  }, [firestore, user, profile]);
 
   const { data: tasks } = useCollection<Task>(tasksQuery);
 
@@ -51,7 +56,7 @@ export function SmartSuggestions() {
 
       const result = await suggestTasks({
         pastTasks: pastTasksString,
-        userRole: 'Software Developer',
+        userRole: profile?.role || 'Employee',
       });
 
       setSuggestions(result.suggestedTasks);

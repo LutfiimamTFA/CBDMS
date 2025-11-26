@@ -29,7 +29,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { users, tags as allTags, currentUser } from '@/lib/data';
+import { users as staticUsers, tags as allTags, currentUser as staticCurrentUser } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
@@ -63,7 +63,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useUserProfile, useMemoFirebase } from '@/firebase';
 import { collection, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
@@ -73,7 +73,7 @@ const taskSchema = z.object({
   description: z.string().optional(),
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
-  assigneeIds: z.array(z.string()).optional(),
+  assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required'),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
   startDate: z.string().optional(),
   dueDate: z.string().optional(),
@@ -131,12 +131,22 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [comments, setComments] = React.useState<Comment[]>([]);
   const [newComment, setNewComment] = React.useState('');
   
-  const { firestore, user } = useFirebase();
+  const { firestore, user: authUser, profile } = useUserProfile();
+
+  const usersQuery = useMemoFirebase(() => {
+    if (!profile) return null;
+    // For now, let's assume we can query all users in the company.
+    // In a real app, this might need more specific rules.
+    return collection(firestore, 'users');
+  }, [firestore, profile]);
+
+  const { data: users = staticUsers } = useCollection<UserType>(usersQuery);
+
   
   const tasksQuery = useMemoFirebase(() => {
-    if (!user) return null;
+    if (!profile) return null;
     return collection(firestore, 'tasks');
-  }, [firestore, user]);
+  }, [firestore, profile]);
 
   const { data: allTasks } = useCollection<Task>(tasksQuery);
 
@@ -168,11 +178,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   });
 
   const onSubmit = (data: TaskFormValues) => {
-    if (!tasksQuery || !user) return;
+    if (!tasksQuery || !profile) return;
 
     const newTask = {
         ...data,
-        companyId: 'company-a', // Hardcoded for now
+        companyId: profile.companyId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         assignees: selectedUsers,
@@ -240,16 +250,16 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const handleSelectUser = (user: UserType) => {
     if (!selectedUsers.find((u) => u.id === user.id)) {
-      setSelectedUsers([...selectedUsers, user]);
-      const currentAssignees = form.getValues('assigneeIds') || [];
-      form.setValue('assigneeIds', [...currentAssignees, user.id]);
+      const newSelectedUsers = [...selectedUsers, user];
+      setSelectedUsers(newSelectedUsers);
+      form.setValue('assigneeIds', newSelectedUsers.map(u => u.id));
     }
   };
 
   const handleRemoveUser = (userId: string) => {
-    setSelectedUsers(selectedUsers.filter((u) => u.id !== userId));
-     const currentAssignees = form.getValues('assigneeIds') || [];
-     form.setValue('assigneeIds', currentAssignees.filter(id => id !== userId));
+    const newSelectedUsers = selectedUsers.filter((u) => u.id !== userId);
+    setSelectedUsers(newSelectedUsers);
+    form.setValue('assigneeIds', newSelectedUsers.map(u => u.id));
   };
   
   const handleSelectTag = (tag: TagType) => {
@@ -378,7 +388,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }
   
   const handlePostComment = () => {
-    if (!newComment.trim()) return;
+    if (!newComment.trim() || !authUser) return;
+    const currentUser = users.find(u => u.id === authUser.uid) || staticCurrentUser;
     const comment: Comment = {
       id: `c-${Date.now()}`,
       user: currentUser,
@@ -443,6 +454,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       setIsSuggesting(false);
     }
   };
+
+  const currentUser = authUser ? users.find(u => u.id === authUser.uid) || staticCurrentUser : staticCurrentUser;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -615,60 +628,48 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             </div>
                         )}
                         <Separator />
-                        <h3 className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4" />{t('addtask.form.teammembers')}</h3>
-                        <div className="flex gap-2">
-                            <Input placeholder={t('addtask.form.inviteemail')} />
-                            <Button variant="outline">{t('addtask.form.invite')}</Button>
-                        </div>
-                        <p className="text-center text-xs text-muted-foreground">{t('addtask.form.or').toUpperCase()}</p>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" className="w-full justify-start text-muted-foreground">
-                                <UserPlus className="mr-2 h-4 w-4" />{t('addtask.form.selectmembers')}
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                {users.map((user) => (
-                                    <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                        <Avatar className="h-6 w-6 mr-2">
-                                            <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                                        </Avatar>
-                                        <span>{user.name}</span>
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        {selectedUsers.length > 0 && (
-                            <div className="space-y-2">
-                                <Label>{t('addtask.form.selectedmembers')}</Label>
-                                {selectedUsers.map((user) => (
-                                    <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
-                                        <div className="flex items-center gap-2">
-                                            <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                            <span className="text-sm font-medium">{user.name}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            {shareSetting === 'private' && (
-                                                <Select defaultValue="full-access">
-                                                    <SelectTrigger className="h-8 w-[120px] text-xs">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="full-access">{t('addtask.form.access.full')}</SelectItem>
-                                                        <SelectItem value="edit">{t('addtask.form.access.edit')}</SelectItem>
-                                                        <SelectItem value="comment">{t('addtask.form.access.comment')}</SelectItem>
-                                                        <SelectItem value="view">{t('addtask.form.access.view')}</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
-                                        </div>
+                        <FormField
+                            control={form.control}
+                            name="assigneeIds"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>{t('addtask.form.teammembers')}</FormLabel>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-start text-muted-foreground">
+                                        <UserPlus className="mr-2 h-4 w-4" />{t('addtask.form.selectmembers')}
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                        {users.map((user) => (
+                                            <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                                <Avatar className="h-6 w-6 mr-2">
+                                                    <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                                    <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                <span>{user.name}</span>
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                {selectedUsers.length > 0 && (
+                                    <div className="space-y-2 pt-2">
+                                        <Label>{t('addtask.form.selectedmembers')}</Label>
+                                        {selectedUsers.map((user) => (
+                                            <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                    <span className="text-sm font-medium">{user.name}</span>
+                                                </div>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                )}
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
                     </div>
                      <Tabs defaultValue="subtasks" className="w-full">
                       <TabsList className="grid w-full grid-cols-3">
@@ -769,5 +770,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    
