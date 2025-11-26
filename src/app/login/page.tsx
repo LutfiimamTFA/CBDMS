@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -63,10 +62,8 @@ const roles = [
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  // useAuth provides a stable auth instance needed for sign-in calls.
   const auth = useAuth();
-  // useUserProfile gives us the live auth state for redirection and error handling.
-  const { userError } = useUserProfile();
+  const { user, userError, isUserLoading } = useUserProfile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -78,7 +75,15 @@ export default function LoginPage() {
   
   const { formState: { isSubmitting } } = form;
 
-  // Effect to handle login errors from the global state
+  // This effect handles redirection after a successful login.
+  // When the global user state is available, we redirect.
+  useEffect(() => {
+    if (!isUserLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, isUserLoading, router]);
+
+  // This effect handles displaying login errors.
   useEffect(() => {
     if (userError) {
       toast({
@@ -92,12 +97,20 @@ export default function LoginPage() {
   }, [userError, toast]);
 
   const onSubmit = (data: LoginFormValues) => {
-    // The initiateEmailSignIn function handles sign-in or sign-up.
-    // It's a non-blocking call. We don't await it.
-    // Errors will be caught by the global onAuthStateChanged listener and surfaced
-    // in the `userError` object from the useUserProfile hook.
+    // We don't need to manually set loading state. `react-hook-form`'s `isSubmitting` handles it.
+    // The initiateEmailSignIn function is non-blocking. Errors/success are handled by the effects above.
     initiateEmailSignIn(auth, data.email, data.password);
   };
+
+  // While checking auth state on page load, show a loader
+  if (isUserLoading) {
+    return (
+      <div className="flex h-svh items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
 
   return (
     <div className="w-full h-svh lg:grid lg:min-h-[600px] lg:grid-cols-2 xl:min-h-[800px]">
@@ -156,15 +169,7 @@ export default function LoginPage() {
                 name="password"
                 render={({ field }) => (
                   <FormItem className="grid gap-2">
-                    <div className="flex items-center">
-                      <FormLabel>Password</FormLabel>
-                      <Link
-                        href="#"
-                        className="ml-auto inline-block text-sm underline"
-                      >
-                        Forgot your password?
-                      </Link>
-                    </div>
+                    <FormLabel>Password</FormLabel>
                     <FormControl>
                       <Input type="password" {...field} disabled={isSubmitting} />
                     </FormControl>
