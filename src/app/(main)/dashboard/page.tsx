@@ -1,6 +1,6 @@
 import { Header } from '@/components/layout/header';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
-import { SmartSuggestions } from '@/components/tasks/smart-suggestions';
+import { SmartSuggestions } from '@/components/smart-suggestions/page';
 
 export default function DashboardPage() {
   return (
