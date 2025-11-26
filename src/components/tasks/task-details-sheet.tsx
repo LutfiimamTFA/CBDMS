@@ -101,9 +101,7 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
   const [isRunning, setIsRunning] = useState(false);
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
 
-  const [comments, setComments] = useState<Comment[]>([
-      { id: 'c1', user: users[0], text: 'Can you double-check the mobile responsiveness?', timestamp: new Date(Date.now() - 3600000).toISOString(), replies: [] }
-  ]);
+  const [comments, setComments] = useState<Comment[]>(task.comments || []);
   const [newComment, setNewComment] = useState('');
 
   const [activities, setActivities] = useState<Activity[]>([
@@ -111,7 +109,7 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
       { id: 'a2', user: currentUser, action: 'updated the description', timestamp: new Date(Date.now() - 86400000).toISOString()},
   ]);
   
-  const [subtasks, setSubtasks] = useState(task.subtasks?.map(st => ({...st, completed: false})) || []);
+  const [subtasks, setSubtasks] = useState(task.subtasks || []);
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
 
@@ -119,6 +117,10 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
     resolver: zodResolver(taskDetailsSchema),
   });
   
+  useEffect(() => {
+    setTask(initialTask);
+  }, [initialTask]);
+
   useEffect(() => {
     form.reset({
       title: task.title,
@@ -128,7 +130,7 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
       assignees: task.assignees.map(a => a.id),
       timeEstimate: task.timeEstimate,
     });
-  }, [task, form]);
+  }, [task, form, isEditing]);
 
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -138,7 +140,7 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
       onOpenChange(isOpen);
     }
     if (!isOpen && defaultOpen) {
-      router.push('/tasks');
+      router.back();
     }
   }
 
@@ -300,25 +302,26 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
               <SheetHeader className="p-6">
-                  <SheetTitle className="sr-only">{task.title}</SheetTitle>
                    {isEditing ? (
-                       <FormField
-                          control={form.control}
-                          name="title"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                       <SheetTitle asChild>
+                           <FormField
+                              control={form.control}
+                              name="title"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                       </SheetTitle>
                    ) : (
-                      <h2 className="text-2xl font-headline font-bold">{task.title}</h2>
+                      <SheetTitle>{task.title}</SheetTitle>
                    )}
               </SheetHeader>
               <Separator />
@@ -428,7 +431,7 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
                               <h3 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Time Tracking</h3>
                               <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
                           </div>
-                          <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{timeTrackedValue}h / {timeEstimateValue}h</span></div><Progress value={timeTrackingProgress} /></div>
+                          <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{timeTrackedValue.toFixed(2)}h / {timeEstimateValue}h</span></div><Progress value={timeTrackingProgress} /></div>
                           <div className="grid grid-cols-2 gap-2">
                           <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>{isRunning ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}{isRunning ? 'Pause Timer' : 'Start Timer'}</Button>
                           <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}><LogIn className="mr-2 h-4 w-4" />Log Time</Button>
