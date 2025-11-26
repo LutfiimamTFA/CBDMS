@@ -107,6 +107,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [selectedTags, setSelectedTags] = React.useState<TagType[]>([]);
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('private');
   const [isSuggesting, setIsSuggesting] = React.useState(false);
+  const [suggestionReason, setSuggestionReason] = React.useState<string | null>(null);
   const { t } = useI18n();
   const { toast } = useToast();
 
@@ -192,6 +193,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setDependencies([]);
     setBlocking([]);
     setComments([]);
+    setSuggestionReason(null);
   };
   
   const handleAddLogEntry = () => {
@@ -406,15 +408,16 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       return;
     }
     setIsSuggesting(true);
+    setSuggestionReason(null);
     try {
       const result = await suggestPriority({
         title,
         description: form.getValues('description'),
       });
       form.setValue('priority', result.priority);
+      setSuggestionReason(result.reason);
       toast({
-        title: `Priority set to ${result.priority}`,
-        description: result.reason,
+        title: `Priority suggested: ${result.priority}`,
       });
     } catch (e) {
       console.error(e);
@@ -527,15 +530,22 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           </FormItem>
                       )}/>
                       <FormField control={form.control} name="priority" render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>{t('addtask.form.priority')}</FormLabel>
-                              <div className="flex items-center gap-2">
-                                  <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.priority.placeholder')} /></SelectTrigger></FormControl>
-                                  <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{t(`priority.${p.value.toLowerCase()}` as any)}</div></SelectItem>))}</SelectContent>
-                                  </Select>
-                                  <Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting} className="shrink-0">{isSuggesting ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Wand2 className="h-4 w-4" />)}<span className="sr-only">Suggest Priority</span></Button>
-                              </div><FormMessage />
-                          </FormItem>
+                        <FormItem>
+                            <FormLabel>{t('addtask.form.priority')}</FormLabel>
+                            <div className="flex items-center gap-2">
+                                <Select onValueChange={(value) => { field.onChange(value); setSuggestionReason(null); }} value={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.priority.placeholder')} /></SelectTrigger></FormControl>
+                                    <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{t(`priority.${p.value.toLowerCase()}` as any)}</div></SelectItem>))}</SelectContent>
+                                </Select>
+                                <Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting} className="shrink-0">{isSuggesting ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Wand2 className="h-4 w-4" />)}<span className="sr-only">Suggest Priority</span></Button>
+                            </div>
+                            {suggestionReason && (
+                                <div className="mt-2 text-xs text-muted-foreground p-2 bg-secondary/50 rounded-md animate-in fade-in-0 slide-in-from-top-2">
+                                    <span className='font-semibold text-primary'>AI says:</span> {suggestionReason}
+                                </div>
+                            )}
+                            <FormMessage />
+                        </FormItem>
                       )}/>
                     </div>
 
