@@ -26,8 +26,8 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { tasks as data } from '@/lib/data';
-import type { Task } from '@/lib/types';
+import { tasks as initialData } from '@/lib/data';
+import type { Task, Status } from '@/lib/types';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -46,9 +46,11 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 
 export function TasksDataTable() {
+  const [data, setData] = React.useState<Task[]>(initialData);
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
@@ -66,6 +68,12 @@ export function TasksDataTable() {
       label: t(`priority.${p.value.toLowerCase()}` as any),
       icon: p.icon
   }));
+
+  const handleStatusChange = (taskId: string, newStatus: Status) => {
+    setData(prevData => prevData.map(task => 
+      task.id === taskId ? { ...task, status: newStatus } : task
+    ));
+  };
 
 
   const columns: ColumnDef<Task>[] = [
@@ -90,7 +98,9 @@ export function TasksDataTable() {
                   Copy task ID
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>View details</DropdownMenuItem>
+                 <TaskDetailsSheet task={task}>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
+                </TaskDetailsSheet>
                 <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10'>
                     <Trash2 className='mr-2 h-4 w-4'/>
                     Delete Task
@@ -116,14 +126,25 @@ export function TasksDataTable() {
       accessorKey: 'status',
       header: t('tasks.column.status'),
       cell: ({ row }) => {
-        const status = row.getValue('status') as keyof typeof statusInfo;
-        const Icon = statusInfo[status].icon;
-        const translationKey = `status.${status.toLowerCase().replace(' ', '')}` as any;
+        const task = row.original;
+        const currentStatus = row.getValue('status') as Status;
+        
         return (
-          <div className="flex w-[120px] items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm">
-            <Icon className="h-4 w-4 text-muted-foreground" />
-            <span>{t(translationKey)}</span>
-          </div>
+          <Select value={currentStatus} onValueChange={(newStatus: Status) => handleStatusChange(task.id, newStatus)}>
+            <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.values(statusInfo).map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  <div className="flex items-center gap-2">
+                    <s.icon className="h-4 w-4 text-muted-foreground" />
+                    <span>{t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         );
       },
       filterFn: (row, id, value) => {
@@ -337,3 +358,5 @@ export function TasksDataTable() {
     </div>
   );
 }
+
+    
