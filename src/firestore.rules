@@ -30,9 +30,10 @@ service cloud.firestore {
       return isSignedIn() && getMyProfile().role == role;
     }
 
-    // Function to check if two users are in the same company
+    // Function to check if two users are in the same company by reading both profiles
     function isInSameCompanyAs(otherUserId) {
         let myCompanyId = getMyProfile().companyId;
+        // This read is allowed by the 'get' rule below
         let otherCompanyId = getUserProfile(otherUserId).companyId;
         return myCompanyId == otherCompanyId;
     }
@@ -42,9 +43,10 @@ service cloud.firestore {
     // --------------------------------------------------------------------------------
 
     match /users/{userId} {
-      // READ: You can read your own profile. You can read the profile of another user
+      // READ: You can read your own profile. You can also read another user's profile
       // if you are in the same company. Super Admins can read any profile.
-      allow get: if isSignedIn() && (isOwner(userId) || isInSameCompanyAs(userId) || hasRole('Super Admin'));
+      allow get: if isSignedIn() && 
+                    (isOwner(userId) || isInSameCompanyAs(userId) || hasRole('Super Admin'));
       
       // LIST: Employees and Managers can list users within their own company. 
       // Super Admins can list all users.
