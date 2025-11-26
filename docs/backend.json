@@ -19,6 +19,11 @@
           "description": "The user's email address.",
           "format": "email"
         },
+        "avatarUrl": {
+            "type": "string",
+            "description": "URL of the user's profile picture.",
+            "format": "uri"
+        },
         "role": {
             "type": "string",
             "description": "The role of the user, determining their access level.",
