@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -16,11 +16,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
-import { initiateEmailSignIn } from '@/firebase';
+import { initiateEmailSignIn, initiateEmailSignUp } from '@/firebase';
 import { useAuth, useFirebase, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
+import { Separator } from '@/components/ui/separator';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address.'),
@@ -52,10 +53,25 @@ export default function LoginPage() {
 
   const {
     formState: { isSubmitting },
+    getValues,
   } = form;
 
-  const onSubmit = async (data: LoginFormValues) => {
-    if (!auth || !firestore) {
+  const onSignIn = () => {
+    const { email, password } = getValues();
+    if (!auth) {
+       toast({
+        variant: 'destructive',
+        title: 'Initialization Error',
+        description: 'Firebase is not ready. Please try again in a moment.',
+      });
+      return;
+    }
+    initiateEmailSignIn(auth, email, password);
+  };
+
+  const onSignUp = () => {
+     const { email, password } = getValues();
+     if (!auth || !firestore) {
       toast({
         variant: 'destructive',
         title: 'Initialization Error',
@@ -63,8 +79,8 @@ export default function LoginPage() {
       });
       return;
     }
-    initiateEmailSignIn(auth, firestore, data.email, data.password);
-  };
+    initiateEmailSignUp(auth, firestore, email, password);
+  }
 
   if (isUserLoading || user) {
      return (
@@ -81,13 +97,13 @@ export default function LoginPage() {
           <div className="mb-4 flex justify-center">
              <Logo />
           </div>
-          <CardTitle className="text-2xl">Login</CardTitle>
+          <CardTitle className="text-2xl">Welcome</CardTitle>
           <CardDescription>
-            Enter your credentials to access your dashboard.
+            Sign in or create an account to continue.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form id="login-form" onSubmit={form.handleSubmit(onSubmit)}>
+          <form id="login-form">
             <div className="grid gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
@@ -123,10 +139,18 @@ export default function LoginPage() {
             </div>
           </form>
         </CardContent>
-        <CardFooter>
-          <Button type="submit" form="login-form" className="w-full" disabled={isSubmitting}>
+        <CardFooter className="flex flex-col gap-4">
+          <Button onClick={form.handleSubmit(onSignIn)} className="w-full" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Sign In
+          </Button>
+           <div className="relative w-full">
+            <Separator />
+            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-2 text-xs text-muted-foreground">OR</span>
+          </div>
+          <Button variant="secondary" onClick={form.handleSubmit(onSignUp)} className="w-full" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Sign Up
           </Button>
         </CardFooter>
       </Card>

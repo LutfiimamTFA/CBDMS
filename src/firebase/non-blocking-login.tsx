@@ -10,19 +10,15 @@ import { doc, setDoc, Firestore } from 'firebase/firestore';
 
 
 /**
- * Initiates an email/password sign-in. If the user does not exist,
- * it automatically attempts to create a new user account.
+ * Initiates an email/password sign-in. This function ONLY attempts to sign in.
+ * It no longer automatically creates an account on failure to prevent request loops.
  */
-export function initiateEmailSignIn(authInstance: Auth, firestore: Firestore, email: string, password: string): void {
+export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): void {
   signInWithEmailAndPassword(authInstance, email, password)
     .catch((error: FirebaseError) => {
-      // If sign-in fails because the user is not found, try to sign them up.
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
-        initiateEmailSignUp(authInstance, firestore, email, password);
-      } else {
-        // For other errors (network, etc.), log them.
-        console.error("Sign-in Error:", error);
-      }
+      // Log any sign-in error to the console for debugging.
+      // We do not automatically try to sign up anymore.
+      console.error("Sign-in Error:", error.code, error.message);
     });
 }
 
@@ -49,7 +45,7 @@ export function initiateEmailSignUp(authInstance: Auth, firestore: Firestore, em
     })
     .catch(createError => {
       // Handle sign-up errors (e.g., email already in use, weak password)
-      console.error("Sign-up Error:", createError);
+      console.error("Sign-up Error:", createError.code, createError.message);
     });
 }
 
