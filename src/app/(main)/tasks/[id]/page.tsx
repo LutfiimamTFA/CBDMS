@@ -1,21 +1,22 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, use } from 'react';
 import { tasks as allTasks } from '@/lib/data';
 import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
 import { notFound, useRouter } from 'next/navigation';
 import type { Task } from '@/lib/types';
 import { useI18n } from '@/context/i18n-provider';
 
-export default function TaskPage({ params }: { params: { id: string } }) {
+export default function TaskPage({ params }: { params: Promise<{ id: string }> }) {
   const [task, setTask] = useState<Task | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
   const { t } = useI18n();
+  const resolvedParams = use(params);
 
   useEffect(() => {
-    const foundTask = allTasks.find((t) => t.id === params.id);
+    const foundTask = allTasks.find((t) => t.id === resolvedParams.id);
     if (foundTask) {
       setTask(foundTask);
       setIsOpen(true);
@@ -23,7 +24,7 @@ export default function TaskPage({ params }: { params: { id: string } }) {
       // If no task is found, trigger a 404
       notFound();
     }
-  }, [params.id]);
+  }, [resolvedParams.id]);
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
