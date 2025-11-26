@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -205,18 +204,17 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
             <SheetHeader className="p-6">
+               <SheetTitle className="sr-only">{task.title}</SheetTitle>
               <FormField
                 control={form.control}
                 name="title"
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <SheetTitle asChild>
-                        <Input
-                          {...field}
-                          className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
-                        />
-                      </SheetTitle>
+                      <Input
+                        {...field}
+                        className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -433,3 +431,5 @@ export function TaskDetailsSheet({ task: initialTask, children }: { task: Task; 
     </Sheet>
   );
 }
+
+    
