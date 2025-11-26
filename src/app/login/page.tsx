@@ -15,6 +15,7 @@ import {
   initiateGoogleSignIn,
   initiateEmailSignIn,
   initiateEmailSignUp,
+  handleRedirectSignIn,
 } from '@/firebase/non-blocking-login';
 import { useAuth, useFirebase, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -105,6 +106,28 @@ export default function LoginPage() {
     }
   }, [user, isUserLoading, router]);
 
+  // Handle Google redirect result
+  useEffect(() => {
+    if (!auth || !firestore || isUserLoading || user) return;
+
+    // We are not logged in, but the page loaded.
+    // Let's check if this is a redirect from Google Sign-In.
+    handleRedirectSignIn(auth, firestore)
+      .then(result => {
+        if (result) {
+          // Sign-in successful, the main useEffect will handle the redirect.
+        }
+      })
+      .catch(error => {
+        console.error('Redirect Sign-in Error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Sign-in Failed',
+          description: 'Could not complete sign-in with Google. Please try again.',
+        });
+      });
+  }, [auth, firestore, isUserLoading, user, router, toast]);
+
   const onSignIn = async (data: SignInFormValues) => {
     if (!auth) return;
     setIsSigningIn(true);
@@ -112,7 +135,6 @@ export default function LoginPage() {
       await initiateEmailSignIn(auth, data.email, data.password);
       // Successful sign-in will be handled by the useEffect
     } catch (error: any) {
-      console.error('Sign-in Error:', error);
       let description = 'Invalid credentials. Please check your email and password.';
       if (error.code === 'auth/email-not-verified') {
         description = 'Your email is not verified. Please check your inbox for the verification link.';
@@ -134,7 +156,6 @@ export default function LoginPage() {
       await initiateEmailSignUp(auth, firestore, data.name, data.email, data.password);
       router.push('/check-email');
     } catch (error: any) {
-      console.error('Sign-up Error:', error);
       const description =
         error.code === 'auth/email-already-in-use'
           ? 'This email is already registered. Please sign in.'
@@ -159,31 +180,7 @@ export default function LoginPage() {
       return;
     }
     setIsGoogleSigningIn(true);
-    initiateGoogleSignIn(auth, firestore)
-      .catch((error) => {
-        // Don't show a toast if the user closes the popup
-        if (error.code === 'auth/popup-closed-by-user') {
-          return;
-        }
-
-        if (error.code === 'auth/operation-not-allowed') {
-          toast({
-            variant: 'destructive',
-            title: 'Sign-in Method Disabled',
-            description: 'Google Sign-In is not enabled for this project. Please enable it in the Firebase console.',
-          });
-          return;
-        }
-        
-        toast({
-          variant: 'destructive',
-          title: 'Sign-in Failed',
-          description: 'Could not sign in with Google. Please try again.',
-        });
-      })
-      .finally(() => {
-        setIsGoogleSigningIn(false);
-      });
+    initiateGoogleSignIn(auth); // No firestore needed here for redirect
   };
 
   if (isUserLoading || user) {
