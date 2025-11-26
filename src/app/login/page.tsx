@@ -26,7 +26,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import { Briefcase, Building, Shield, User as UserIcon, Loader2 } from 'lucide-react';
-import { useUserProfile } from '@/firebase';
+import { useAuth, useFirestore, useUserProfile } from '@/firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -65,7 +65,9 @@ const roles = [
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { auth, firestore, user, isUserLoading } = useUserProfile();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const { user, isUserLoading } = useUserProfile();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -98,7 +100,7 @@ export default function LoginPage() {
         await signInWithEmailAndPassword(auth, data.email, data.password);
         // Successful login is handled by the useEffect redirecting to /dashboard
     } catch (error: any) {
-        if (error.code === 'auth/user-not-found') {
+        if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
             try {
                 const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
                 const newUser = userCredential.user;
