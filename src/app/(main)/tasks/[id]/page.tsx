@@ -6,41 +6,49 @@ import { tasks as allTasks } from '@/lib/data';
 import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
 import { notFound, useRouter } from 'next/navigation';
 import type { Task } from '@/lib/types';
+import { useI18n } from '@/context/i18n-provider';
 
 export default function TaskPage({ params }: { params: { id: string } }) {
   const [task, setTask] = useState<Task | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const router = useRouter();
+  const { t } = useI18n();
 
   useEffect(() => {
     const foundTask = allTasks.find((t) => t.id === params.id);
     if (foundTask) {
       setTask(foundTask);
+      setIsOpen(true);
+    } else {
+      // If no task is found, trigger a 404
+      notFound();
     }
-    setLoading(false);
   }, [params.id]);
 
-  if (loading) {
-    // Optional: You can return a loading skeleton here
-    return null;
-  }
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) {
+      // When the sheet is closed, navigate back to the main tasks list.
+      router.push('/tasks');
+    }
+  };
 
+  // Render a loading state or null while we wait for the client-side effect to run.
   if (!task) {
-    notFound();
-    return null;
+    return (
+      <div className="flex h-svh items-center justify-center">
+        <p>{t('tasks.noresults')}</p>
+      </div>
+    );
   }
 
   return (
     <TaskDetailsSheet 
         task={task} 
-        defaultOpen={true} 
-        onOpenChange={(open) => {
-            if (!open) {
-                router.back();
-            }
-        }}
+        open={isOpen}
+        onOpenChange={handleOpenChange}
     >
-        {/* The trigger is visually hidden but required */}
+        {/* The trigger is visually hidden but required for the Sheet component */}
         <div className="sr-only" />
     </TaskDetailsSheet>
   );

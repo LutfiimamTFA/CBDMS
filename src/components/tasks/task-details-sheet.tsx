@@ -89,8 +89,17 @@ type AIValidationState = {
 };
 
 
-export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = false, onOpenChange }: { task: Task; children: React.ReactNode, defaultOpen?: boolean, onOpenChange?: (open: boolean) => void; }) {
-  const [open, setOpen] = useState(defaultOpen);
+export function TaskDetailsSheet({ 
+  task: initialTask, 
+  children, 
+  open: openProp,
+  onOpenChange: onOpenChangeProp 
+}: { 
+  task: Task; 
+  children: React.ReactNode, 
+  open?: boolean,
+  onOpenChange?: (open: boolean) => void; 
+}) {
   const [task, setTask] = useState(initialTask);
   const { t } = useI18n();
   const router = useRouter();
@@ -134,13 +143,8 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
 
 
   const handleOpenChange = (isOpen: boolean) => {
-    setOpen(isOpen);
-    setIsEditing(false); // Reset to view mode when opening/closing
-    if (onOpenChange) {
-      onOpenChange(isOpen);
-    }
-    if (!isOpen && defaultOpen) {
-      router.back();
+    if (onOpenChangeProp) {
+      onOpenChangeProp(isOpen);
     }
   }
 
@@ -296,32 +300,29 @@ export function TaskDetailsSheet({ task: initialTask, children, defaultOpen = fa
 
   return (
     <>
-      <Sheet open={open} onOpenChange={handleOpenChange}>
+      <Sheet open={openProp} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>{children}</SheetTrigger>
         <SheetContent className="w-full sm:max-w-3xl grid grid-rows-[auto_1fr_auto] p-0">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
               <SheetHeader className="p-6">
-                   {isEditing ? (
-                       <SheetTitle asChild>
-                           <FormField
-                              control={form.control}
-                              name="title"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                       </SheetTitle>
-                   ) : (
-                      <SheetTitle>{task.title}</SheetTitle>
+                <SheetTitle className={isEditing ? 'sr-only' : ''}>{task.title}</SheetTitle>
+                   {isEditing && (
+                       <FormField
+                          control={form.control}
+                          name="title"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
                    )}
               </SheetHeader>
               <Separator />
