@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -27,7 +27,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import { Briefcase, Building, Shield, User as UserIcon, Users, Loader2 } from 'lucide-react';
-import { initiateEmailSignIn, useAuth } from '@/firebase';
+import { initiateEmailSignIn, useFirebase } from '@/firebase';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -61,10 +61,10 @@ const roles = [
 
 
 export default function LoginPage() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  const auth = useAuth();
+  const { auth, user, isUserLoading, userError } = useFirebase();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -74,31 +74,30 @@ export default function LoginPage() {
     },
   });
 
-  const onSubmit = async (data: LoginFormValues) => {
-    setIsLoading(true);
-    try {
-      // We are not awaiting this, the onAuthStateChanged listener in the layout will handle the redirect
-      initiateEmailSignIn(auth, data.email, data.password);
-      
-      // We can't immediately check for the user, so we optimistically assume login will succeed
-      // and let the listener handle the redirect. We can show a toast.
-       toast({
-        title: 'Logging in...',
-        description: 'You will be redirected shortly.',
-      });
-      // The router.push will be handled by the MainLayout's useEffect
-      
-    } catch (error: any) {
-      console.error(error);
+  // Effect to handle login errors from the global state
+  useEffect(() => {
+    if (userError) {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: error.message || 'An unexpected error occurred.',
+        description: 'Invalid credentials. Please check your email and password.',
       });
-      setIsLoading(false);
+      setIsAuthLoading(false); // Stop loading on error
     }
-    // Don't set isLoading to false here if login is successful,
-    // as the page will be redirected.
+  }, [userError, toast]);
+
+  // Effect to handle successful login
+  useEffect(() => {
+    if (user && !isUserLoading) {
+      router.push('/dashboard');
+    }
+  }, [user, isUserLoading, router]);
+
+  const onSubmit = (data: LoginFormValues) => {
+    setIsAuthLoading(true);
+    // The new initiateEmailSignIn will handle sign-in or sign-up.
+    // We don't need a try-catch here, as errors are caught by the hook.
+    initiateEmailSignIn(auth, data.email, data.password);
   };
 
   return (
@@ -129,9 +128,9 @@ export default function LoginPage() {
       <div className="flex items-center justify-center py-12">
         <div className="mx-auto grid w-[350px] gap-6">
           <div className="grid gap-2 text-center">
-            <h1 className="text-3xl font-bold font-headline">Login</h1>
+            <h1 className="text-3xl font-bold font-headline">Login or Sign Up</h1>
             <p className="text-balance text-muted-foreground">
-              Enter your email below to login to your account
+              Enter your details to sign in or create a new account.
             </p>
           </div>
           <Form {...form}>
@@ -146,7 +145,7 @@ export default function LoginPage() {
                       <Input
                         placeholder="m@example.com"
                         {...field}
-                        disabled={isLoading}
+                        disabled={isAuthLoading}
                       />
                     </FormControl>
                     <FormMessage />
@@ -168,23 +167,20 @@ export default function LoginPage() {
                       </Link>
                     </div>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isLoading} />
+                      <Input type="password" {...field} disabled={isAuthLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Login
+              <Button type="submit" className="w-full" disabled={isAuthLoading}>
+                {isAuthLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Sign In / Sign Up
               </Button>
             </form>
           </Form>
           <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{' '}
-            <Link href="#" className="underline">
-              Sign up
-            </Link>
+             By signing in, you agree to our terms of service.
           </div>
         </div>
       </div>

@@ -44,7 +44,8 @@ service cloud.firestore {
       allow get: if isOwner(userId) || (hasRole('Manager') && isInSameCompany(userId)) || hasRole('Super Admin');
       // LIST: Disabled for security. No one can list all users.
       allow list: if false;
-      // CREATE: You can create your own user profile.
+      // CREATE: Anyone can create their own user profile document.
+      // This is necessary for the sign-up flow. The user ID must match the authenticated user's ID.
       allow create: if isOwner(userId);
       // UPDATE: You can only update your own profile.
       // A Super Admin could change roles, but that logic would be handled via a Cloud Function.
@@ -61,7 +62,7 @@ service cloud.firestore {
       // - Clients can read any task within their company.
       allow get: if isSignedIn() &&
                     (hasRole('Super Admin') ||
-                    (hasRole('Employee') && request.auth.uid in resource.data.assigneeIds) ||
+                    (request.auth.uid in resource.data.assigneeIds) || // Simplified employee check
                     (hasRole('Manager') && getMyProfile().companyId == resource.data.companyId) ||
                     (hasRole('Client') && getMyProfile().companyId == resource.data.companyId));
                     
@@ -71,7 +72,10 @@ service cloud.firestore {
 
       // CREATE:
       // - Employees, Managers, and Super Admins can create tasks.
-      allow create: if isSignedIn() && (hasRole('Employee') || hasRole('Manager') || hasRole('Super Admin'));
+      // Task creator must be one of the assignees.
+      allow create: if isSignedIn() && 
+                     (hasRole('Employee') || hasRole('Manager') || hasRole('Super Admin')) &&
+                     request.auth.uid in request.resource.data.assigneeIds;
 
       // UPDATE:
       // - Super Admins can update any task.
@@ -81,7 +85,7 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
                      (hasRole('Super Admin') ||
                      (hasRole('Manager') && getMyProfile().companyId == resource.data.companyId) ||
-                     (hasRole('Employee') && request.auth.uid in resource.data.assigneeIds));
+                     (request.auth.uid in resource.data.assigneeIds));
 
       // DELETE:
       // - Only Super Admins and Managers can delete tasks.
@@ -98,5 +102,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
