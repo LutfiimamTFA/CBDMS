@@ -14,6 +14,7 @@ import {
   VisibilityState,
   getFacetedRowModel,
   getFacetedUniqueValues,
+  getPaginationRowModel,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -23,12 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { tasks as data } from '@/lib/data';
@@ -37,17 +32,27 @@ import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO } from 'date-fns';
-import { ChevronDown, Plus, X as XIcon } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon } from 'lucide-react';
 import { TaskDetailsSheet } from './task-details-sheet';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
+import { DataTableViewOptions } from './data-table-view-options';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 
 export function TasksDataTable() {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = React.useState({})
   const { t } = useI18n();
   
   const statusOptions = Object.values(statusInfo).map(s => ({
@@ -64,6 +69,37 @@ export function TasksDataTable() {
 
 
   const columns: ColumnDef<Task>[] = [
+    {
+        id: "actions",
+        cell: ({ row }) => {
+          const task = row.original
+     
+          return (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                  <span className="sr-only">Open menu</span>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={() => navigator.clipboard.writeText(task.id)}
+                >
+                  Copy task ID
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem>View details</DropdownMenuItem>
+                <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10'>
+                    <Trash2 className='mr-2 h-4 w-4'/>
+                    Delete Task
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )
+        },
+      },
     {
       accessorKey: 'title',
       header: t('tasks.column.title'),
@@ -160,10 +196,24 @@ export function TasksDataTable() {
     onColumnVisibilityChange: setColumnVisibility,
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onRowSelectionChange: setRowSelection,
+    initialState: {
+        pagination: {
+            pageSize: 5,
+        },
+        columnFilters: [
+            {
+                id: 'status',
+                value: ['To Do', 'Doing']
+            }
+        ]
+    },
     state: {
       sorting,
       columnFilters,
       columnVisibility,
+      rowSelection
     },
   });
 
@@ -207,32 +257,7 @@ export function TasksDataTable() {
           )}
         </div>
         <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="ml-auto h-8">
-                {t('tasks.columns')} <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter((column) => column.getCanHide())
-                .map((column) => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) =>
-                        column.toggleVisibility(!!value)
-                      }
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+            <DataTableViewOptions table={table}/>
           <AddTaskDialog>
             <Button size="sm" className="h-8">
               <Plus className="mr-2 h-4 w-4" />
@@ -290,6 +315,24 @@ export function TasksDataTable() {
             )}
           </TableBody>
         </Table>
+      </div>
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+        >
+            Previous
+        </Button>
+        <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+        >
+            Next
+        </Button>
       </div>
     </div>
   );
