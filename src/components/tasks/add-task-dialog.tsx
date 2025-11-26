@@ -489,10 +489,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
               <form
                 id="add-task-form"
                 onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-4"
+                className="space-y-6"
               >
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="space-y-4">
+                  {/* Left Column */}
+                  <div className="space-y-6">
                     <FormField
                       control={form.control}
                       name="title"
@@ -550,6 +551,38 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       )}/>
                     </div>
 
+                    <div className="space-y-4 rounded-lg border p-4">
+                        <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.startdate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
+                            <FormField control={form.control} name="dueDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.duedate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
+                        </div>
+                        <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', '')}>{t('addtask.form.quickselect.clear')}</Button></div></div>
+                    </div>
+
+                    <div className="space-y-4 rounded-lg border p-4">
+                      <h3 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Time Management</h3>
+                      <FormField control={form.control} name="timeEstimate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.timeestimate')}</FormLabel><FormControl><Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)}/>
+                      <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Time Logged</span><span>{timeTracked.toFixed(2)}h / {timeEstimateValue}h</span></div><Progress value={timeTrackingProgress} /></div>
+                      <Accordion type="single" collapsible>
+                        <AccordionItem value="time-log" className="border-b-0">
+                          <AccordionTrigger className="text-xs -mt-2">Log Manual Time</AccordionTrigger>
+                          <AccordionContent className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="log-date" className="text-xs">Date</Label><Input id="log-date" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} /></div><div><Label htmlFor="log-note" className="text-xs">Note</Label><Input id="log-note" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What did you work on?"/></div></div>
+                                <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="start-time" className="text-xs">Start Time</Label><Input id="start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div><div><Label htmlFor="end-time" className="text-xs">End Time</Label><Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div></div>
+                            </div>
+                            <Button variant="outline" type="button" onClick={handleAddLogEntry} className="w-full">Add Time Entry</Button>
+                            {timeLogs.length > 0 && (<div className="space-y-3 pt-4"><h4 className='text-xs font-semibold text-muted-foreground'>History</h4><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{timeLogs.map(log => (<div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'><div><p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p><p className='text-muted-foreground'>{log.description ? `${log.description} - ` : ''}{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p></div><div className='font-semibold'>{formatDistanceToNow(new Date().getTime() - log.duration * 1000, { includeSeconds: true, addSuffix: false, unit: 'hour' })}</div></div>))}</div></div>)}
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    </div>
+
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-6">
                     <div className="space-y-4 rounded-lg border p-4">
                         <div className='flex items-center justify-between'>
                             <h3 className="text-sm font-medium flex items-center gap-2"><Share className="h-4 w-4" />{t('addtask.form.sharelink')}</h3>
@@ -625,18 +658,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             </div>
                         )}
                     </div>
-                    
-                    <div className="space-y-4 rounded-lg border p-4">
-                        <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.startdate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
-                            <FormField control={form.control} name="dueDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.duedate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
-                        </div>
-                        <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', '')}>{t('addtask.form.quickselect.clear')}</Button></div></div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
                      <Tabs defaultValue="subtasks" className="w-full">
                       <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
@@ -700,49 +721,29 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </div>
                       </TabsContent>
                     </Tabs>
-                  </div>
-                </div>
-                
-                <Separator />
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-4">
-                      <FormField control={form.control} name="timeEstimate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.timeestimate')}</FormLabel><FormControl><Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)}/>
-                       <div className="space-y-2">
-                        <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
-                        <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-10">
-                          {selectedTags.map(tag => (<div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>{tag.label}<button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100"><X className="h-3 w-3" /></button></div>))}
-                          <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 w-6 p-0">+</Button></PopoverTrigger>
-                              <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
-                          </Popover>
-                        </div>
+
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
+                      <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-10">
+                        {selectedTags.map(tag => (<div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>{tag.label}<button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100"><X className="h-3 w-3" /></button></div>))}
+                        <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 w-6 p-0">+</Button></PopoverTrigger>
+                            <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
+                        </Popover>
                       </div>
                     </div>
-                     <div className="space-y-4 rounded-lg border p-4">
-                        <h3 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Time Tracking</h3>
-                        <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{timeTracked.toFixed(2)}h / {timeEstimateValue}h</span></div><Progress value={timeTrackingProgress} /></div>
-                        <div className="grid grid-cols-1 gap-4">
-                            <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="log-date" className="text-xs">Date</Label><Input id="log-date" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} /></div><div><Label htmlFor="log-note" className="text-xs">Note</Label><Input id="log-note" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What did you work on?"/></div></div>
-                            <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="start-time" className="text-xs">Start Time</Label><Input id="start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div><div><Label htmlFor="end-time" className="text-xs">End Time</Label><Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div></div>
-                        </div>
-                        <Button variant="outline" type="button" onClick={handleAddLogEntry} className="w-full">Add Time Entry</Button>
-                        {timeLogs.length > 0 && (<div className="space-y-3 pt-4"><h4 className='text-xs font-semibold text-muted-foreground'>History</h4><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{timeLogs.map(log => (<div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'><div><p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p><p className='text-muted-foreground'>{log.description ? `${log.description} - ` : ''}{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p></div><div className='font-semibold'>{formatDistanceToNow(new Date().getTime() - log.duration * 1000, { includeSeconds: true, addSuffix: false, unit: 'hour' })}</div></div>))}</div></div>)}
+
+                    <div className="space-y-4 rounded-lg border p-4">
+                      <h3 className="text-sm font-medium flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h3>
+                      <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="mr-2 h-4 w-4" />Upload from Local</Button><Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
+                      {attachments.length > 0 && (<div className="space-y-2"><Label>Attached Files</Label><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{attachments.map(att => (<div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><div className="flex items-center gap-2 truncate">{att.icon}<span className="truncate" title={att.name}>{att.name}</span></div><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}><X className="h-4 w-4" /></Button></div>))}</div></div>)}
                     </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-4 rounded-lg border p-4">
-                    <h3 className="text-sm font-medium flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h3>
-                    <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="mr-2 h-4 w-4" />Upload from Local</Button><Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
-                    {attachments.length > 0 && (<div className="space-y-2"><Label>Attached Files</Label><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{attachments.map(att => (<div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><div className="flex items-center gap-2 truncate">{att.icon}<span className="truncate" title={att.name}>{att.name}</span></div><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}><X className="h-4 w-4" /></Button></div>))}</div></div>)}
-                  </div>
-
-                  <div className="space-y-4 rounded-lg border p-4">
-                      <div className="flex items-center justify-between"><h3 className="text-sm font-medium flex items-center gap-2"><Plus className="h-4 w-4" />Custom Fields</h3><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" />Add Field</Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={() => handleAddCustomField('Text')}><Type className="mr-2 h-4 w-4" /> Text</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Number')}><Hash className="mr-2 h-4 w-4" /> Number</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Date')}><CalendarIcon className="mr-2 h-4 w-4" /> Date</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Dropdown')}><List className="mr-2 h-4 w-4" /> Dropdown</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
-                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">{customFields.map((field) => (<div key={field.id} className="flex items-center gap-2"><Input placeholder="Field Name" value={field.name} onChange={(e) => handleCustomFieldChange(field.id, 'name', e.target.value)} className="flex-1" />{renderCustomFieldInput(field)}<Button variant="ghost" size="icon" onClick={() => handleRemoveCustomField(field.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>))}</div>
+                    
+                    <div className="space-y-4 rounded-lg border p-4">
+                        <div className="flex items-center justify-between"><h3 className="text-sm font-medium flex items-center gap-2"><Plus className="h-4 w-4" />Custom Fields</h3><DropdownMenu><DropdownMenuTrigger asChild><Button variant="outline" size="sm"><Plus className="mr-2 h-4 w-4" />Add Field</Button></DropdownMenuTrigger><DropdownMenuContent><DropdownMenuItem onSelect={() => handleAddCustomField('Text')}><Type className="mr-2 h-4 w-4" /> Text</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Number')}><Hash className="mr-2 h-4 w-4" /> Number</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Date')}><CalendarIcon className="mr-2 h-4 w-4" /> Date</DropdownMenuItem><DropdownMenuItem onSelect={() => handleAddCustomField('Dropdown')}><List className="mr-2 h-4 w-4" /> Dropdown</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>
+                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">{customFields.map((field) => (<div key={field.id} className="flex items-center gap-2"><Input placeholder="Field Name" value={field.name} onChange={(e) => handleCustomFieldChange(field.id, 'name', e.target.value)} className="flex-1" />{renderCustomFieldInput(field)}<Button variant="ghost" size="icon" onClick={() => handleRemoveCustomField(field.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button></div>))}</div>
+                    </div>
                   </div>
                 </div>
-
               </form>
             </Form>
           </div>
@@ -756,5 +757,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
 
     
