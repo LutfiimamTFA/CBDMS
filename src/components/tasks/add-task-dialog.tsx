@@ -367,7 +367,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     if (!newComment.trim()) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
-      user: currentUser, // Assuming current user
+      user: currentUser,
       text: newComment,
       timestamp: new Date().toISOString(),
       replies: [],
@@ -745,3 +745,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
