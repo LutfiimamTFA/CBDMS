@@ -8,17 +8,22 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase, useFirestore, useMemoFirebase } from '@/firebase';
 import type { Task } from '@/lib/types';
 import { CheckCircle2, CircleDashed, Clock, Loader2 } from 'lucide-react';
-import { collection } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 
 export default function ReportsPage() {
   const firestore = useFirestore();
+  const { user } = useFirebase();
 
-  const tasksCollectionRef = useMemoFirebase(() => 
-    firestore ? collection(firestore, 'tasks') : null,
-  [firestore]);
+  const tasksCollectionRef = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+      collection(firestore, 'tasks'),
+      where('assigneeIds', 'array-contains', user.uid)
+    );
+  }, [firestore, user?.uid]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksCollectionRef);
   

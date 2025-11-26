@@ -4,17 +4,23 @@ import { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './kanban-column';
 import type { Task, Status } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc, updateDoc } from 'firebase/firestore';
+import { useCollection, useFirebase, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc, query, updateDoc, where } from 'firebase/firestore';
 
 const statuses: Status[] = ['To Do', 'Doing', 'Done'];
 
 export function KanbanBoard() {
   const firestore = useFirestore();
+  const { user } = useFirebase();
 
-  const tasksQuery = useMemoFirebase(() => 
-    firestore ? collection(firestore, 'tasks') : null,
-  [firestore]);
+  const tasksQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+      collection(firestore, 'tasks'),
+      where('assigneeIds', 'array-contains', user.uid)
+    );
+  }, [firestore, user?.uid]);
+
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   const [isClient, setIsClient] = useState(false);

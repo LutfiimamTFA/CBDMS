@@ -48,8 +48,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
+import { useCollection, useFirebase, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc, query, where } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 type AIValidationState = {
@@ -72,11 +72,17 @@ const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
 
 export function TasksDataTable() {
   const firestore = useFirestore();
-  
-  const tasksQuery = useMemoFirebase(() => 
-    firestore ? collection(firestore, 'tasks') : null,
-  [firestore]);
+  const { user } = useFirebase();
 
+  const tasksQuery = useMemoFirebase(() => {
+    if (!firestore || !user?.uid) return null;
+    return query(
+      collection(firestore, 'tasks'),
+      where('assigneeIds', 'array-contains', user.uid)
+    );
+  }, [firestore, user?.uid]);
+
+  
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   const [data, setData] = React.useState<Task[]>([]);
 
