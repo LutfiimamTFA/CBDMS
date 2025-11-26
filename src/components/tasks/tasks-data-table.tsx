@@ -74,6 +74,10 @@ export function TasksDataTable() {
       task.id === taskId ? { ...task, status: newStatus } : task
     ));
   };
+  
+  const handleDeleteTask = (taskId: string) => {
+      setData(prevData => prevData.filter(task => task.id !== taskId));
+  };
 
 
   const columns: ColumnDef<Task>[] = [
@@ -101,7 +105,10 @@ export function TasksDataTable() {
                  <TaskDetailsSheet task={task}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
                 </TaskDetailsSheet>
-                <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10'>
+                <DropdownMenuItem 
+                    className='text-destructive focus:text-destructive focus:bg-destructive/10'
+                    onClick={() => handleDeleteTask(task.id)}
+                >
                     <Trash2 className='mr-2 h-4 w-4'/>
                     Delete Task
                 </DropdownMenuItem>
