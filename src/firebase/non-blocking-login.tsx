@@ -4,53 +4,54 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  onAuthStateChanged,
-  User,
 } from 'firebase/auth';
-import { doc, setDoc, Firestore } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 
 
 /**
- * Initiates an email/password sign-in. If the user does not exist, it automatically
- * creates a new account and a corresponding user profile in Firestore.
+ * Initiates an email/password sign-in. It will only attempt to sign in.
+ * It will not create a new user.
  */
-export function initiateEmailSignIn(authInstance: Auth, firestore: Firestore, email: string, password: string): void {
-  // Check if a user is already signed in. If so, do nothing.
-  if (authInstance.currentUser) {
-    return;
-  }
-
+export function initiateEmailSignIn(authInstance: Auth, email: string, password: string): void {
   signInWithEmailAndPassword(authInstance, email, password)
     .catch((error) => {
-      // If user not found, create a new account
-      if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-        createUserWithEmailAndPassword(authInstance, email, password)
-          .then(userCredential => {
-            const user = userCredential.user;
-            const userProfileRef = doc(firestore, 'users', user.uid);
-            
-            setDoc(userProfileRef, {
-              name: email.split('@')[0],
-              email: user.email,
-              role: 'Employee',
-              companyId: 'company-a',
-              avatarUrl: `https://i.pravatar.cc/150?u=${user.uid}`
-            }).catch(profileError => {
-              console.error("Error creating user profile:", profileError);
-            });
-          })
-          .catch(createError => {
-             console.error("Error during account creation:", createError);
-          });
-      } else {
-        // For other errors, let the global listener handle them.
-        console.error("Login Error:", error);
-      }
+      // Let the caller or global handlers deal with the error.
+      // This avoids creating an infinite loop on wrong password.
+      console.error("Sign-in Error:", error);
+    });
+}
+
+/**
+ * Initiates an email/password sign-up. Creates a new user and a corresponding
+ * user profile in Firestore.
+ */
+export function initiateEmailSignUp(authInstance: Auth, firestore: Firestore, email: string, password: string): void {
+  createUserWithEmailAndPassword(authInstance, email, password)
+    .then(userCredential => {
+      const user = userCredential.user;
+      const userProfileRef = doc(firestore, 'users', user.uid);
+      
+      // Create a user profile document
+      setDoc(userProfileRef, {
+        name: email.split('@')[0], // Default name from email
+        email: user.email,
+        role: 'Employee', // Default role
+        companyId: 'company-a', // Default company
+        avatarUrl: `https://i.pravatar.cc/150?u=${user.uid}`
+      }).catch(profileError => {
+        console.error("Error creating user profile:", profileError);
+      });
+    })
+    .catch(createError => {
+      // Handle sign-up errors (e.g., email already in use)
+      console.error("Sign-up Error:", createError);
     });
 }
 
 
 /** Initiate sign-out (non-blocking). */
 export function initiateSignOut(authInstance: Auth): void {
-  signOut(authInstance);
+  signOut(authInstance).catch(error => {
+      console.error("Sign-out Error:", error);
+  });
 }
