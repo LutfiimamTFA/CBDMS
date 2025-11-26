@@ -4,10 +4,9 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
-  signInWithRedirect,
+  signInWithPopup,
   GoogleAuthProvider,
   sendEmailVerification,
-  getRedirectResult,
   UserCredential,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
@@ -75,7 +74,7 @@ export function initiateEmailSignUp(
               user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
           });
 
-          // Sign the user out immediately after registration
+          // Sign the user out immediately after registration to force verification
           await signOut(authInstance);
           
           resolve();
@@ -89,67 +88,36 @@ export function initiateEmailSignUp(
   });
 }
 
-/**
- * Initiates a Google Sign-In flow using redirect.
- */
-export function initiateGoogleSignIn(
-  auth: Auth
-): void {
-  const provider = new GoogleAuthProvider();
-  signInWithRedirect(auth, provider).catch(error => {
-    // This initial catch is for immediate errors, e.g., config issues.
-    // The main result is handled by getRedirectResult on page load.
-    console.error("Google Sign-In Redirect Error:", error);
-  });
-}
 
 /**
- * Handles the result of a Google sign-in redirect.
+ * Initiates a Google Sign-In flow using a popup.
  * If the user is new, it creates a profile in Firestore.
- * Returns a promise that resolves with the UserCredential or null.
+ * Returns a promise that resolves with the UserCredential.
  */
-export function handleRedirectSignIn(
+export async function initiateGoogleSignIn(
   auth: Auth,
   firestore: Firestore
-): Promise<UserCredential | null> {
-  return new Promise((resolve, reject) => {
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (!result) {
-          // This means the page loaded without a redirect result.
-          resolve(null);
-          return;
-        }
+): Promise<UserCredential> {
+  const provider = new GoogleAuthProvider();
+  const result = await signInWithPopup(auth, provider);
+  const user = result.user;
 
-        const user = result.user;
-        const userProfileRef = doc(firestore, 'users', user.uid);
-        const docSnap = await getDoc(userProfileRef);
+  // Check if the user is new by trying to get their profile
+  const userProfileRef = doc(firestore, 'users', user.uid);
+  const docSnap = await getDoc(userProfileRef);
 
-        // Create profile only if it doesn't exist
-        if (!docSnap.exists()) {
-          try {
-            await setDoc(userProfileRef, {
-              name: user.displayName || 'New User',
-              email: user.email,
-              role: 'Employee',
-              companyId: 'company-a',
-              avatarUrl:
-                user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
-            });
-            resolve(result);
-          } catch (profileError) {
-            reject(profileError);
-          }
-        } else {
-          // User already exists, just resolve
-          resolve(result);
-        }
-      })
-      .catch((error) => {
-        // Handle errors from getRedirectResult, e.g., account-exists-with-different-credential
-        reject(error);
-      });
-  });
+  if (!docSnap.exists()) {
+    // User is new, create a profile document
+    await setDoc(userProfileRef, {
+      name: user.displayName || 'New User',
+      email: user.email,
+      role: 'Employee',
+      companyId: 'company-a',
+      avatarUrl: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
+    });
+  }
+  
+  return result;
 }
 
 

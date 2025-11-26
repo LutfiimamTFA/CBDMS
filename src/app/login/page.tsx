@@ -15,7 +15,6 @@ import {
   initiateGoogleSignIn,
   initiateEmailSignIn,
   initiateEmailSignUp,
-  handleRedirectSignIn,
 } from '@/firebase/non-blocking-login';
 import { useAuth, useFirebase, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -106,28 +105,6 @@ export default function LoginPage() {
     }
   }, [user, isUserLoading, router]);
 
-  // Handle Google redirect result
-  useEffect(() => {
-    if (!auth || !firestore || isUserLoading || user) return;
-
-    // We are not logged in, but the page loaded.
-    // Let's check if this is a redirect from Google Sign-In.
-    handleRedirectSignIn(auth, firestore)
-      .then(result => {
-        if (result) {
-          // Sign-in successful, the main useEffect will handle the redirect.
-        }
-      })
-      .catch(error => {
-        console.error('Redirect Sign-in Error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Sign-in Failed',
-          description: 'Could not complete sign-in with Google. Please try again.',
-        });
-      });
-  }, [auth, firestore, isUserLoading, user, router, toast]);
-
   const onSignIn = async (data: SignInFormValues) => {
     if (!auth) return;
     setIsSigningIn(true);
@@ -170,7 +147,7 @@ export default function LoginPage() {
     }
   };
 
-  const onGoogleSignIn = () => {
+  const onGoogleSignIn = async () => {
     if (!auth || !firestore) {
       toast({
         variant: 'destructive',
@@ -180,7 +157,26 @@ export default function LoginPage() {
       return;
     }
     setIsGoogleSigningIn(true);
-    initiateGoogleSignIn(auth); // No firestore needed here for redirect
+    try {
+      await initiateGoogleSignIn(auth, firestore);
+      // Successful sign-in will be handled by the useEffect hook
+    } catch (error: any) {
+      // Don't show toast if user closes popup
+      if (error.code === 'auth/popup-closed-by-user') {
+        setIsGoogleSigningIn(false);
+        return;
+      }
+      toast({
+        variant: 'destructive',
+        title: 'Sign-in Failed',
+        description:
+          'Could not sign in with Google. Please try again.',
+      });
+    } finally {
+        // This may run before the redirect is complete in some cases,
+        // but it's okay as the page will be left anyway.
+        setIsGoogleSigningIn(false);
+    }
   };
 
   if (isUserLoading || user) {
