@@ -11,7 +11,7 @@ import {
 import { doc, setDoc, getDoc, Firestore } from 'firebase/firestore';
 
 /**
- * Initiates an email/password sign-in. This function ONLY attempts to sign in.
+ * Initiates an email/password sign-in and checks for email verification.
  * Returns a promise that resolves on success and rejects on failure.
  */
 export function initiateEmailSignIn(
@@ -21,10 +21,21 @@ export function initiateEmailSignIn(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     signInWithEmailAndPassword(authInstance, email, password)
-      .then(() => {
+      .then((userCredential) => {
+        const user = userCredential.user;
+        if (!user.emailVerified) {
+          // If email is not verified, sign out immediately and reject.
+          signOut(authInstance);
+          const error = new Error('Email not verified.');
+          (error as any).code = 'auth/email-not-verified';
+          reject(error);
+          return;
+        }
+        // If email is verified, resolve the promise.
         resolve();
       })
       .catch((error) => {
+        // Catch other errors like invalid credentials.
         console.error('Sign-in Error:', error);
         reject(error);
       });
@@ -63,6 +74,9 @@ export function initiateEmailSignUp(
               user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
           });
 
+          // Sign the user out immediately after registration
+          await signOut(authInstance);
+          
           resolve();
         } catch (setupError) {
           console.error(

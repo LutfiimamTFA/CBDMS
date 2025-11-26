@@ -113,13 +113,16 @@ export default function LoginPage() {
     try {
       await initiateEmailSignIn(auth, data.email, data.password);
       // Successful sign-in will be handled by the useEffect
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign-in Error:', error);
+      let description = 'Invalid credentials. Please check your email and password.';
+      if (error.code === 'auth/email-not-verified') {
+        description = 'Your email is not verified. Please check your inbox for the verification link.';
+      }
       toast({
         variant: 'destructive',
         title: 'Sign-in Failed',
-        description:
-          'Invalid credentials. Please check your email and password.',
+        description,
       });
     } finally {
       setIsSigningIn(false);
