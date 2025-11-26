@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -61,12 +61,11 @@ const roles = [
 
 
 export default function LoginPage() {
-  const [isAuthLoading, setIsAuthLoading] = useState(false);
   const router = useRouter();
   const { toast } = useToast();
-  // Use useAuth to get a stable auth instance for login actions
+  // useAuth provides a stable auth instance needed for sign-in calls.
   const auth = useAuth();
-  // Use useUserProfile to react to the global user state for redirection
+  // useUserProfile gives us the live auth state for redirection and error handling.
   const { user, isLoading: isUserLoading, error: userError } = useUserProfile();
 
   const form = useForm<LoginFormValues>({
@@ -76,6 +75,8 @@ export default function LoginPage() {
       password: '',
     },
   });
+  
+  const { formState: { isSubmitting } } = form;
 
   // Effect to handle login errors from the global state
   useEffect(() => {
@@ -83,14 +84,15 @@ export default function LoginPage() {
       toast({
         variant: 'destructive',
         title: 'Login Failed',
-        description: userError.message || 'An unexpected error occurred.',
+        description: userError.code === 'auth/invalid-credential' 
+          ? 'Invalid email or password. Please try again.'
+          : userError.message || 'An unexpected error occurred.',
       });
-      setIsAuthLoading(false); // Stop loading on error
     }
   }, [userError, toast]);
 
-  // Effect to handle successful login based on the global user profile state
-  // This ensures we only redirect when the entire app knows the user is logged in
+  // Effect for redirection after successful login is confirmed globally.
+  // This logic is now primarily handled by MainLayout.tsx, but this is a good safeguard.
   useEffect(() => {
     if (user && !isUserLoading) {
       router.push('/dashboard');
@@ -98,13 +100,16 @@ export default function LoginPage() {
   }, [user, isUserLoading, router]);
 
   const onSubmit = (data: LoginFormValues) => {
-    setIsAuthLoading(true);
     // The initiateEmailSignIn function handles sign-in or sign-up.
-    // Errors are caught and handled by the global useUserProfile hook.
+    // It's a non-blocking call. We don't await it.
+    // Errors will be caught by the global onAuthStateChanged listener and surfaced
+    // in the `userError` object from the useUserProfile hook.
     initiateEmailSignIn(auth, data.email, data.password);
   };
   
-  // While checking auth state on initial load, show a loading screen.
+  // While the global auth state is being determined on first load, show a spinner.
+  // If a user is already logged in, this prevents the login form from flashing
+  // before the redirect in the useEffect above happens.
   if (isUserLoading) {
     return (
       <div className="flex h-svh items-center justify-center bg-background">
@@ -159,7 +164,7 @@ export default function LoginPage() {
                       <Input
                         placeholder="m@example.com"
                         {...field}
-                        disabled={isAuthLoading}
+                        disabled={isSubmitting}
                       />
                     </FormControl>
                     <FormMessage />
@@ -181,14 +186,14 @@ export default function LoginPage() {
                       </Link>
                     </div>
                     <FormControl>
-                      <Input type="password" {...field} disabled={isAuthLoading} />
+                      <Input type="password" {...field} disabled={isSubmitting} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button type="submit" className="w-full" disabled={isAuthLoading}>
-                {isAuthLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Sign In / Sign Up
               </Button>
             </form>
