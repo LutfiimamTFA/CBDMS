@@ -29,6 +29,7 @@ export default function TaskPage({ params }: { params: Promise<{ id: string }> }
       if (task) {
         setIsOpen(true);
       } else {
+        // Only call notFound if loading is complete and there's no task
         notFound();
       }
     }
@@ -37,25 +38,34 @@ export default function TaskPage({ params }: { params: Promise<{ id: string }> }
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open);
     if (!open) {
-      router.push('/tasks');
+      router.push('/dashboard');
     }
   };
 
-  if (isLoading || !task) {
+  // While loading, show a spinner. Don't call notFound() yet.
+  if (isLoading) {
     return (
-      <div className="flex h-svh items-center justify-center">
-        {isLoading ? <Loader2 className="h-8 w-8 animate-spin" /> : <p>{t('tasks.noresults')}</p>}
+      <div className="flex h-svh items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
+  // If loading is finished and still no task, it's a true 404.
+  if (!task) {
+     return notFound();
+  }
+
+  // If task is found, render the sheet.
   return (
-    <TaskDetailsSheet 
-        task={task} 
-        open={isOpen}
-        onOpenChange={handleOpenChange}
-    >
-        <div className="sr-only" />
-    </TaskDetailsSheet>
+    <div className="h-svh w-full bg-background">
+        <TaskDetailsSheet 
+            task={task} 
+            open={isOpen}
+            onOpenChange={handleOpenChange}
+        >
+            <div className="sr-only" />
+        </TaskDetailsSheet>
+    </div>
   );
 }
