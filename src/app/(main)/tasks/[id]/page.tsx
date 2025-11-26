@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
 import { notFound, useRouter } from 'next/navigation';
 import type { Task } from '@/lib/types';
-import { useDoc, useFirebase, useMemoFirebase, useUserProfile } from '@/firebase';
+import { useDoc, useFirebase, useMemoFirebase, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
@@ -13,7 +13,7 @@ export default function TaskPage({ params }: { params: Promise<{ id: string }> }
   const router = useRouter();
   const resolvedParams = use(params);
 
-  const { firestore } = useUserProfile();
+  const firestore = useFirestore();
 
   const taskRef = useMemoFirebase(() => {
     if (!firestore || !resolvedParams.id) return null;
