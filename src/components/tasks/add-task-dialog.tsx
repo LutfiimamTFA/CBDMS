@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -138,9 +138,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   [firestore]);
   const { data: users } = useCollection<UserType>(usersCollectionRef);
 
-  const { profile: currentUser } = useUserProfile();
+  const { profile: currentUserProfile } = useUserProfile();
 
-  
   const tasksCollectionRef = useMemoFirebase(() => {
     if (!firestore) return null;
     return collection(firestore, 'tasks');
@@ -175,6 +174,25 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     },
   });
 
+  // Effect to auto-assign task to current user if their role is 'Employee'
+  useEffect(() => {
+    if (currentUserProfile && currentUserProfile.role === 'Employee') {
+      const selfUser = {
+        id: currentUserProfile.id,
+        name: currentUserProfile.name,
+        email: currentUserProfile.email,
+        avatarUrl: currentUserProfile.avatarUrl || '',
+      };
+      setSelectedUsers([selfUser]);
+      form.setValue('assigneeIds', [selfUser.id]);
+    } else {
+        // Reset if the user is not an employee or profile changes
+        setSelectedUsers([]);
+        form.setValue('assigneeIds', []);
+    }
+  }, [currentUserProfile, form, open]);
+
+
   const onSubmit = (data: TaskFormValues) => {
     if (!tasksCollectionRef) return;
     
@@ -184,7 +202,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         (acc as any)[key] = value;
       }
       return acc;
-    }, {} as TaskFormValues);
+    }, {} as Partial<TaskFormValues>);
 
 
     const newTask = {
@@ -394,14 +412,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }
   
   const handlePostComment = () => {
-    if (!newComment.trim() || !currentUser) return;
+    if (!newComment.trim() || !currentUserProfile) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
       user: {
-        id: currentUser.id,
-        name: currentUser.name || '',
-        email: currentUser.email || '',
-        avatarUrl: currentUser.avatarUrl || '',
+        id: currentUserProfile.id,
+        name: currentUserProfile.name || '',
+        email: currentUserProfile.email || '',
+        avatarUrl: currentUserProfile.avatarUrl || '',
       },
       text: newComment,
       timestamp: new Date().toISOString(),
@@ -642,24 +660,26 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             render={({ field }) => (
                             <FormItem>
                                 <FormLabel>{t('addtask.form.teammembers')}</FormLabel>
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="outline" className="w-full justify-start text-muted-foreground">
-                                        <UserPlus className="mr-2 h-4 w-4" />{t('addtask.form.selectmembers')}
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                        {(users || []).map((user) => (
-                                            <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                <Avatar className="h-6 w-6 mr-2">
-                                                    <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                                    <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <span>{user.name}</span>
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                {currentUserProfile?.role !== 'Employee' && (
+                                  <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                          <Button variant="outline" className="w-full justify-start text-muted-foreground">
+                                          <UserPlus className="mr-2 h-4 w-4" />{t('addtask.form.selectmembers')}
+                                          </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                          {(users || []).map((user) => (
+                                              <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                                  <Avatar className="h-6 w-6 mr-2">
+                                                      <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                                      <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                                                  </Avatar>
+                                                  <span>{user.name}</span>
+                                              </DropdownMenuItem>
+                                          ))}
+                                      </DropdownMenuContent>
+                                  </DropdownMenu>
+                                )}
                                 {selectedUsers.length > 0 && (
                                     <div className="space-y-2 pt-2">
                                         <Label>{t('addtask.form.selectedmembers')}</Label>
@@ -669,7 +689,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                                     <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                                     <span className="text-sm font-medium">{user.name}</span>
                                                 </div>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
+                                                {currentUserProfile?.role !== 'Employee' && (
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -734,7 +756,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           ))}
                         </div>
                         <div className="flex gap-3 pt-4 border-t">
-                             <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
+                             <Avatar className="h-8 w-8"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{currentUserProfile?.name?.charAt(0)}</AvatarFallback></Avatar>
                              <div className="flex-1 relative">
                                 <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-10" />
                                 <div className="absolute top-2 right-2 flex gap-1"><Button type="button" variant="ghost" size="icon" className="h-6 w-6"><AtSign className="h-4 w-4"/></Button><Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button></div>
@@ -778,3 +800,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
