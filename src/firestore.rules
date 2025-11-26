@@ -33,7 +33,7 @@ service cloud.firestore {
     // Function to check if two users are in the same company by reading both profiles
     function isInSameCompanyAs(otherUserId) {
         let myCompanyId = getMyProfile().companyId;
-        // This read is allowed by the 'get' rule below
+        // This read is allowed by the 'get' rule below which permits reading profiles in the same company
         let otherCompanyId = getUserProfile(otherUserId).companyId;
         return myCompanyId == otherCompanyId;
     }
@@ -44,21 +44,26 @@ service cloud.firestore {
 
     match /users/{userId} {
       // READ: You can read your own profile. You can also read another user's profile
-      // if you are in the same company. Super Admins can read any profile.
+      // if you are a Manager/Employee in the same company. Super Admins can read any profile.
       allow get: if isSignedIn() && 
-                    (isOwner(userId) || isInSameCompanyAs(userId) || hasRole('Super Admin'));
+                    (isOwner(userId) || 
+                    ((hasRole('Employee') || hasRole('Manager')) && isInSameCompanyAs(userId)) || 
+                    hasRole('Super Admin'));
       
-      // LIST: Employees and Managers can list users within their own company. 
-      // Super Admins can list all users.
+      // LIST: Employees and Managers can list users as long as the query is filtered by their own companyId.
+      // Super Admins can list all users without restriction.
       // The client query MUST include a `where('companyId', '==', user.companyId)` clause.
       allow list: if isSignedIn() &&
+                  (
                     (
                       (hasRole('Employee') || hasRole('Manager')) &&
                       request.query.where.size() > 0 &&
                       request.query.where[0][0] == 'companyId' &&
                       request.query.where[0][1] == '==' &&
                       request.query.where[0][2] == getMyProfile().companyId
-                    ) || hasRole('Super Admin');
+                    ) 
+                    || hasRole('Super Admin')
+                  );
 
 
       // CREATE: Anyone can create their own user profile document.
@@ -99,7 +104,7 @@ service cloud.firestore {
       // - Super Admins can update any task.
       // - Managers can update tasks in their company.
       // - Employees can update tasks they are assigned to.
-      // - Clients can ONLY comment (This logic would be more complex, for now they can't update).
+      // - Clients can NOT update tasks.
       allow update: if isSignedIn() &&
                      (hasRole('Super Admin') ||
                      (hasRole('Manager') && getMyProfile().companyId == resource.data.companyId) ||
