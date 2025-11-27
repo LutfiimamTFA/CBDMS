@@ -72,7 +72,6 @@ const navItemSchema = z.object({
 
 type NavItemFormValues = z.infer<typeof navItemSchema>;
 const availableRoles = ['Super Admin', 'Manager', 'Employee', 'Client'];
-const iconNames = Object.keys(lucideIcons).filter(name => name !== 'default' && name !== 'createLucideIcon');
 
 
 export default function NavigationSettingsPage() {
@@ -83,6 +82,8 @@ export default function NavigationSettingsPage() {
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<NavigationItem | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const iconNames = Object.keys(lucideIcons).filter(name => name !== 'default' && name !== 'createLucideIcon');
 
   const navItemsCollectionRef = useMemoFirebase(
     () => (firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null),
