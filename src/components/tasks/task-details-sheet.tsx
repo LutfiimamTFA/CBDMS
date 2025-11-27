@@ -421,6 +421,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentTags(currentTags.filter(t => t.label !== tagLabel));
   }
 
+  const copyTaskLink = () => {
+    const link = `${window.location.origin}/tasks/${initialTask.id}`;
+    navigator.clipboard.writeText(link);
+    toast({
+        title: "Link Copied!",
+        description: "Task link has been copied to your clipboard.",
+    });
+  }
+
   const ReadOnlyField = ({ label, children }: { label: string, children: React.ReactNode }) => (
     <div className="grid grid-cols-3 items-center gap-2">
       <span className="text-sm text-muted-foreground">{label}</span>
@@ -448,8 +457,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm"><Share2 className="h-4 w-4 mr-2"/> Share</Button>
-                     <Button variant="ghost" size="sm"><LinkIcon className="h-4 w-4 mr-2"/> Copy Link</Button>
+                    <Button variant="ghost" size="sm" onClick={copyTaskLink}><LinkIcon className="h-4 w-4 mr-2"/> Copy Link</Button>
                     <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
                 </div>
              </div>
