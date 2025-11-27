@@ -86,10 +86,10 @@ export type StatusInfo = {
 
 export type PermissionSettings = {
   Manager: {
-    canCreateTasks: boolean;
-    canDeleteTasks: boolean;
     canManageUsers: boolean;
     canDeleteUsers: boolean;
+    canCreateTasks: boolean;
+    canDeleteTasks: boolean;
     canViewReports: boolean;
   };
   Employee: {

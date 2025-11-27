@@ -13,10 +13,10 @@ import { Separator } from '@/components/ui/separator';
 
 const defaultPermissions: PermissionSettings = {
   Manager: {
-    canCreateTasks: true,
-    canDeleteTasks: true,
     canManageUsers: true,
     canDeleteUsers: false,
+    canCreateTasks: true,
+    canDeleteTasks: true,
     canViewReports: true,
   },
   Employee: {
@@ -134,10 +134,10 @@ export default function RoleSettingsPage() {
             <CardDescription>Core permissions for daily task execution.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
+            <PermissionSwitch role="Employee" permissionKey="canCreateTasks" label="Can Create Tasks"/>
             <PermissionSwitch role="Employee" permissionKey="canChangeTaskStatus" label="Can Change Task Status"/>
             <PermissionSwitch role="Employee" permissionKey="canTrackTime" label="Can Track Time on Tasks"/>
             <PermissionSwitch role="Employee" permissionKey="canCreateDailyReports" label="Can Create Daily Reports"/>
-            <PermissionSwitch role="Employee" permissionKey="canCreateTasks" label="Can Create Tasks"/>
           </CardContent>
         </Card>
 

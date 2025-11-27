@@ -8,10 +8,10 @@ import { doc } from 'firebase/firestore';
 // Default permissions, used as a fallback during loading or if the document doesn't exist.
 const defaultPermissions: PermissionSettings = {
   Manager: {
-    canCreateTasks: true,
-    canDeleteTasks: false,
     canManageUsers: true,
     canDeleteUsers: false,
+    canCreateTasks: true,
+    canDeleteTasks: true,
     canViewReports: true,
   },
   Employee: {
