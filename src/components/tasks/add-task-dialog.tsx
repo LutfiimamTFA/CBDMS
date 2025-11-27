@@ -57,7 +57,7 @@ import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
-import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment } from '@/lib/types';
+import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment, Notification } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Progress } from '../ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -65,7 +65,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
 import { useCollection, useFirestore, useMemoFirebase, useUserProfile, useStorage } from '@/firebase';
-import { collection, serverTimestamp } from 'firebase/firestore';
+import { collection, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -191,10 +191,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }, [currentUserProfile, user, form, open]);
 
 
-  const onSubmit = (data: TaskFormValues) => {
-    if (!tasksCollectionRef || !currentUserProfile) return;
+  const onSubmit = async (data: TaskFormValues) => {
+    if (!tasksCollectionRef || !currentUserProfile || !firestore) return;
     
-    // Remove undefined properties from data to prevent Firestore errors
+    const batch = writeBatch(firestore);
+
+    // 1. Create the new task document
+    const newTaskRef = doc(collection(firestore, 'tasks'));
     const cleanedData = Object.entries(data).reduce((acc, [key, value]) => {
       if (value !== undefined) {
         (acc as any)[key] = value;
@@ -202,8 +205,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       return acc;
     }, {} as Partial<TaskFormValues>);
 
-
-    const newTask = {
+    const newTaskData = {
         ...cleanedData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -222,28 +224,58 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
           avatarUrl: currentUserProfile.avatarUrl || '',
         },
     };
+    batch.set(newTaskRef, newTaskData);
 
-    addDocumentNonBlocking(tasksCollectionRef, newTask);
+    // 2. Create notifications for each assignee
+    selectedUsers.forEach(assignee => {
+        const notificationRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
+        const notification: Omit<Notification, 'id'> = {
+            userId: assignee.id,
+            title: 'New Task Assigned',
+            message: `${currentUserProfile.name} assigned you a new task.`,
+            taskId: newTaskRef.id,
+            taskTitle: data.title,
+            isRead: false,
+            createdAt: serverTimestamp(),
+            createdBy: {
+                id: currentUserProfile.id,
+                name: currentUserProfile.name,
+                avatarUrl: currentUserProfile.avatarUrl || '',
+            }
+        };
+        batch.set(notificationRef, notification);
+    });
 
-    toast({
-        title: 'Task Created',
-        description: `${data.title} has been added to your board.`
-    })
+    try {
+        await batch.commit();
+        toast({
+            title: 'Task Created',
+            description: `${data.title} has been added and assignees have been notified.`
+        });
 
-    setOpen(false);
-    form.reset();
-    setSelectedUsers([]);
-    setSelectedTags([]);
-    setTimeLogs([]);
-    setTimeTracked(0);
-    setLogNote('');
-    setCustomFields([]);
-    setAttachments([]);
-    setSubtasks([]);
-    setDependencies([]);
-    setBlocking([]);
-    setComments([]);
-    setSuggestionReason(null);
+        setOpen(false);
+        form.reset();
+        setSelectedUsers([]);
+        setSelectedTags([]);
+        setTimeLogs([]);
+        setTimeTracked(0);
+        setLogNote('');
+        setCustomFields([]);
+        setAttachments([]);
+        setSubtasks([]);
+        setDependencies([]);
+        setBlocking([]);
+        setComments([]);
+        setSuggestionReason(null);
+
+    } catch (error) {
+        console.error("Failed to create task and notifications:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Creation Failed',
+            description: 'Could not create the task. Please try again.'
+        });
+    }
   };
   
   const handleAddLogEntry = () => {
@@ -833,3 +865,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    

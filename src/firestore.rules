@@ -59,6 +59,12 @@ service cloud.firestore {
       // We check for dynamic permissions as an extra layer, though it will always be false.
       allow create: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canManageUsers'));
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteUsers'));
+      
+      // Notification subcollection rules
+      match /notifications/{notificationId} {
+        // A user can only access their own notifications.
+        allow read, write, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+      }
     }
 
     // Rules for 'tasks' collection
@@ -92,3 +98,5 @@ service cloud.firestore {
     }
   }
 }
+
+    

@@ -1,0 +1,145 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Bell, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  useCollection,
+  useFirestore,
+  useMemoFirebase,
+  useUserProfile,
+} from '@/firebase';
+import type { Notification } from '@/lib/types';
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  writeBatch,
+  doc,
+} from 'firebase/firestore';
+import { formatDistanceToNow } from 'date-fns';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useRouter } from 'next/navigation';
+
+export function NotificationBell() {
+  const router = useRouter();
+  const firestore = useFirestore();
+  const { user } = useUserProfile();
+  const [hasUnread, setHasUnread] = useState(false);
+
+  const notificationsQuery = useMemoFirebase(
+    () =>
+      user && firestore
+        ? query(
+            collection(firestore, `users/${user.uid}/notifications`),
+            orderBy('createdAt', 'desc'),
+            limit(10)
+          )
+        : null,
+    [user, firestore]
+  );
+
+  const { data: notifications, isLoading } =
+    useCollection<Notification>(notificationsQuery);
+
+  useEffect(() => {
+    if (notifications) {
+      setHasUnread(notifications.some((n) => !n.isRead));
+    }
+  }, [notifications]);
+
+  const handleOpenChange = async (isOpen: boolean) => {
+    if (isOpen && hasUnread && firestore && user && notifications) {
+      const unreadNotifications = notifications.filter((n) => !n.isRead);
+      if (unreadNotifications.length === 0) return;
+
+      const batch = writeBatch(firestore);
+      unreadNotifications.forEach((notification) => {
+        const notifRef = doc(
+          firestore,
+          `users/${user.uid}/notifications`,
+          notification.id
+        );
+        batch.update(notifRef, { isRead: true });
+      });
+
+      try {
+        await batch.commit();
+        setHasUnread(false);
+      } catch (error) {
+        console.error('Failed to mark notifications as read:', error);
+      }
+    }
+  };
+
+  const handleNotificationClick = (taskId: string) => {
+    router.push(`/tasks/${taskId}`);
+  };
+
+  return (
+    <DropdownMenu onOpenChange={handleOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative">
+          <Bell className="h-[1.2rem] w-[1.2rem]" />
+          {isLoading ? (
+            <div className="absolute top-1 right-1 flex h-3 w-3 items-center justify-center">
+              <Loader2 className="h-full w-full animate-spin text-xs" />
+            </div>
+          ) : (
+            hasUnread && (
+              <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive" />
+            )
+          )}
+          <span className="sr-only">Toggle notifications</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-80">
+        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {isLoading ? (
+          <div className="flex items-center justify-center p-4">
+            <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : notifications && notifications.length > 0 ? (
+          notifications.map((notif) => (
+            <DropdownMenuItem
+              key={notif.id}
+              className="flex items-start gap-3"
+              onClick={() => handleNotificationClick(notif.taskId)}
+            >
+              <Avatar className="h-8 w-8">
+                <AvatarImage src={notif.createdBy.avatarUrl} />
+                <AvatarFallback>
+                  {notif.createdBy.name.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <p className="text-sm leading-tight">{notif.message}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatDistanceToNow(notif.createdAt.toDate(), {
+                    addSuffix: true,
+                  })}
+                </p>
+              </div>
+            </DropdownMenuItem>
+          ))
+        ) : (
+          <p className="p-4 text-center text-sm text-muted-foreground">
+            You're all caught up!
+          </p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+    

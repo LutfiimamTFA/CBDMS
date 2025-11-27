@@ -196,6 +196,32 @@
         }
       },
       "required": ["id", "label", "path", "icon", "order", "roles"]
+    },
+    "Notification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Notification",
+      "type": "object",
+      "description": "Represents a notification for a user.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the notification." },
+        "userId": { "type": "string", "description": "The ID of the user receiving the notification." },
+        "title": { "type": "string", "description": "The title of the notification." },
+        "message": { "type": "string", "description": "The content of the notification message." },
+        "taskId": { "type": "string", "description": "The ID of the task related to this notification." },
+        "isRead": { "type": "boolean", "description": "Flag indicating if the notification has been read." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the notification was created." },
+        "createdBy": {
+          "type": "object",
+          "description": "User who triggered the notification.",
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "avatarUrl": { "type": "string" }
+          },
+          "required": ["id", "name"]
+        }
+      },
+      "required": ["id", "userId", "title", "message", "taskId", "isRead", "createdAt", "createdBy"]
     }
   },
   "auth": {
@@ -270,6 +296,18 @@
               "name": "navItemId",
               "description": "The unique identifier for the navigation item."
             }
+          ]
+        }
+      },
+       {
+        "path": "/users/{userId}/notifications/{notificationId}",
+        "definition": {
+          "entityName": "Notification",
+          "schema": { "$ref": "#/backend/entities/Notification" },
+          "description": "Subcollection to store notifications for each user.",
+           "params": [
+            { "name": "userId", "description": "The ID of the user." },
+            { "name": "notificationId", "description": "The ID of the notification." }
           ]
         }
       }

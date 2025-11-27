@@ -122,4 +122,20 @@ export type NavigationItem = {
   roles: ('Super Admin' | 'Manager' | 'Employee' | 'Client')[];
 }
 
+export type Notification = {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  taskId: string;
+  taskTitle: string;
+  isRead: boolean;
+  createdAt: any;
+  createdBy: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+  };
+};
+
     
