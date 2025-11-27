@@ -1,3 +1,4 @@
+
 'use client';
 import type { Task, Status } from '@/lib/types';
 import {
@@ -38,6 +39,14 @@ export function TaskStatusChart({ tasks }: { tasks: Task[] }) {
   }));
 
   const totalTasks = tasks.length;
+  
+  if (totalTasks === 0) {
+      return (
+          <div className="h-[250px] w-full flex items-center justify-center text-muted-foreground">
+              No tasks found in the selected period.
+          </div>
+      )
+  }
 
   return (
     <div className="h-[250px] w-full relative">

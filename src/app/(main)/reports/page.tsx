@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DateRange } from 'react-day-picker';
-import { addDays, format } from 'date-fns';
+import { addDays, format, parseISO, isWithinInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 // --- Komponen untuk Laporan Karyawan ---
@@ -92,6 +92,15 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
         to: new Date(),
     });
 
+    const filteredTasks = useMemo(() => {
+        if (!allTasks || !date?.from) return [];
+        const to = date.to || date.from; // If 'to' is not set, use 'from' as end date
+        return allTasks.filter(task => {
+            const taskDate = parseISO(task.createdAt);
+            return isWithinInterval(taskDate, { start: date.from!, end: to });
+        });
+    }, [allTasks, date]);
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -101,9 +110,9 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
   }
 
   const totalUsers = allUsers?.length || 0;
-  const totalTasks = allTasks?.length || 0;
-  const completedTasks = allTasks?.filter((t) => t.status === 'Done').length || 0;
-  const inProgressTasks = allTasks?.filter((t) => t.status === 'Doing').length || 0;
+  const totalTasks = filteredTasks.length || 0;
+  const completedTasks = filteredTasks.filter((t) => t.status === 'Done').length || 0;
+  const inProgressTasks = filteredTasks.filter((t) => t.status === 'Doing').length || 0;
 
   return (
     <>
@@ -173,7 +182,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground">di seluruh proyek</p>
+            <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
           </CardContent>
         </Card>
         <Card>
@@ -204,19 +213,19 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>Beban Kerja Tim</CardTitle>
-              <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim.</CardDescription>
+              <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim dalam rentang waktu terpilih.</CardDescription>
             </CardHeader>
             <CardContent>
-              <TeamWorkloadChart tasks={allTasks || []} users={allUsers || []} />
+              <TeamWorkloadChart tasks={filteredTasks || []} users={allUsers || []} />
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle>Distribusi Status Tugas</CardTitle>
-              <CardDescription>Proporsi tugas dalam setiap kategori status.</CardDescription>
+              <CardDescription>Proporsi tugas dalam setiap kategori status dalam rentang waktu terpilih.</CardDescription>
             </CardHeader>
             <CardContent>
-              <TaskStatusChart tasks={allTasks || []} />
+              <TaskStatusChart tasks={filteredTasks || []} />
             </CardContent>
           </Card>
         </div>
@@ -274,5 +283,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    

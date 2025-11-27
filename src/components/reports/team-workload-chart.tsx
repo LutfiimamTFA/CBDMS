@@ -1,3 +1,4 @@
+
 'use client';
 import type { Task, User } from '@/lib/types';
 import {
@@ -43,7 +44,7 @@ export function TeamWorkloadChart({
   if (!workloadData.length) {
     return (
       <div className="h-[250px] w-full flex items-center justify-center text-muted-foreground">
-          No active tasks assigned to team members.
+          No active tasks assigned to team members in the selected period.
       </div>
     );
   }
