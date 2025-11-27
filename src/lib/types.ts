@@ -86,6 +86,7 @@ export type StatusInfo = {
 
 export type PermissionSettings = {
   Manager: {
+    // Action Permissions
     canManageUsers: boolean;
     canDeleteUsers: boolean;
     canCreateTasks: boolean;
@@ -93,14 +94,27 @@ export type PermissionSettings = {
     canViewReports: boolean;
   };
   Employee: {
+    // Action Permissions
     canCreateTasks: boolean;
     canChangeTaskStatus: boolean;
     canTrackTime: boolean;
     canCreateDailyReports: boolean;
   };
   Client: {
+    // Action Permissions
     canViewAssignedTasks: boolean;
     canCommentOnTasks: boolean;
     canApproveContent: boolean;
   };
 };
+
+export type NavigationItem = {
+  id: string;
+  label: string;
+  path: string;
+  icon: string;
+  order: number;
+  roles: ('Super Admin' | 'Manager' | 'Employee' | 'Client')[];
+}
+
+    

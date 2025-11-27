@@ -29,12 +29,37 @@ import {
   ChevronDown,
   Database,
   Settings as SettingsIcon,
+  Icon as LucideIcon,
 } from 'lucide-react';
+import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useUserProfile } from '@/firebase';
-import { useEffect, useState } from 'react';
+import {
+  useUserProfile,
+  useCollection,
+  useFirestore,
+  useMemoFirebase,
+} from '@/firebase';
+import { useEffect, useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import type { NavigationItem } from '@/lib/types';
+import {
+  collection,
+  query,
+  orderBy,
+  writeBatch,
+  getDocs,
+} from 'firebase/firestore';
+import { defaultNavItems } from '@/lib/navigation-items';
+
+const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
+  const LucideIcon = (lucideIcons as Record<string, any>)[name];
+  if (!LucideIcon) {
+    return <lucideIcons.HelpCircle {...props} />; // Fallback Icon
+  }
+  return <LucideIcon {...props} />;
+};
+
 
 export default function MainLayout({
   children,
@@ -44,8 +69,48 @@ export default function MainLayout({
   const pathname = usePathname();
   const { t } = useI18n();
   const router = useRouter();
+  const firestore = useFirestore();
   const { user, profile, isLoading } = useUserProfile();
   const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith('/admin'));
+
+  // --- Dynamic Navigation ---
+  const navItemsRef = useMemoFirebase(
+    () =>
+      firestore
+        ? query(collection(firestore, 'navigationItems'), orderBy('order'))
+        : null,
+    [firestore]
+  );
+  const { data: navItemsData, isLoading: isNavLoading } =
+    useCollection<NavigationItem>(navItemsRef);
+  
+  // Seed initial navigation data if collection is empty
+  useEffect(() => {
+    if (firestore && profile?.role === 'Super Admin' && navItemsData?.length === 0) {
+      const seedNavData = async () => {
+        const querySnapshot = await getDocs(collection(firestore, 'navigationItems'));
+        if (querySnapshot.empty) {
+          console.log('Seeding navigation items...');
+          const batch = writeBatch(firestore);
+          defaultNavItems.forEach((item) => {
+            const docRef = collection(firestore, 'navigationItems');
+            batch.set(doc(docRef, item.id), item);
+          });
+          await batch.commit();
+          console.log('Navigation items seeded.');
+        }
+      };
+      seedNavData().catch(console.error);
+    }
+  }, [firestore, profile, navItemsData]);
+
+
+  const filteredNavItems = useMemo(() => {
+    if (!navItemsData || !profile) return [];
+    return navItemsData.filter(item => item.roles.includes(profile.role));
+  }, [navItemsData, profile]);
+  // --- End Dynamic Navigation ---
+
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -53,11 +118,6 @@ export default function MainLayout({
     }
   }, [user, isLoading, router]);
 
-  const baseNavItems = [
-    { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
-    { href: '/tasks', icon: ClipboardList, label: t('nav.list') },
-    { href: '/reports', icon: FileText, label: t('nav.reports') },
-  ];
 
   const adminNavItems = {
     label: 'Admin',
@@ -78,9 +138,7 @@ export default function MainLayout({
     ],
   };
 
-  const navItems = [...baseNavItems];
-
-  if (isLoading || !user) {
+  if (isLoading || isNavLoading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -96,14 +154,14 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {navItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <Link href={item.href}>
+            {filteredNavItems.map((item) => (
+              <SidebarMenuItem key={item.id}>
+                <Link href={item.path}>
                   <SidebarMenuButton
-                    isActive={pathname === item.href}
+                    isActive={pathname === item.path}
                     tooltip={item.label}
                   >
-                    <item.icon />
+                    <Icon name={item.icon} />
                     <span>{item.label}</span>
                   </SidebarMenuButton>
                 </Link>
@@ -174,3 +232,5 @@ export default function MainLayout({
     </SidebarProvider>
   );
 }
+
+    

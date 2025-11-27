@@ -160,6 +160,42 @@
         "endTime",
         "duration"
       ]
+    },
+    "NavigationItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "NavigationItem",
+      "type": "object",
+      "description": "Represents a configurable item in the main sidebar navigation.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the navigation item (e.g., 'nav_dashboard')."
+        },
+        "label": {
+          "type": "string",
+          "description": "The text label displayed for the menu item."
+        },
+        "path": {
+          "type": "string",
+          "description": "The URL path the menu item links to (e.g., '/dashboard')."
+        },
+        "icon": {
+          "type": "string",
+          "description": "The name of the lucide-react icon to display."
+        },
+        "order": {
+          "type": "number",
+          "description": "The display order of the menu item in the sidebar."
+        },
+        "roles": {
+          "type": "array",
+          "description": "An array of user roles that can see this navigation item.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["id", "label", "path", "icon", "order", "roles"]
     }
   },
   "auth": {
@@ -220,8 +256,26 @@
             }
           ]
         }
+      },
+      {
+        "path": "/navigationItems/{navItemId}",
+        "definition": {
+          "entityName": "NavigationItem",
+          "schema": {
+            "$ref": "#/backend/entities/NavigationItem"
+          },
+          "description": "Stores the configuration for dynamic sidebar navigation items.",
+          "params": [
+            {
+              "name": "navItemId",
+              "description": "The unique identifier for the navigation item."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. Security rules will be heavily relied upon to enforce who can see which tasks, based on their role, companyId, and assignee."
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee."
   }
 }
+
+    
