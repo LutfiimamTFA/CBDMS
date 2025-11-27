@@ -69,6 +69,11 @@ export type Task = {
   comments?: Comment[];
   attachments?: Attachment[];
   createdAt: any;
+  createdBy: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+  };
 };
 
 export type PriorityInfo = {

@@ -414,8 +414,13 @@ export function TaskDetailsSheet({
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    {/* Placeholder for a task ID or breadcrumb */}
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    {initialTask.createdBy && (
+                        <div className='flex items-center gap-2'>
+                           <Avatar className="h-6 w-6"><AvatarImage src={initialTask.createdBy.avatarUrl} /><AvatarFallback>{initialTask.createdBy.name.charAt(0)}</AvatarFallback></Avatar>
+                           <span>Dibuat oleh {initialTask.createdBy.name}</span>
+                        </div>
+                    )}
                 </div>
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" size="sm"><Star className="h-4 w-4 mr-2"/> Favorite</Button>

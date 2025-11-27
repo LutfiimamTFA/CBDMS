@@ -190,7 +190,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
 
   const onSubmit = (data: TaskFormValues) => {
-    if (!tasksCollectionRef) return;
+    if (!tasksCollectionRef || !currentUserProfile) return;
     
     // Remove undefined properties from data to prevent Firestore errors
     const cleanedData = Object.entries(data).reduce((acc, [key, value]) => {
@@ -214,6 +214,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         blocking,
         comments,
         attachments,
+        createdBy: {
+          id: currentUserProfile.id,
+          name: currentUserProfile.name,
+          avatarUrl: currentUserProfile.avatarUrl || '',
+        },
     };
 
     addDocumentNonBlocking(tasksCollectionRef, newTask);
@@ -318,15 +323,15 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const getFileIcon = (fileName: string): React.ReactElement => {
     if (fileName.match(/\.(pdf)$/i)) {
-      return <FileText className="h-5 w-5 text-red-500" />;
+      return <FileImage className="h-5 w-5 text-red-500" />;
     }
     if (fileName.match(/\.(doc|docx)$/i)) {
-      return <FileText className="h-5 w-5 text-blue-500" />;
+      return <FileImage className="h-5 w-5 text-blue-500" />;
     }
     if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
       return <FileImage className="h-5 w-5 text-green-500" />;
     }
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
+    return <FileImage className="h-5 w-5 text-muted-foreground" />;
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {

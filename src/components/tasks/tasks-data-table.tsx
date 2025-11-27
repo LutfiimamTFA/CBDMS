@@ -364,6 +364,29 @@ export function TasksDataTable() {
       },
     },
     {
+      accessorKey: 'createdBy',
+      header: 'Dibuat Oleh',
+      cell: ({ row }) => {
+        const createdBy = row.original.createdBy;
+        if (!createdBy) return <div className="text-muted-foreground">-</div>;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Avatar className="h-7 w-7">
+                  <AvatarImage src={createdBy.avatarUrl} alt={createdBy.name} />
+                  <AvatarFallback>{createdBy.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{createdBy.name}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      },
+    },
+    {
       accessorKey: 'dueDate',
       header: t('tasks.column.duedate'),
       cell: ({ row }) => {
