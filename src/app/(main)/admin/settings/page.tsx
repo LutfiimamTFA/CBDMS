@@ -1,3 +1,4 @@
+
 'use client';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,34 +32,6 @@ export default function AppSettingsPage() {
                         <p className="text-xs text-muted-foreground">Recommended size: 200x50px, PNG format.</p>
                     </div>
                     <Button>Save Changes</Button>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Role & Permissions</CardTitle>
-                    <CardDescription>
-                        Define what each role can see and do within the application.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Link href="/admin/settings/roles">
-                        <Button variant="outline">Manage Roles & Permissions</Button>
-                    </Link>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Sidebar Navigation</CardTitle>
-                    <CardDescription>
-                        Customize the main application sidebar for different user roles.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Link href="/admin/settings/navigation">
-                        <Button variant="outline">Manage Navigation</Button>
-                    </Link>
                 </CardContent>
             </Card>
 

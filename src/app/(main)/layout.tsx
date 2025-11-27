@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -29,6 +30,8 @@ import {
   User,
   Icon as LucideIcon,
   KeyRound,
+  SlidersHorizontal,
+  Palette,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -74,6 +77,9 @@ export default function MainLayout({
 
   const isAdminRoute = pathname.startsWith('/admin');
   const [isAdminOpen, setIsAdminOpen] = useState(isAdminRoute);
+  
+  const isSettingsRoute = pathname.startsWith('/admin/settings');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsRoute);
 
   // --- Dynamic Navigation ---
   const navItemsRef = useMemoFirebase(
@@ -120,26 +126,6 @@ export default function MainLayout({
     }
   }, [user, isLoading, router]);
 
-
-  const adminNavItems = {
-    label: 'Admin',
-    icon: Shield,
-    subItems: [
-      {
-        href: '/admin/dashboard',
-        icon: LayoutDashboard,
-        label: 'Overview',
-      },
-      { href: '/admin/users', icon: Users, label: 'User Management' },
-      { href: '/admin/data', icon: Database, label: 'Data Management' },
-      {
-        href: '/admin/settings',
-        icon: SettingsIcon,
-        label: 'App Settings',
-      },
-    ],
-  };
-
   if (isLoading || isNavLoading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -185,13 +171,13 @@ export default function MainLayout({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={isAdminRoute}
+                      isActive={isAdminRoute && !isSettingsRoute}
                       className="w-full justify-between"
-                      tooltip={adminNavItems.label}
+                      tooltip='Admin'
                     >
                       <div className="flex items-center gap-2">
-                        <adminNavItems.icon />
-                        <span>{adminNavItems.label}</span>
+                        <Shield />
+                        <span>Admin</span>
                       </div>
                       <ChevronDown
                         className={cn(
@@ -204,21 +190,75 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                    {adminNavItems.subItems.map((subItem) => (
-                      <SidebarMenuItem key={subItem.href}>
-                        <Link href={subItem.href}>
-                          <SidebarMenuButton
-                            variant="ghost"
-                            size="sm"
-                            isActive={pathname.startsWith(subItem.href)}
-                            className="w-full justify-start"
-                          >
-                            <subItem.icon />
-                            <span>{subItem.label}</span>
-                          </SidebarMenuButton>
-                        </Link>
-                      </SidebarMenuItem>
-                    ))}
+                     <SidebarMenuItem>
+                      <Link href='/admin/dashboard'>
+                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/dashboard'} className="w-full justify-start">
+                          <LayoutDashboard/>
+                          <span>Overview</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <Link href='/admin/users'>
+                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/users')} className="w-full justify-start">
+                          <Users/>
+                          <span>Users</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                     <SidebarMenuItem>
+                      <Link href='/admin/data'>
+                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/data')} className="w-full justify-start">
+                          <Database/>
+                          <span>Data</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                  </SidebarMenu>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {profile?.role === 'Super Admin' && (
+              <Collapsible open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={isSettingsRoute}
+                      className="w-full justify-between"
+                      tooltip='Settings'
+                    >
+                      <div className="flex items-center gap-2">
+                        <SettingsIcon />
+                        <span>Settings</span>
+                      </div>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          isSettingsOpen && 'rotate-180'
+                        )}
+                      />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                </SidebarMenuItem>
+                <CollapsibleContent className="pl-6">
+                  <SidebarMenu>
+                     <SidebarMenuItem>
+                      <Link href='/admin/settings/roles'>
+                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings/roles'} className="w-full justify-start">
+                          <KeyRound/>
+                          <span>Roles & Permissions</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
+                    <SidebarMenuItem>
+                      <Link href='/admin/settings/navigation'>
+                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/settings/navigation')} className="w-full justify-start">
+                          <SlidersHorizontal/>
+                          <span>Navigation</span>
+                        </SidebarMenuButton>
+                      </Link>
+                    </SidebarMenuItem>
                   </SidebarMenu>
                 </CollapsibleContent>
               </Collapsible>
