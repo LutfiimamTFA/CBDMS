@@ -10,7 +10,16 @@ let serviceAccountValue;
 
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-    serviceAccountValue = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    const parsedKey = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    
+    // The private key from an environment variable can have its newlines escaped.
+    // We need to replace '\\n' with '\n' to ensure the PEM format is correct.
+    if (parsedKey.private_key) {
+      parsedKey.private_key = parsedKey.private_key.replace(/\\n/g, '\n');
+    }
+    
+    serviceAccountValue = parsedKey;
+
   } else {
     // Provide a placeholder for when the env var is not set.
     // This prevents build errors but will fail at runtime if actually used.
