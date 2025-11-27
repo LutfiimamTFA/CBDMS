@@ -14,6 +14,11 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
   LayoutDashboard,
   FileText,
   User,
@@ -21,11 +26,15 @@ import {
   Loader2,
   Users,
   Shield,
+  ChevronDown,
+  Database,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
 import { useUserProfile } from '@/firebase';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 export default function MainLayout({
   children,
@@ -36,6 +45,7 @@ export default function MainLayout({
   const { t } = useI18n();
   const router = useRouter();
   const { user, profile, isLoading } = useUserProfile();
+  const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith('/admin'));
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -43,16 +53,32 @@ export default function MainLayout({
     }
   }, [user, isLoading, router]);
 
-  const navItems = [
+  const baseNavItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
     { href: '/tasks', icon: ClipboardList, label: t('nav.list') },
     { href: '/reports', icon: FileText, label: t('nav.reports') },
   ];
 
-  // Conditionally add the "Admin" nav item only after profile has loaded and role is checked.
-  if (!isLoading && profile?.role === 'Super Admin') {
-    navItems.push({ href: '/admin/dashboard', icon: Shield, label: 'Admin' });
-  }
+  const adminNavItems = {
+    label: 'Admin',
+    icon: Shield,
+    subItems: [
+      {
+        href: '/admin/dashboard',
+        icon: LayoutDashboard,
+        label: 'Overview',
+      },
+      { href: '/admin/users', icon: Users, label: 'User Management' },
+      { href: '/admin/data', icon: Database, label: 'Data Management' },
+      {
+        href: '/admin/settings',
+        icon: SettingsIcon,
+        label: 'App Settings',
+      },
+    ],
+  };
+
+  const navItems = [...baseNavItems];
 
   if (isLoading || !user) {
     return (
@@ -74,7 +100,7 @@ export default function MainLayout({
               <SidebarMenuItem key={item.href}>
                 <Link href={item.href}>
                   <SidebarMenuButton
-                    isActive={pathname.startsWith(item.href)}
+                    isActive={pathname === item.href}
                     tooltip={item.label}
                   >
                     <item.icon />
@@ -83,6 +109,49 @@ export default function MainLayout({
                 </Link>
               </SidebarMenuItem>
             ))}
+            {!isLoading && profile?.role === 'Super Admin' && (
+              <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={pathname.startsWith('/admin')}
+                      className="w-full justify-between"
+                      tooltip={adminNavItems.label}
+                    >
+                      <div className="flex items-center gap-2">
+                        <adminNavItems.icon />
+                        <span>{adminNavItems.label}</span>
+                      </div>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          isAdminOpen && 'rotate-180'
+                        )}
+                      />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                </SidebarMenuItem>
+                <CollapsibleContent className="pl-6">
+                  <SidebarMenu>
+                    {adminNavItems.subItems.map((subItem) => (
+                      <SidebarMenuItem key={subItem.href}>
+                        <Link href={subItem.href}>
+                          <SidebarMenuButton
+                            variant="ghost"
+                            size="sm"
+                            isActive={pathname === subItem.href}
+                            className="w-full justify-start"
+                          >
+                            <subItem.icon />
+                            <span>{subItem.label}</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
