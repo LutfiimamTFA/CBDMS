@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -102,6 +102,8 @@ export function TaskDetailsSheet({
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [internalOpen, setInternalOpen] = useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
+
 
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -310,23 +312,37 @@ export function TaskDetailsSheet({
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && storage) {
-      const files = Array.from(event.target.files);
-      const uploadPromises = files.map(async (file) => {
-        const storageRef = ref(storage, `attachments/${initialTask.id}/${file.name}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        return {
-          id: `local-${Date.now()}-${file.name}`,
-          name: file.name,
-          type: 'local' as const,
-          url: url,
-        };
-      });
-      const newAttachments = await Promise.all(uploadPromises);
-      setAttachments(prev => [...prev, ...newAttachments]);
+    if (!event.target.files || !storage) return;
+
+    setIsUploading(true);
+    const files = Array.from(event.target.files);
+
+    try {
+        const uploadPromises = files.map(async (file) => {
+            const storageRef = ref(storage, `attachments/${initialTask.id}/${Date.now()}-${file.name}`);
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+            return {
+                id: `local-${Date.now()}-${file.name}`,
+                name: file.name,
+                type: 'local' as const,
+                url: url,
+            };
+        });
+
+        const newAttachments = await Promise.all(uploadPromises);
+        setAttachments(prev => [...prev, ...newAttachments]);
+        toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
+
+    } catch (error) {
+        console.error("File upload failed:", error);
+        toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload files. Please try again.' });
+    } finally {
+        setIsUploading(false);
+        // Reset file input
+        if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  };
+};
 
   const handleAddGdriveLink = () => {
     const url = prompt('Please enter the Google Drive file link:');
@@ -472,7 +488,7 @@ export function TaskDetailsSheet({
                           {isEditing && (
                             <div className="grid grid-cols-2 gap-4">
                               <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
-                              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="mr-2 h-4 w-4" />Upload from Local</Button>
+                              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
                               <Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
                             </div>
                           )}
@@ -698,3 +714,5 @@ export function TaskDetailsSheet({
     </>
   );
 }
+
+    

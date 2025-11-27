@@ -102,6 +102,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [selectedTags, setSelectedTags] = React.useState<TagType[]>([]);
   const [shareSetting, setShareSetting] = React.useState<ShareSetting>('private');
   const [isSuggesting, setIsSuggesting] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
   const [suggestionReason, setSuggestionReason] = React.useState<string | null>(null);
   const { t, language } = useI18n();
   const { toast } = useToast();
@@ -335,22 +336,35 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && storage) {
-      const files = Array.from(event.target.files);
-      const newAttachments: Attachment[] = [];
-      
-      for (const file of files) {
-        const storageRef = ref(storage, `attachments/${Date.now()}-${file.name}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        newAttachments.push({
-          id: `local-${Date.now()}-${file.name}`,
-          name: file.name,
-          type: 'local',
-          url: url,
+    if (!event.target.files || !storage) return;
+    
+    setIsUploading(true);
+    const files = Array.from(event.target.files);
+    
+    try {
+        const uploadPromises = files.map(async (file) => {
+            const storageRef = ref(storage, `attachments/${Date.now()}-${file.name}`);
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+            return {
+                id: `local-${Date.now()}-${file.name}`,
+                name: file.name,
+                type: 'local' as const,
+                url: url,
+            };
         });
-      }
-      setAttachments(prev => [...prev, ...newAttachments]);
+        
+        const newAttachments = await Promise.all(uploadPromises);
+        setAttachments(prev => [...prev, ...newAttachments]);
+        toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
+
+    } catch (error) {
+        console.error("File upload failed:", error);
+        toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload files. Please try again.' });
+    } finally {
+        setIsUploading(false);
+        // Reset file input
+        if(fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
@@ -795,7 +809,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
                     <div className="space-y-4 rounded-lg border p-4">
                       <h3 className="text-sm font-medium flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h3>
-                      <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="mr-2 h-4 w-4" />Upload from Local</Button><Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
+                      <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
                       {attachments.length > 0 && (<div className="space-y-2"><Label>Attached Files</Label><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{attachments.map(att => (<a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm hover:bg-secondary"><div className="flex items-center gap-2 truncate">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></div><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.preventDefault(); handleRemoveAttachment(att.id);}}><X className="h-4 w-4" /></Button></a>))}</div></div>)}
                     </div>
                     
