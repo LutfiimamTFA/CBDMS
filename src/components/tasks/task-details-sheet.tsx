@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -157,7 +157,7 @@ export function TaskDetailsSheet({
         setAttachments(initialTask.attachments || []);
         setIsEditing(false); // Always start in read-only mode
     }
-  }, [initialTask, form]);
+  }, [initialTask, form, openProp]);
 
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -291,10 +291,10 @@ export function TaskDetailsSheet({
   }
 
   const getFileIcon = (fileName: string) => {
-    if (fileName.match(/\.(pdf)$/i)) return <FileImage className="h-5 w-5 text-red-500" />;
-    if (fileName.match(/\.(doc|docx)$/i)) return <FileImage className="h-5 w-5 text-blue-500" />;
+    if (fileName.match(/\.(pdf)$/i)) return <FileText className="h-5 w-5 text-red-500" />;
+    if (fileName.match(/\.(doc|docx)$/i)) return <FileText className="h-5 w-5 text-blue-500" />;
     if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
-    return <FileImage className="h-5 w-5 text-muted-foreground" />;
+    return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -435,7 +435,7 @@ export function TaskDetailsSheet({
                         
                         <div className="space-y-4">
                           <h3 className="font-semibold flex items-center gap-2"><Paperclip/> Attachments</h3>
-                          {attachments.length > 0 && (
+                           {attachments.length > 0 && (
                             <div className="space-y-2">
                               {attachments.map(att => (
                                 <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
@@ -641,11 +641,13 @@ export function TaskDetailsSheet({
                 </ScrollArea>
               </form>
           </Form>
-          <SheetFooter className="p-4 border-t flex justify-between">
-            <Button variant="destructive" onClick={() => {}} className={isEditing ? 'visible' : 'invisible'}>
-                <Trash2 className="mr-2 h-4 w-4"/>
-                Delete Task
-            </Button>
+          <SheetFooter className="p-4 border-t flex justify-between items-center w-full">
+            <div className="flex gap-2">
+                 <Button variant="destructive" onClick={() => {}} className={isEditing ? 'visible' : 'invisible'}>
+                    <Trash2 className="mr-2 h-4 w-4"/>
+                    Delete Task
+                </Button>
+            </div>
             {isEditing ? (
               <div className="flex justify-end gap-2">
                   <Button variant="ghost" type="button" onClick={() => setIsEditing(false)}>Cancel</Button>
