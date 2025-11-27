@@ -1,20 +1,13 @@
 import { initializeApp, cert, getApps, App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { serviceAccount } from "@/firebase/service-account";
 
 // Function to safely initialize Firebase Admin
 function initializeAdminApp(): App {
   if (getApps().length > 0) {
     return getApps()[0];
   }
-
-  // The key is now read from a server-side environment variable
-  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!serviceAccountString) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set or accessible.');
-  }
-
-  const serviceAccount = JSON.parse(serviceAccountString);
 
   return initializeApp({
     credential: cert(serviceAccount),
@@ -64,7 +57,7 @@ export async function POST(req: Request) {
     let errorMessage = "An error occurred.";
     if (error.code === 'auth/email-already-exists') {
         errorMessage = "The email address is already in use by another account.";
-    } else if (error.message?.includes('FIREBASE_SERVICE_ACCOUNT_KEY')) {
+    } else if (error.message?.includes('FIREBASE_SERVICE_ACCOUNT_KEY') || error.code === 'app/invalid-credential') {
         errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials in environment variables.';
     }
     

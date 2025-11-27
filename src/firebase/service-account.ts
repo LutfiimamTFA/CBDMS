@@ -1,22 +1,48 @@
 // This service account is used by Firebase Admin SDK on the server-side.
 // It is NOT a public configuration and must be kept secure.
 
-// IMPORTANT: In a real production environment, you would load this from
-// a secure source like Google Secret Manager or environment variables.
-// Do not commit the actual service account key to your repository.
+// The service account key is securely injected from an environment variable.
+// In Firebase Studio, this is handled automatically.
+// For local development outside of Studio, you would set the
+// FIREBASE_SERVICE_ACCOUNT_KEY environment variable.
 
-// For demonstration purposes in Firebase Studio, we use a placeholder.
-// The build system will inject the correct service account key during deployment.
+let serviceAccountValue;
 
-export const serviceAccount = {
-  "type": "service_account",
-  "project_id": process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "your-project-id",
-  "private_key_id": "your-private-key-id",
-  "private_key": "your-private-key",
-  "client_email": "your-client-email",
-  "client_id": "your-client-id",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "your-client-x509-cert-url"
-};
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    serviceAccountValue = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+  } else {
+    // Provide a placeholder for when the env var is not set.
+    // This prevents build errors but will fail at runtime if actually used.
+    serviceAccountValue = {
+      type: "service_account",
+      project_id: "your-project-id",
+      private_key_id: "your-private-key-id",
+      private_key: "your-private-key",
+      client_email: "your-client-email",
+      client_id: "your-client-id",
+      auth_uri: "https://accounts.google.com/o/oauth2/auth",
+      token_uri: "https://oauth2.googleapis.com/token",
+      auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+      client_x509_cert_url: "your-client-x509-cert-url"
+    };
+  }
+} catch (e) {
+  console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", e);
+  // Fallback to placeholder if JSON parsing fails
+   serviceAccountValue = {
+      type: "service_account",
+      project_id: "your-project-id",
+      private_key_id: "your-private-key-id",
+      private_key: "your-private-key",
+      client_email: "your-client-email",
+      client_id: "your-client-id",
+      auth_uri: "https://accounts.google.com/o/oauth2/auth",
+      token_uri: "https://oauth2.googleapis.com/token",
+      auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+      client_x509_cert_url: "your-client-x509-cert-url"
+    };
+}
+
+
+export const serviceAccount = serviceAccountValue;
