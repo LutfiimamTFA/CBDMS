@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -84,6 +84,14 @@ type AIValidationState = {
   onConfirm: () => void;
 };
 
+type Attachment = {
+  id: string;
+  name: string;
+  type: 'local' | 'gdrive';
+  source: File | string; // File object for local, URL for gdrive
+  icon: React.ReactNode;
+}
+
 
 export function TaskDetailsSheet({ 
   task: initialTask, 
@@ -117,6 +125,9 @@ export function TaskDetailsSheet({
   const [subtasks, setSubtasks] = useState(initialTask.subtasks || []);
   const [newSubtask, setNewSubtask] = useState('');
 
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
 
   const firestore = useFirestore();
@@ -149,6 +160,9 @@ export function TaskDetailsSheet({
     setCurrentTags(initialTask.tags || []);
     setTimeLogs(initialTask.timeLogs || []);
     setTimeTracked(initialTask.timeTracked || 0);
+    // Attachments need to be handled carefully if they are files.
+    // For now, we assume attachments are not part of the initialTask prop in a way that can be reset easily.
+    setAttachments([]); // This should be populated from initialTask if available
     setIsEditing(false);
   }, [initialTask, form]);
 
@@ -289,6 +303,46 @@ export function TaskDetailsSheet({
     setSubtasks(subtasks.filter(st => st.id !== subtaskId));
   }
 
+  const getFileIcon = (fileName: string) => {
+    if (fileName.endsWith('.pdf')) return <FileImage className="h-5 w-5 text-red-500" />;
+    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return <FileImage className="h-5 w-5 text-blue-500" />;
+    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')) return <FileImage className="h-5 w-5 text-green-500" />;
+    return <FileImage className="h-5 w-5 text-muted-foreground" />;
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const files = Array.from(event.target.files);
+      const newAttachments: Attachment[] = files.map(file => ({
+        id: `local-${Date.now()}-${file.name}`,
+        name: file.name,
+        type: 'local',
+        source: file,
+        icon: getFileIcon(file.name),
+      }));
+      setAttachments(prev => [...prev, ...newAttachments]);
+    }
+  };
+
+  const handleAddGdriveLink = () => {
+    const url = prompt('Please enter the Google Drive file link:');
+    if (url) {
+      const name = prompt('Please enter a name for this link:', 'Google Drive File');
+      const newAttachment: Attachment = {
+        id: `gdrive-${Date.now()}`,
+        name: name || 'Google Drive File',
+        type: 'gdrive',
+        source: url,
+        icon: <LinkIcon className="h-5 w-5 text-yellow-500" />
+      };
+      setAttachments(prev => [...prev, newAttachment]);
+    }
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+
 
   const subtaskProgress = useMemo(() => {
     if (subtasks.length === 0) return 0;
@@ -309,6 +363,7 @@ export function TaskDetailsSheet({
         comments: comments,
         timeTracked: timeTracked,
         timeLogs: timeLogs,
+        // attachments should be handled separately, especially file uploads
     };
     
     updateDocumentNonBlocking(taskDocRef, updatedTaskData);
@@ -354,7 +409,7 @@ export function TaskDetailsSheet({
         <SheetTrigger asChild>{children}</SheetTrigger>
         <SheetContent className="w-full sm:max-w-4xl grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
-             <SheetTitle className='sr-only'>Task Details</SheetTitle>
+             <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     {/* Placeholder for a task ID or breadcrumb */}
@@ -388,11 +443,31 @@ export function TaskDetailsSheet({
                         <Separator/>
                         
                         <div className="space-y-4">
-                            <h3 className="font-semibold flex items-center gap-2"><Paperclip/> Attachments</h3>
-                             <div className="grid grid-cols-2 gap-4">
-                                <Button variant="outline"><FileUp className="mr-2"/> Upload</Button>
-                                <Button variant="outline"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg> Drive</Button>
+                          <h3 className="font-semibold flex items-center gap-2"><Paperclip/> Attachments</h3>
+                          {attachments.length > 0 && (
+                            <div className="space-y-2">
+                              {attachments.map(att => (
+                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                  <div className="flex items-center gap-2 truncate">
+                                    {att.icon}
+                                    <span className="truncate" title={att.name}>{att.name}</span>
+                                  </div>
+                                  {isEditing && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              ))}
                             </div>
+                          )}
+                          {isEditing && (
+                            <div className="grid grid-cols-2 gap-4">
+                              <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" />
+                              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="mr-2 h-4 w-4" />Upload from Local</Button>
+                              <Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
+                            </div>
+                          )}
                         </div>
 
                          <Tabs defaultValue="subtasks" className="w-full">
