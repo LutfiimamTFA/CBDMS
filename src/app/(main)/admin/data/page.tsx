@@ -37,11 +37,28 @@ export default function DataManagementPage() {
     });
     const [confirmationInput, setConfirmationInput] = useState('');
 
+    const escapeCSVCell = (cellData: any) => {
+        if (cellData === null || cellData === undefined) {
+            return '';
+        }
+        
+        const stringData = String(cellData);
+        
+        // If the data contains a comma, a double quote, or a newline,
+        // it needs to be enclosed in double quotes.
+        if (stringData.includes(',') || stringData.includes('"') || stringData.includes('\n')) {
+            // Any double quote inside the data must be escaped by another double quote.
+            const escapedData = stringData.replace(/"/g, '""');
+            return `"${escapedData}"`;
+        }
+        
+        return stringData;
+    };
 
     const convertToCSV = (data: any[], headers: string[]) => {
-        const headerRow = headers.join(',');
+        const headerRow = headers.map(escapeCSVCell).join(',');
         const rows = data.map(item => 
-            headers.map(header => JSON.stringify(item[header] ?? '')).join(',')
+            headers.map(header => escapeCSVCell(item[header])).join(',')
         );
         return [headerRow, ...rows].join('\n');
     }
