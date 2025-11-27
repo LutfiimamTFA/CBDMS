@@ -53,6 +53,7 @@ import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
+import { Header } from '@/components/layout/header';
 
 
 // Helper to get Lucide icon component by name
@@ -158,7 +159,9 @@ export default function NavigationSettingsPage() {
   };
 
   return (
-    <div className="h-svh flex-col bg-background p-4 md:p-6">
+    <div className="h-svh flex flex-col bg-background">
+      <Header title="Navigation Settings" />
+      <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
             <div>
                 <h2 className="text-2xl font-bold">Manage Sidebar Navigation</h2>
@@ -273,7 +276,7 @@ export default function NavigationSettingsPage() {
                                                     <CommandList>
                                                         <CommandEmpty>No icon found.</CommandEmpty>
                                                         <CommandGroup>
-                                                            {iconNames.map((iconName) => (
+                                                            {(iconNames || []).map((iconName) => (
                                                                 <CommandItem
                                                                     key={iconName}
                                                                     value={iconName}
@@ -361,7 +364,7 @@ export default function NavigationSettingsPage() {
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
+    </main>
     </div>
   );
-
-    
+}

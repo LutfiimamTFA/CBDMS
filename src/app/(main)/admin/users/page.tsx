@@ -57,6 +57,7 @@ import { collection } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { usePermissions } from '@/context/permissions-provider';
+import { Header } from '@/components/layout/header';
 
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
@@ -243,6 +244,7 @@ export default function UsersPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
+      <Header title="User Management" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
             <div>
