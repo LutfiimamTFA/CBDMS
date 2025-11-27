@@ -1,5 +1,6 @@
 'use client';
 import type { LucideIcon } from 'lucide-react';
+import type { jsPDF } from 'jspdf';
 
 export type User = {
   id: string;
@@ -137,3 +138,7 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+export interface jsPDFWithAutoTable extends jsPDF {
+  autoTable: (options: any) => jsPDFWithAutoTable;
+}

@@ -4,8 +4,8 @@
 import { useMemo, useState, useRef } from 'react';
 import { useUserProfile, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Task, User } from '@/lib/types';
-import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, FileDown, Calendar as CalendarIcon } from 'lucide-react';
+import type { Task, User, jsPDFWithAutoTable } from '@/lib/types';
+import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, FileDown, Calendar as CalendarIcon, Briefcase } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
@@ -19,6 +19,7 @@ import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subM
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 
 
@@ -92,11 +93,13 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
 // --- Komponen untuk Dasbor Admin/Manager ---
 function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
     const [date, setDate] = useState<DateRange | undefined>({
-        from: addDays(new Date(), -7),
+        from: subDays(new Date(), 29),
         to: new Date(),
     });
     const [isExporting, setIsExporting] = useState(false);
     const reportRef = useRef<HTMLDivElement>(null);
+    const chartsRef = useRef<HTMLDivElement>(null);
+
 
     const filteredTasks = useMemo(() => {
         if (!allTasks || !date?.from) return [];
@@ -113,7 +116,6 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
             } else if (typeof task.createdAt === 'string') {
                 taskDate = parseISO(task.createdAt);
             } else if (task.createdAt && typeof task.createdAt === 'object' && 'seconds' in task.createdAt) {
-                // Handle plain object representation of Timestamp after serialization
                 taskDate = new Timestamp(task.createdAt.seconds, task.createdAt.nanoseconds).toDate();
             }
             else {
@@ -125,31 +127,89 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     }, [allTasks, date]);
 
   const handleExportPdf = async () => {
-    if (!reportRef.current) return;
+    if (!allUsers || !filteredTasks) return;
     setIsExporting(true);
+    
+    const doc = new jsPDF() as jsPDFWithAutoTable;
+    
+    // 1. KOP SURAT
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("WorkWise", 14, 22);
 
-    const input = reportRef.current;
-    try {
-        const canvas = await html2canvas(input, {
-            scale: 2,
-            useCORS: true,
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("Alamat: Jl. Jati Mataram No.284B 2nd Floor, Karangjati, Sinduadi, Mlati, Sleman", 14, 30);
+    doc.text("Telepon: (0274) 454000", 14, 35);
+    doc.setLineWidth(0.5);
+    doc.line(14, 40, 196, 40);
+
+    // 2. JUDUL LAPORAN
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.text("Laporan Kinerja Tim", 105, 50, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const dateFrom = date?.from ? format(date.from, "dd MMM yyyy") : 'N/A';
+    const dateTo = date?.to ? format(date.to, "dd MMM yyyy") : 'N/A';
+    doc.text(`Periode: ${dateFrom} - ${dateTo}`, 105, 56, { align: 'center' });
+    doc.text(`Dicetak pada: ${format(new Date(), "dd MMM yyyy, HH:mm")}`, 105, 61, { align: 'center' });
+    
+    // 3. TABEL KINERJA
+    const head = [['Nama Karyawan', 'Tugas Ditugaskan', 'Tugas Selesai', 'Jam Kerja (h)', 'Produktivitas (%)']];
+    
+    const body = allUsers
+        .filter(user => user.role === 'Employee' || user.role === 'Manager')
+        .map(user => {
+            const userTasks = filteredTasks.filter(task => task.assigneeIds.includes(user.id));
+            const assignedCount = userTasks.length;
+            const completedCount = userTasks.filter(t => t.status === 'Done').length;
+            const totalHours = userTasks.reduce((acc, t) => acc + (t.timeTracked || 0), 0);
+            const productivity = assignedCount > 0 ? ((completedCount / assignedCount) * 100).toFixed(1) : '0.0';
+
+            return [
+                user.name,
+                assignedCount,
+                completedCount,
+                totalHours.toFixed(2),
+                `${productivity}%`
+            ];
         });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        
-        const dateFrom = date?.from ? format(date.from, "yyyy-MM-dd") : 'start';
-        const dateTo = date?.to ? format(date.to, "yyyy-MM-dd") : 'end';
-        pdf.save(`workwise-report-${dateFrom}_${dateTo}.pdf`);
 
-    } catch (error) {
-        console.error("Failed to export PDF", error);
-    } finally {
-        setIsExporting(false);
+    doc.autoTable({
+        startY: 70,
+        head: head,
+        body: body,
+        theme: 'striped',
+        headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    // 4. GRAFIK (sebagai gambar)
+    if (chartsRef.current) {
+        try {
+            const canvas = await html2canvas(chartsRef.current, { scale: 2, backgroundColor: null });
+            const imgData = canvas.toDataURL('image/png');
+            
+            const lastTableY = (doc as any).lastAutoTable.finalY || 120;
+            const remainingSpace = doc.internal.pageSize.height - lastTableY;
+            
+            const imgWidth = 180;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            if (remainingSpace > imgHeight + 20) {
+                 doc.addImage(imgData, 'PNG', 14, lastTableY + 10, imgWidth, imgHeight);
+            } else {
+                 doc.addPage();
+                 doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
+            }
+        } catch (error) {
+            console.error("Gagal menambahkan grafik ke PDF:", error);
+        }
     }
+    
+    doc.save(`laporan-kinerja-tim-${format(new Date(), "yyyy-MM-dd")}.pdf`);
+    setIsExporting(false);
   };
 
   if (isLoading) {
@@ -264,7 +324,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
             </CardContent>
             </Card>
         </div>
-        <div className="mt-6">
+        <div className="mt-6" ref={chartsRef}>
             <h3 className="text-xl font-bold tracking-tight">Analisis Tim & Proyek</h3>
             <p className="text-muted-foreground">Visualisasi data untuk wawasan performa tim dan status proyek.</p>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
