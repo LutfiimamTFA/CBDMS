@@ -152,6 +152,20 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
+            {profile?.role === 'Super Admin' && (
+               <SidebarMenuItem>
+                <Link href='/admin/dashboard'>
+                  <SidebarMenuButton
+                    isActive={pathname === '/admin/dashboard'}
+                    tooltip='Dashboard'
+                  >
+                    <LayoutDashboard/>
+                    <span>Dashboard</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            )}
+            
             {filteredNavItems.map((item) => (
               <SidebarMenuItem key={item.id}>
                 <Link href={item.path}>
@@ -171,7 +185,7 @@ export default function MainLayout({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={isAdminRoute && !isSettingsRoute}
+                      isActive={isAdminRoute && !isSettingsRoute && pathname !== '/admin/dashboard'}
                       className="w-full justify-between"
                       tooltip='Admin'
                     >
@@ -190,14 +204,6 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                     <SidebarMenuItem>
-                      <Link href='/admin/dashboard'>
-                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/dashboard'} className="w-full justify-start">
-                          <LayoutDashboard/>
-                          <span>Dashboard</span>
-                        </SidebarMenuButton>
-                      </Link>
-                    </SidebarMenuItem>
                     <SidebarMenuItem>
                       <Link href='/admin/users'>
                         <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/users')} className="w-full justify-start">
