@@ -2,10 +2,18 @@
 'use client';
 
 import { TaskCard } from './task-card';
-import type { Task, Status } from '@/lib/types';
+import type { Task, Status, User } from '@/lib/types';
 import { statusInfo } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/context/i18n-provider';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../ui/tooltip';
+import { useMemo } from 'react';
 
 interface KanbanColumnProps {
   status: Status;
@@ -14,16 +22,33 @@ interface KanbanColumnProps {
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
 }
 
-export function KanbanColumn({ status, tasks, onDrop, onDragStart }: KanbanColumnProps) {
+export function KanbanColumn({
+  status,
+  tasks,
+  onDrop,
+  onDragStart,
+}: KanbanColumnProps) {
   const info = statusInfo[status];
   const Icon = info.icon;
   const { t } = useI18n();
-  const translationKey = `status.${status.toLowerCase().replace(' ', '')}` as any;
-
+  const translationKey =
+    `status.${status.toLowerCase().replace(' ', '')}` as any;
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
   };
+
+  const uniqueAssignees = useMemo(() => {
+    const assignees = new Map<string, User>();
+    tasks.forEach((task) => {
+      task.assignees?.forEach((assignee) => {
+        if (assignee && !assignees.has(assignee.id)) {
+          assignees.set(assignee.id, assignee);
+        }
+      });
+    });
+    return Array.from(assignees.values());
+  }, [tasks]);
 
   return (
     <div
@@ -31,12 +56,52 @@ export function KanbanColumn({ status, tasks, onDrop, onDragStart }: KanbanColum
       onDragOver={handleDragOver}
       onDrop={(e) => onDrop(e, status)}
     >
-      <div className="flex items-center gap-2 p-4">
-        <Icon className="h-5 w-5 text-muted-foreground" />
-        <h2 className="font-headline font-semibold">{t(translationKey)}</h2>
-        <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
-          {tasks.length}
-        </span>
+      <div className="flex items-center justify-between p-4">
+        <div className="flex items-center gap-2">
+          <Icon className="h-5 w-5 text-muted-foreground" />
+          <h2 className="font-headline font-semibold">{t(translationKey)}</h2>
+          <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
+            {tasks.length}
+          </span>
+        </div>
+        <div className="flex -space-x-2">
+          <TooltipProvider>
+            {uniqueAssignees.slice(0, 3).map((assignee) => (
+              <Tooltip key={assignee.id}>
+                <TooltipTrigger asChild>
+                  <Avatar className="h-7 w-7 border-2 border-secondary">
+                    <AvatarImage
+                      src={assignee.avatarUrl}
+                      alt={assignee.name}
+                    />
+                    <AvatarFallback>
+                      {assignee.name?.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{assignee.name}</p>
+                </TooltipContent>
+              </Tooltip>
+            ))}
+          </TooltipProvider>
+          {uniqueAssignees.length > 3 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Avatar className="h-7 w-7 border-2 border-secondary">
+                    <AvatarFallback>
+                      +{uniqueAssignees.length - 3}
+                    </AvatarFallback>
+                  </Avatar>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{uniqueAssignees.length - 3} more users</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       </div>
       <ScrollArea className="flex-1 px-2">
         <div className="flex flex-col gap-3 p-2">
