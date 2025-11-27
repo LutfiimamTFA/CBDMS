@@ -146,7 +146,7 @@ export function TasksDataTable() {
         if (taskToUpdate.createdBy.id !== profile.id) {
             userIdsToNotify.add(taskToUpdate.createdBy.id);
         }
-        // Add assignees (except the one making the change)
+        // Add all assignees (except the one making the change)
         taskToUpdate.assigneeIds.forEach(id => {
             if (id !== profile.id) {
                 userIdsToNotify.add(id);
@@ -288,7 +288,7 @@ export function TasksDataTable() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <TaskDetailsSheet task={task} open={false}>
+                <TaskDetailsSheet task={task}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
                 </TaskDetailsSheet>
                 <DropdownMenuItem
@@ -316,7 +316,7 @@ export function TasksDataTable() {
       cell: ({ row }) => {
         const task = row.original;
         return (
-          <TaskDetailsSheet task={task} open={false}>
+          <TaskDetailsSheet task={task}>
             <div className="font-medium cursor-pointer hover:underline">{task.title}</div>
           </TaskDetailsSheet>
         );

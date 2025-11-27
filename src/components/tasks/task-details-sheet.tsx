@@ -94,7 +94,7 @@ export function TaskDetailsSheet({
   isReadOnly = false
 }: { 
   task: Task; 
-  children: React.ReactNode, 
+  children?: React.ReactNode, 
   open?: boolean,
   onOpenChange?: (open: boolean) => void; 
   isReadOnly?: boolean;
@@ -385,6 +385,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         timeTracked: timeTracked,
         timeLogs: timeLogs,
         attachments: attachments,
+        updatedAt: serverTimestamp(),
     };
     
     batch.update(taskDocRef, updatedTaskData);
@@ -399,8 +400,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         if (initialTask.createdBy.id !== currentUser.id) {
             userIdsToNotify.add(initialTask.createdBy.id);
         }
-        // Add assignees (except the one making the change)
-        updatedTaskData.assignees.forEach(assignee => {
+        // Add all assignees (except the one making the change)
+        currentAssignees.forEach(assignee => {
             if (assignee.id !== currentUser.id) {
                 userIdsToNotify.add(assignee.id);
             }
