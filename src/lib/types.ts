@@ -1,3 +1,4 @@
+'use client';
 import type { LucideIcon } from 'lucide-react';
 
 export type User = {
@@ -55,6 +56,7 @@ export type Task = {
   status: Status;
   priority: Priority;
   assignees: User[];
+  assigneeIds: string[];
   startDate?: string;
   dueDate?: string;
   timeEstimate?: number; // in hours
@@ -66,6 +68,7 @@ export type Task = {
   tags?: Tag[];
   comments?: Comment[];
   attachments?: Attachment[];
+  createdAt: any;
 };
 
 export type PriorityInfo = {
