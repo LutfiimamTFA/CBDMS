@@ -55,7 +55,7 @@ export default function AdminLayout({
 
   const navItems = [
     { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { href: '/admin/users', icon: Users, label: 'User Management' },
+    { href: '/admin/users', icon: KeyRound, label: 'User Management' },
     { href: '/admin/data', icon: Database, label: 'Data Management' },
     { href: '/admin/settings', icon: Settings, label: 'App Settings' },
   ];
@@ -68,7 +68,7 @@ export default function AdminLayout({
     );
   }
   
-  const isSettingsPage = pathname.startsWith('/admin/settings');
+  const isUserManagementPage = pathname.startsWith('/admin/users') || pathname.startsWith('/admin/settings/roles');
 
   return (
     <SidebarProvider>
@@ -82,7 +82,7 @@ export default function AdminLayout({
                 <SidebarMenuItem key={item.href}>
                     <Link href={item.href}>
                     <SidebarMenuButton
-                        isActive={item.href === '/admin/settings' ? isSettingsPage : pathname.startsWith(item.href)}
+                        isActive={item.href === '/admin/users' ? isUserManagementPage : pathname.startsWith(item.href)}
                         tooltip={item.label}
                     >
                         <item.icon />
@@ -91,8 +91,14 @@ export default function AdminLayout({
                     </Link>
                 </SidebarMenuItem>
             ))}
-            {isSettingsPage && (
+            {isUserManagementPage && (
                  <div className="pl-6 mt-2 space-y-1">
+                    <Link href="/admin/users">
+                        <div className={cn("flex items-center gap-2 text-sm p-2 rounded-md hover:bg-sidebar-accent", pathname === '/admin/users' && "bg-sidebar-accent font-semibold")}>
+                            <Users className="h-4 w-4" />
+                            <span>Users</span>
+                        </div>
+                    </Link>
                     <Link href="/admin/settings/roles">
                         <div className={cn("flex items-center gap-2 text-sm p-2 rounded-md hover:bg-sidebar-accent", pathname === '/admin/settings/roles' && "bg-sidebar-accent font-semibold")}>
                             <KeyRound className="h-4 w-4" />
