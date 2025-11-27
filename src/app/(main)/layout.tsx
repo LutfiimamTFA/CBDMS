@@ -49,6 +49,7 @@ import {
   orderBy,
   writeBatch,
   getDocs,
+  doc,
 } from 'firebase/firestore';
 import { defaultNavItems } from '@/lib/navigation-items';
 
@@ -86,15 +87,15 @@ export default function MainLayout({
   
   // Seed initial navigation data if collection is empty
   useEffect(() => {
-    if (firestore && profile?.role === 'Super Admin' && navItemsData?.length === 0) {
+    if (firestore && profile?.role === 'Super Admin' && navItemsData?.length === 0 && !isNavLoading) {
       const seedNavData = async () => {
         const querySnapshot = await getDocs(collection(firestore, 'navigationItems'));
         if (querySnapshot.empty) {
           console.log('Seeding navigation items...');
           const batch = writeBatch(firestore);
           defaultNavItems.forEach((item) => {
-            const docRef = collection(firestore, 'navigationItems');
-            batch.set(doc(docRef, item.id), item);
+            const itemDocRef = doc(firestore, 'navigationItems', item.id);
+            batch.set(itemDocRef, item);
           });
           await batch.commit();
           console.log('Navigation items seeded.');
@@ -102,7 +103,7 @@ export default function MainLayout({
       };
       seedNavData().catch(console.error);
     }
-  }, [firestore, profile, navItemsData]);
+  }, [firestore, profile, navItemsData, isNavLoading]);
 
 
   const filteredNavItems = useMemo(() => {
@@ -232,5 +233,3 @@ export default function MainLayout({
     </SidebarProvider>
   );
 }
-
-    
