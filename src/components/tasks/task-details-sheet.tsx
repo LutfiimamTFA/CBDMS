@@ -7,7 +7,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Check, Clock, Edit, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag, Trash2, Users, Wand2, X } from 'lucide-react';
+import { AtSign, CalendarIcon, Check, Clock, Edit, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, Trash } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -47,6 +47,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
 import { collection } from 'firebase/firestore';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { tags as allTags } from '@/lib/data';
 
 
 const taskDetailsSchema = z.object({
@@ -54,8 +56,10 @@ const taskDetailsSchema = z.object({
   description: z.string().optional(),
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
-  assignees: z.array(z.string()).optional(),
+  assigneeIds: z.array(z.string()).optional(),
   timeEstimate: z.coerce.number().min(0).optional(),
+  dueDate: z.string().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 type TaskDetailsFormValues = z.infer<typeof taskDetailsSchema>;
@@ -103,7 +107,6 @@ export function TaskDetailsSheet({
 }) {
   const [task, setTask] = useState(initialTask);
   const { t } = useI18n();
-  const router = useRouter();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
 
@@ -117,6 +120,7 @@ export function TaskDetailsSheet({
   const [activities, setActivities] = useState<Activity[]>([]);
   
   const [subtasks, setSubtasks] = useState(task.subtasks || []);
+  const [newSubtask, setNewSubtask] = useState('');
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
 
@@ -125,12 +129,22 @@ export function TaskDetailsSheet({
     firestore ? collection(firestore, 'users') : null,
   [firestore]);
 
-  const { data: users } = useCollection<User>(usersCollectionRef);
+  const { data: allUsers } = useCollection<User>(usersCollectionRef);
 
   const { profile: currentUser } = useUserProfile();
 
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
+    values: {
+        title: initialTask.title,
+        description: initialTask.description || '',
+        status: initialTask.status,
+        priority: initialTask.priority,
+        assigneeIds: initialTask.assignees.map(a => a.id),
+        timeEstimate: initialTask.timeEstimate,
+        dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
+        tags: initialTask.tags?.map(t => t.label) || [],
+    }
   });
   
   useEffect(() => {
@@ -143,15 +157,22 @@ export function TaskDetailsSheet({
       description: task.description || '',
       status: task.status,
       priority: task.priority,
-      assignees: task.assignees.map(a => a.id),
+      assigneeIds: task.assignees.map(a => a.id),
       timeEstimate: task.timeEstimate,
+      dueDate: task.dueDate ? format(parseISO(task.dueDate), 'yyyy-MM-dd') : undefined,
+      tags: task.tags?.map(t => t.label) || [],
     });
-  }, [task, form, isEditing]);
+    setSubtasks(task.subtasks || []);
+    setComments(task.comments || []);
+  }, [task, form, openProp]);
 
 
   const handleOpenChange = (isOpen: boolean) => {
     if (onOpenChangeProp) {
-      onOpenChangeProp(isOpen);
+        if (!isOpen) {
+            setIsEditing(false); // Reset edit state when closing
+        }
+        onOpenChangeProp(isOpen);
     }
   }
 
@@ -159,7 +180,6 @@ export function TaskDetailsSheet({
     const currentPriority = form.getValues('priority');
     const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
 
-    // If it's not an escalation, just apply it
     if (priorityValues[newPriority] <= priorityValues[currentPriority]) {
         form.setValue('priority', newPriority);
         return;
@@ -178,13 +198,12 @@ export function TaskDetailsSheet({
             form.setValue('priority', newPriority);
             toast({ title: 'AI Agrees!', description: result.reason });
         } else {
-            // AI disagrees, show confirmation dialog
             setAiValidation({
                 isOpen: true,
                 isChecking: false,
                 reason: result.reason,
                 onConfirm: () => {
-                    form.setValue('priority', newPriority); // User overrides AI
+                    form.setValue('priority', newPriority); 
                     setAiValidation({ ...aiValidation, isOpen: false });
                 }
             });
@@ -192,7 +211,7 @@ export function TaskDetailsSheet({
     } catch (e) {
         console.error(e);
         toast({ variant: 'destructive', title: 'AI Validation Failed', description: 'Could not validate priority change. Applying directly.' });
-        form.setValue('priority', newPriority); // Apply directly on error
+        form.setValue('priority', newPriority);
     } finally {
         if (aiValidation.isChecking) {
              setAiValidation(prev => ({ ...prev, isChecking: false }));
@@ -226,7 +245,6 @@ export function TaskDetailsSheet({
 
   const handleLogTime = () => {
     if (elapsedTime === 0 && !isRunning) return;
-
     const endTime = new Date();
     const newLog: TimeLog = {
       id: `log-${Date.now()}`,
@@ -234,16 +252,12 @@ export function TaskDetailsSheet({
       endTime: endTime.toISOString(),
       duration: elapsedTime,
     };
-    
     const newTimeTracked = (task.timeTracked || 0) + (elapsedTime / 3600);
-
     setTask(prevTask => ({
       ...prevTask,
       timeTracked: parseFloat(newTimeTracked.toFixed(2)),
       timeLogs: [...(prevTask.timeLogs || []), newLog]
     }));
-    
-    // Reset timer
     setIsRunning(false);
     setElapsedTime(0);
     setTimerStartTime(null);
@@ -268,11 +282,22 @@ export function TaskDetailsSheet({
     setNewComment('');
   };
 
-  const handleToggleSubtask = (subtaskIndex: number) => {
-    const newSubtasks = [...subtasks];
-    newSubtasks[subtaskIndex].completed = !newSubtasks[subtaskIndex].completed;
+  const handleToggleSubtask = (subtaskId: string) => {
+    const newSubtasks = subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
     setSubtasks(newSubtasks);
   };
+
+  const handleAddSubtask = () => {
+    if(!newSubtask.trim()) return;
+    const subtask: Subtask = { id: `st-${Date.now()}`, title: newSubtask, completed: false };
+    setSubtasks([...subtasks, subtask]);
+    setNewSubtask('');
+  };
+  
+  const handleRemoveSubtask = (subtaskId: string) => {
+    setSubtasks(subtasks.filter(st => st.id !== subtaskId));
+  }
+
 
   const subtaskProgress = useMemo(() => {
     if (subtasks.length === 0) return 0;
@@ -283,11 +308,14 @@ export function TaskDetailsSheet({
 
   const onSubmit = (data: TaskDetailsFormValues) => {
     console.log('Updated Task Data:', {...data, timeTracked: task.timeTracked, timeLogs: task.timeLogs, subtasks});
-    if (!users) return;
+    if (!allUsers) return;
     setTask(currentTask => ({
         ...currentTask,
         ...data,
-        assignees: users.filter(u => data.assignees?.includes(u.id))
+        assignees: allUsers.filter(u => data.assigneeIds?.includes(u.id)),
+        tags: allTags ? Object.values(allTags).filter(t => data.tags?.includes(t.label)) : [],
+        subtasks: subtasks,
+        comments: comments,
     }));
     setIsEditing(false); // Exit edit mode on save
   };
@@ -299,269 +327,219 @@ export function TaskDetailsSheet({
     ? (timeTrackedValue / timeEstimateValue) * 100
     : 0;
 
-  const getStatusDisplay = (status: Task['status']) => {
-    const info = statusInfo[status];
-    const Icon = info.icon;
-    return <div className="flex items-center gap-2"><Icon className="h-4 w-4 text-muted-foreground" />{t(`status.${status.toLowerCase().replace(' ', '')}` as any)}</div>;
-  };
-  
-  const getPriorityDisplay = (priority: Task['priority']) => {
-    const info = priorityInfo[priority];
-    const Icon = info.icon;
-    return <div className="flex items-center gap-2"><Icon className={`h-4 w-4 ${info.color}`} />{t(`priority.${priority.toLowerCase()}` as any)}</div>;
-  };
-
   return (
     <>
       <Sheet open={openProp} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>{children}</SheetTrigger>
-        <SheetContent className="w-full sm:max-w-3xl grid grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="w-full sm:max-w-4xl grid grid-rows-[auto_1fr_auto] p-0">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-              <SheetHeader className="p-6">
-                <SheetTitle className="sr-only">{task.title}</SheetTitle>
-                   {isEditing ? (
-                       <FormField
-                          control={form.control}
-                          name="title"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormControl>
-                                <Input
-                                  {...field}
-                                  className="text-2xl font-headline font-bold border-none shadow-none focus-visible:ring-0 p-0"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                   ) : (
-                     <h2 className="text-2xl font-headline font-bold">{task.title}</h2>
-                   )}
+            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full overflow-hidden">
+              <SheetHeader className="p-4 border-b">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        {/* Placeholder for a task ID or breadcrumb */}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm"><Star className="h-4 w-4 mr-2"/> Favorite</Button>
+                        <Button variant="ghost" size="sm"><Share2 className="h-4 w-4 mr-2"/> Share</Button>
+                         <Button variant="ghost" size="sm"><LinkIcon className="h-4 w-4 mr-2"/> Copy Link</Button>
+                        <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                 </div>
               </SheetHeader>
-              <Separator />
-              <div className="flex-1 overflow-y-auto px-6">
-                  <Tabs defaultValue="details" className="pt-4">
-                    <TabsList className="grid w-full grid-cols-5">
-                      <TabsTrigger value="details">Details</TabsTrigger>
-                      <TabsTrigger value="comments">Comments</TabsTrigger>
-                      <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
-                      <TabsTrigger value="dependencies">Dependencies</TabsTrigger>
-                      <TabsTrigger value="activity">Activity</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="details" className="space-y-6 mt-4">
-                      <div className="grid grid-cols-2 gap-6">
-                          <FormItem>
-                              <FormLabel>Status</FormLabel>
-                              {isEditing ? (
-                                  <FormField control={form.control} name="status" render={({ field }) => (
-                                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                      <SelectContent>{Object.values(statusInfo).map((s) => (<SelectItem key={s.value} value={s.value}>{getStatusDisplay(s.value)}</SelectItem>))}</SelectContent>
-                                      </Select>
-                                  )}/>
-                              ) : (
-                                  <div className="flex items-center h-10 px-3 py-2 text-sm rounded-md border border-input">{getStatusDisplay(task.status)}</div>
-                              )}
-                          </FormItem>
-                          <FormItem>
-                            <FormLabel>{t('addtask.form.priority')}</FormLabel>
-                            {isEditing ? (
-                                <FormField control={form.control} name="priority" render={({ field }) => (
-                                    <div className="flex items-center gap-2">
-                                        <Select onValueChange={(value: Priority) => handlePriorityChange(value)} value={field.value}>
-                                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                                            <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}>{getPriorityDisplay(p.value)}</SelectItem>))}</SelectContent>
-                                        </Select>
-                                        {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+              
+              <div className="flex-1 grid grid-cols-1 md:grid-cols-3 overflow-hidden">
+                {/* Main Content */}
+                <ScrollArea className="md:col-span-2 h-full">
+                    <div className="p-6 space-y-6">
+                        {isEditing ? (
+                           <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} className="text-2xl font-bold border-dashed"/> )}/>
+                        ) : (
+                           <h2 className="text-2xl font-bold">{task.title}</h2>
+                        )}
+
+                        {isEditing ? (
+                           <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
+                        ) : (
+                           <p className="text-muted-foreground">{task.description || 'No description provided.'}</p>
+                        )}
+
+                        <Separator/>
+                        
+                        <div className="space-y-4">
+                            <h3 className="font-semibold flex items-center gap-2"><Paperclip/> Attachments</h3>
+                             <div className="grid grid-cols-2 gap-4">
+                                <Button variant="outline"><FileUp className="mr-2"/> Upload</Button>
+                                <Button variant="outline"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg> Drive</Button>
+                            </div>
+                        </div>
+
+                         <Tabs defaultValue="subtasks" className="w-full">
+                            <TabsList>
+                                <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
+                                <TabsTrigger value="comments">Comments</TabsTrigger>
+                                <TabsTrigger value="activity">Activity</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="subtasks" className="mt-4 space-y-4">
+                                <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
+                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                    {subtasks.map((subtask) => (
+                                        <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
+                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
+                                            <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}/>
+                                    <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
+                                </div>
+                            </TabsContent>
+                            <TabsContent value="comments" className="mt-4">
+                                <div className="space-y-6">
+                                    {comments.map(comment => (
+                                        <div key={comment.id} className="flex gap-3">
+                                            <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
+                                                <p className="text-sm bg-secondary p-3 rounded-lg mt-1">{comment.text}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="flex gap-3 pt-4 border-t">
+                                        <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
+                                        <div className="flex-1 relative">
+                                            <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-20" />
+                                            <div className="absolute top-2 right-2 flex gap-1">
+                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7"><AtSign className="h-4 w-4"/></Button>
+                                                <Button type="button" size="sm" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4 mr-2"/>Send</Button>
+                                            </div>
+                                        </div>
                                     </div>
-                                )}/>
-                            ) : (
-                                <div className="flex items-center h-10 px-3 py-2 text-sm rounded-md border border-input">{getPriorityDisplay(task.priority)}</div>
-                            )}
+                                </div>
+                            </TabsContent>
+                             <TabsContent value="activity" className="mt-4">
+                                <div className="space-y-6">
+                                    {activities.map(activity => (
+                                        <div key={activity.id} className="flex gap-3 text-sm">
+                                            <Avatar className="h-8 w-8"><AvatarImage src={activity.user.avatarUrl}/><AvatarFallback>{activity.user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                            <div><span className="font-semibold">{activity.user.name}</span> <span className="text-muted-foreground">{activity.action}</span><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(parseISO(activity.timestamp), { addSuffix: true })}</p></div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </TabsContent>
+                        </Tabs>
+                    </div>
+                </ScrollArea>
+
+                {/* Sidebar */}
+                <ScrollArea className="md:col-span-1 h-full border-l">
+                  <div className="p-6 space-y-6">
+                     <FormField control={form.control} name="status" render={({ field }) => (
+                         <FormItem className="grid grid-cols-3 items-center gap-2">
+                            <FormLabel className="text-muted-foreground">Status</FormLabel>
+                            <div className="col-span-2">
+                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isEditing}>
+                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                    <SelectContent>{Object.values(statusInfo).map(s => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{s.label}</div></SelectItem>))}</SelectContent>
+                                </Select>
+                            </div>
+                         </FormItem>
+                     )}/>
+                     <FormField control={form.control} name="priority" render={({ field }) => (
+                         <FormItem className="grid grid-cols-3 items-center gap-2">
+                            <FormLabel className="text-muted-foreground">Priority</FormLabel>
+                            <div className="col-span-2 flex items-center gap-2">
+                                <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value} disabled={!isEditing}>
+                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                    <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
+                                </Select>
+                                {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+                            </div>
+                         </FormItem>
+                     )}/>
+                      <FormField control={form.control} name="dueDate" render={({ field }) => (
+                          <FormItem className="grid grid-cols-3 items-center gap-2">
+                             <FormLabel className="text-muted-foreground">Due Date</FormLabel>
+                             <div className="col-span-2">
+                                <Input type="date" {...field} value={field.value || ''} readOnly={!isEditing} />
+                             </div>
                           </FormItem>
-                      </div>
+                      )}/>
+                    <Separator/>
+                    
+                    <FormField control={form.control} name="assigneeIds" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="text-muted-foreground">Assignees</FormLabel>
+                             {task.assignees.map(user => (
+                                <div key={user.id} className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                        <p className="text-sm font-medium">{user.name}</p>
+                                    </div>
+                                    {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><X className="h-4"/></Button>}
+                                </div>
+                            ))}
+                            {isEditing && <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>}
+                        </FormItem>
+                    )}/>
+                    
+                    <FormField control={form.control} name="tags" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel className="text-muted-foreground">Tags</FormLabel>
+                             <div className="flex flex-wrap gap-2">
+                                {task.tags?.map(tag => (
+                                    <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
+                                        {tag.label}
+                                        {isEditing && <button type="button"><X className="h-3 w-3"/></button>}
+                                    </div>
+                                ))}
+                                {isEditing && (
+                                     <Popover>
+                                        <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
+                                        <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start"><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
+                                    </Popover>
+                                )}
+                             </div>
+                        </FormItem>
+                    )}/>
 
-                       <FormItem>
-                          <FormLabel>{t('addtask.form.description')}</FormLabel>
-                           {isEditing ? (
-                              <FormField control={form.control} name="description" render={({ field }) => (
-                                  <FormControl><Textarea placeholder={t('addtask.form.description.placeholder')} {...field} className="min-h-[100px]" /></FormControl>
-                              )}/>
-                           ): (
-                              <p className="text-sm text-muted-foreground min-h-[100px] p-3 border rounded-md">{task.description || 'No description provided.'}</p>
-                           )}
-                      </FormItem>
+                    <Separator/>
 
-                      {task.tags && task.tags.length > 0 && (
-                          <div className="space-y-2">
-                          <FormLabel className="flex items-center gap-2"><Tag className="w-4 h-4"/>Tags</FormLabel>
-                          <div className="flex flex-wrap gap-2">
-                              {task.tags.map((tag) => (
-                              <div key={tag.label} className={`px-2.5 py-1 text-sm font-medium rounded-md ${tag.color}`}>
-                                  {tag.label}
-                              </div>
-                              ))}
-                          </div>
-                          </div>
-                      )}
-                          
-                      <div className="space-y-4">
-                          <FormLabel className="flex items-center gap-2"><Users className="w-4 h-4"/>{t('addtask.form.teammembers')}</FormLabel>
-                          <div className="space-y-3">
-                              {task.assignees.map(user => (
-                                  <div key={user.id} className="flex items-center justify-between gap-2 bg-secondary/50 p-2 rounded-lg">
-                                      <div className="flex items-center gap-3">
-                                          <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                          <div><p className="text-sm font-medium">{user.name}</p><p className="text-xs text-muted-foreground">{user.email}</p></div>
-                                      </div>
-                                      <Button variant="outline" size="sm" disabled={!isEditing}>Owner</Button>
-                                  </div>
-                              ))}
-                          </div>
-                          {isEditing && <Button variant="outline" className="w-full">Invite new member</Button>}
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-6">
-                          <FormItem><FormLabel className="flex items-center gap-2"><CalendarIcon className="w-4 h-4"/>{t('addtask.form.duedate')}</FormLabel><Input type="date" defaultValue={task.dueDate ? task.dueDate.split('T')[0] : ''} readOnly={!isEditing} /></FormItem>
-                      </div>
-                       <FormItem>
-                          <FormLabel>{t('addtask.form.timeestimate')}</FormLabel>
-                          {isEditing ? (
-                              <FormField control={form.control} name="timeEstimate" render={({ field }) => (
-                                  <>
-                                  <FormControl><Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} value={field.value ?? ''}/></FormControl>
-                                  <FormMessage />
-                                  </>
-                              )}/>
-                          ) : (
-                              <div className="flex items-center h-10 px-3 py-2 text-sm rounded-md border border-input">{task.timeEstimate ? `${task.timeEstimate} hours` : 'Not set'}</div>
-                          )}
-                      </FormItem>
-
+                     <FormField control={form.control} name="timeEstimate" render={({ field }) => (
+                         <FormItem className="grid grid-cols-3 items-center gap-2">
+                            <FormLabel className="text-muted-foreground">Estimate</FormLabel>
+                            <div className="col-span-2">
+                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} readOnly={!isEditing} placeholder="Hours"/>
+                            </div>
+                         </FormItem>
+                     )}/>
+                     
+                     <div className="space-y-2">
+                        <div className="grid grid-cols-3 items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Time Tracked</span>
+                            <span className="col-span-2 text-sm font-medium">{timeTrackedValue.toFixed(2)}h</span>
+                        </div>
+                        <Progress value={timeTrackingProgress} />
+                     </div>
 
                       <div className="space-y-4 rounded-lg border p-4">
                           <div className='flex items-center justify-between'>
                               <h3 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Time Tracking</h3>
                               <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
                           </div>
-                          <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{timeTrackedValue.toFixed(2)}h / {timeEstimateValue}h</span></div><Progress value={timeTrackingProgress} /></div>
                           <div className="grid grid-cols-2 gap-2">
-                          <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>{isRunning ? <PauseCircle className="mr-2 h-4 w-4" /> : <PlayCircle className="mr-2 h-4 w-4" />}{isRunning ? 'Pause Timer' : 'Start Timer'}</Button>
-                          <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}><LogIn className="mr-2 h-4 w-4" />Log Time</Button>
-                          </div>
-                          {task.timeLogs && task.timeLogs.length > 0 && (
-                              <div className="space-y-3 pt-4">
-                                  <h4 className='text-xs font-semibold text-muted-foreground'>History</h4>
-                                  <div className="max-h-40 overflow-y-auto space-y-2 pr-2">
-                                  {task.timeLogs.map(log => (
-                                      <div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'>
-                                          <div><p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p><p className='text-muted-foreground'>{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p></div>
-                                          <div className='font-semibold'>{formatDistanceToNow(new Date(new Date().getTime() - log.duration * 1000), { includeSeconds: true, addSuffix: false })}</div>
-                                      </div>
-                                  ))}
-                                  </div>
-                              </div>
-                          )}
-                      </div>
-                    </TabsContent>
-
-                    <TabsContent value="comments" className="mt-4">
-                      <div className="space-y-6">
-                          {comments.map(comment => (
-                              <div key={comment.id} className="flex gap-3">
-                                  <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                  <div className="flex-1">
-                                      <div className="flex items-center gap-2">
-                                          <span className="font-semibold text-sm">{comment.user.name}</span>
-                                          <span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span>
-                                      </div>
-                                      <p className="text-sm bg-secondary/50 p-3 rounded-lg mt-1">{comment.text}</p>
-                                  </div>
-                              </div>
-                          ))}
-                          <div className="flex gap-3">
-                               <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                               <div className="flex-1 relative">
-                                  <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-10" />
-                                  <div className="absolute top-2 right-2 flex gap-1">
-                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6"><AtSign className="h-4 w-4"/></Button>
-                                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
-                                  </div>
-                               </div>
+                            <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>{isRunning ? <PauseCircle className="mr-2" /> : <PlayCircle className="mr-2" />}{isRunning ? 'Pause' : 'Start'}</Button>
+                            <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}><LogIn className="mr-2" />Log Time</Button>
                           </div>
                       </div>
-                    </TabsContent>
 
-                    <TabsContent value="subtasks" className="mt-4">
-                       <div className="space-y-4">
-                          <div className="space-y-2">
-                              <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Progress</span>
-                                  <span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span>
-                              </div>
-                              <Progress value={subtaskProgress} />
-                          </div>
-                          <div className="space-y-2">
-                              {subtasks.map((subtask, index) => (
-                                  <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md">
-                                      <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(index)} />
-                                      <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7"><Edit className="h-4 w-4"/></Button>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"><Trash2 className="h-4 w-4"/></Button>
-                                  </div>
-                              ))}
-                          </div>
-                          <div className="flex items-center gap-2">
-                              <Input placeholder="Add a new subtask..." />
-                              <Button><Plus className="h-4 w-4 mr-2"/> Add Subtask</Button>
-                          </div>
-                       </div>
-                    </TabsContent>
-
-                    <TabsContent value="dependencies" className="mt-4">
-                        <div className="space-y-4">
-                            <div>
-                                <h4 className="font-semibold mb-2 flex items-center gap-2"><GitMerge className="h-4 w-4"/> Waiting On ({task.dependencies?.length || 0})</h4>
-                                <div className="space-y-2">
-                                    {task.dependencies?.map(depId => (
-                                        <div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm">
-                                            <span>Task: {depId}</span>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7"><X className="h-4 w-4"/></Button>
-                                        </div>
-                                    ))}
-                                    <Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Dependency</Button>
-                                </div>
-                            </div>
-                             <div>
-                                <h4 className="font-semibold mb-2 flex items-center gap-2"><GitMerge className="h-4 w-4 text-green-500"/> Blocking (0)</h4>
-                                <Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Blocking Task</Button>
-                            </div>
-                        </div>
-                    </TabsContent>
-
-                    <TabsContent value="activity" className="mt-4">
-                        <ScrollArea className="h-96">
-                          <div className="space-y-6">
-                              {activities.map(activity => (
-                                  <div key={activity.id} className="flex gap-3 text-sm">
-                                      <Avatar className="h-8 w-8"><AvatarImage src={activity.user.avatarUrl}/><AvatarFallback>{activity.user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                      <div>
-                                          <span className="font-semibold">{activity.user.name}</span>
-                                          <span className="text-muted-foreground"> {activity.action}</span>
-                                          <p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(parseISO(activity.timestamp), { addSuffix: true })}</p>
-                                      </div>
-                                  </div>
-                              ))}
-                          </div>
-                        </ScrollArea>
-                    </TabsContent>
-
-                  </Tabs>
+                  </div>
+                </ScrollArea>
               </div>
-              <SheetFooter className="p-6 border-t">
+
+              <SheetFooter className="p-4 border-t flex justify-end">
                 {isEditing ? (
                   <div className="flex justify-end gap-2">
                       <Button variant="ghost" type="button" onClick={() => {setIsEditing(false); form.reset();}}>Cancel</Button>
