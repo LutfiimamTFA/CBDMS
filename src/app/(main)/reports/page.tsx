@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useRef } from 'react';
 import { useUserProfile, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
@@ -18,6 +18,8 @@ import { DateRange } from 'react-day-picker';
 import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subMonths, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 
 // --- Komponen untuk Laporan Karyawan ---
@@ -93,6 +95,8 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
         from: addDays(new Date(), -7),
         to: new Date(),
     });
+    const [isExporting, setIsExporting] = useState(false);
+    const reportRef = useRef<HTMLDivElement>(null);
 
     const filteredTasks = useMemo(() => {
         if (!allTasks || !date?.from) return [];
@@ -119,6 +123,34 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
             return isWithinInterval(taskDate, { start: from, end: to });
         });
     }, [allTasks, date]);
+
+  const handleExportPdf = async () => {
+    if (!reportRef.current) return;
+    setIsExporting(true);
+
+    const input = reportRef.current;
+    try {
+        const canvas = await html2canvas(input, {
+            scale: 2,
+            useCORS: true,
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+        
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+        
+        const dateFrom = date?.from ? format(date.from, "yyyy-MM-dd") : 'start';
+        const dateTo = date?.to ? format(date.to, "yyyy-MM-dd") : 'end';
+        pdf.save(`workwise-report-${dateFrom}_${dateTo}.pdf`);
+
+    } catch (error) {
+        console.error("Failed to export PDF", error);
+    } finally {
+        setIsExporting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -183,76 +215,78 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
                 />
                 </PopoverContent>
             </Popover>
-            <Button variant="outline" size="sm" disabled>
-                <FileDown className="mr-2 h-4 w-4" />
+            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isExporting}>
+                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FileDown className="mr-2 h-4 w-4" />}
                 Ekspor ke PDF
             </Button>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalUsers}</div>
-            <p className="text-xs text-muted-foreground">pengguna terdaftar</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tugas</CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completedTasks}</div>
-            <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
-            <CircleDashed className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="mt-6">
-        <h3 className="text-xl font-bold tracking-tight">Analisis Tim & Proyek</h3>
-        <p className="text-muted-foreground">Visualisasi data untuk wawasan performa tim dan status proyek.</p>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>Beban Kerja Tim</CardTitle>
-              <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim dalam rentang waktu terpilih.</CardDescription>
+      <div id="report-content" ref={reportRef} className="p-4 bg-background">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <TeamWorkloadChart tasks={filteredTasks || []} users={allUsers || []} />
+                <div className="text-2xl font-bold">{totalUsers}</div>
+                <p className="text-xs text-muted-foreground">pengguna terdaftar</p>
             </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Distribusi Status Tugas</CardTitle>
-              <CardDescription>Proporsi tugas dalam setiap kategori status dalam rentang waktu terpilih.</CardDescription>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Tugas</CardTitle>
+                <ClipboardList className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <TaskStatusChart tasks={filteredTasks || []} />
+                <div className="text-2xl font-bold">{totalTasks}</div>
+                <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
             </CardContent>
-          </Card>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
+                <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{completedTasks}</div>
+                <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
+            </CardContent>
+            </Card>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
+                <CircleDashed className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                <div className="text-2xl font-bold">{inProgressTasks}</div>
+                <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
+            </CardContent>
+            </Card>
+        </div>
+        <div className="mt-6">
+            <h3 className="text-xl font-bold tracking-tight">Analisis Tim & Proyek</h3>
+            <p className="text-muted-foreground">Visualisasi data untuk wawasan performa tim dan status proyek.</p>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+            <Card className="lg:col-span-2">
+                <CardHeader>
+                <CardTitle>Beban Kerja Tim</CardTitle>
+                <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim dalam rentang waktu terpilih.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                <TeamWorkloadChart tasks={filteredTasks || []} users={allUsers || []} />
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                <CardTitle>Distribusi Status Tugas</CardTitle>
+                <CardDescription>Proporsi tugas dalam setiap kategori status dalam rentang waktu terpilih.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                <TaskStatusChart tasks={filteredTasks || []} />
+                </CardContent>
+            </Card>
+            </div>
         </div>
       </div>
     </>
