@@ -56,6 +56,7 @@ import type { User } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
+import { usePermissions } from '@/context/permissions-provider';
 
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
@@ -73,6 +74,7 @@ export default function UsersPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const { profile: currentUserProfile } = useUserProfile();
+  const { permissions, isLoading: permissionsLoading } = usePermissions();
 
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
@@ -100,7 +102,23 @@ export default function UsersPage() {
     resolver: zodResolver(editUserSchema),
   });
   
-  const canManageUsers = currentUserProfile?.role === 'Super Admin' || currentUserProfile?.role === 'Manager';
+  const canManageUsers = useMemo(() => {
+    if (!currentUserProfile || !permissions) return false;
+    if (currentUserProfile.role === 'Super Admin') return true;
+    if (currentUserProfile.role === 'Manager') {
+      return permissions.Manager.canManageUsers;
+    }
+    return false;
+  }, [currentUserProfile, permissions]);
+
+  const canDeleteUsers = useMemo(() => {
+      if (!currentUserProfile || !permissions) return false;
+      if (currentUserProfile.role === 'Super Admin') return true;
+      if (currentUserProfile.role === 'Manager') {
+        return permissions.Manager.canDeleteUsers;
+      }
+      return false;
+  }, [currentUserProfile, permissions]);
 
 
   useEffect(() => {
@@ -305,7 +323,7 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isUsersLoading ? (
+              {isUsersLoading || permissionsLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
                     <div className='flex items-center justify-center gap-2'>
@@ -339,13 +357,15 @@ export default function UsersPage() {
                             <DropdownMenuItem onClick={() => openEditDialog(user)}>
                                 <Edit className="mr-2 h-4 w-4" /> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                                className="text-destructive focus:text-destructive"
-                                onClick={() => openDeleteDialog(user)}
-                            >
-                                <Trash2 className="mr-2 h-4 w-4" /> Delete
-                            </DropdownMenuItem>
+                            {canDeleteUsers && <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => openDeleteDialog(user)}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                </DropdownMenuItem>
+                            </>}
                             </DropdownMenuContent>
                         </DropdownMenu>
                         </TableCell>

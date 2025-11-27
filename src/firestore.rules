@@ -11,14 +11,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.token.role == 'Super Admin';
     }
 
-    function isManager() {
-      return isSignedIn() && request.auth.token.role == 'Manager';
-    }
-    
-    function isEmployee() {
-       return isSignedIn() && request.auth.token.role == 'Employee';
-    }
-
     function getUserData(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data;
     }
@@ -26,9 +18,23 @@ service cloud.firestore {
     function getRequestingUserData() {
         return getUserData(request.auth.uid);
     }
+
+    // Function to get the permissions document
+    function getPermissions() {
+      return get(/databases/$(database)/documents/permissions/roles).data;
+    }
     
-    function isSameCompany(companyId) {
-        return getRequestingUserData().companyId == companyId;
+    // Function to check a specific permission for a given role
+    function hasPermission(role, permission) {
+      return getPermissions()[role][permission] == true;
+    }
+
+    function isRole(role) {
+      return isSignedIn() && request.auth.token.role == role;
+    }
+
+    function isSameCompanyAsRequestingUser(entityCompanyId) {
+        return getRequestingUserData().companyId == entityCompanyId;
     }
 
     // Rules for 'permissions' collection
@@ -39,60 +45,46 @@ service cloud.firestore {
 
     // Rules for 'users' collection
     match /users/{userId} {
-      // READ:
-      // - Super Admins can read any user.
-      // - Managers can read users within their own company.
-      // - Any user can read their own profile.
       allow read: if isSuperAdmin() || 
-                     (isManager() && isSameCompany(resource.data.companyId)) ||
+                     (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
                      request.auth.uid == userId;
       
-      // UPDATE:
-      // - Super Admins can update any user.
-      // - Managers can update users within their own company.
-      // - Any user can update their own profile (e.g., name, avatar).
-      //   (Field-level restrictions might be needed for security, e.g., user cannot change their own role)
       allow update: if isSuperAdmin() || 
-                       (isManager() && isSameCompany(resource.data.companyId)) ||
+                       (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId) && hasPermission('Manager', 'canManageUsers')) ||
                        request.auth.uid == userId;
 
-      // CREATE & DELETE:
-      // These actions should be handled by secure server-side functions (Firebase Functions)
-      // and not directly by clients. UI will hide buttons for unauthorized roles.
-      // We explicitly deny direct client creation/deletion for security.
-      allow create, delete: if false;
+      // Create and delete must be handled by secure server functions.
+      // We check for dynamic permissions as an extra layer, though it will always be false.
+      allow create: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canManageUsers'));
+      allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteUsers'));
     }
 
     // Rules for 'tasks' collection
     match /tasks/{taskId} {
-      // READ:
-      // - Super Admins can read any task.
-      // - Managers can read any task within their company.
-      // - Employees can read tasks they are assigned to.
-      // - Clients can read tasks within their company.
       allow read: if isSuperAdmin() ||
-                     (isManager() && isSameCompany(resource.data.companyId)) ||
-                     (isEmployee() && request.auth.uid in resource.data.assigneeIds) ||
-                     (getRequestingUserData().role == 'Client' && isSameCompany(resource.data.companyId));
+                     (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
+                     (isRole('Employee') && request.auth.uid in resource.data.assigneeIds) ||
+                     (isRole('Client') && isSameCompanyAsRequestingUser(resource.data.companyId) && hasPermission('Client', 'canViewAssignedTasks'));
                      
-      // CREATE:
-      // - Super Admins and Managers can create tasks.
-      allow create: if isSuperAdmin() || isManager();
+      allow create: if isSuperAdmin() ||
+                       (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
+                       (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
 
-      // UPDATE:
-      // - Super Admins and Managers can update any task in their company.
-      // - Employees can update tasks assigned to them.
-      // (Further restrictions can be added, e.g., employees can only change 'status')
       allow update: if isSuperAdmin() || 
-                       (isManager() && isSameCompany(resource.data.companyId)) ||
-                       (isEmployee() && request.auth.uid in resource.data.assigneeIds);
+                       (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
+                       (isRole('Employee') && request.auth.uid in resource.data.assigneeIds);
       
-      // DELETE:
-      // - Only Super Admins and Managers can delete tasks.
-      allow delete: if isSuperAdmin() || isManager();
+      allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks'));
+
+      // Rules for timeTracking subcollection
+      match /timeTracking/{timeTrackingId} {
+          allow read, create, update, delete: if isSuperAdmin() || 
+                               (isRole('Manager') && isSameCompanyAsRequestingUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId)) ||
+                               (isRole('Employee') && request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds && hasPermission('Employee', 'canTrackTime'));
+      }
     }
     
-    // Default deny all other access
+    // By default, deny all other access. This is important for security.
     match /{document=**} {
       allow read, write: if false;
     }
