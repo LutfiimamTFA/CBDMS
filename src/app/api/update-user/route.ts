@@ -9,12 +9,13 @@ function initializeAdminApp(): App {
     return getApps()[0];
   }
 
-  const firebaseKey = process.env.FIREBASE_ADMIN_KEY;
-  if (!firebaseKey) {
-    throw new Error('FIREBASE_ADMIN_KEY environment variable is not set.');
+  // The key is now read from a server-side environment variable
+  const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!serviceAccountString) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY environment variable is not set or accessible.');
   }
 
-  const serviceAccount = JSON.parse(firebaseKey);
+  const serviceAccount = JSON.parse(serviceAccountString);
 
   return initializeApp({
     credential: cert(serviceAccount),
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     if (error.code === 'auth/user-not-found') {
         errorMessage = 'User not found.';
         statusCode = 404;
-    } else if (error.message?.includes('FIREBASE_ADMIN_KEY')) {
+    } else if (error.message?.includes('FIREBASE_SERVICE_ACCOUNT_KEY')) {
         errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials in environment variables.';
     }
     return NextResponse.json({ message: errorMessage, error: error.message }, { status: statusCode });
