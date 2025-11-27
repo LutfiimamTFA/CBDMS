@@ -13,9 +13,10 @@ import Link from 'next/link';
 
 interface TaskCardProps {
   task: Task;
+  isBoardView?: boolean;
 }
 
-export function TaskCard({ task }: TaskCardProps) {
+export function TaskCard({ task, isBoardView = false }: TaskCardProps) {
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
   const { t } = useI18n();
@@ -27,7 +28,7 @@ export function TaskCard({ task }: TaskCardProps) {
   const priorityTranslationKey = `priority.${task.priority.toLowerCase()}` as any;
 
   return (
-    <TaskDetailsSheet task={task}>
+    <TaskDetailsSheet task={task} isReadOnly={isBoardView}>
         <Card
             className="cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full"
         >

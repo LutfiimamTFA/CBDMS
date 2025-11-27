@@ -90,12 +90,14 @@ export function TaskDetailsSheet({
   task: initialTask, 
   children, 
   open: openProp,
-  onOpenChange: onOpenChangeProp 
+  onOpenChange: onOpenChangeProp,
+  isReadOnly = false
 }: { 
   task: Task; 
   children: React.ReactNode, 
   open?: boolean,
   onOpenChange?: (open: boolean) => void; 
+  isReadOnly?: boolean;
 }) {
   const { t } = useI18n();
   const { toast } = useToast();
@@ -719,16 +721,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     Delete Task
                 </Button>
             </div>
-            {isEditing ? (
-              <div className="flex justify-end gap-2">
-                  <Button variant="ghost" type="button" onClick={() => setIsEditing(false)}>Cancel</Button>
-                  <Button type="submit" form="task-details-form">Save Changes</Button>
-              </div>
-            ) : (
-              <Button type="button" onClick={() => setIsEditing(true)}>
-                  <Edit className="mr-2 h-4 w-4"/>
-                  Edit Task
-              </Button>
+            {!isReadOnly && (
+              isEditing ? (
+                <div className="flex justify-end gap-2">
+                    <Button variant="ghost" type="button" onClick={() => setIsEditing(false)}>Cancel</Button>
+                    <Button type="submit" form="task-details-form">Save Changes</Button>
+                </div>
+              ) : (
+                <Button type="button" onClick={() => setIsEditing(true)}>
+                    <Edit className="mr-2 h-4 w-4"/>
+                    Edit Task
+                </Button>
+              )
             )}
           </SheetFooter>
         </SheetContent>

@@ -96,7 +96,7 @@ export function KanbanColumn({
       <ScrollArea className="flex-1 px-2">
         <div className="flex flex-col gap-3 p-2">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard key={task.id} task={task} isBoardView={true} />
           ))}
         </div>
       </ScrollArea>
