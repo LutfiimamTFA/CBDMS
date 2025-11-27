@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -33,7 +34,7 @@ import { tags as allTags } from '@/lib/data';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useEffect, useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -324,15 +325,15 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const getFileIcon = (fileName: string): React.ReactElement => {
     if (fileName.match(/\.(pdf)$/i)) {
-      return <FileImage className="h-5 w-5 text-red-500" />;
+      return <FileText className="h-5 w-5 text-red-500" />;
     }
     if (fileName.match(/\.(doc|docx)$/i)) {
-      return <FileImage className="h-5 w-5 text-blue-500" />;
+      return <FileText className="h-5 w-5 text-blue-500" />;
     }
     if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
       return <FileImage className="h-5 w-5 text-green-500" />;
     }
-    return <FileImage className="h-5 w-5 text-muted-foreground" />;
+    return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -832,5 +833,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    
