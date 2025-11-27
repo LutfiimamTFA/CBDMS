@@ -17,6 +17,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { DateRange } from 'react-day-picker';
 import { addDays, format, parseISO, isWithinInterval } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Timestamp } from 'firebase/firestore';
+
 
 // --- Komponen untuk Laporan Karyawan ---
 function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading: boolean }) {
@@ -94,9 +96,24 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
 
     const filteredTasks = useMemo(() => {
         if (!allTasks || !date?.from) return [];
-        const to = date.to || date.from; // If 'to' is not set, use 'from' as end date
+        const to = date.to || date.from;
         return allTasks.filter(task => {
-            const taskDate = parseISO(task.createdAt);
+            if (!task.createdAt) return false;
+            
+            // The `createdAt` field can be a Firestore Timestamp object or an ISO string.
+            // We need to handle both cases to prevent crashes.
+            let taskDate: Date;
+            if (task.createdAt instanceof Timestamp) {
+                // If it's a Firestore Timestamp, convert it to a JS Date.
+                taskDate = task.createdAt.toDate();
+            } else if (typeof task.createdAt === 'string') {
+                // If it's a string, parse it.
+                taskDate = parseISO(task.createdAt);
+            } else {
+                // If it's neither, we can't process it.
+                return false;
+            }
+
             return isWithinInterval(taskDate, { start: date.from!, end: to });
         });
     }, [allTasks, date]);
