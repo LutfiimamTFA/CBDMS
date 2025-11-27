@@ -49,6 +49,20 @@ export default function AppSettingsPage() {
 
             <Card>
                 <CardHeader>
+                    <CardTitle>Sidebar Navigation</CardTitle>
+                    <CardDescription>
+                        Customize the main application sidebar for different user roles.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Link href="/admin/settings/navigation">
+                        <Button variant="outline">Manage Navigation</Button>
+                    </Link>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
                     <CardTitle>Time Tracking Settings</CardTitle>
                     <CardDescription>
                         Configure default work hours and other time-related settings.
