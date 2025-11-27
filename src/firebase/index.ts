@@ -24,9 +24,9 @@ export function initializeFirebase() {
   // Get the Auth and Firestore services.
   auth = getAuth(firebaseApp);
   firestore = getFirestore(firebaseApp);
-  storage = getStorage(firebaseApp);
+  // Ensure storage is initialized with the correct bucket.
+  storage = getStorage(firebaseApp, firebaseConfig.storageBucket);
 
-  // The connection to emulators has been removed to connect to the live Firebase services.
 
   return { firebaseApp, auth, firestore, storage };
 }
