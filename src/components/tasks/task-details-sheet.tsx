@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -7,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,10 +46,9 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, useUserProfile, useStorage } from '@/firebase';
-import { collection, doc, updateDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
-import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 
@@ -370,8 +370,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   }, [subtasks]);
 
 
-  const onSubmit = (data: TaskDetailsFormValues) => {
-    if (!firestore) return;
+  const onSubmit = async (data: TaskDetailsFormValues) => {
+    if (!firestore || !currentUser) return;
+
+    const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
     
     const updatedTaskData = {
@@ -385,13 +387,62 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         attachments: attachments,
     };
     
-    updateDocumentNonBlocking(taskDocRef, updatedTaskData);
-    
-    toast({
-        title: 'Task Updated',
-        description: `"${data.title}" has been saved.`,
-    });
-    setIsEditing(false);
+    batch.update(taskDocRef, updatedTaskData);
+
+    // --- Notification Logic ---
+    const originalStatus = initialTask.status;
+    const newStatus = data.status;
+
+    if (originalStatus !== newStatus) {
+        const userIdsToNotify = new Set<string>();
+        // Add creator
+        if (initialTask.createdBy.id !== currentUser.id) {
+            userIdsToNotify.add(initialTask.createdBy.id);
+        }
+        // Add assignees (except the one making the change)
+        updatedTaskData.assignees.forEach(assignee => {
+            if (assignee.id !== currentUser.id) {
+                userIdsToNotify.add(assignee.id);
+            }
+        });
+        
+        const notificationMessage = `${currentUser.name} changed the status of "${data.title}" to ${newStatus}.`;
+
+        userIdsToNotify.forEach(userId => {
+            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+            const newNotification: Omit<Notification, 'id'> = {
+                userId,
+                title: 'Task Status Updated',
+                message: notificationMessage,
+                taskId: initialTask.id,
+                taskTitle: data.title,
+                isRead: false,
+                createdAt: serverTimestamp(),
+                createdBy: {
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    avatarUrl: currentUser.avatarUrl || '',
+                },
+            };
+            batch.set(notifRef, newNotification);
+        });
+    }
+
+    try {
+        await batch.commit();
+        toast({
+            title: 'Task Updated',
+            description: `"${data.title}" has been saved.`,
+        });
+        setIsEditing(false);
+    } catch (error) {
+        console.error("Failed to update task:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Update Failed',
+            description: 'Could not save task changes.'
+        });
+    }
   };
   
   const timeEstimateValue = form.watch('timeEstimate') ?? initialTask.timeEstimate ?? 0;

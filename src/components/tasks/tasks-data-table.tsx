@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -27,7 +26,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Status, Priority, User } from '@/lib/types';
+import type { Task, Status, Priority, User, Notification } from '@/lib/types';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -51,7 +50,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
-import { collection, doc, query, where } from 'firebase/firestore';
+import { collection, doc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
 
@@ -132,13 +131,63 @@ export function TasksDataTable() {
   }));
 
   const handleStatusChange = (taskId: string, newStatus: Status) => {
-    if (!firestore) return;
+    if (!firestore || !profile) return;
     const taskToUpdate = data.find(task => task.id === taskId);
     if (!taskToUpdate) return;
     
-    const performUpdate = () => {
+    const performUpdate = async () => {
+        const batch = writeBatch(firestore);
         const taskRef = doc(firestore, 'tasks', taskId);
-        updateDocumentNonBlocking(taskRef, { status: newStatus });
+        batch.update(taskRef, { status: newStatus });
+        
+        // --- Notification Logic ---
+        const userIdsToNotify = new Set<string>();
+        // Add creator
+        if (taskToUpdate.createdBy.id !== profile.id) {
+            userIdsToNotify.add(taskToUpdate.createdBy.id);
+        }
+        // Add assignees (except the one making the change)
+        taskToUpdate.assigneeIds.forEach(id => {
+            if (id !== profile.id) {
+                userIdsToNotify.add(id);
+            }
+        });
+        
+        const notificationMessage = `${profile.name} changed the status of "${taskToUpdate.title}" to ${newStatus}.`;
+
+        userIdsToNotify.forEach(userId => {
+            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+            const newNotification: Omit<Notification, 'id'> = {
+                userId,
+                title: 'Task Status Updated',
+                message: notificationMessage,
+                taskId: taskToUpdate.id,
+                taskTitle: taskToUpdate.title,
+                isRead: false,
+                createdAt: serverTimestamp(),
+                createdBy: {
+                    id: profile.id,
+                    name: profile.name,
+                    avatarUrl: profile.avatarUrl || '',
+                },
+            };
+            batch.set(notifRef, newNotification);
+        });
+
+        try {
+            await batch.commit();
+            toast({
+                title: 'Status Updated',
+                description: `Task status changed to ${newStatus} and relevant users have been notified.`
+            })
+        } catch (error) {
+            console.error('Failed to update status and send notifications:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Update Failed',
+                description: 'Could not update task status.'
+            });
+        }
     };
 
     if (newStatus === 'Done') {
@@ -673,6 +722,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-
-    
