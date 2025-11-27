@@ -309,19 +309,20 @@ export function TaskDetailsSheet({
     return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || !storage) return;
+const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || !storage || !initialTask?.id) return;
 
     setIsUploading(true);
     const files = Array.from(event.target.files);
 
     try {
         const uploadPromises = files.map(async (file) => {
-            const storageRef = ref(storage, `attachments/${initialTask.id}/${Date.now()}-${file.name}`);
+            const attachmentId = `${Date.now()}-${file.name}`;
+            const storageRef = ref(storage, `attachments/${initialTask.id}/${attachmentId}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
             return {
-                id: `local-${Date.now()}-${file.name}`,
+                id: attachmentId,
                 name: file.name,
                 type: 'local' as const,
                 url: url,
@@ -425,7 +426,7 @@ export function TaskDetailsSheet({
     </div>
   );
 
-  const priorityValue = form.getValues('priority');
+  const priorityValue = form.watch('priority');
 
 
   return (
