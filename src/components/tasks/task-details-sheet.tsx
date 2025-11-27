@@ -7,7 +7,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,11 +44,12 @@ import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Loader2 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, updateDoc } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
 const taskDetailsSchema = z.object({
@@ -84,15 +85,6 @@ type AIValidationState = {
   onConfirm: () => void;
 };
 
-type Attachment = {
-  id: string;
-  name: string;
-  type: 'local' | 'gdrive';
-  source: File | string; // File object for local, URL for gdrive
-  icon: React.ReactNode;
-}
-
-
 export function TaskDetailsSheet({ 
   task: initialTask, 
   children, 
@@ -112,25 +104,26 @@ export function TaskDetailsSheet({
   const [isRunning, setIsRunning] = useState(false);
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
 
-  const [comments, setComments] = useState<Comment[]>(initialTask.comments || []);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   
-  const [currentAssignees, setCurrentAssignees] = useState<User[]>(initialTask.assignees || []);
-  const [currentTags, setCurrentTags] = useState<Tag[]>(initialTask.tags || []);
-  const [timeLogs, setTimeLogs] = useState<TimeLog[]>(initialTask.timeLogs || []);
-  const [timeTracked, setTimeTracked] = useState(initialTask.timeTracked || 0);
+  const [currentAssignees, setCurrentAssignees] = useState<User[]>([]);
+  const [currentTags, setCurrentTags] = useState<Tag[]>([]);
+  const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
+  const [timeTracked, setTimeTracked] = useState(0);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
 
   const [activities, setActivities] = useState<Activity[]>([]);
   
-  const [subtasks, setSubtasks] = useState(initialTask.subtasks || []);
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
 
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
 
   const firestore = useFirestore();
+  const storage = useStorage();
   const usersCollectionRef = useMemoFirebase(() => 
     firestore ? collection(firestore, 'users') : null,
   [firestore]);
@@ -144,33 +137,27 @@ export function TaskDetailsSheet({
   });
   
   // Resets form and all local states when the sheet is opened or the task prop changes.
-  const resetAllState = useCallback(() => {
-    form.reset({
-        title: initialTask.title,
-        description: initialTask.description || '',
-        status: initialTask.status,
-        priority: initialTask.priority,
-        assigneeIds: initialTask.assignees?.map(a => a.id) || [],
-        timeEstimate: initialTask.timeEstimate,
-        dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
-    });
-    setSubtasks(initialTask.subtasks || []);
-    setComments(initialTask.comments || []);
-    setCurrentAssignees(initialTask.assignees || []);
-    setCurrentTags(initialTask.tags || []);
-    setTimeLogs(initialTask.timeLogs || []);
-    setTimeTracked(initialTask.timeTracked || 0);
-    // Attachments need to be handled carefully if they are files.
-    // For now, we assume attachments are not part of the initialTask prop in a way that can be reset easily.
-    setAttachments([]); // This should be populated from initialTask if available
-    setIsEditing(false);
-  }, [initialTask, form]);
-
   useEffect(() => {
-    if (openProp) {
-        resetAllState();
+    if (initialTask) {
+        form.reset({
+            title: initialTask.title,
+            description: initialTask.description || '',
+            status: initialTask.status,
+            priority: initialTask.priority,
+            assigneeIds: initialTask.assignees?.map(a => a.id) || [],
+            timeEstimate: initialTask.timeEstimate,
+            dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
+        });
+        setSubtasks(initialTask.subtasks || []);
+        setComments(initialTask.comments || []);
+        setCurrentAssignees(initialTask.assignees || []);
+        setCurrentTags(initialTask.tags || []);
+        setTimeLogs(initialTask.timeLogs || []);
+        setTimeTracked(initialTask.timeTracked || 0);
+        setAttachments(initialTask.attachments || []);
+        setIsEditing(false); // Always start in read-only mode
     }
-  }, [openProp, resetAllState]);
+  }, [initialTask, form]);
 
 
   const handleOpenChange = (isOpen: boolean) => {
@@ -304,22 +291,27 @@ export function TaskDetailsSheet({
   }
 
   const getFileIcon = (fileName: string) => {
-    if (fileName.endsWith('.pdf')) return <FileImage className="h-5 w-5 text-red-500" />;
-    if (fileName.endsWith('.doc') || fileName.endsWith('.docx')) return <FileImage className="h-5 w-5 text-blue-500" />;
-    if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png')) return <FileImage className="h-5 w-5 text-green-500" />;
+    if (fileName.match(/\.(pdf)$/i)) return <FileImage className="h-5 w-5 text-red-500" />;
+    if (fileName.match(/\.(doc|docx)$/i)) return <FileImage className="h-5 w-5 text-blue-500" />;
+    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
     return <FileImage className="h-5 w-5 text-muted-foreground" />;
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files) {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && storage) {
       const files = Array.from(event.target.files);
-      const newAttachments: Attachment[] = files.map(file => ({
-        id: `local-${Date.now()}-${file.name}`,
-        name: file.name,
-        type: 'local',
-        source: file,
-        icon: getFileIcon(file.name),
-      }));
+      const uploadPromises = files.map(async (file) => {
+        const storageRef = ref(storage, `attachments/${initialTask.id}/${file.name}`);
+        await uploadBytes(storageRef, file);
+        const url = await getDownloadURL(storageRef);
+        return {
+          id: `local-${Date.now()}-${file.name}`,
+          name: file.name,
+          type: 'local' as const,
+          url: url,
+        };
+      });
+      const newAttachments = await Promise.all(uploadPromises);
       setAttachments(prev => [...prev, ...newAttachments]);
     }
   };
@@ -332,8 +324,7 @@ export function TaskDetailsSheet({
         id: `gdrive-${Date.now()}`,
         name: name || 'Google Drive File',
         type: 'gdrive',
-        source: url,
-        icon: <LinkIcon className="h-5 w-5 text-yellow-500" />
+        url: url
       };
       setAttachments(prev => [...prev, newAttachment]);
     }
@@ -363,7 +354,7 @@ export function TaskDetailsSheet({
         comments: comments,
         timeTracked: timeTracked,
         timeLogs: timeLogs,
-        // attachments should be handled separately, especially file uploads
+        attachments: attachments,
     };
     
     updateDocumentNonBlocking(taskDocRef, updatedTaskData);
@@ -424,12 +415,12 @@ export function TaskDetailsSheet({
           </SheetHeader>
           
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-3 h-full overflow-hidden">
+            <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-3 h-full overflow-hidden">
                 {/* Main Content */}
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         {isEditing ? (
-                           <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} className="text-2xl font-bold border-dashed"/> )}/>
+                           <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
                         ) : (
                            <h2 className="text-2xl font-bold">{form.getValues('title')}</h2>
                         )}
@@ -448,10 +439,10 @@ export function TaskDetailsSheet({
                             <div className="space-y-2">
                               {attachments.map(att => (
                                 <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                  <div className="flex items-center gap-2 truncate">
-                                    {att.icon}
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                    {getFileIcon(att.name)}
                                     <span className="truncate" title={att.name}>{att.name}</span>
-                                  </div>
+                                  </a>
                                   {isEditing && (
                                     <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
                                       <X className="h-4 w-4" />
@@ -463,7 +454,7 @@ export function TaskDetailsSheet({
                           )}
                           {isEditing && (
                             <div className="grid grid-cols-2 gap-4">
-                              <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" />
+                              <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
                               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}><FileUp className="mr-2 h-4 w-4" />Upload from Local</Button>
                               <Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
                             </div>
@@ -559,7 +550,7 @@ export function TaskDetailsSheet({
                           <FormItem className="grid grid-cols-3 items-center gap-2">
                              <FormLabel className="text-muted-foreground">Due Date</FormLabel>
                              <div className="col-span-2">
-                                <Input type="date" {...field} value={field.value || ''} readOnly={!isEditing} className={!isEditing ? 'border-none' : ''}/>
+                                <Input type="date" {...field} value={field.value || ''} readOnly={!isEditing} className={!isEditing ? 'border-none p-0' : ''}/>
                              </div>
                           </FormItem>
                       )}/>
@@ -581,7 +572,7 @@ export function TaskDetailsSheet({
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-80">
+                                <PopoverContent className="w-60">
                                     <div className="space-y-2">
                                         {(allUsers || []).map((user) => (
                                             <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
@@ -622,7 +613,7 @@ export function TaskDetailsSheet({
                          <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Estimate</FormLabel>
                             <div className="col-span-2">
-                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} readOnly={!isEditing} placeholder="Hours" className={!isEditing ? 'border-none' : ''}/>
+                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} readOnly={!isEditing} placeholder="Hours" className={!isEditing ? 'border-none p-0' : ''}/>
                             </div>
                          </FormItem>
                      )}/>
@@ -648,22 +639,25 @@ export function TaskDetailsSheet({
 
                   </div>
                 </ScrollArea>
-
-              <SheetFooter className="col-span-3 p-4 border-t flex justify-end">
-                {isEditing ? (
-                  <div className="flex justify-end gap-2">
-                      <Button variant="ghost" type="button" onClick={resetAllState}>Cancel</Button>
-                      <Button type="submit">Save Changes</Button>
-                  </div>
-                ) : (
-                  <Button type="button" onClick={() => setIsEditing(true)}>
-                      <Edit className="mr-2 h-4 w-4"/>
-                      Edit Task
-                  </Button>
-                )}
-              </SheetFooter>
-            </form>
+              </form>
           </Form>
+          <SheetFooter className="p-4 border-t flex justify-between">
+            <Button variant="destructive" onClick={() => {}} className={isEditing ? 'visible' : 'invisible'}>
+                <Trash2 className="mr-2 h-4 w-4"/>
+                Delete Task
+            </Button>
+            {isEditing ? (
+              <div className="flex justify-end gap-2">
+                  <Button variant="ghost" type="button" onClick={() => setIsEditing(false)}>Cancel</Button>
+                  <Button type="submit" form="task-details-form">Save Changes</Button>
+              </div>
+            ) : (
+              <Button type="button" onClick={() => setIsEditing(true)}>
+                  <Edit className="mr-2 h-4 w-4"/>
+                  Edit Task
+              </Button>
+            )}
+          </SheetFooter>
         </SheetContent>
       </Sheet>
       <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>

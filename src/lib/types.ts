@@ -1,4 +1,3 @@
-
 import type { LucideIcon } from 'lucide-react';
 
 export type User = {
@@ -7,7 +6,7 @@ export type User = {
   avatarUrl: string;
   email: string;
   role: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
-  createdAt: string;
+  createdAt?: string;
 };
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
@@ -41,6 +40,14 @@ export type Comment = {
     replies: Comment[];
 };
 
+export type Attachment = {
+  id: string;
+  name: string;
+  type: 'local' | 'gdrive';
+  url: string; 
+};
+
+
 export type Task = {
   id: string;
   title: string;
@@ -58,6 +65,7 @@ export type Task = {
   recurring?: string;
   tags?: Tag[];
   comments?: Comment[];
+  attachments?: Attachment[];
 };
 
 export type PriorityInfo = {
