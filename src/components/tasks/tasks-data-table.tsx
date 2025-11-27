@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -51,6 +52,7 @@ import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { Badge } from '../ui/badge';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -277,6 +279,18 @@ export function TasksDataTable() {
         const task = row.original;
         const currentStatus = row.getValue('status') as Status;
         
+        if (profile?.role === 'Super Admin') {
+            const status = statusInfo[currentStatus];
+            if (!status) return null;
+            const Icon = status.icon;
+            return (
+                <Badge variant="outline" className='font-normal'>
+                    <Icon className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span>{t(`status.${status.value.toLowerCase().replace(' ', '')}` as any)}</span>
+                </Badge>
+            )
+        }
+
         return (
           <Select value={currentStatus} onValueChange={(newStatus: Status) => handleStatusChange(task.id, newStatus)}>
             <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0">
@@ -307,6 +321,18 @@ export function TasksDataTable() {
           const task = row.original;
           const currentPriority = row.getValue('priority') as Priority;
           const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
+
+          if (profile?.role === 'Employee') {
+              const priority = priorityInfo[currentPriority];
+              if (!priority) return null;
+              const Icon = priority.icon;
+              return (
+                <Badge variant="outline" className='font-normal'>
+                    <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                    <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
+                </Badge>
+              )
+          }
 
           return (
             <div className="flex items-center gap-2">
