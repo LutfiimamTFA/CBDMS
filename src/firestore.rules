@@ -1,8 +1,94 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && request.auth.token.role == 'Super Admin';
+    }
+
+    function isManager() {
+      return isSignedIn() && request.auth.token.role == 'Manager';
+    }
+    
+    function isEmployee() {
+       return isSignedIn() && request.auth.token.role == 'Employee';
+    }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+    
+    function getRequestingUserData() {
+        return getUserData(request.auth.uid);
+    }
+    
+    function isSameCompany(companyId) {
+        return getRequestingUserData().companyId == companyId;
+    }
+
+    // Rules for 'users' collection
+    match /users/{userId} {
+      // READ:
+      // - Super Admins can read any user.
+      // - Managers can read users within their own company.
+      // - Any user can read their own profile.
+      allow read: if isSuperAdmin() || 
+                     (isManager() && isSameCompany(resource.data.companyId)) ||
+                     request.auth.uid == userId;
+      
+      // UPDATE:
+      // - Super Admins can update any user.
+      // - Managers can update users within their own company.
+      // - Any user can update their own profile (e.g., name, avatar).
+      //   (Field-level restrictions might be needed for security, e.g., user cannot change their own role)
+      allow update: if isSuperAdmin() || 
+                       (isManager() && isSameCompany(resource.data.companyId)) ||
+                       request.auth.uid == userId;
+
+      // CREATE & DELETE:
+      // These actions should be handled by secure server-side functions (Firebase Functions)
+      // and not directly by clients. UI will hide buttons for unauthorized roles.
+      // We explicitly deny direct client creation/deletion for security.
+      allow create, delete: if false;
+    }
+
+    // Rules for 'tasks' collection
+    match /tasks/{taskId} {
+      // READ:
+      // - Super Admins can read any task.
+      // - Managers can read any task within their company.
+      // - Employees can read tasks they are assigned to.
+      // - Clients can read tasks within their company.
+      allow read: if isSuperAdmin() ||
+                     (isManager() && isSameCompany(resource.data.companyId)) ||
+                     (isEmployee() && request.auth.uid in resource.data.assigneeIds) ||
+                     (getRequestingUserData().role == 'Client' && isSameCompany(resource.data.companyId));
+                     
+      // CREATE:
+      // - Super Admins and Managers can create tasks.
+      allow create: if isSuperAdmin() || isManager();
+
+      // UPDATE:
+      // - Super Admins and Managers can update any task in their company.
+      // - Employees can update tasks assigned to them.
+      // (Further restrictions can be added, e.g., employees can only change 'status')
+      allow update: if isSuperAdmin() || 
+                       (isManager() && isSameCompany(resource.data.companyId)) ||
+                       (isEmployee() && request.auth.uid in resource.data.assigneeIds);
+      
+      // DELETE:
+      // - Only Super Admins and Managers can delete tasks.
+      allow delete: if isSuperAdmin() || isManager();
+    }
+    
+    // Default deny all other access
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

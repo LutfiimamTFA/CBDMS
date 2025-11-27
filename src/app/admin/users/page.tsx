@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import {
   Table,
   TableBody,
@@ -52,7 +51,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { MoreHorizontal, Plus, Trash2, Edit, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
 import type { User } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
@@ -73,6 +72,7 @@ type EditUserFormValues = z.infer<typeof editUserSchema>;
 export default function UsersPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const { profile: currentUserProfile } = useUserProfile();
 
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
@@ -99,6 +99,9 @@ export default function UsersPage() {
   const editForm = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
   });
+  
+  const canManageUsers = currentUserProfile?.role === 'Super Admin' || currentUserProfile?.role === 'Manager';
+
 
   useEffect(() => {
     if (selectedUser) {
@@ -222,70 +225,74 @@ export default function UsersPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header
-        title="User Management"
-        actions={
-          <Dialog open={isCreateDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="mr-2" /> Add User
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New User</DialogTitle>
-                <DialogDescription>
-                  Fill in the details to create a new user account.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={createForm.handleSubmit(handleCreateUser)} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name-create">Full Name</Label>
-                  <Input id="name-create" {...createForm.register('name')} />
-                  {createForm.formState.errors.name && <p className="text-sm text-destructive">{createForm.formState.errors.name.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email-create">Email Address</Label>
-                  <Input id="email-create" type="email" {...createForm.register('email')} />
-                  {createForm.formState.errors.email && <p className="text-sm text-destructive">{createForm.formState.errors.email.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-create">Password</Label>
-                  <Input id="password-create" type="password" {...createForm.register('password')} />
-                  {createForm.formState.errors.password && <p className="text-sm text-destructive">{createForm.formState.errors.password.message}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="role-create">Role</Label>
-                  <Controller
-                    control={createForm.control}
-                    name="role"
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <SelectTrigger id="role-create">
-                          <SelectValue placeholder="Select a role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Manager">Manager</SelectItem>
-                          <SelectItem value="Employee">Employee</SelectItem>
-                          <SelectItem value="Client">Client</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="ghost" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Create User
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        }
-      />
       <main className="flex-1 overflow-auto p-4 md:p-6">
+        <div className="flex items-center justify-between mb-4">
+            <div>
+                <h2 className="text-2xl font-bold">User Management</h2>
+                <p className="text-muted-foreground">Manage all users in the system.</p>
+            </div>
+            {canManageUsers && (
+                <Dialog open={isCreateDialogOpen} onOpenChange={setCreateDialogOpen}>
+                    <DialogTrigger asChild>
+                    <Button size="sm">
+                        <Plus className="mr-2" /> Add User
+                    </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Add New User</DialogTitle>
+                        <DialogDescription>
+                        Fill in the details to create a new user account.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={createForm.handleSubmit(handleCreateUser)} className="space-y-4">
+                        <div className="space-y-2">
+                        <Label htmlFor="name-create">Full Name</Label>
+                        <Input id="name-create" {...createForm.register('name')} />
+                        {createForm.formState.errors.name && <p className="text-sm text-destructive">{createForm.formState.errors.name.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="email-create">Email Address</Label>
+                        <Input id="email-create" type="email" {...createForm.register('email')} />
+                        {createForm.formState.errors.email && <p className="text-sm text-destructive">{createForm.formState.errors.email.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="password-create">Password</Label>
+                        <Input id="password-create" type="password" {...createForm.register('password')} />
+                        {createForm.formState.errors.password && <p className="text-sm text-destructive">{createForm.formState.errors.password.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="role-create">Role</Label>
+                        <Controller
+                            control={createForm.control}
+                            name="role"
+                            render={({ field }) => (
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <SelectTrigger id="role-create">
+                                <SelectValue placeholder="Select a role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
+                                  <SelectItem value="Manager">Manager</SelectItem>
+                                  <SelectItem value="Employee">Employee</SelectItem>
+                                  <SelectItem value="Client">Client</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            )}
+                        />
+                        </div>
+                        <DialogFooter>
+                        <Button type="button" variant="ghost" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+                        <Button type="submit" disabled={isLoading}>
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            Create User
+                        </Button>
+                        </DialogFooter>
+                    </form>
+                    </DialogContent>
+                </Dialog>
+            )}
+        </div>
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
@@ -294,14 +301,17 @@ export default function UsersPage() {
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Created At</TableHead>
-                <TableHead><span className="sr-only">Actions</span></TableHead>
+                {canManageUsers && <TableHead><span className="sr-only">Actions</span></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isUsersLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
-                    Loading users...
+                    <div className='flex items-center justify-center gap-2'>
+                        <Loader2 className='h-5 w-5 animate-spin' />
+                        Loading users...
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -315,29 +325,31 @@ export default function UsersPage() {
                     <TableCell>
                       {user.createdAt ? format(parseISO(user.createdAt), 'PPpp') : 'N/A'}
                     </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => openEditDialog(user)}>
-                            <Edit className="mr-2 h-4 w-4" /> Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={() => openDeleteDialog(user)}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" /> Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {canManageUsers && (
+                        <TableCell>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                                <Edit className="mr-2 h-4 w-4" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => openDeleteDialog(user)}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" /> Delete
+                            </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
@@ -376,7 +388,7 @@ export default function UsersPage() {
                           <SelectValue placeholder="Select a role" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Super Admin">Super Admin</SelectItem>
+                          {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
                           <SelectItem value="Manager">Manager</SelectItem>
                           <SelectItem value="Employee">Employee</SelectItem>
                           <SelectItem value="Client">Client</SelectItem>
