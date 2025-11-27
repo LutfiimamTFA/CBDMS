@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DateRange } from 'react-day-picker';
-import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subMonths, subYears } from 'date-fns';
+import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subMonths, subYears, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 import jsPDF from 'jspdf';
