@@ -46,6 +46,7 @@ export async function POST(req: Request) {
 
     // Simpan data user di Firestore
     await db.collection("users").doc(userRecord.uid).set({
+      id: userRecord.uid,
       name,
       email,
       role,

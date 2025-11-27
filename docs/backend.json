@@ -32,6 +32,11 @@
         "companyId": {
             "type": "string",
             "description": "The ID of the company the user belongs to."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the user was created.",
+          "format": "date-time"
         }
       },
       "required": [
@@ -39,7 +44,8 @@
         "name",
         "email",
         "role",
-        "companyId"
+        "companyId",
+        "createdAt"
       ]
     },
     "Task": {
