@@ -20,16 +20,15 @@ import {
 } from '@/components/ui/collapsible';
 import {
   LayoutDashboard,
-  FileText,
-  User,
-  ClipboardList,
-  Loader2,
   Users,
-  Shield,
-  ChevronDown,
   Database,
   Settings as SettingsIcon,
+  Loader2,
+  Shield,
+  ChevronDown,
+  User,
   Icon as LucideIcon,
+  KeyRound,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -72,7 +71,9 @@ export default function MainLayout({
   const router = useRouter();
   const firestore = useFirestore();
   const { user, profile, isLoading } = useUserProfile();
-  const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith('/admin'));
+
+  const isAdminRoute = pathname.startsWith('/admin');
+  const [isAdminOpen, setIsAdminOpen] = useState(isAdminRoute);
 
   // --- Dynamic Navigation ---
   const navItemsRef = useMemoFirebase(
@@ -147,6 +148,16 @@ export default function MainLayout({
     );
   }
 
+  // Super Admins see everything, but normal users can only access non-admin routes.
+  if (profile?.role !== 'Super Admin' && isAdminRoute) {
+    router.push('/dashboard');
+    return (
+        <div className="flex h-screen w-full items-center justify-center bg-background">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -168,12 +179,13 @@ export default function MainLayout({
                 </Link>
               </SidebarMenuItem>
             ))}
-            {!isLoading && profile?.role === 'Super Admin' && (
+
+            {profile?.role === 'Super Admin' && (
               <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={pathname.startsWith('/admin')}
+                      isActive={isAdminRoute}
                       className="w-full justify-between"
                       tooltip={adminNavItems.label}
                     >
@@ -198,7 +210,7 @@ export default function MainLayout({
                           <SidebarMenuButton
                             variant="ghost"
                             size="sm"
-                            isActive={pathname === subItem.href}
+                            isActive={pathname.startsWith(subItem.href)}
                             className="w-full justify-start"
                           >
                             <subItem.icon />
