@@ -20,11 +20,13 @@ import {
   Settings,
   Loader2,
   ArrowLeft,
+  KeyRound,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useUserProfile } from '@/firebase';
 import { useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 export default function AdminLayout({
   children,
@@ -65,6 +67,8 @@ export default function AdminLayout({
       </div>
     );
   }
+  
+  const isSettingsPage = pathname.startsWith('/admin/settings');
 
   return (
     <SidebarProvider>
@@ -75,18 +79,28 @@ export default function AdminLayout({
         <SidebarContent>
           <SidebarMenu>
             {navItems.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <Link href={item.href}>
-                  <SidebarMenuButton
-                    isActive={pathname.startsWith(item.href)}
-                    tooltip={item.label}
-                  >
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
+                <SidebarMenuItem key={item.href}>
+                    <Link href={item.href}>
+                    <SidebarMenuButton
+                        isActive={item.href === '/admin/settings' ? isSettingsPage : pathname.startsWith(item.href)}
+                        tooltip={item.label}
+                    >
+                        <item.icon />
+                        <span>{item.label}</span>
+                    </SidebarMenuButton>
+                    </Link>
+                </SidebarMenuItem>
             ))}
+            {isSettingsPage && (
+                 <div className="pl-6 mt-2 space-y-1">
+                    <Link href="/admin/settings/roles">
+                        <div className={cn("flex items-center gap-2 text-sm p-2 rounded-md hover:bg-sidebar-accent", pathname === '/admin/settings/roles' && "bg-sidebar-accent font-semibold")}>
+                            <KeyRound className="h-4 w-4" />
+                            <span>Roles</span>
+                        </div>
+                    </Link>
+                 </div>
+            )}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>

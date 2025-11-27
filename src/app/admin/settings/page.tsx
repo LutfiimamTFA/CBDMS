@@ -4,12 +4,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import Link from 'next/link';
 
 export default function AppSettingsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Application Settings" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mx-auto max-w-2xl space-y-6">
             <Card>
@@ -30,6 +30,20 @@ export default function AppSettingsPage() {
                         <p className="text-xs text-muted-foreground">Recommended size: 200x50px, PNG format.</p>
                     </div>
                     <Button>Save Changes</Button>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Role & Permissions</CardTitle>
+                    <CardDescription>
+                        Define what each role can see and do within the application.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Link href="/admin/settings/roles">
+                        <Button variant="outline">Manage Roles & Permissions</Button>
+                    </Link>
                 </CardContent>
             </Card>
 

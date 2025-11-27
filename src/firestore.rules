@@ -31,6 +31,12 @@ service cloud.firestore {
         return getRequestingUserData().companyId == companyId;
     }
 
+    // Rules for 'permissions' collection
+    match /permissions/{docId} {
+      // Only Super Admins can read or write the permission settings.
+      allow read, write: if isSuperAdmin();
+    }
+
     // Rules for 'users' collection
     match /users/{userId} {
       // READ:

@@ -83,3 +83,24 @@ export type StatusInfo = {
   value: Status;
   icon: LucideIcon;
 };
+
+export type PermissionSettings = {
+  Manager: {
+    canCreateTasks: boolean;
+    canDeleteTasks: boolean;
+    canManageUsers: boolean;
+    canDeleteUsers: boolean;
+    canViewReports: boolean;
+  };
+  Employee: {
+    canCreateTasks: boolean;
+    canChangeTaskStatus: boolean;
+    canTrackTime: boolean;
+    canCreateDailyReports: boolean;
+  };
+  Client: {
+    canViewAssignedTasks: boolean;
+    canCommentOnTasks: boolean;
+    canApproveContent: boolean;
+  };
+};
