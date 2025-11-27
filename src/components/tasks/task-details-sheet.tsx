@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, LogIn } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -425,6 +425,8 @@ export function TaskDetailsSheet({
     </div>
   );
 
+  const priorityValue = form.getValues('priority');
+
 
   return (
     <>
@@ -604,8 +606,8 @@ export function TaskDetailsSheet({
                             </ReadOnlyField>
                             <ReadOnlyField label="Priority">
                                <div className="flex items-center gap-2">
-                                  {React.createElement(priorityInfo[form.getValues('priority')].icon, { className: `h-4 w-4 ${priorityInfo[form.getValues('priority')].color}` })}
-                                  {form.getValues('priority')}
+                                  {priorityValue && React.createElement(priorityInfo[priorityValue].icon, { className: `h-4 w-4 ${priorityInfo[priorityValue].color}` })}
+                                  {priorityValue}
                                </div>
                             </ReadOnlyField>
                             <ReadOnlyField label="Due Date">
