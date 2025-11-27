@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DateRange } from 'react-day-picker';
-import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subYears } from 'date-fns';
+import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subMonths, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 
@@ -142,8 +142,9 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
         </div>
         <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(new Date()), to: endOfDay(new Date()) })}>Hari Ini</Button>
-            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -7)), to: endOfDay(new Date()) })}>7 Hari</Button>
-            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -30)), to: endOfDay(new Date()) })}>30 Hari</Button>
+            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -6)), to: endOfDay(new Date()) })}>7 Hari</Button>
+            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -29)), to: endOfDay(new Date()) })}>30 Hari</Button>
+            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(subMonths(new Date(), 6)), to: endOfDay(new Date()) })}>6 Bulan</Button>
             <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(subYears(new Date(), 1)), to: endOfDay(new Date()) })}>1 Tahun</Button>
             <Popover>
                 <PopoverTrigger asChild>
