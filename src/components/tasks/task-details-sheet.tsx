@@ -7,7 +7,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Check, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -40,15 +40,15 @@ import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
-import { useRouter } from 'next/navigation';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { collection, doc, updateDoc } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
+import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 
 const taskDetailsSchema = z.object({
@@ -59,7 +59,6 @@ const taskDetailsSchema = z.object({
   assigneeIds: z.array(z.string()).optional(),
   timeEstimate: z.coerce.number().min(0).optional(),
   dueDate: z.string().optional(),
-  tags: z.array(z.string()).optional(),
 });
 
 type TaskDetailsFormValues = z.infer<typeof taskDetailsSchema>;
@@ -69,14 +68,6 @@ const formatStopwatch = (time: number) => {
   const minutes = Math.floor((time % 3600) / 60);
   const seconds = time % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-};
-
-type Comment = {
-    id: string;
-    user: User;
-    text: string;
-    timestamp: string;
-    replies: Comment[];
 };
 
 type Activity = {
@@ -105,7 +96,6 @@ export function TaskDetailsSheet({
   open?: boolean,
   onOpenChange?: (open: boolean) => void; 
 }) {
-  const [task, setTask] = useState(initialTask);
   const { t } = useI18n();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
@@ -114,12 +104,17 @@ export function TaskDetailsSheet({
   const [isRunning, setIsRunning] = useState(false);
   const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
 
-  const [comments, setComments] = useState<Comment[]>(task.comments || []);
+  const [comments, setComments] = useState<Comment[]>(initialTask.comments || []);
   const [newComment, setNewComment] = useState('');
+  
+  const [currentAssignees, setCurrentAssignees] = useState<User[]>(initialTask.assignees || []);
+  const [currentTags, setCurrentTags] = useState<Tag[]>(initialTask.tags || []);
+  const [timeLogs, setTimeLogs] = useState<TimeLog[]>(initialTask.timeLogs || []);
+  const [timeTracked, setTimeTracked] = useState(initialTask.timeTracked || 0);
 
   const [activities, setActivities] = useState<Activity[]>([]);
   
-  const [subtasks, setSubtasks] = useState(task.subtasks || []);
+  const [subtasks, setSubtasks] = useState(initialTask.subtasks || []);
   const [newSubtask, setNewSubtask] = useState('');
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
@@ -135,42 +130,39 @@ export function TaskDetailsSheet({
 
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
-    values: {
+  });
+  
+  // Resets form and all local states when the sheet is opened or the task prop changes.
+  const resetAllState = useCallback(() => {
+    form.reset({
         title: initialTask.title,
         description: initialTask.description || '',
         status: initialTask.status,
         priority: initialTask.priority,
-        assigneeIds: initialTask.assignees.map(a => a.id),
+        assigneeIds: initialTask.assignees?.map(a => a.id) || [],
         timeEstimate: initialTask.timeEstimate,
         dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
-        tags: initialTask.tags?.map(t => t.label) || [],
-    }
-  });
-  
-  useEffect(() => {
-    setTask(initialTask);
-  }, [initialTask]);
+    });
+    setSubtasks(initialTask.subtasks || []);
+    setComments(initialTask.comments || []);
+    setCurrentAssignees(initialTask.assignees || []);
+    setCurrentTags(initialTask.tags || []);
+    setTimeLogs(initialTask.timeLogs || []);
+    setTimeTracked(initialTask.timeTracked || 0);
+    setIsEditing(false);
+  }, [initialTask, form]);
 
   useEffect(() => {
-    form.reset({
-      title: task.title,
-      description: task.description || '',
-      status: task.status,
-      priority: task.priority,
-      assigneeIds: task.assignees.map(a => a.id),
-      timeEstimate: task.timeEstimate,
-      dueDate: task.dueDate ? format(parseISO(task.dueDate), 'yyyy-MM-dd') : undefined,
-      tags: task.tags?.map(t => t.label) || [],
-    });
-    setSubtasks(task.subtasks || []);
-    setComments(task.comments || []);
-  }, [task, form, openProp]);
+    if (openProp) {
+        resetAllState();
+    }
+  }, [openProp, resetAllState]);
 
 
   const handleOpenChange = (isOpen: boolean) => {
     if (onOpenChangeProp) {
         if (!isOpen) {
-            setIsEditing(false); // Reset edit state when closing
+            setIsEditing(false);
         }
         onOpenChangeProp(isOpen);
     }
@@ -252,12 +244,10 @@ export function TaskDetailsSheet({
       endTime: endTime.toISOString(),
       duration: elapsedTime,
     };
-    const newTimeTracked = (task.timeTracked || 0) + (elapsedTime / 3600);
-    setTask(prevTask => ({
-      ...prevTask,
-      timeTracked: parseFloat(newTimeTracked.toFixed(2)),
-      timeLogs: [...(prevTask.timeLogs || []), newLog]
-    }));
+    const newTimeTracked = timeTracked + (elapsedTime / 3600);
+    setTimeTracked(parseFloat(newTimeTracked.toFixed(2)));
+    setTimeLogs(prev => [...prev, newLog]);
+    
     setIsRunning(false);
     setElapsedTime(0);
     setTimerStartTime(null);
@@ -272,6 +262,7 @@ export function TaskDetailsSheet({
         name: currentUser.name,
         email: currentUser.email,
         avatarUrl: currentUser.avatarUrl || '',
+        role: currentUser.role
       },
       text: newComment,
       timestamp: new Date().toISOString(),
@@ -307,62 +298,91 @@ export function TaskDetailsSheet({
 
 
   const onSubmit = (data: TaskDetailsFormValues) => {
-    console.log('Updated Task Data:', {...data, timeTracked: task.timeTracked, timeLogs: task.timeLogs, subtasks});
-    if (!allUsers) return;
-    setTask(currentTask => ({
-        ...currentTask,
+    if (!firestore) return;
+    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+    
+    const updatedTaskData = {
         ...data,
-        assignees: allUsers.filter(u => data.assigneeIds?.includes(u.id)),
-        tags: allTags ? Object.values(allTags).filter(t => data.tags?.includes(t.label)) : [],
+        assignees: currentAssignees,
+        tags: currentTags,
         subtasks: subtasks,
         comments: comments,
-    }));
-    setIsEditing(false); // Exit edit mode on save
+        timeTracked: timeTracked,
+        timeLogs: timeLogs,
+    };
+    
+    updateDocumentNonBlocking(taskDocRef, updatedTaskData);
+    
+    toast({
+        title: 'Task Updated',
+        description: `"${data.title}" has been saved.`,
+    });
+    setIsEditing(false);
   };
   
-  const timeEstimateValue = form.watch('timeEstimate') ?? task.timeEstimate ?? 0;
-  const timeTrackedValue = task.timeTracked ?? 0;
+  const timeEstimateValue = form.watch('timeEstimate') ?? initialTask.timeEstimate ?? 0;
   
   const timeTrackingProgress = timeEstimateValue > 0
-    ? (timeTrackedValue / timeEstimateValue) * 100
+    ? (timeTracked / timeEstimateValue) * 100
     : 0;
+    
+  const handleSelectUser = (user: User) => {
+    if (!currentAssignees.find((u) => u.id === user.id)) {
+      const newSelectedUsers = [...currentAssignees, user];
+      setCurrentAssignees(newSelectedUsers);
+    }
+  };
+
+  const handleRemoveUser = (userId: string) => {
+    setCurrentAssignees(currentAssignees.filter((u) => u.id !== userId));
+  };
+  
+  const handleSelectTag = (tag: Tag) => {
+    if (!currentTags.find(t => t.label === tag.label)) {
+        setCurrentTags([...currentTags, tag]);
+    }
+  }
+
+  const handleRemoveTag = (tagLabel: string) => {
+    setCurrentTags(currentTags.filter(t => t.label !== tagLabel));
+  }
+
 
   return (
     <>
       <Sheet open={openProp} onOpenChange={handleOpenChange}>
         <SheetTrigger asChild>{children}</SheetTrigger>
         <SheetContent className="w-full sm:max-w-4xl grid grid-rows-[auto_1fr_auto] p-0">
+          <SheetHeader className="p-4 border-b">
+             <SheetTitle className='sr-only'>Task Details</SheetTitle>
+             <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    {/* Placeholder for a task ID or breadcrumb */}
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm"><Star className="h-4 w-4 mr-2"/> Favorite</Button>
+                    <Button variant="ghost" size="sm"><Share2 className="h-4 w-4 mr-2"/> Share</Button>
+                     <Button variant="ghost" size="sm"><LinkIcon className="h-4 w-4 mr-2"/> Copy Link</Button>
+                    <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
+                </div>
+             </div>
+          </SheetHeader>
+          
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full overflow-hidden">
-              <SheetHeader className="p-4 border-b">
-                 <SheetTitle className='sr-only'>Task Details</SheetTitle>
-                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        {/* Placeholder for a task ID or breadcrumb */}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="sm"><Star className="h-4 w-4 mr-2"/> Favorite</Button>
-                        <Button variant="ghost" size="sm"><Share2 className="h-4 w-4 mr-2"/> Share</Button>
-                         <Button variant="ghost" size="sm"><LinkIcon className="h-4 w-4 mr-2"/> Copy Link</Button>
-                        <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                 </div>
-              </SheetHeader>
-              
-              <div className="flex-1 grid grid-cols-1 md:grid-cols-3 overflow-hidden">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-3 h-full overflow-hidden">
                 {/* Main Content */}
-                <ScrollArea className="md:col-span-2 h-full">
+                <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         {isEditing ? (
                            <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} className="text-2xl font-bold border-dashed"/> )}/>
                         ) : (
-                           <h2 className="text-2xl font-bold">{task.title}</h2>
+                           <h2 className="text-2xl font-bold">{form.getValues('title')}</h2>
                         )}
 
                         {isEditing ? (
                            <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
                         ) : (
-                           <p className="text-muted-foreground">{task.description || 'No description provided.'}</p>
+                           <p className="text-muted-foreground">{form.getValues('description') || 'No description provided.'}</p>
                         )}
 
                         <Separator/>
@@ -386,16 +406,16 @@ export function TaskDetailsSheet({
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                     {subtasks.map((subtask) => (
                                         <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
-                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
+                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!isEditing} />
                                             <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
+                                            {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}
                                         </div>
                                     ))}
                                 </div>
-                                <div className="flex items-center gap-2">
+                                {isEditing && <div className="flex items-center gap-2">
                                     <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}/>
                                     <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
-                                </div>
+                                </div>}
                             </TabsContent>
                             <TabsContent value="comments" className="mt-4">
                                 <div className="space-y-6">
@@ -435,13 +455,13 @@ export function TaskDetailsSheet({
                 </ScrollArea>
 
                 {/* Sidebar */}
-                <ScrollArea className="md:col-span-1 h-full border-l">
+                <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
                      <FormField control={form.control} name="status" render={({ field }) => (
                          <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!isEditing}>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={!isEditing}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>{Object.values(statusInfo).map(s => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{s.label}</div></SelectItem>))}</SelectContent>
                                 </Select>
@@ -464,47 +484,62 @@ export function TaskDetailsSheet({
                           <FormItem className="grid grid-cols-3 items-center gap-2">
                              <FormLabel className="text-muted-foreground">Due Date</FormLabel>
                              <div className="col-span-2">
-                                <Input type="date" {...field} value={field.value || ''} readOnly={!isEditing} />
+                                <Input type="date" {...field} value={field.value || ''} readOnly={!isEditing} className={!isEditing ? 'border-none' : ''}/>
                              </div>
                           </FormItem>
                       )}/>
                     <Separator/>
                     
-                    <FormField control={form.control} name="assigneeIds" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="text-muted-foreground">Assignees</FormLabel>
-                             {task.assignees.map(user => (
-                                <div key={user.id} className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-3">
-                                        <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                        <p className="text-sm font-medium">{user.name}</p>
+                    <FormItem>
+                        <FormLabel className="text-muted-foreground">Assignees</FormLabel>
+                         {currentAssignees.map(user => (
+                            <div key={user.id} className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-3">
+                                    <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                    <p className="text-sm font-medium">{user.name}</p>
+                                </div>
+                                {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
+                            </div>
+                        ))}
+                        {isEditing && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80">
+                                    <div className="space-y-2">
+                                        {(allUsers || []).map((user) => (
+                                            <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
+                                                <Avatar className="h-6 w-6 mr-2">
+                                                    <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                                    <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                                                </Avatar>
+                                                <span>{user.name}</span>
+                                            </Button>
+                                        ))}
                                     </div>
-                                    {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><X className="h-4"/></Button>}
+                                </PopoverContent>
+                            </Popover>
+                        )}
+                    </FormItem>
+                    
+                    <FormItem>
+                        <FormLabel className="text-muted-foreground">Tags</FormLabel>
+                         <div className="flex flex-wrap gap-2">
+                            {currentTags.map(tag => (
+                                <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
+                                    {tag.label}
+                                    {isEditing && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
                                 </div>
                             ))}
-                            {isEditing && <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>}
-                        </FormItem>
-                    )}/>
-                    
-                    <FormField control={form.control} name="tags" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel className="text-muted-foreground">Tags</FormLabel>
-                             <div className="flex flex-wrap gap-2">
-                                {task.tags?.map(tag => (
-                                    <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
-                                        {tag.label}
-                                        {isEditing && <button type="button"><X className="h-3 w-3"/></button>}
-                                    </div>
-                                ))}
-                                {isEditing && (
-                                     <Popover>
-                                        <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
-                                        <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start"><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
-                                    </Popover>
-                                )}
-                             </div>
-                        </FormItem>
-                    )}/>
+                            {isEditing && (
+                                 <Popover>
+                                    <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
+                                    <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
+                                </Popover>
+                            )}
+                         </div>
+                    </FormItem>
 
                     <Separator/>
 
@@ -512,7 +547,7 @@ export function TaskDetailsSheet({
                          <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Estimate</FormLabel>
                             <div className="col-span-2">
-                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} readOnly={!isEditing} placeholder="Hours"/>
+                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} readOnly={!isEditing} placeholder="Hours" className={!isEditing ? 'border-none' : ''}/>
                             </div>
                          </FormItem>
                      )}/>
@@ -520,7 +555,7 @@ export function TaskDetailsSheet({
                      <div className="space-y-2">
                         <div className="grid grid-cols-3 items-center gap-2">
                             <span className="text-sm text-muted-foreground">Time Tracked</span>
-                            <span className="col-span-2 text-sm font-medium">{timeTrackedValue.toFixed(2)}h</span>
+                            <span className="col-span-2 text-sm font-medium">{timeTracked.toFixed(2)}h</span>
                         </div>
                         <Progress value={timeTrackingProgress} />
                      </div>
@@ -538,12 +573,11 @@ export function TaskDetailsSheet({
 
                   </div>
                 </ScrollArea>
-              </div>
 
-              <SheetFooter className="p-4 border-t flex justify-end">
+              <SheetFooter className="col-span-3 p-4 border-t flex justify-end">
                 {isEditing ? (
                   <div className="flex justify-end gap-2">
-                      <Button variant="ghost" type="button" onClick={() => {setIsEditing(false); form.reset();}}>Cancel</Button>
+                      <Button variant="ghost" type="button" onClick={resetAllState}>Cancel</Button>
                       <Button type="submit">Save Changes</Button>
                   </div>
                 ) : (
