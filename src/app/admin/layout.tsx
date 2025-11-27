@@ -14,6 +14,11 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
   LayoutDashboard,
   Users,
   Database,
@@ -21,10 +26,11 @@ import {
   Loader2,
   ArrowLeft,
   KeyRound,
+  ChevronDown,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useUserProfile } from '@/firebase';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +43,13 @@ export default function AdminLayout({
   const router = useRouter();
   const { toast } = useToast();
   const { user, profile, isLoading } = useUserProfile();
+
+  const isUserManagementPage =
+    pathname.startsWith('/admin/users') ||
+    pathname.startsWith('/admin/settings/roles');
+    
+  const [isUserManagementOpen, setIsUserManagementOpen] =
+    useState(isUserManagementPage);
 
   useEffect(() => {
     if (!isLoading) {
@@ -55,10 +68,18 @@ export default function AdminLayout({
 
   const navItems = [
     { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
-    { href: '/admin/users', icon: KeyRound, label: 'User Management' },
     { href: '/admin/data', icon: Database, label: 'Data Management' },
     { href: '/admin/settings', icon: Settings, label: 'App Settings' },
   ];
+
+  const userManagementNav = {
+    label: 'User Management',
+    icon: KeyRound,
+    subItems: [
+      { href: '/admin/users', icon: Users, label: 'Users' },
+      { href: '/admin/settings/roles', icon: KeyRound, label: 'Roles' },
+    ],
+  };
 
   if (isLoading || !profile || profile.role !== 'Super Admin') {
     return (
@@ -67,8 +88,6 @@ export default function AdminLayout({
       </div>
     );
   }
-  
-  const isUserManagementPage = pathname.startsWith('/admin/users') || pathname.startsWith('/admin/settings/roles');
 
   return (
     <SidebarProvider>
@@ -79,34 +98,61 @@ export default function AdminLayout({
         <SidebarContent>
           <SidebarMenu>
             {navItems.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                    <Link href={item.href}>
-                    <SidebarMenuButton
-                        isActive={item.href === '/admin/users' ? isUserManagementPage : pathname.startsWith(item.href)}
-                        tooltip={item.label}
-                    >
-                        <item.icon />
-                        <span>{item.label}</span>
-                    </SidebarMenuButton>
-                    </Link>
-                </SidebarMenuItem>
+              <SidebarMenuItem key={item.href}>
+                <Link href={item.href}>
+                  <SidebarMenuButton
+                    isActive={pathname.startsWith(item.href)}
+                    tooltip={item.label}
+                  >
+                    <item.icon />
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
             ))}
-            {isUserManagementPage && (
-                 <div className="pl-6 mt-2 space-y-1">
-                    <Link href="/admin/users">
-                        <div className={cn("flex items-center gap-2 text-sm p-2 rounded-md hover:bg-sidebar-accent", pathname === '/admin/users' && "bg-sidebar-accent font-semibold")}>
-                            <Users className="h-4 w-4" />
-                            <span>Users</span>
-                        </div>
-                    </Link>
-                    <Link href="/admin/settings/roles">
-                        <div className={cn("flex items-center gap-2 text-sm p-2 rounded-md hover:bg-sidebar-accent", pathname === '/admin/settings/roles' && "bg-sidebar-accent font-semibold")}>
-                            <KeyRound className="h-4 w-4" />
-                            <span>Roles</span>
-                        </div>
-                    </Link>
-                 </div>
-            )}
+
+            <Collapsible open={isUserManagementOpen} onOpenChange={setIsUserManagementOpen}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={isUserManagementPage}
+                      className="w-full justify-between"
+                      tooltip={userManagementNav.label}
+                    >
+                      <div className="flex items-center gap-2">
+                        <userManagementNav.icon />
+                        <span>{userManagementNav.label}</span>
+                      </div>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          isUserManagementOpen && 'rotate-180'
+                        )}
+                      />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                </SidebarMenuItem>
+                <CollapsibleContent className="pl-6">
+                  <SidebarMenu>
+                    {userManagementNav.subItems.map((subItem) => (
+                      <SidebarMenuItem key={subItem.href}>
+                        <Link href={subItem.href}>
+                          <SidebarMenuButton
+                            variant="ghost"
+                            size="sm"
+                            isActive={pathname === subItem.href}
+                            className="w-full justify-start"
+                          >
+                            <subItem.icon />
+                            <span>{subItem.label}</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </CollapsibleContent>
+              </Collapsible>
+
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
