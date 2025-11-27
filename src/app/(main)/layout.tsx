@@ -194,7 +194,7 @@ export default function MainLayout({
                       <Link href='/admin/dashboard'>
                         <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/dashboard'} className="w-full justify-start">
                           <LayoutDashboard/>
-                          <span>Overview</span>
+                          <span>Dashboard</span>
                         </SidebarMenuButton>
                       </Link>
                     </SidebarMenuItem>

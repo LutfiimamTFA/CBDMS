@@ -3,7 +3,7 @@ import type { NavigationItem } from './types';
 export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_dashboard',
-    label: 'Board',
+    label: 'Task Board',
     path: '/dashboard',
     icon: 'LayoutDashboard',
     order: 1,
@@ -26,5 +26,3 @@ export const defaultNavItems: NavigationItem[] = [
     roles: ['Super Admin', 'Manager'],
   },
 ];
-
-    
