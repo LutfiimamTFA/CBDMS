@@ -1,16 +1,22 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useUserProfile, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
-import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList } from 'lucide-react';
+import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, FileDown, Calendar as CalendarIcon } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { TaskStatusChart } from '@/components/reports/task-status-chart';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DateRange } from 'react-day-picker';
+import { addDays, format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 // --- Komponen untuk Laporan Karyawan ---
 function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading: boolean }) {
@@ -28,43 +34,47 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
 
   return (
     <>
+      <div className="mb-4">
+          <h2 className="text-2xl font-bold">Laporan Kinerja Anda</h2>
+          <p className="text-muted-foreground">Ringkasan aktivitas dan kontribusi Anda.</p>
+      </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Tasks</CardTitle>
+            <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completedTasks}</div>
-            <p className="text-xs text-muted-foreground">in total</p>
+            <p className="text-xs text-muted-foreground">dari total tugas Anda</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">In Progress</CardTitle>
+            <CardTitle className="text-sm font-medium">Sedang Dikerjakan</CardTitle>
             <CircleDashed className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">currently active</p>
+            <p className="text-xs text-muted-foreground">tugas aktif saat ini</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Hours Logged</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Jam Kerja</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalHoursTracked.toFixed(2)}h</div>
-            <p className="text-xs text-muted-foreground">across all your tasks</p>
+            <p className="text-xs text-muted-foreground">tercatat di semua tugas</p>
           </CardContent>
         </Card>
       </div>
       <div className="mt-6">
         <Card>
           <CardHeader>
-            <CardTitle>Hours by Priority</CardTitle>
-            <CardDescription>A breakdown of hours you've tracked against different priorities.</CardDescription>
+            <CardTitle>Jam Kerja Berdasarkan Prioritas</CardTitle>
+            <CardDescription>Rincian jam kerja Anda pada berbagai tingkat prioritas tugas.</CardDescription>
           </CardHeader>
           <CardContent>
             <HoursByPriorityChart tasks={tasks || []} />
@@ -76,7 +86,12 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
 }
 
 // --- Komponen untuk Dasbor Admin/Manager ---
-function AdminDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
+function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
+    const [date, setDate] = useState<DateRange | undefined>({
+        from: addDays(new Date(), -7),
+        to: new Date(),
+    });
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -92,60 +107,104 @@ function AdminDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | 
 
   return (
     <>
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold tracking-tight">System Overview</h2>
-        <p className="text-muted-foreground">A quick look at the current state of your application.</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+            <h2 className="text-2xl font-bold tracking-tight">Pusat Analisis Kinerja</h2>
+            <p className="text-muted-foreground">Analisis data operasional untuk pengambilan keputusan strategis.</p>
+        </div>
+        <div className="flex items-center gap-2">
+            <Popover>
+                <PopoverTrigger asChild>
+                <Button
+                    id="date"
+                    variant={"outline"}
+                    className={cn(
+                    "w-[300px] justify-start text-left font-normal",
+                    !date && "text-muted-foreground"
+                    )}
+                >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {date?.from ? (
+                    date.to ? (
+                        <>
+                        {format(date.from, "LLL dd, y")} -{" "}
+                        {format(date.to, "LLL dd, y")}
+                        </>
+                    ) : (
+                        format(date.from, "LLL dd, y")
+                    )
+                    ) : (
+                    <span>Pilih tanggal</span>
+                    )}
+                </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={date?.from}
+                    selected={date}
+                    onSelect={setDate}
+                    numberOfMonths={2}
+                />
+                </PopoverContent>
+            </Popover>
+            <Button variant="outline" disabled>
+                <FileDown className="mr-2 h-4 w-4" />
+                Ekspor ke PDF
+            </Button>
+        </div>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalUsers}</div>
-            <p className="text-xs text-muted-foreground">registered in the system</p>
+            <p className="text-xs text-muted-foreground">pengguna terdaftar</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tasks</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Tugas</CardTitle>
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground">across all projects</p>
+            <p className="text-xs text-muted-foreground">di seluruh proyek</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed Tasks</CardTitle>
+            <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completedTasks}</div>
-            <p className="text-xs text-muted-foreground">out of {totalTasks} tasks</p>
+            <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasks In Progress</CardTitle>
+            <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
             <CircleDashed className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">currently active</p>
+            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
           </CardContent>
         </Card>
       </div>
       <div className="mt-6">
-        <h2 className="text-2xl font-bold tracking-tight">Data Visualization</h2>
-        <p className="text-muted-foreground">Deeper insights into your team's performance and project status.</p>
+        <h3 className="text-xl font-bold tracking-tight">Analisis Tim & Proyek</h3>
+        <p className="text-muted-foreground">Visualisasi data untuk wawasan performa tim dan status proyek.</p>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Team Workload</CardTitle>
-              <CardDescription>Number of active tasks assigned to each team member.</CardDescription>
+              <CardTitle>Beban Kerja Tim</CardTitle>
+              <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim.</CardDescription>
             </CardHeader>
             <CardContent>
               <TeamWorkloadChart tasks={allTasks || []} users={allUsers || []} />
@@ -153,8 +212,8 @@ function AdminDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | 
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Task Status Distribution</CardTitle>
-              <CardDescription>Proportion of tasks in each status category.</CardDescription>
+              <CardTitle>Distribusi Status Tugas</CardTitle>
+              <CardDescription>Proporsi tugas dalam setiap kategori status.</CardDescription>
             </CardHeader>
             <CardContent>
               <TaskStatusChart tasks={allTasks || []} />
@@ -200,14 +259,14 @@ export default function ReportsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Work Reports" />
+      <Header title="Laporan" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : isSuperAdminOrManager ? (
-          <AdminDashboard allTasks={allTasks} allUsers={allUsers} isLoading={isLoading} />
+          <AdminAnalysisDashboard allTasks={allTasks} allUsers={allUsers} isLoading={isLoading} />
         ) : (
           <EmployeeReport tasks={employeeTasks} isLoading={isLoading} />
         )}
@@ -215,3 +274,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
