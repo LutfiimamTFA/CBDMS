@@ -43,7 +43,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Icon as LucideIcon } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Icon as LucideIcon, Check, ChevronsUpDown } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
@@ -51,6 +51,10 @@ import type { NavigationItem } from '@/lib/types';
 import { collection, doc, writeBatch, query, orderBy, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
+
 
 // Helper to get Lucide icon component by name
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
@@ -69,6 +73,7 @@ const navItemSchema = z.object({
 
 type NavItemFormValues = z.infer<typeof navItemSchema>;
 const availableRoles = ['Super Admin', 'Manager', 'Employee', 'Client'];
+const iconNames = Object.keys(lucideIcons).filter(name => name !== 'default' && name !== 'createLucideIcon');
 
 
 export default function NavigationSettingsPage() {
@@ -219,29 +224,79 @@ export default function NavigationSettingsPage() {
         
         {/* Form Dialog */}
         <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
                     <DialogTitle>{selectedItem ? 'Edit' : 'Create'} Navigation Item</DialogTitle>
                     <DialogDescription>Fill in the details for the sidebar menu item.</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                    <div className='grid grid-cols-2 gap-4'>
-                         <div className="space-y-2">
-                            <Label htmlFor="label">Label</Label>
-                            <Input id="label" {...form.register('label')} />
-                            {form.formState.errors.label && <p className="text-sm text-destructive">{form.formState.errors.label.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="path">Path</Label>
-                            <Input id="path" {...form.register('path')} />
-                            {form.formState.errors.path && <p className="text-sm text-destructive">{form.formState.errors.path.message}</p>}
-                        </div>
+                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 pt-4">
+                     <div className="space-y-2">
+                        <Label htmlFor="label">Label</Label>
+                        <Input id="label" {...form.register('label')} placeholder="e.g. Dashboard"/>
+                        {form.formState.errors.label && <p className="text-sm text-destructive">{form.formState.errors.label.message}</p>}
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="path">Path</Label>
+                        <Input id="path" {...form.register('path')} placeholder="e.g. /dashboard"/>
+                        <p className="text-xs text-muted-foreground">The URL for the page, must start with a '/'.</p>
+                        {form.formState.errors.path && <p className="text-sm text-destructive">{form.formState.errors.path.message}</p>}
                     </div>
                      <div className='grid grid-cols-2 gap-4'>
                         <div className="space-y-2">
-                            <Label htmlFor="icon">Icon Name (lucide-react)</Label>
-                            <Input id="icon" {...form.register('icon')} />
-                            {form.formState.errors.icon && <p className="text-sm text-destructive">{form.formState.errors.icon.message}</p>}
+                            <Controller
+                                control={form.control}
+                                name="icon"
+                                render={({ field }) => (
+                                    <>
+                                        <Label>Icon</Label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
+                                                >
+                                                    {field.value ? (
+                                                        <div className='flex items-center gap-2'>
+                                                            <Icon name={field.value} className='h-4 w-4'/>
+                                                            {field.value}
+                                                        </div>
+                                                    ) : (
+                                                        "Select icon"
+                                                    )}
+                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-[300px] p-0">
+                                                <Command>
+                                                    <CommandInput placeholder="Search icon..." />
+                                                    <CommandList>
+                                                        <CommandEmpty>No icon found.</CommandEmpty>
+                                                        <CommandGroup>
+                                                            {iconNames.map((iconName) => (
+                                                                <CommandItem
+                                                                    key={iconName}
+                                                                    value={iconName}
+                                                                    onSelect={() => {
+                                                                        field.onChange(iconName);
+                                                                    }}
+                                                                >
+                                                                    <Icon name={iconName} className="mr-2 h-4 w-4" />
+                                                                    {iconName}
+                                                                    <Check
+                                                                        className={cn("ml-auto h-4 w-4", field.value === iconName ? "opacity-100" : "opacity-0")}
+                                                                    />
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
+                                        {form.formState.errors.icon && <p className="text-sm text-destructive">{form.formState.errors.icon.message}</p>}
+                                    </>
+                                )}
+                             />
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="order">Order</Label>
@@ -253,21 +308,25 @@ export default function NavigationSettingsPage() {
                         <Label>Visible To Roles</Label>
                         <div className="grid grid-cols-2 gap-4 rounded-md border p-4">
                         {availableRoles.map((role) => (
-                            <div key={role} className="flex items-center space-x-2">
-                                <Checkbox
-                                    id={`role-${role}`}
-                                    checked={form.watch('roles').includes(role)}
-                                    onCheckedChange={(checked) => {
-                                        const currentRoles = form.getValues('roles');
-                                        if (checked) {
-                                            form.setValue('roles', [...currentRoles, role]);
-                                        } else {
-                                            form.setValue('roles', currentRoles.filter((r) => r !== role));
-                                        }
-                                    }}
-                                />
-                                <Label htmlFor={`role-${role}`} className="font-normal">{role}</Label>
-                            </div>
+                            <Controller
+                                key={role}
+                                name="roles"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`role-${role}`}
+                                            checked={field.value?.includes(role)}
+                                            onCheckedChange={(checked) => {
+                                                return checked
+                                                    ? field.onChange([...(field.value || []), role])
+                                                    : field.onChange(field.value?.filter((value) => value !== role));
+                                            }}
+                                        />
+                                        <Label htmlFor={`role-${role}`} className="font-normal">{role}</Label>
+                                    </div>
+                                )}
+                            />
                         ))}
                         </div>
                         {form.formState.errors.roles && <p className="text-sm text-destructive">{form.formState.errors.roles.message}</p>}
@@ -305,3 +364,5 @@ export default function NavigationSettingsPage() {
     </div>
   );
 }
+
+    
