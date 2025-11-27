@@ -1,6 +1,5 @@
-
 'use client';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Table,
   TableBody,
@@ -9,362 +8,147 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Icon as LucideIcon, Check, ChevronsUpDown } from 'lucide-react';
-import * as lucideIcons from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import type { NavigationItem } from '@/lib/types';
-import { collection, doc, writeBatch, query, orderBy, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
+import { collection, doc, query, orderBy, updateDoc } from 'firebase/firestore';
+import { Loader2, Icon as LucideIcon } from 'lucide-react';
+import * as lucideIcons from 'lucide-react';
 import { Header } from '@/components/layout/header';
-
+import { Badge } from '@/components/ui/badge';
 
 // Helper to get Lucide icon component by name
-const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
-  const LucideIcon = (lucideIcons as Record<string, any>)[name];
-  if (!LucideIcon) return <lucideIcons.HelpCircle {...props} />;
-  return <LucideIcon {...props} />;
+const Icon = ({
+  name,
+  ...props
+}: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
+  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
+  if (!LucideIconComponent) return <lucideIcons.HelpCircle {...props} />;
+  return <LucideIconComponent {...props} />;
 };
 
-const navItemSchema = z.object({
-  label: z.string().min(2, 'Label is required.'),
-  path: z.string().startsWith('/', "Path must start with a '/'. " ).min(2, 'Path is required.'),
-  icon: z.string().min(1, 'Icon is required.'),
-  order: z.coerce.number().min(0, 'Order must be a positive number.'),
-  roles: z.array(z.string()).min(1, 'At least one role must be selected.'),
-});
-
-type NavItemFormValues = z.infer<typeof navItemSchema>;
-const availableRoles = ['Super Admin', 'Manager', 'Employee', 'Client'];
-
+const availableRoles = ['Super Admin', 'Manager', 'Employee', 'Client'] as const;
+type Role = (typeof availableRoles)[number];
 
 export default function NavigationSettingsPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  const [isFormOpen, setFormOpen] = useState(false);
-  const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<NavigationItem | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  const iconNames = Object.keys(lucideIcons).filter(name => name !== 'default' && name !== 'createLucideIcon');
-
   const navItemsCollectionRef = useMemoFirebase(
-    () => (firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null),
+    () =>
+      firestore
+        ? query(collection(firestore, 'navigationItems'), orderBy('order'))
+        : null,
     [firestore]
   );
-  const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
+  const { data: navItems, isLoading: isNavItemsLoading } =
+    useCollection<NavigationItem>(navItemsCollectionRef);
 
-  const form = useForm<NavItemFormValues>({
-    resolver: zodResolver(navItemSchema),
-    defaultValues: { label: '', path: '/', icon: 'Home', order: 100, roles: [] },
-  });
+  const handleRoleChange = async (
+    itemId: string,
+    role: Role,
+    isChecked: boolean
+  ) => {
+    if (!firestore || !navItems) return;
 
-  useEffect(() => {
-    if (selectedItem) {
-      form.reset({
-        label: selectedItem.label,
-        path: selectedItem.path,
-        icon: selectedItem.icon,
-        order: selectedItem.order,
-        roles: selectedItem.roles,
-      });
+    const itemToUpdate = navItems.find((item) => item.id === itemId);
+    if (!itemToUpdate) return;
+
+    let updatedRoles: Role[];
+    if (isChecked) {
+      updatedRoles = [...itemToUpdate.roles, role];
     } else {
-      form.reset({ label: '', path: '/', icon: 'Home', order: (navItems?.length || 0) + 1, roles: [] });
+      updatedRoles = itemToUpdate.roles.filter((r) => r !== role);
     }
-  }, [selectedItem, form, navItems]);
+    // Remove duplicates just in case
+    updatedRoles = [...new Set(updatedRoles)];
 
-  const handleSubmit = async (data: NavItemFormValues) => {
-    if (!firestore) return;
-    setIsLoading(true);
+    const itemDocRef = doc(firestore, 'navigationItems', itemId);
     try {
-      if (selectedItem) {
-        // Update existing item
-        const itemDocRef = doc(firestore, 'navigationItems', selectedItem.id);
-        await updateDoc(itemDocRef, data as any);
-        toast({ title: 'Navigation Item Updated', description: `"${data.label}" has been saved.` });
-      } else {
-        // Create new item
-        await addDoc(collection(firestore, 'navigationItems'), data as any);
-        toast({ title: 'Navigation Item Created', description: `"${data.label}" has been added to the sidebar.` });
-      }
-      setFormOpen(false);
+      await updateDoc(itemDocRef, { roles: updatedRoles });
+      toast({
+        title: 'Permissions Updated',
+        description: `Access for ${role} on "${itemToUpdate.label}" has been ${isChecked ? 'granted' : 'revoked'}.`,
+      });
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Operation Failed', description: error.message });
-    } finally {
-      setIsLoading(false);
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: error.message,
+      });
     }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedItem || !firestore) return;
-    setIsLoading(true);
-    try {
-      const itemDocRef = doc(firestore, 'navigationItems', selectedItem.id);
-      await deleteDoc(itemDocRef);
-      toast({ title: 'Navigation Item Deleted', description: `"${selectedItem.label}" has been removed.` });
-      setDeleteDialogOpen(false);
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const openFormDialog = (item: NavigationItem | null) => {
-    setSelectedItem(item);
-    setFormOpen(true);
-  };
-
-  const openDeleteDialog = (item: NavigationItem) => {
-    setSelectedItem(item);
-    setDeleteDialogOpen(true);
   };
 
   return (
     <div className="h-svh flex flex-col bg-background">
       <Header title="Navigation Settings" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="flex items-center justify-between mb-4">
-            <div>
-                <h2 className="text-2xl font-bold">Manage Sidebar Navigation</h2>
-                <p className="text-muted-foreground">Add, edit, or remove items from the main sidebar.</p>
-            </div>
-            <Button size="sm" onClick={() => openFormDialog(null)}>
-                <Plus className="mr-2" /> Create New Item
-            </Button>
+        <div className="mb-4">
+          <h2 className="text-2xl font-bold">Manage Sidebar Visibility</h2>
+          <p className="text-muted-foreground">
+            Control which user roles can see each sidebar menu item. Changes are
+            saved automatically.
+          </p>
         </div>
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Order</TableHead>
-                <TableHead>Icon</TableHead>
-                <TableHead>Label</TableHead>
-                <TableHead>Path</TableHead>
-                <TableHead>Visible To</TableHead>
-                <TableHead><span className="sr-only">Actions</span></TableHead>
+                <TableHead className="w-[250px]">Menu Item</TableHead>
+                {availableRoles.map((role) => (
+                  <TableHead key={role} className="text-center">
+                    {role}
+                  </TableHead>
+                ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {isNavItemsLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
-                    <Loader2 className='h-6 w-6 animate-spin mx-auto' />
+                  <TableCell
+                    colSpan={1 + availableRoles.length}
+                    className="h-24 text-center"
+                  >
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : (
                 navItems?.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.order}</TableCell>
-                    <TableCell><Icon name={item.icon} className="h-5 w-5" /></TableCell>
-                    <TableCell>{item.label}</TableCell>
-                    <TableCell><code className="text-sm bg-muted p-1 rounded-sm">{item.path}</code></TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 flex-wrap">
-                        {item.roles.map(role => <Badge key={role} variant="secondary">{role}</Badge>)}
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <Icon name={item.icon} className="h-5 w-5" />
+                        <div>
+                          <span>{item.label}</span>
+                          <Badge
+                            variant="outline"
+                            className="ml-2 font-mono text-xs"
+                          >
+                            {item.path}
+                          </Badge>
+                        </div>
                       </div>
                     </TableCell>
-                    <TableCell>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => openFormDialog(item)}><Edit className="mr-2 h-4 w-4" /> Edit</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openDeleteDialog(item)}><Trash2 className="mr-2 h-4 w-4" /> Delete</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </TableCell>
+                    {availableRoles.map((role) => (
+                      <TableCell key={role} className="text-center">
+                        <Checkbox
+                          checked={item.roles.includes(role)}
+                          onCheckedChange={(checked) => {
+                            handleRoleChange(item.id, role, !!checked);
+                          }}
+                          aria-label={`Allow ${role} to see ${item.label}`}
+                          disabled={role === 'Super Admin'} // Super Admin always has access
+                        />
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
         </div>
-        
-        {/* Form Dialog */}
-        <Dialog open={isFormOpen} onOpenChange={setFormOpen}>
-            <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>{selectedItem ? 'Edit' : 'Create'} Navigation Item</DialogTitle>
-                    <DialogDescription>Fill in the details for the sidebar menu item.</DialogDescription>
-                </DialogHeader>
-                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 pt-4">
-                     <div className="space-y-2">
-                        <Label htmlFor="label">Label</Label>
-                        <Input id="label" {...form.register('label')} placeholder="e.g. Dashboard"/>
-                        {form.formState.errors.label && <p className="text-sm text-destructive">{form.formState.errors.label.message}</p>}
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="path">Path</Label>
-                        <Input id="path" {...form.register('path')} placeholder="e.g. /dashboard"/>
-                        <p className="text-xs text-muted-foreground">The URL for the page, must start with a '/'.</p>
-                        {form.formState.errors.path && <p className="text-sm text-destructive">{form.formState.errors.path.message}</p>}
-                    </div>
-                     <div className='grid grid-cols-2 gap-4'>
-                        <div className="space-y-2">
-                            <Controller
-                                control={form.control}
-                                name="icon"
-                                render={({ field }) => (
-                                    <>
-                                        <Label>Icon</Label>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    className={cn("w-full justify-between", !field.value && "text-muted-foreground")}
-                                                >
-                                                    {field.value ? (
-                                                        <div className='flex items-center gap-2'>
-                                                            <Icon name={field.value} className='h-4 w-4'/>
-                                                            {field.value}
-                                                        </div>
-                                                    ) : (
-                                                        "Select icon"
-                                                    )}
-                                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-[300px] p-0">
-                                                <Command>
-                                                    <CommandInput placeholder="Search icon..." />
-                                                    <CommandList>
-                                                        <CommandEmpty>No icon found.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            {(iconNames || []).map((iconName) => (
-                                                                <CommandItem
-                                                                    key={iconName}
-                                                                    value={iconName}
-                                                                    onSelect={() => {
-                                                                        field.onChange(iconName);
-                                                                    }}
-                                                                >
-                                                                    <Icon name={iconName} className="mr-2 h-4 w-4" />
-                                                                    {iconName}
-                                                                    <Check
-                                                                        className={cn("ml-auto h-4 w-4", field.value === iconName ? "opacity-100" : "opacity-0")}
-                                                                    />
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                        {form.formState.errors.icon && <p className="text-sm text-destructive">{form.formState.errors.icon.message}</p>}
-                                    </>
-                                )}
-                             />
-                        </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="order">Order</Label>
-                            <Input id="order" type="number" {...form.register('order')} />
-                            {form.formState.errors.order && <p className="text-sm text-destructive">{form.formState.errors.order.message}</p>}
-                        </div>
-                    </div>
-                    <div className="space-y-3">
-                        <Label>Visible To Roles</Label>
-                        <div className="grid grid-cols-2 gap-4 rounded-md border p-4">
-                        {availableRoles.map((role) => (
-                            <Controller
-                                key={role}
-                                name="roles"
-                                control={form.control}
-                                render={({ field }) => (
-                                    <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id={`role-${role}`}
-                                            checked={field.value?.includes(role)}
-                                            onCheckedChange={(checked) => {
-                                                return checked
-                                                    ? field.onChange([...(field.value || []), role])
-                                                    : field.onChange(field.value?.filter((value) => value !== role));
-                                            }}
-                                        />
-                                        <Label htmlFor={`role-${role}`} className="font-normal">{role}</Label>
-                                    </div>
-                                )}
-                            />
-                        ))}
-                        </div>
-                        {form.formState.errors.roles && <p className="text-sm text-destructive">{form.formState.errors.roles.message}</p>}
-                    </div>
-
-                    <DialogFooter>
-                        <Button type="button" variant="ghost" onClick={() => setFormOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={isLoading}>
-                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            {selectedItem ? 'Save Changes' : 'Create Item'}
-                        </Button>
-                    </DialogFooter>
-                </form>
-            </DialogContent>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent>
-              <AlertDialogHeader>
-                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                      This will permanently delete the navigation item <span className="font-bold">"{selectedItem?.label}"</span>.
-                  </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90" disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Yes, delete
-                  </AlertDialogAction>
-              </AlertDialogFooter>
-          </AlertDialogContent>
-      </AlertDialog>
-    </main>
+      </main>
     </div>
   );
 }
