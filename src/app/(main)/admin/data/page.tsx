@@ -1,3 +1,4 @@
+
 'use client';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -94,7 +95,7 @@ export default function DataManagementPage() {
     }
     
     const handleExportUsers = () => {
-        const headers = ['id', 'name', 'email', 'role', 'createdAt'];
+        const headers = ['id', 'name', 'email'];
         downloadCSV(users || [], 'users-export.csv', headers);
     }
 
