@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DateRange } from 'react-day-picker';
-import { addDays, format, parseISO, isWithinInterval } from 'date-fns';
+import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 
@@ -96,25 +96,27 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
 
     const filteredTasks = useMemo(() => {
         if (!allTasks || !date?.from) return [];
-        const to = date.to || date.from;
+        // Ensure the end of the day is included in the interval
+        const to = date.to ? endOfDay(date.to) : endOfDay(date.from);
+        const from = startOfDay(date.from);
+
         return allTasks.filter(task => {
             if (!task.createdAt) return false;
             
-            // The `createdAt` field can be a Firestore Timestamp object or an ISO string.
-            // We need to handle both cases to prevent crashes.
             let taskDate: Date;
             if (task.createdAt instanceof Timestamp) {
-                // If it's a Firestore Timestamp, convert it to a JS Date.
                 taskDate = task.createdAt.toDate();
             } else if (typeof task.createdAt === 'string') {
-                // If it's a string, parse it.
                 taskDate = parseISO(task.createdAt);
-            } else {
-                // If it's neither, we can't process it.
+            } else if (task.createdAt && typeof task.createdAt === 'object' && 'seconds' in task.createdAt) {
+                // Handle plain object representation of Timestamp after serialization
+                taskDate = new Timestamp(task.createdAt.seconds, task.createdAt.nanoseconds).toDate();
+            }
+            else {
                 return false;
             }
 
-            return isWithinInterval(taskDate, { start: date.from!, end: to });
+            return isWithinInterval(taskDate, { start: from, end: to });
         });
     }, [allTasks, date]);
 
@@ -133,19 +135,24 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
 
   return (
     <>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
         <div>
             <h2 className="text-2xl font-bold tracking-tight">Pusat Analisis Kinerja</h2>
             <p className="text-muted-foreground">Analisis data operasional untuk pengambilan keputusan strategis.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(new Date()), to: endOfDay(new Date()) })}>Hari Ini</Button>
+            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -7)), to: endOfDay(new Date()) })}>7 Hari</Button>
+            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -30)), to: endOfDay(new Date()) })}>30 Hari</Button>
+            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(subYears(new Date(), 1)), to: endOfDay(new Date()) })}>1 Tahun</Button>
             <Popover>
                 <PopoverTrigger asChild>
                 <Button
                     id="date"
+                    size="sm"
                     variant={"outline"}
                     className={cn(
-                    "w-[300px] justify-start text-left font-normal",
+                    "w-[240px] justify-start text-left font-normal",
                     !date && "text-muted-foreground"
                     )}
                 >
@@ -175,7 +182,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
                 />
                 </PopoverContent>
             </Popover>
-            <Button variant="outline" disabled>
+            <Button variant="outline" size="sm" disabled>
                 <FileDown className="mr-2 h-4 w-4" />
                 Ekspor ke PDF
             </Button>
