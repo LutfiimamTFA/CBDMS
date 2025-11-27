@@ -15,46 +15,50 @@ import {
 } from '@/components/ui/sidebar';
 import {
   LayoutDashboard,
-  FileText,
-  User,
-  ClipboardList,
-  Loader2,
   Users,
-  Shield,
+  Database,
+  Settings,
+  Loader2,
+  ArrowLeft,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
-import { useI18n } from '@/context/i18n-provider';
 import { useUserProfile } from '@/firebase';
 import { useEffect } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
-export default function MainLayout({
+export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { t } = useI18n();
   const router = useRouter();
+  const { toast } = useToast();
   const { user, profile, isLoading } = useUserProfile();
 
   useEffect(() => {
-    if (!isLoading && !user) {
-      router.push('/login');
+    if (!isLoading) {
+      if (!user) {
+        router.push('/login');
+      } else if (profile && profile.role !== 'Super Admin') {
+        toast({
+          variant: 'destructive',
+          title: 'Unauthorized Access',
+          description: 'You do not have permission to view the admin area.',
+        });
+        router.push('/dashboard');
+      }
     }
-  }, [user, isLoading, router]);
+  }, [user, profile, isLoading, router, toast]);
 
   const navItems = [
-    { href: '/dashboard', icon: LayoutDashboard, label: t('nav.board') },
-    { href: '/tasks', icon: ClipboardList, label: t('nav.list') },
-    { href: '/reports', icon: FileText, label: t('nav.reports') },
+    { href: '/admin/dashboard', icon: LayoutDashboard, label: 'Overview' },
+    { href: '/admin/users', icon: Users, label: 'User Management' },
+    { href: '/admin/data', icon: Database, label: 'Data Management' },
+    { href: '/admin/settings', icon: Settings, label: 'App Settings' },
   ];
 
-  // Conditionally add the "Admin" nav item only after profile has loaded and role is checked.
-  if (!isLoading && profile?.role === 'Super Admin') {
-    navItems.push({ href: '/admin/dashboard', icon: Shield, label: 'Admin' });
-  }
-
-  if (isLoading || !user) {
+  if (isLoading || !profile || profile.role !== 'Super Admin') {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -88,13 +92,10 @@ export default function MainLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Link href="/settings">
-                <SidebarMenuButton
-                  isActive={pathname === '/settings'}
-                  tooltip={'Profile'}
-                >
-                  <User />
-                  <span>{'Profile'}</span>
+              <Link href="/dashboard">
+                <SidebarMenuButton tooltip={'Back to App'}>
+                  <ArrowLeft />
+                  <span>{'Back to App'}</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
