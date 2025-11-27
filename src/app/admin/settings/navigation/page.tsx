@@ -273,7 +273,7 @@ export default function NavigationSettingsPage() {
                                                     <CommandList>
                                                         <CommandEmpty>No icon found.</CommandEmpty>
                                                         <CommandGroup>
-                                                            {(iconNames || []).map((iconName) => (
+                                                            {iconNames.map((iconName) => (
                                                                 <CommandItem
                                                                     key={iconName}
                                                                     value={iconName}
@@ -363,4 +363,5 @@ export default function NavigationSettingsPage() {
       </AlertDialog>
     </div>
   );
-}
+
+    
