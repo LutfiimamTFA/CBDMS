@@ -144,7 +144,6 @@ export function TaskDetailsSheet({
     resolver: zodResolver(taskDetailsSchema),
   });
   
-  // Resets form and all local states when the sheet is opened or the task prop changes.
   useEffect(() => {
     if (initialTask && open) {
         form.reset({
@@ -163,7 +162,7 @@ export function TaskDetailsSheet({
         setTimeLogs(initialTask.timeLogs || []);
         setTimeTracked(initialTask.timeTracked || 0);
         setAttachments(initialTask.attachments || []);
-        setIsEditing(false); // Always start in read-only mode
+        setIsEditing(false);
     }
   }, [initialTask, form, open]);
 
@@ -176,7 +175,6 @@ export function TaskDetailsSheet({
     }
     if (!isOpen) {
         setIsEditing(false);
-        // If the component was opened from a direct URL, redirect on close.
         if (window.location.pathname.startsWith('/tasks/')) {
           router.push('/dashboard');
         }
@@ -339,7 +337,6 @@ export function TaskDetailsSheet({
         toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload files. Please try again.' });
     } finally {
         setIsUploading(false);
-        // Reset file input
         if (fileInputRef.current) fileInputRef.current.value = '';
     }
 };
@@ -421,6 +418,13 @@ export function TaskDetailsSheet({
     setCurrentTags(currentTags.filter(t => t.label !== tagLabel));
   }
 
+  const ReadOnlyField = ({ label, children }: { label: string, children: React.ReactNode }) => (
+    <div className="grid grid-cols-3 items-center gap-2">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="col-span-2 text-sm font-medium">{children}</div>
+    </div>
+  );
+
 
   return (
     <>
@@ -439,7 +443,6 @@ export function TaskDetailsSheet({
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm"><Star className="h-4 w-4 mr-2"/> Favorite</Button>
                     <Button variant="ghost" size="sm"><Share2 className="h-4 w-4 mr-2"/> Share</Button>
                      <Button variant="ghost" size="sm"><LinkIcon className="h-4 w-4 mr-2"/> Copy Link</Button>
                     <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
@@ -458,16 +461,17 @@ export function TaskDetailsSheet({
                            <h2 className="text-2xl font-bold">{form.getValues('title')}</h2>
                         )}
 
-                        {isEditing ? (
-                           <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
-                        ) : (
-                           <p className="text-muted-foreground">{form.getValues('description') || 'No description provided.'}</p>
-                        )}
+                        <div className="space-y-2">
+                          <h3 className="font-semibold text-sm">Description</h3>
+                          {isEditing ? (
+                            <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
+                          ) : (
+                            <p className="text-muted-foreground text-sm">{form.getValues('description') || 'No description provided.'}</p>
+                          )}
+                        </div>
 
-                        <Separator/>
-                        
                         <div className="space-y-4">
-                          <h3 className="font-semibold flex items-center gap-2"><Paperclip/> Attachments</h3>
+                          <h3 className="font-semibold flex items-center gap-2 text-sm"><Paperclip className='h-4 w-4'/> Attachments</h3>
                            {attachments.length > 0 && (
                             <div className="space-y-2">
                               {attachments.map(att => (
@@ -556,119 +560,150 @@ export function TaskDetailsSheet({
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                     <FormField control={form.control} name="status" render={({ field }) => (
-                         <FormItem className="grid grid-cols-3 items-center gap-2">
-                            <FormLabel className="text-muted-foreground">Status</FormLabel>
-                            <div className="col-span-2">
-                                <Select onValueChange={field.onChange} value={field.value} disabled={!isEditing}>
-                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                    <SelectContent>{Object.values(statusInfo).map(s => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{s.label}</div></SelectItem>))}</SelectContent>
-                                </Select>
-                            </div>
-                         </FormItem>
-                     )}/>
-                     <FormField control={form.control} name="priority" render={({ field }) => (
-                         <FormItem className="grid grid-cols-3 items-center gap-2">
-                            <FormLabel className="text-muted-foreground">Priority</FormLabel>
-                            <div className="col-span-2 flex items-center gap-2">
-                                <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value} disabled={!isEditing}>
-                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                    <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
-                                </Select>
-                                {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
-                            </div>
-                         </FormItem>
-                     )}/>
-                      <FormField control={form.control} name="dueDate" render={({ field }) => (
-                          <FormItem className="grid grid-cols-3 items-center gap-2">
-                             <FormLabel className="text-muted-foreground">Due Date</FormLabel>
-                             <div className="col-span-2">
-                                <Input type="date" {...field} value={field.value || ''} readOnly={!isEditing} className={!isEditing ? 'border-none p-0' : ''}/>
-                             </div>
-                          </FormItem>
-                      )}/>
-                    <Separator/>
-                    
-                    <FormItem>
-                        <FormLabel className="text-muted-foreground">Assignees</FormLabel>
-                         {currentAssignees.map(user => (
-                            <div key={user.id} className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-3">
-                                    <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                    <p className="text-sm font-medium">{user.name}</p>
-                                </div>
-                                {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
-                            </div>
-                        ))}
-                        {isEditing && (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-60">
-                                    <div className="space-y-2">
-                                        {(allUsers || []).map((user) => (
-                                            <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
-                                                <Avatar className="h-6 w-6 mr-2">
-                                                    <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                                    <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
-                                                </Avatar>
-                                                <span>{user.name}</span>
-                                            </Button>
-                                        ))}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    </FormItem>
-                    
-                    <FormItem>
-                        <FormLabel className="text-muted-foreground">Tags</FormLabel>
-                         <div className="flex flex-wrap gap-2">
-                            {currentTags.map(tag => (
-                                <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
-                                    {tag.label}
-                                    {isEditing && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
-                                </div>
-                            ))}
-                            {isEditing && (
-                                 <Popover>
-                                    <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
-                                    <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
-                                </Popover>
-                            )}
-                         </div>
-                    </FormItem>
+                    <div className='space-y-4 p-4 rounded-lg border'>
+                      <h3 className='font-semibold text-sm'>Task Details</h3>
+                      <Separator/>
+                       {isEditing ? (
+                         <>
+                           <FormField control={form.control} name="status" render={({ field }) => (
+                               <FormItem className="grid grid-cols-3 items-center gap-2">
+                                  <FormLabel className="text-muted-foreground">Status</FormLabel>
+                                  <div className="col-span-2">
+                                      <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                      <SelectContent>{Object.values(statusInfo).map(s => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{s.label}</div></SelectItem>))}</SelectContent>
+                                      </Select>
+                                  </div>
+                               </FormItem>
+                           )}/>
+                           <FormField control={form.control} name="priority" render={({ field }) => (
+                               <FormItem className="grid grid-cols-3 items-center gap-2">
+                                  <FormLabel className="text-muted-foreground">Priority</FormLabel>
+                                  <div className="col-span-2 flex items-center gap-2">
+                                      <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
+                                          <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                          <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
+                                      </Select>
+                                      {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+                                  </div>
+                               </FormItem>
+                           )}/>
+                           <FormField control={form.control} name="dueDate" render={({ field }) => (
+                                <FormItem className="grid grid-cols-3 items-center gap-2">
+                                   <FormLabel className="text-muted-foreground">Due Date</FormLabel>
+                                   <div className="col-span-2"><Input type="date" {...field} value={field.value || ''} /></div>
+                                </FormItem>
+                            )}/>
+                         </>
+                       ) : (
+                         <>
+                            <ReadOnlyField label="Status">
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2 w-2 rounded-full ${form.getValues('status') === 'To Do' ? 'bg-yellow-500' : form.getValues('status') === 'Doing' ? 'bg-blue-500' : 'bg-green-500'}`}></span>
+                                {form.getValues('status')}
+                              </div>
+                            </ReadOnlyField>
+                            <ReadOnlyField label="Priority">
+                               <div className="flex items-center gap-2">
+                                  {React.createElement(priorityInfo[form.getValues('priority')].icon, { className: `h-4 w-4 ${priorityInfo[form.getValues('priority')].color}` })}
+                                  {form.getValues('priority')}
+                               </div>
+                            </ReadOnlyField>
+                            <ReadOnlyField label="Due Date">
+                              {form.getValues('dueDate') ? format(parseISO(form.getValues('dueDate')!), 'MMM d, yyyy') : 'No due date'}
+                            </ReadOnlyField>
+                         </>
+                       )}
+                    </div>
 
-                    <Separator/>
+                    <div className='space-y-4 p-4 rounded-lg border'>
+                      <h3 className='font-semibold text-sm'>People</h3>
+                      <Separator/>
+                      <FormItem>
+                          <FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
+                           {currentAssignees.map(user => (
+                              <div key={user.id} className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-3">
+                                      <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                      <p className="text-sm font-medium">{user.name}</p>
+                                  </div>
+                                  {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
+                              </div>
+                          ))}
+                          {isEditing && (
+                              <Popover>
+                                  <PopoverTrigger asChild>
+                                      <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-60">
+                                      <div className="space-y-2">
+                                          {(allUsers || []).map((user) => (
+                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
+                                                  <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                                  <span>{user.name}</span>
+                                              </Button>
+                                          ))}
+                                      </div>
+                                  </PopoverContent>
+                              </Popover>
+                          )}
+                      </FormItem>
+                    </div>
 
-                     <FormField control={form.control} name="timeEstimate" render={({ field }) => (
-                         <FormItem className="grid grid-cols-3 items-center gap-2">
-                            <FormLabel className="text-muted-foreground">Estimate</FormLabel>
-                            <div className="col-span-2">
-                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} readOnly={!isEditing} placeholder="Hours" className={!isEditing ? 'border-none p-0' : ''}/>
+                    <div className='space-y-4 p-4 rounded-lg border'>
+                      <h3 className='font-semibold text-sm'>Categorization</h3>
+                      <Separator/>
+                      <FormItem>
+                          <FormLabel className="text-muted-foreground text-sm">Tags</FormLabel>
+                           <div className="flex flex-wrap gap-2">
+                              {currentTags.map(tag => (
+                                  <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
+                                      {tag.label}
+                                      {isEditing && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
+                                  </div>
+                              ))}
+                              {isEditing && (
+                                   <Popover>
+                                      <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
+                                      <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
+                                  </Popover>
+                              )}
+                           </div>
+                      </FormItem>
+                    </div>
+
+                    <div className='space-y-4 p-4 rounded-lg border'>
+                      <h3 className='font-semibold text-sm'>Time Management</h3>
+                      <Separator/>
+                       {isEditing ? (
+                         <FormField control={form.control} name="timeEstimate" render={({ field }) => (
+                           <FormItem className="grid grid-cols-3 items-center gap-2">
+                              <FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel>
+                              <div className="col-span-2"><Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" /></div>
+                           </FormItem>
+                         )}/>
+                       ) : (
+                         <ReadOnlyField label="Estimate">{timeEstimateValue} hours</ReadOnlyField>
+                       )}
+                       
+                       <div className="space-y-2">
+                          <div className="grid grid-cols-3 items-center gap-2">
+                              <span className="text-sm text-muted-foreground">Tracked</span>
+                              <span className="col-span-2 text-sm font-medium">{timeTracked.toFixed(2)}h</span>
+                          </div>
+                          <Progress value={timeTrackingProgress} />
+                       </div>
+
+                        <div className="space-y-2">
+                            <div className='flex items-center justify-between'>
+                                <h4 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Stopwatch</h4>
+                                <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
                             </div>
-                         </FormItem>
-                     )}/>
-                     
-                     <div className="space-y-2">
-                        <div className="grid grid-cols-3 items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Time Tracked</span>
-                            <span className="col-span-2 text-sm font-medium">{timeTracked.toFixed(2)}h</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>{isRunning ? <PauseCircle className="mr-2" /> : <PlayCircle className="mr-2" />}{isRunning ? 'Pause' : 'Start'}</Button>
+                              <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}><LogIn className="mr-2" />Log Time</Button>
+                            </div>
                         </div>
-                        <Progress value={timeTrackingProgress} />
-                     </div>
-
-                      <div className="space-y-4 rounded-lg border p-4">
-                          <div className='flex items-center justify-between'>
-                              <h3 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Time Tracking</h3>
-                              <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>{isRunning ? <PauseCircle className="mr-2" /> : <PlayCircle className="mr-2" />}{isRunning ? 'Pause' : 'Start'}</Button>
-                            <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}><LogIn className="mr-2" />Log Time</Button>
-                          </div>
-                      </div>
+                    </div>
 
                   </div>
                 </ScrollArea>
