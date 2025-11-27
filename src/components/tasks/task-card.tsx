@@ -28,7 +28,7 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
   const priorityTranslationKey = `priority.${task.priority.toLowerCase()}` as any;
 
   return (
-    <Link href={`/tasks/${task.id}`} className='w-full'>
+    <TaskDetailsSheet task={task}>
         <Card
             draggable
             onDragStart={(e) => onDragStart(e, task.id)}
@@ -108,6 +108,6 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
             </div>
             </CardContent>
         </Card>
-    </Link>
+    </TaskDetailsSheet>
   );
 }

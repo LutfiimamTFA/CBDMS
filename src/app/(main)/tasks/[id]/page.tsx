@@ -4,39 +4,36 @@ import React, { useEffect, useState, use } from 'react';
 import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
 import { notFound, useRouter } from 'next/navigation';
 import type { Task } from '@/lib/types';
-import { useDoc, useFirebase, useMemoFirebase, useFirestore } from '@/firebase';
+import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
-export default function TaskPage({ params }: { params: Promise<{ id: string }> }) {
-  const [isOpen, setIsOpen] = useState(false);
+export default function TaskPage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const resolvedParams = use(params);
-
+  
+  const [isOpen, setIsOpen] = useState(true); // Always start open
   const firestore = useFirestore();
 
   const taskRef = useMemoFirebase(() => {
-    if (!firestore || !resolvedParams.id) return null;
-    return doc(firestore, 'tasks', resolvedParams.id);
-  }, [firestore, resolvedParams.id]);
+    if (!firestore || !params.id) return null;
+    return doc(firestore, 'tasks', params.id);
+  }, [firestore, params.id]);
 
-  const { data: task, isLoading } = useDoc<Task>(taskRef);
+  const { data: task, isLoading, error } = useDoc<Task>(taskRef);
 
   useEffect(() => {
-    if (!isLoading) {
-      if (task) {
-        setIsOpen(true);
-      } else {
-        notFound();
-      }
+    // If loading completes and there's no task or an error occurred, navigate to not found.
+    if (!isLoading && (!task || error)) {
+      notFound();
     }
-  }, [isLoading, task]);
+  }, [isLoading, task, error]);
 
   const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
     if (!open) {
+      // When the sheet is closed, navigate back to the main dashboard.
       router.push('/dashboard');
     }
-    setIsOpen(open);
   };
 
   if (isLoading) {
@@ -47,18 +44,21 @@ export default function TaskPage({ params }: { params: Promise<{ id: string }> }
     );
   }
 
+  // This check is important for the initial render before the useEffect runs.
   if (!task) {
      return notFound();
   }
 
   return (
     <div className="h-svh w-full bg-background">
+        {/* The sheet is now controlled by this page's state */}
         <TaskDetailsSheet 
             task={task} 
             open={isOpen}
             onOpenChange={handleOpenChange}
         >
-            <div className="sr-only" />
+            {/* The trigger is now implicit; the page itself controls the sheet */}
+            <div className="sr-only">Task details page</div>
         </TaskDetailsSheet>
     </div>
   );

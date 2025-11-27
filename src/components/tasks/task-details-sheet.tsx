@@ -50,6 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useRouter } from 'next/navigation';
 
 
 const taskDetailsSchema = z.object({
@@ -98,7 +99,9 @@ export function TaskDetailsSheet({
 }) {
   const { t } = useI18n();
   const { toast } = useToast();
+  const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
 
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -132,13 +135,16 @@ export function TaskDetailsSheet({
 
   const { profile: currentUser } = useUserProfile();
 
+  const isControlled = openProp !== undefined && onOpenChangeProp !== undefined;
+  const open = isControlled ? openProp : internalOpen;
+
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
   });
   
   // Resets form and all local states when the sheet is opened or the task prop changes.
   useEffect(() => {
-    if (initialTask) {
+    if (initialTask && open) {
         form.reset({
             title: initialTask.title,
             description: initialTask.description || '',
@@ -157,15 +163,21 @@ export function TaskDetailsSheet({
         setAttachments(initialTask.attachments || []);
         setIsEditing(false); // Always start in read-only mode
     }
-  }, [initialTask, form, openProp]);
+  }, [initialTask, form, open]);
 
 
   const handleOpenChange = (isOpen: boolean) => {
-    if (onOpenChangeProp) {
-        if (!isOpen) {
-            setIsEditing(false);
-        }
+    if (isControlled) {
         onOpenChangeProp(isOpen);
+    } else {
+        setInternalOpen(isOpen);
+    }
+    if (!isOpen) {
+        setIsEditing(false);
+        // If the component was opened from a direct URL, redirect on close.
+        if (window.location.pathname.startsWith('/tasks/')) {
+          router.push('/dashboard');
+        }
     }
   }
 
@@ -396,8 +408,8 @@ export function TaskDetailsSheet({
 
   return (
     <>
-      <Sheet open={openProp} onOpenChange={handleOpenChange}>
-        <SheetTrigger asChild>{children}</SheetTrigger>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetTrigger asChild onClick={() => handleOpenChange(true)}>{children}</SheetTrigger>
         <SheetContent className="w-full sm:max-w-4xl grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>

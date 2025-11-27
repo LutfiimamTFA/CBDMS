@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Status, Priority } from '@/lib/types';
+import type { Task, Status, Priority, User } from '@/lib/types';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -48,7 +48,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
-import { useCollection, useFirebase, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
@@ -72,20 +72,24 @@ const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
 
 export function TasksDataTable() {
   const firestore = useFirestore();
-  const { user } = useFirebase();
+  const { profile, isLoading: isProfileLoading } = useUserProfile();
 
   const tasksQuery = useMemoFirebase(() => {
-    if (!firestore || !user?.uid) return null;
+    if (!firestore || !profile) return null;
+    // Admins and Managers see all tasks
+    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
+      return query(collection(firestore, 'tasks'));
+    }
+    // Employees only see tasks assigned to them.
     return query(
       collection(firestore, 'tasks'),
-      where('assigneeIds', 'array-contains', user.uid)
+      where('assigneeIds', 'array-contains', profile.id)
     );
-  }, [firestore, user?.uid]);
+  }, [firestore, profile]);
 
-  
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  
   const [data, setData] = React.useState<Task[]>([]);
-
   React.useEffect(() => {
     setData(tasks || []);
   }, [tasks]);
@@ -232,7 +236,7 @@ export function TasksDataTable() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <TaskDetailsSheet task={task}>
+                <TaskDetailsSheet task={task} open={false}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
                 </TaskDetailsSheet>
                 <DropdownMenuItem
@@ -260,7 +264,7 @@ export function TasksDataTable() {
       cell: ({ row }) => {
         const task = row.original;
         return (
-          <TaskDetailsSheet task={task}>
+          <TaskDetailsSheet task={task} open={false}>
             <div className="font-medium cursor-pointer hover:underline">{task.title}</div>
           </TaskDetailsSheet>
         );
@@ -384,7 +388,7 @@ export function TasksDataTable() {
     onRowSelectionChange: setRowSelection,
     initialState: {
         pagination: {
-            pageSize: 5,
+            pageSize: 10,
         },
         sorting: [
             {
@@ -402,6 +406,7 @@ export function TasksDataTable() {
   });
 
   const isFiltered = table.getState().columnFilters.length > 0
+  const isLoading = isTasksLoading || isProfileLoading;
 
   return (
     <>
@@ -472,7 +477,16 @@ export function TasksDataTable() {
               ))}
             </TableHeader>
             <TableBody>
-              {table.getRowModel().rows?.length ? (
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} className="h-24 text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                      <span>Loading tasks...</span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
@@ -494,7 +508,7 @@ export function TasksDataTable() {
                     colSpan={columns.length}
                     className="h-24 text-center"
                   >
-                    {isTasksLoading ? 'Loading tasks...' : t('tasks.noresults')}
+                    {t('tasks.noresults')}
                   </TableCell>
                 </TableRow>
               )}
@@ -519,7 +533,7 @@ export function TasksDataTable() {
                       <SelectValue placeholder={table.getState().pagination.pageSize} />
                       </SelectTrigger>
                       <SelectContent side="top">
-                      {[5, 10, 20, 30, 40, 50].map((pageSize) => (
+                      {[10, 20, 30, 40, 50].map((pageSize) => (
                           <SelectItem key={pageSize} value={`${pageSize}`}>
                           {pageSize}
                           </SelectItem>
