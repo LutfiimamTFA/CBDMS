@@ -53,16 +53,8 @@ export default function MainLayout({
     navItems.push({ href: '/users', icon: Users, label: 'Users' });
   }
 
-  if (isLoading) {
+  if (isLoading || !user) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
