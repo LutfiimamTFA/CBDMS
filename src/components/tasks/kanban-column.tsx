@@ -18,25 +18,17 @@ import { useMemo } from 'react';
 interface KanbanColumnProps {
   status: Status;
   tasks: Task[];
-  onDrop: (e: React.DragEvent<HTMLDivElement>, status: Status) => void;
-  onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
 }
 
 export function KanbanColumn({
   status,
   tasks,
-  onDrop,
-  onDragStart,
 }: KanbanColumnProps) {
   const info = statusInfo[status];
   const Icon = info.icon;
   const { t } = useI18n();
   const translationKey =
     `status.${status.toLowerCase().replace(' ', '')}` as any;
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  };
 
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
@@ -53,8 +45,6 @@ export function KanbanColumn({
   return (
     <div
       className="flex h-full flex-col rounded-lg bg-secondary/50"
-      onDragOver={handleDragOver}
-      onDrop={(e) => onDrop(e, status)}
     >
       <div className="flex items-center justify-between p-4">
         <div className="flex items-center gap-2">
@@ -106,7 +96,7 @@ export function KanbanColumn({
       <ScrollArea className="flex-1 px-2">
         <div className="flex flex-col gap-3 p-2">
           {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} onDragStart={onDragStart} />
+            <TaskCard key={task.id} task={task} />
           ))}
         </div>
       </ScrollArea>

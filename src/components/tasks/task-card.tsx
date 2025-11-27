@@ -13,10 +13,9 @@ import Link from 'next/link';
 
 interface TaskCardProps {
   task: Task;
-  onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
 }
 
-export function TaskCard({ task, onDragStart }: TaskCardProps) {
+export function TaskCard({ task }: TaskCardProps) {
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
   const { t } = useI18n();
@@ -30,8 +29,6 @@ export function TaskCard({ task, onDragStart }: TaskCardProps) {
   return (
     <TaskDetailsSheet task={task}>
         <Card
-            draggable
-            onDragStart={(e) => onDragStart(e, task.id)}
             className="cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full"
         >
             <CardContent className="p-4">
