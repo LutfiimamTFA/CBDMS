@@ -1,5 +1,7 @@
+
 'use client';
 
+import { useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { SmartSuggestions } from '@/components/smart-suggestions/page';
