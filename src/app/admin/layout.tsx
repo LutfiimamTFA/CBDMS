@@ -115,7 +115,7 @@ export default function AdminLayout({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={isUserManagementPage}
+                      isActive={false}
                       className="w-full justify-between"
                       tooltip={userManagementNav.label}
                     >
