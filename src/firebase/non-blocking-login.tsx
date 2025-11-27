@@ -9,7 +9,7 @@ import {
   sendEmailVerification,
   UserCredential,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, Firestore, getCountFromServer, collection } from 'firebase/firestore';
+import { doc, setDoc, getDoc, Firestore, serverTimestamp } from 'firebase/firestore';
 
 const SUPER_ADMIN_EMAIL = 'super.admin@workwise.app';
 
@@ -17,22 +17,26 @@ async function createUserProfile(firestore: Firestore, user: UserCredential['use
   const userProfileRef = doc(firestore, 'users', user.uid);
   const docSnap = await getDoc(userProfileRef);
 
+  // Only create a profile if it doesn't already exist (e.g. from Google sign-in)
   if (!docSnap.exists()) {
     // Check if the email is the designated Super Admin email
+    // This is a simple way to bootstrap the first admin user.
     const role = user.email === SUPER_ADMIN_EMAIL ? 'Super Admin' : 'Employee';
 
     await setDoc(userProfileRef, {
+      id: user.uid,
       name: name,
       email: user.email,
       role: role,
-      companyId: 'company-a',
+      companyId: 'company-a', // Default company for all new users
       avatarUrl: user.photoURL || `https://i.pravatar.cc/150?u=${user.uid}`,
+      createdAt: serverTimestamp(),
     });
   }
 }
 
 /**
- * Initiates an email/password sign-in and checks for email verification.
+ * Initiates an email/password sign-in.
  * Returns a promise that resolves on success and rejects on failure.
  */
 export function initiateEmailSignIn(
@@ -42,44 +46,14 @@ export function initiateEmailSignIn(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     signInWithEmailAndPassword(authInstance, email, password)
-      .then((userCredential) => {
-        resolve();
+      .then(() => {
+        resolve(); // Resolve on successful login
       })
       .catch((error) => {
-        reject(error);
+        reject(error); // Reject with the error on failure
       });
   });
 }
-
-/**
- * Initiates an email/password sign-up, creates a user profile in Firestore,
- * and sends a verification email.
- * Returns a promise that resolves on success and rejects on failure.
- */
-export function initiateEmailSignUp(
-  authInstance: Auth,
-  firestore: Firestore,
-  name: string,
-  email: string,
-  password: string
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    createUserWithEmailAndPassword(authInstance, email, password)
-      .then(async (userCredential) => {
-        try {
-          await createUserProfile(firestore, userCredential.user, name);
-          // No verification needed for now, just resolve
-          resolve();
-        } catch (setupError) {
-          reject(setupError);
-        }
-      })
-      .catch((createError) => {
-        reject(createError);
-      });
-  });
-}
-
 
 /**
  * Initiates a Google Sign-In flow using a popup.
@@ -94,8 +68,9 @@ export async function initiateGoogleSignIn(
   const result = await signInWithPopup(auth, provider);
   const user = result.user;
 
-  // Create profile on Google Sign-in if it doesn't exist
-  await createUserProfile(firestore, user, user.displayName || 'New User');
+  // Create profile on Google Sign-in if it doesn't exist.
+  // The name is taken from the Google account.
+  await createUserProfile(firestore, user, user.displayName || 'New Google User');
   
   return result;
 }
@@ -104,6 +79,7 @@ export async function initiateGoogleSignIn(
 /** Initiate sign-out (non-blocking). */
 export function initiateSignOut(authInstance: Auth): void {
   signOut(authInstance).catch((error) => {
+    // This is generally a safe operation, but we log errors just in case.
     console.error('Sign-out Error:', error);
   });
 }

@@ -14,7 +14,6 @@ import { Loader2 } from 'lucide-react';
 import {
   initiateGoogleSignIn,
   initiateEmailSignIn,
-  initiateEmailSignUp,
 } from '@/firebase/non-blocking-login';
 import { useAuth, useFirebase, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
@@ -22,7 +21,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Logo } from '@/components/logo';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -68,16 +66,7 @@ const signInSchema = z.object({
     .min(6, { message: 'Password must be at least 6 characters.' }),
 });
 
-const signUpSchema = z.object({
-  name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
-  email: z.string().email({ message: 'Invalid email address.' }),
-  password: z
-    .string()
-    .min(6, { message: 'Password must be at least 6 characters.' }),
-});
-
 type SignInFormValues = z.infer<typeof signInSchema>;
-type SignUpFormValues = z.infer<typeof signUpSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -86,17 +75,11 @@ export default function LoginPage() {
   const { toast } = useToast();
   const { user, isUserLoading } = useFirebase();
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [isSigningUp, setIsSigningUp] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
   
   const signInForm = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: '', password: '' },
-  });
-
-  const signUpForm = useForm<SignUpFormValues>({
-    resolver: zodResolver(signUpSchema),
-    defaultValues: { name: '', email: '', password: '' },
   });
 
   useEffect(() => {
@@ -120,31 +103,6 @@ export default function LoginPage() {
       });
     } finally {
       setIsSigningIn(false);
-    }
-  };
-
-  const onSignUp = async (data: SignUpFormValues) => {
-    if (!auth || !firestore) return;
-    setIsSigningUp(true);
-    try {
-      await initiateEmailSignUp(auth, firestore, data.name, data.email, data.password);
-      // After successful sign up, the useEffect will redirect to dashboard on login
-       toast({
-        title: 'Account Created',
-        description: "You can now sign in with your new account.",
-      });
-    } catch (error: any) {
-      const description =
-        error.code === 'auth/email-already-in-use'
-          ? 'This email is already registered. Please sign in.'
-          : 'Could not create your account. Please try again.';
-      toast({
-        variant: 'destructive',
-        title: 'Sign-up Failed',
-        description,
-      });
-    } finally {
-      setIsSigningUp(false);
     }
   };
 
@@ -193,126 +151,56 @@ export default function LoginPage() {
           <div className="mb-4 flex justify-center">
             <Logo />
           </div>
-          <CardTitle className="text-2xl">Welcome</CardTitle>
+          <CardTitle className="text-2xl">Welcome Back</CardTitle>
           <CardDescription>
-            Sign in or create an account to continue.
+            Sign in to access your dashboard. Accounts are created by an administrator.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-            <TabsContent value="signin">
-              <Form {...signInForm}>
-                <form
-                  onSubmit={signInForm.handleSubmit(onSignIn)}
-                  className="space-y-4 pt-4"
-                >
-                  <FormField
-                    control={signInForm.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label htmlFor="email-signin">Email</Label>
-                        <Input
-                          id="email-signin"
-                          type="email"
-                          placeholder="m@example.com"
-                          {...field}
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={signInForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label htmlFor="password-signin">Password</Label>
-                        <Input id="password-signin" type="password" {...field} />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSigningIn}
-                  >
-                    {isSigningIn && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Sign In
-                  </Button>
-                </form>
-              </Form>
-            </TabsContent>
-            <TabsContent value="signup">
-              <Form {...signUpForm}>
-                <form
-                  onSubmit={signUpForm.handleSubmit(onSignUp)}
-                  className="space-y-4 pt-4"
-                >
-                  <FormField
-                    control={signUpForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label htmlFor="name-signup">Full Name</Label>
-                        <Input
-                          id="name-signup"
-                          type="text"
-                          placeholder="John Doe"
-                          {...field}
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={signUpForm.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label htmlFor="email-signup">Email</Label>
-                        <Input
-                          id="email-signup"
-                          type="email"
-                          placeholder="m@example.com"
-                          {...field}
-                        />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={signUpForm.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <Label htmlFor="password-signup">Password</Label>
-                        <Input id="password-signup" type="password" {...field} />
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSigningUp}
-                  >
-                    {isSigningUp && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Create Account
-                  </Button>
-                </form>
-              </Form>
-            </TabsContent>
-          </Tabs>
+          <Form {...signInForm}>
+            <form
+              onSubmit={signInForm.handleSubmit(onSignIn)}
+              className="space-y-4 pt-4"
+            >
+              <FormField
+                control={signInForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <Label htmlFor="email-signin">Email</Label>
+                    <Input
+                      id="email-signin"
+                      type="email"
+                      placeholder="m@example.com"
+                      {...field}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={signInForm.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <Label htmlFor="password-signin">Password</Label>
+                    <Input id="password-signin" type="password" {...field} />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isSigningIn}
+              >
+                {isSigningIn && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                Sign In
+              </Button>
+            </form>
+          </Form>
 
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
