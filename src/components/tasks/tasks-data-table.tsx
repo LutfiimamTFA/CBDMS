@@ -340,9 +340,9 @@ export function TasksDataTable() {
               <Select
                 value={currentPriority}
                 onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
-                disabled={isChecking}
+                disabled={isChecking || profile?.role === 'Employee'}
               >
-                <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0">
+                <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0" disabled={profile?.role === 'Employee'}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -368,23 +368,41 @@ export function TasksDataTable() {
       header: t('tasks.column.assignees'),
       cell: ({ row }) => {
         const assignees = row.getValue('assignees') as any[] | undefined;
+        if (!assignees || assignees.length === 0) {
+            return <div className="text-muted-foreground">-</div>;
+        }
+        const firstAssignee = assignees[0];
+
         return (
-          <div className="flex -space-x-2">
+          <div className="flex items-center gap-2">
             <TooltipProvider>
-              {assignees?.map((assignee) => (
-                <Tooltip key={assignee.id}>
-                  <TooltipTrigger asChild>
-                    <Avatar className="h-7 w-7 border-2 border-background">
-                      <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
-                      <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{assignee.name}</p>
-                  </TooltipContent>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div className='flex items-center gap-2'>
+                            <Avatar className="h-7 w-7 border-2 border-background">
+                            <AvatarImage src={firstAssignee.avatarUrl} alt={firstAssignee.name} />
+                            <AvatarFallback>{firstAssignee.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium">{firstAssignee.name}</span>
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>{firstAssignee.name}</p>
+                    </TooltipContent>
                 </Tooltip>
-              ))}
             </TooltipProvider>
+            {assignees.length > 1 && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Badge variant="secondary" className="cursor-default">+{assignees.length - 1}</Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {assignees.slice(1).map(a => <p key={a.id}>{a.name}</p>)}
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
           </div>
         );
       },
@@ -396,19 +414,22 @@ export function TasksDataTable() {
         const createdBy = row.original.createdBy;
         if (!createdBy) return <div className="text-muted-foreground">-</div>;
         return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Avatar className="h-7 w-7">
-                  <AvatarImage src={createdBy.avatarUrl} alt={createdBy.name} />
-                  <AvatarFallback>{createdBy.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{createdBy.name}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+           <div className="flex items-center gap-2">
+             <TooltipProvider>
+                <Tooltip>
+                <TooltipTrigger asChild>
+                    <Avatar className="h-7 w-7">
+                    <AvatarImage src={createdBy.avatarUrl} alt={createdBy.name} />
+                    <AvatarFallback>{createdBy.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>{createdBy.name}</p>
+                </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+            <span className="font-medium">{createdBy.name}</span>
+          </div>
         );
       },
     },
@@ -651,3 +672,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
