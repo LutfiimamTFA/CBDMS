@@ -109,7 +109,7 @@ export type PermissionSettings = {
     // Action Permissions
     canViewAssignedTasks: boolean;
     canCommentOnTasks: boolean;
-    canApproveContent: boolean;
+    canApproveContent: true,
   };
 };
 
@@ -137,5 +137,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
-    

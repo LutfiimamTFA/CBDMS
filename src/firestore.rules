@@ -92,11 +92,17 @@ service cloud.firestore {
       }
     }
     
-    // By default, deny all other access. This is important for security.
+    // Rules for 'navigationItems' collection
+    match /navigationItems/{navItemId} {
+        // Allow read for any signed-in user, visibility is handled client-side.
+        allow read: if isSignedIn();
+        // Only Super Admins can create, update, or delete navigation items.
+        allow write: if isSuperAdmin();
+    }
+    
+    // Deny all other access by default.
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
-
-    
