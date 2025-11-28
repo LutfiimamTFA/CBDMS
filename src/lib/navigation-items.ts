@@ -31,6 +31,6 @@ export const defaultNavItems: NavigationItem[] = [
     path: '/reports',
     icon: 'FileText',
     order: 4,
-    roles: ['Super Admin', 'Manager'],
+    roles: ['Super Admin', 'Manager', 'Employee'],
   },
 ];
