@@ -143,6 +143,25 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const { data: allTasks } = useCollection<Task>(tasksCollectionRef);
 
+  const userWorkload = useMemo(() => {
+    const workloadMap = new Map<string, number>();
+    if (!allTasks || !users) return workloadMap;
+
+    users.forEach(u => workloadMap.set(u.id, 0));
+
+    allTasks.forEach(task => {
+        if (task.status !== 'Done') {
+            task.assigneeIds.forEach(assigneeId => {
+                if (workloadMap.has(assigneeId)) {
+                    workloadMap.set(assigneeId, (workloadMap.get(assigneeId) || 0) + 1);
+                }
+            });
+        }
+    });
+
+    return workloadMap;
+  }, [allTasks, users]);
+
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -736,11 +755,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                       <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
                                           {(users || []).map((user) => (
                                               <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                  <Avatar className="h-6 w-6 mr-2">
-                                                      <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                                      <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
-                                                  </Avatar>
-                                                  <span>{user.name}</span>
+                                                  <div className="flex w-full items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Avatar className="h-6 w-6 mr-2">
+                                                            <AvatarImage src={user.avatarUrl} alt={user.name} />
+                                                            <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <span>{user.name}</span>
+                                                    </div>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {userWorkload.get(user.id) || 0} tugas aktif
+                                                    </span>
+                                                  </div>
                                               </DropdownMenuItem>
                                           ))}
                                       </DropdownMenuContent>
@@ -831,7 +857,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </Tabs>
 
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
+                      <Label className="flex items-center gap-2"><TagIcon className="w-4 h-4" />Tags</Label>
                       <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-10">
                         {selectedTags.map(tag => (<div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>{tag.label}<button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100"><X className="h-3 w-3" /></button></div>))}
                         <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 w-6 p-0">+</Button></PopoverTrigger>
