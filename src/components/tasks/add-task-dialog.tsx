@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import {
@@ -127,6 +128,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [blocking, setBlocking] = React.useState<string[]>([]);
   const [comments, setComments] = React.useState<Comment[]>([]);
   const [newComment, setNewComment] = React.useState('');
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<UserType[]>([]);
+  const [isMentioning, setIsMentioning] = React.useState(false);
   
   const firestore = useFirestore();
   const storage = useStorage();
@@ -251,8 +254,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     };
     batch.set(newTaskRef, newTaskData);
 
-    // 2. Create notifications for each assignee
+    // 2. Create notifications for each assignee (initial assignment)
     selectedUsers.forEach(assignee => {
+        if (assignee.id === currentUserProfile.id) return; // Don't notify self
         const notificationRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
         const notification: Omit<Notification, 'id'> = {
             userId: assignee.id,
@@ -270,12 +274,40 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         };
         batch.set(notificationRef, notification);
     });
+    
+    // 3. Create notifications for mentions in comments
+    comments.forEach(comment => {
+        const mentionedUsernames = comment.text.match(/@(\w+)/g)?.map(m => m.substring(1));
+        if (mentionedUsernames) {
+            const mentionedUsers = (users || []).filter(u => mentionedUsernames.includes(u.name.split(' ')[0]));
+            mentionedUsers.forEach(mentionedUser => {
+                if (mentionedUser.id === currentUserProfile.id) return; // Don't notify self
+                
+                const notifRef = doc(collection(firestore, `users/${mentionedUser.id}/notifications`));
+                const notification: Omit<Notification, 'id'> = {
+                    userId: mentionedUser.id,
+                    title: 'You were mentioned',
+                    message: `${comment.user.name} mentioned you in a comment on task: "${data.title}"`,
+                    taskId: newTaskRef.id,
+                    taskTitle: data.title,
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    createdBy: {
+                        id: comment.user.id,
+                        name: comment.user.name,
+                        avatarUrl: comment.user.avatarUrl,
+                    }
+                };
+                batch.set(notifRef, notification);
+            });
+        }
+    });
 
     try {
         await batch.commit();
         toast({
             title: 'Task Created',
-            description: `${data.title} has been added and assignees have been notified.`
+            description: `${data.title} has been added and relevant users have been notified.`
         });
 
         setOpen(false);
@@ -520,7 +552,31 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     };
     setComments([...comments, comment]);
     setNewComment('');
+    setIsMentioning(false);
   };
+
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+
+    const mentionMatch = text.match(/@(\w*)$/);
+    if (mentionMatch) {
+      setIsMentioning(true);
+      const searchTerm = mentionMatch[1].toLowerCase();
+      setMentionSuggestions((users || []).filter(u => u.name.toLowerCase().includes(searchTerm)));
+    } else {
+      setIsMentioning(false);
+    }
+  };
+
+  const handleMentionSelect = (user: UserType) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
+  };
+
 
   const subtaskProgress = useMemo(() => {
     if (subtasks.length === 0) return 0;
@@ -902,7 +958,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                <div className="space-y-2">{blocking.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks?.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setBlocking(b => b.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
                           </div>
                       </TabsContent>
-                      <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                         <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
                           {comments.map(comment => (
                               <div key={comment.id} className="flex gap-3">
@@ -914,10 +970,26 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                               </div>
                           ))}
                         </div>
+                        {isMentioning && (
+                          <Card className="absolute bottom-20 w-full max-w-sm shadow-lg">
+                            <CardContent className="p-2 max-h-48 overflow-y-auto">
+                              {mentionSuggestions.length > 0 ? (
+                                mentionSuggestions.map(u => (
+                                  <Button key={u.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(u)}>
+                                    <Avatar className="h-6 w-6"><AvatarImage src={u.avatarUrl} /><AvatarFallback>{u.name.charAt(0)}</AvatarFallback></Avatar>
+                                    {u.name}
+                                  </Button>
+                                ))
+                              ) : (
+                                <p className="p-2 text-sm text-muted-foreground">No users found.</p>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )}
                         <div className="flex gap-3 pt-4 border-t">
                              <Avatar className="h-8 w-8"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{currentUserProfile?.name?.charAt(0)}</AvatarFallback></Avatar>
                              <div className="flex-1 relative">
-                                <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-10" />
+                                <Textarea value={newComment} onChange={handleCommentChange} placeholder="Write a comment... use @ to mention" className="pr-10" />
                                 <div className="absolute top-2 right-2 flex gap-1"><Button type="button" variant="ghost" size="icon" className="h-6 w-6"><AtSign className="h-4 w-4"/></Button><Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button></div>
                              </div>
                         </div>

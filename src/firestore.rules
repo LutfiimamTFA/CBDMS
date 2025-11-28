@@ -62,8 +62,10 @@ service cloud.firestore {
       
       // Notification subcollection rules
       match /notifications/{notificationId} {
-        // A user can only access their own notifications.
-        allow read, write, create, update, delete: if isSignedIn() && request.auth.uid == userId;
+        // A user can read/update/delete their own notifications.
+        allow read, update, delete: if isSignedIn() && request.auth.uid == userId;
+        // Any signed-in user can create a notification for another user (for @mentions).
+        allow create: if isSignedIn();
       }
     }
 
