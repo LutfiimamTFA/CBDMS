@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Bell, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,6 @@ import {
 import {
   useCollection,
   useFirestore,
-  useMemoFirebase,
   useUserProfile,
 } from '@/firebase';
 import type { Notification } from '@/lib/types';
@@ -36,7 +35,7 @@ export function NotificationBell() {
   const { user } = useUserProfile();
   const [hasUnread, setHasUnread] = useState(false);
 
-  const notificationsQuery = useMemoFirebase(
+  const notificationsQuery = useMemo(
     () =>
       user && firestore
         ? query(
@@ -82,6 +81,7 @@ export function NotificationBell() {
   };
 
   const handleNotificationClick = (taskId: string) => {
+    if (!taskId) return;
     router.push(`/tasks/${taskId}`);
   };
 
@@ -115,6 +115,7 @@ export function NotificationBell() {
               key={notif.id}
               className="flex items-start gap-3"
               onClick={() => handleNotificationClick(notif.taskId)}
+              disabled={!notif.taskId}
             >
               <Avatar className="h-8 w-8">
                 <AvatarImage src={notif.createdBy.avatarUrl} />
@@ -125,7 +126,7 @@ export function NotificationBell() {
               <div className="flex-1">
                 <p className="text-sm leading-tight">{notif.message}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {formatDistanceToNow(notif.createdAt.toDate(), {
+                  {notif.createdAt?.toDate && formatDistanceToNow(notif.createdAt.toDate(), {
                     addSuffix: true,
                   })}
                 </p>
@@ -141,5 +142,3 @@ export function NotificationBell() {
     </DropdownMenu>
   );
 }
-
-    

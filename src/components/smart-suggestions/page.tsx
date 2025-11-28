@@ -14,7 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Lightbulb, Loader2, Wand2 } from 'lucide-react';
 import { suggestTasks } from '@/ai/flows/smart-task-suggestions';
 import type { SmartTaskSuggestionsOutput } from '@/ai/flows/smart-task-suggestions';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore } from '@/firebase';
 import type { Task } from '@/lib/types';
 import { collection } from 'firebase/firestore';
 
@@ -27,7 +27,7 @@ export function SmartSuggestions() {
     
   const firestore = useFirestore();
 
-  const tasksCollectionRef = useMemoFirebase(() => 
+  const tasksCollectionRef = useMemo(() => 
     firestore ? collection(firestore, 'tasks') : null, 
   [firestore]);
 
