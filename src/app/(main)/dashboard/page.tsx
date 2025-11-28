@@ -59,7 +59,15 @@ export default function DashboardPage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <KanbanBoard tasks={tasksForBoard} />
+          <>
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold tracking-tight">Selamat Datang, {profile?.name}!</h2>
+              <p className="text-muted-foreground">
+                Anda masuk sebagai {profile?.role}. Selamat bekerja dan semoga harimu produktif!
+              </p>
+            </div>
+            <KanbanBoard tasks={tasksForBoard} />
+          </>
         )}
       </main>
     </div>

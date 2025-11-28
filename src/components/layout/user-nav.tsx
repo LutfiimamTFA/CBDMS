@@ -16,6 +16,7 @@ import Link from 'next/link';
 import { useUserProfile, useAuth, initiateSignOut } from '@/firebase';
 import { Skeleton } from '../ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { Badge } from '../ui/badge';
 
 export function UserNav() {
   const router = useRouter();
@@ -41,6 +42,13 @@ export function UserNav() {
   if (!user) {
     return null;
   }
+  
+  const roleColors: Record<string, string> = {
+    'Super Admin': 'bg-red-500 text-white',
+    'Manager': 'bg-blue-500 text-white',
+    'Employee': 'bg-green-500 text-white',
+    'Client': 'bg-gray-500 text-white',
+  }
 
   return (
     <DropdownMenu>
@@ -54,11 +62,14 @@ export function UserNav() {
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
+          <div className="flex flex-col space-y-2">
             <p className="text-sm font-medium leading-none">{profile?.name || 'Anonymous User'}</p>
             <p className="text-xs leading-none text-muted-foreground">
               {profile?.email || 'No email associated'}
             </p>
+            {profile?.role && (
+                <Badge variant="secondary" className={`max-w-fit ${roleColors[profile.role]}`}>{profile.role}</Badge>
+            )}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
