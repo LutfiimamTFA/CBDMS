@@ -96,6 +96,31 @@ export default function UsersPage() {
   );
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersCollectionRef);
 
+  const sortedAndGroupedUsers = useMemo(() => {
+    if (!users) return [];
+    
+    const roleOrder: Record<User['role'], number> = {
+        'Super Admin': 0,
+        'Manager': 1,
+        'Employee': 2,
+        'Client': 3,
+    };
+
+    return [...users].sort((a, b) => {
+        // Current Super Admin always on top
+        if (a.id === currentUserProfile?.id) return -1;
+        if (b.id === currentUserProfile?.id) return 1;
+        
+        // Sort by role order
+        const roleComparison = roleOrder[a.role] - roleOrder[b.role];
+        if (roleComparison !== 0) return roleComparison;
+
+        // Then sort by name
+        return a.name.localeCompare(b.name);
+    });
+  }, [users, currentUserProfile?.id]);
+
+
   const createForm = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
     defaultValues: {
@@ -383,8 +408,8 @@ export default function UsersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                users?.map((user) => (
-                  <TableRow key={user.id}>
+                sortedAndGroupedUsers.map((user) => (
+                  <TableRow key={user.id} data-state={user.id === currentUserProfile?.id ? 'selected' : ''}>
                     <TableCell className="font-medium">{user.name}</TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
@@ -395,7 +420,6 @@ export default function UsersPage() {
                     </TableCell>
                     {canManageUsers && (
                         <TableCell>
-                         {/* Prevent Super Admin from editing their own account from this table */}
                          {currentUserProfile?.id !== user.id && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -556,5 +580,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-    
