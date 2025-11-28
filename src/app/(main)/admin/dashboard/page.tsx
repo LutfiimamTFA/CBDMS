@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import {
   Card,
@@ -8,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore } from '@/firebase';
 import type { Task, User } from '@/lib/types';
 import {
   CheckCircle2,
@@ -24,14 +25,14 @@ import { TaskStatusChart } from '@/components/reports/task-status-chart';
 export default function AdminDashboardPage() {
   const firestore = useFirestore();
 
-  const usersCollectionRef = useMemoFirebase(
+  const usersCollectionRef = useMemo(
     () => (firestore ? collection(firestore, 'users') : null),
     [firestore]
   );
   const { data: users, isLoading: isUsersLoading } =
     useCollection<User>(usersCollectionRef);
 
-  const tasksCollectionRef = useMemoFirebase(
+  const tasksCollectionRef = useMemo(
     () => (firestore ? collection(firestore, 'tasks') : null),
     [firestore]
   );
