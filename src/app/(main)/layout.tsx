@@ -57,11 +57,11 @@ import { defaultNavItems } from '@/lib/navigation-items';
 import { getIdTokenResult } from 'firebase/auth';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
-  const LucideIcon = (lucideIcons as Record<string, any>)[name];
-  if (!LucideIcon) {
+  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
+  if (!LucideIconComponent) {
     return <lucideIcons.HelpCircle {...props} />; // Fallback Icon
   }
-  return <LucideIcon {...props} />;
+  return <LucideIconComponent {...props} />;
 };
 
 
@@ -263,7 +263,7 @@ export default function MainLayout({
                         <SidebarMenuItem>
                             <Link href='/admin/settings'>
                                 <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings'} className="w-full justify-start">
-                                    <LucideIcon name="Building" />
+                                    <Icon name="Building" />
                                     <span>Company</span>
                                 </SidebarMenuButton>
                             </Link>
