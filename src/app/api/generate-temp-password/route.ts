@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 import { serviceAccount } from '@/firebase/service-account';
 
 // Function to safely initialize Firebase Admin
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
     }
     
     const auth = getAuth(app);
+    const firestore = getFirestore(app);
     const tempPassword = generateTemporaryPassword();
 
     // Update user's password in Firebase Auth
@@ -46,7 +48,24 @@ export async function POST(request: Request) {
     });
     
     // Set a custom claim to force password change on next login
-    await auth.setCustomUserClaims(uid, { mustChangePassword: true });
+    const currentUser = await auth.getUser(uid);
+    await auth.setCustomUserClaims(uid, { ...currentUser.customClaims, mustChangePassword: true });
+
+    // Create a security notification for the user
+    const userNotifRef = firestore.collection('users').doc(uid).collection('notifications').doc();
+    await userNotifRef.set({
+      title: 'Security Alert: Password Reset',
+      message: 'Your password was reset by an administrator. Please change your password immediately after logging in.',
+      isRead: false,
+      createdAt: new Date(),
+      createdBy: {
+        id: 'system',
+        name: 'System Security',
+        avatarUrl: '',
+      },
+      taskId: '', // No task associated
+      taskTitle: 'Account Security'
+    });
 
     return NextResponse.json({ tempPassword }, { status: 200 });
 
@@ -64,3 +83,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: errorMessage, error: error.message }, { status: statusCode });
   }
 }
+
