@@ -93,20 +93,38 @@ export default function MainLayout({
   const { data: navItemsData, isLoading: isNavLoading } =
     useCollection<NavigationItem>(navItemsRef);
   
-  // Seed initial navigation data if collection is empty
+  // Seed or update navigation data
   useEffect(() => {
-    if (firestore && profile?.role === 'Super Admin' && navItemsData?.length === 0 && !isNavLoading) {
+    if (firestore && profile?.role === 'Super Admin' && navItemsData && !isNavLoading) {
       const seedNavData = async () => {
-        const querySnapshot = await getDocs(collection(firestore, 'navigationItems'));
-        if (querySnapshot.empty) {
-          console.log('Seeding navigation items...');
-          const batch = writeBatch(firestore);
-          defaultNavItems.forEach((item) => {
-            const itemDocRef = doc(firestore, 'navigationItems', item.id);
-            batch.set(itemDocRef, item);
-          });
+        const batch = writeBatch(firestore);
+        let batchHasWrites = false;
+
+        // Check if the base navigation items exist, if not, seed them all.
+        if (navItemsData.length === 0) {
+            console.log('Seeding initial navigation items...');
+            defaultNavItems.forEach((item) => {
+              const itemDocRef = doc(firestore, 'navigationItems', item.id);
+              batch.set(itemDocRef, item);
+            });
+            batchHasWrites = true;
+        } else {
+            // If items exist, check if 'Calendar' is one of them. If not, add it.
+            const calendarItemExists = navItemsData.some(item => item.id === 'nav_calendar');
+            if (!calendarItemExists) {
+                console.log('Adding missing "Calendar" navigation item...');
+                const calendarItem = defaultNavItems.find(item => item.id === 'nav_calendar');
+                if (calendarItem) {
+                    const itemDocRef = doc(firestore, 'navigationItems', calendarItem.id);
+                    batch.set(itemDocRef, calendarItem);
+                    batchHasWrites = true;
+                }
+            }
+        }
+
+        if (batchHasWrites) {
           await batch.commit();
-          console.log('Navigation items seeded.');
+          console.log('Navigation items seeding/update complete.');
         }
       };
       seedNavData().catch(console.error);
