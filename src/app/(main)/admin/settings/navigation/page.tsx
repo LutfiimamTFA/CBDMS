@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore } from '@/firebase';
 import type { NavigationItem } from '@/lib/types';
 import { collection, doc, query, orderBy, updateDoc } from 'firebase/firestore';
 import { Loader2, Icon as LucideIcon } from 'lucide-react';
@@ -35,7 +35,7 @@ export default function NavigationSettingsPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  const navItemsCollectionRef = useMemoFirebase(
+  const navItemsCollectionRef = React.useMemo(
     () =>
       firestore
         ? query(collection(firestore, 'navigationItems'), orderBy('order'))
