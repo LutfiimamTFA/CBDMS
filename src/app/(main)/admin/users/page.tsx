@@ -171,6 +171,7 @@ export default function UsersPage() {
   }, [selectedUser, editForm]);
 
   const handleCreateUser = async (data: UserFormValues) => {
+    if (!firestore || !currentUserProfile) return;
     setIsLoading(true);
     try {
       // Managers can only create Employees or Clients
@@ -181,7 +182,7 @@ export default function UsersPage() {
       const response = await fetch('/api/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({...data, companyId: currentUserProfile.companyId }),
       });
 
       if (!response.ok) {
@@ -207,14 +208,17 @@ export default function UsersPage() {
   };
 
   const handleUpdateUser = async (data: EditUserFormValues) => {
-    if (!selectedUser || !firestore) return;
+    if (!selectedUser || !firestore || !currentUserProfile) return;
     setIsLoading(true);
     try {
       // Direct update for manager, API for super admin
       if (currentUserProfile?.role === 'Manager') {
+        if (data.role === 'Super Admin' || data.role === 'Manager') {
+          throw new Error("Managers can only edit Employee or Client users.");
+        }
         const userRef = doc(firestore, 'users', selectedUser.id);
         await setDoc(userRef, { name: data.name, role: data.role }, { merge: true });
-      } else {
+      } else { // Super Admin
         const response = await fetch('/api/update-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -599,7 +603,7 @@ export default function UsersPage() {
                 Please copy this password and share it securely with the user.
                 <strong className="text-destructive"> This password will only be shown once.</strong>
             </DialogDescription>
-          </Header>
+          </DialogHeader>
           <div className="flex items-center space-x-2 my-4">
             <Input id="temp-password" value={generatedPassword} readOnly className="font-mono text-lg h-12"/>
             <Button type="button" size="icon" className="h-12 w-12" onClick={() => copyToClipboard(generatedPassword)}>
@@ -619,3 +623,5 @@ export default function UsersPage() {
     </div>
   );
 }
+
+    
