@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
@@ -11,6 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { TaskStatusChart } from '@/components/reports/task-status-chart';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { subDays, isAfter, parseISO } from 'date-fns';
+import { Label } from '@/components/ui/label';
+
 
 // --- Komponen untuk Laporan Karyawan ---
 function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading: boolean }) {
@@ -81,6 +85,27 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
 
 // --- Komponen untuk Dasbor Admin/Manager ---
 function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
+  
+  const [selectedUserId, setSelectedUserId] = useState('all');
+  const [selectedPeriod, setSelectedPeriod] = useState('all');
+
+  const filteredTasks = useMemo(() => {
+    if (!allTasks) return [];
+
+    const periodDate = selectedPeriod === '7' ? subDays(new Date(), 7) : selectedPeriod === '30' ? subDays(new Date(), 30) : null;
+
+    return allTasks.filter(task => {
+      const isUserMatch = selectedUserId === 'all' || task.assigneeIds.includes(selectedUserId);
+      const isPeriodMatch = !periodDate || (task.createdAt && isAfter(task.createdAt.toDate(), periodDate));
+      return isUserMatch && isPeriodMatch;
+    });
+  }, [allTasks, selectedUserId, selectedPeriod]);
+  
+  const filteredUsers = useMemo(() => {
+    if (selectedUserId === 'all') return allUsers;
+    return allUsers?.filter(u => u.id === selectedUserId) || [];
+  }, [allUsers, selectedUserId]);
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -89,10 +114,10 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     );
   }
 
-  const totalUsers = allUsers?.length || 0;
-  const totalTasks = allTasks?.length || 0;
-  const completedTasks = allTasks?.filter((t) => t.status === 'Done').length || 0;
-  const inProgressTasks = allTasks?.filter((t) => t.status === 'Doing').length || 0;
+  const totalUsers = (selectedUserId === 'all' ? allUsers?.length : 1) || 0;
+  const totalTasks = filteredTasks.length || 0;
+  const completedTasks = filteredTasks?.filter((t) => t.status === 'Done').length || 0;
+  const inProgressTasks = filteredTasks?.filter((t) => t.status === 'Doing').length || 0;
 
   return (
     <>
@@ -100,6 +125,40 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           <h2 className="text-2xl font-bold tracking-tight">Pusat Analisis Kinerja</h2>
           <p className="text-muted-foreground">Analisis data operasional untuk pengambilan keputusan strategis.</p>
       </div>
+
+       <div className="mb-6 p-4 border rounded-lg bg-card">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <Label htmlFor="user-filter">Filter by Team Member</Label>
+                 <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger id="user-filter">
+                        <SelectValue placeholder="Select a team member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Team Members</SelectItem>
+                        {allUsers?.filter(u => u.role !== 'Client').map(user => (
+                            <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+            <div>
+                 <Label htmlFor="period-filter">Filter by Period</Label>
+                 <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+                    <SelectTrigger id="period-filter">
+                        <SelectValue placeholder="Select a period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="7">Last 7 Days</SelectItem>
+                        <SelectItem value="30">Last 30 Days</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+        </div>
+      </div>
+
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -108,7 +167,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalUsers}</div>
-            <p className="text-xs text-muted-foreground">pengguna terdaftar</p>
+            <p className="text-xs text-muted-foreground">pengguna terfilter</p>
           </CardContent>
         </Card>
         <Card>
@@ -118,7 +177,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground">di seluruh proyek</p>
+            <p className="text-xs text-muted-foreground">di seluruh proyek (terfilter)</p>
           </CardContent>
         </Card>
         <Card>
@@ -128,7 +187,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completedTasks}</div>
-            <p className="text-xs text-muted-foreground">dari {totalTasks} tugas</p>
+            <p className="text-xs text-muted-foreground">dari {totalTasks} tugas (terfilter)</p>
           </CardContent>
         </Card>
         <Card>
@@ -138,7 +197,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
+            <p className="text-xs text-muted-foreground">sedang dikerjakan (terfilter)</p>
           </CardContent>
         </Card>
       </div>
@@ -152,7 +211,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
               <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim.</CardDescription>
             </CardHeader>
             <CardContent>
-              <TeamWorkloadChart tasks={allTasks || []} users={allUsers || []} />
+              <TeamWorkloadChart tasks={filteredTasks || []} users={filteredUsers || []} />
             </CardContent>
           </Card>
           <Card>
@@ -161,7 +220,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
               <CardDescription>Proporsi tugas dalam setiap kategori status.</CardDescription>
             </CardHeader>
             <CardContent>
-              <TaskStatusChart tasks={allTasks || []} />
+              <TaskStatusChart tasks={filteredTasks || []} />
             </CardContent>
           </Card>
         </div>
