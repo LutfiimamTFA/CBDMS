@@ -2,7 +2,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useUserProfile, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
 import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList } from 'lucide-react';
@@ -180,21 +180,21 @@ export default function ReportsPage() {
   }, [profile]);
 
   // Kueri untuk karyawan: hanya tugas yang ditugaskan kepada mereka
-  const employeeTasksQuery = useMemoFirebase(() => {
+  const employeeTasksQuery = useMemo(() => {
     if (!firestore || !profile || isSuperAdminOrManager) return null;
     return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
   }, [firestore, profile, isSuperAdminOrManager]);
   const { data: employeeTasks, isLoading: isEmployeeTasksLoading } = useCollection<Task>(employeeTasksQuery);
 
   // Kueri untuk Admin/Manager: semua tugas
-  const allTasksQuery = useMemoFirebase(() => {
+  const allTasksQuery = useMemo(() => {
     if (!firestore || !isSuperAdminOrManager) return null;
     return collection(firestore, 'tasks');
   }, [firestore, isSuperAdminOrManager]);
   const { data: allTasks, isLoading: isAdminTasksLoading } = useCollection<Task>(allTasksQuery);
   
   // Kueri untuk Admin/Manager: semua pengguna
-  const allUsersQuery = useMemoFirebase(() => {
+  const allUsersQuery = useMemo(() => {
       if (!firestore || !isSuperAdminOrManager) return null;
       return collection(firestore, 'users');
   }, [firestore, isSuperAdminOrManager]);

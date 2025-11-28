@@ -45,7 +45,7 @@ import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Loader2 } from 'lucide-react';
-import { useCollection, useFirestore, useMemoFirebase, useUserProfile, useStorage } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
@@ -131,7 +131,7 @@ export function TaskDetailsSheet({
 
   const firestore = useFirestore();
   const storage = useStorage();
-  const usersCollectionRef = useMemoFirebase(() => 
+  const usersCollectionRef = useMemo(() => 
     firestore ? collection(firestore, 'users') : null,
   [firestore]);
 
