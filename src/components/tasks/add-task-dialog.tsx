@@ -753,7 +753,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                           </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                          {(users || []).map((user) => (
+                                          {(users || []).filter(user => user.role === 'Employee' || user.role === 'Client').map((user) => (
                                               <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
                                                   <div className="flex w-full items-center justify-between">
                                                     <div className="flex items-center gap-2">
@@ -891,3 +891,4 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
