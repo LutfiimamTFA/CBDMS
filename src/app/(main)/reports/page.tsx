@@ -92,7 +92,14 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
   const filteredTasks = useMemo(() => {
     if (!allTasks) return [];
 
-    const periodDate = selectedPeriod === '7' ? subDays(new Date(), 7) : selectedPeriod === '30' ? subDays(new Date(), 30) : null;
+    let periodDate: Date | null = null;
+    switch (selectedPeriod) {
+        case '7': periodDate = subDays(new Date(), 7); break;
+        case '30': periodDate = subDays(new Date(), 30); break;
+        case '180': periodDate = subDays(new Date(), 180); break;
+        case '365': periodDate = subDays(new Date(), 365); break;
+        default: periodDate = null;
+    }
 
     return allTasks.filter(task => {
       const isUserMatch = selectedUserId === 'all' || task.assigneeIds.includes(selectedUserId);
@@ -114,7 +121,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     );
   }
 
-  const totalUsers = (selectedUserId === 'all' ? allUsers?.length : 1) || 0;
+  const totalUsers = (selectedUserId === 'all' ? allUsers?.filter(u => u.role === 'Employee').length : 1) || 0;
   const totalTasks = filteredTasks.length || 0;
   const completedTasks = filteredTasks?.filter((t) => t.status === 'Done').length || 0;
   const inProgressTasks = filteredTasks?.filter((t) => t.status === 'Doing').length || 0;
@@ -129,14 +136,14 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
        <div className="mb-6 p-4 border rounded-lg bg-card">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <Label htmlFor="user-filter">Filter by Team Member</Label>
+                <Label htmlFor="user-filter">Filter by Employee</Label>
                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger id="user-filter">
-                        <SelectValue placeholder="Select a team member" />
+                        <SelectValue placeholder="Select an employee" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All Team Members</SelectItem>
-                        {allUsers?.filter(u => u.role !== 'Client').map(user => (
+                        <SelectItem value="all">All Employees</SelectItem>
+                        {allUsers?.filter(user => user.role === 'Employee').map(user => (
                             <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                         ))}
                     </SelectContent>
@@ -152,6 +159,8 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
                         <SelectItem value="all">All Time</SelectItem>
                         <SelectItem value="7">Last 7 Days</SelectItem>
                         <SelectItem value="30">Last 30 Days</SelectItem>
+                        <SelectItem value="180">Last 6 Months</SelectItem>
+                        <SelectItem value="365">Last 1 Year</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
@@ -162,12 +171,12 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Karyawan</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalUsers}</div>
-            <p className="text-xs text-muted-foreground">pengguna terfilter</p>
+            <p className="text-xs text-muted-foreground">karyawan terfilter</p>
           </CardContent>
         </Card>
         <Card>
