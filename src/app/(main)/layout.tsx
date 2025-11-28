@@ -36,25 +36,11 @@ import {
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import {
-  useUserProfile,
-  useCollection,
-  useFirestore,
-  useAuth,
-} from '@/firebase';
+import { useUserProfile } from '@/firebase';
 import { useEffect, useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
-import {
-  collection,
-  query,
-  orderBy,
-  writeBatch,
-  getDocs,
-  doc,
-} from 'firebase/firestore';
 import { defaultNavItems } from '@/lib/navigation-items';
-import { getIdTokenResult } from 'firebase/auth';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -73,7 +59,6 @@ export default function MainLayout({
   const pathname = usePathname();
   const { t } = useI18n();
   const router = useRouter();
-  const firestore = useFirestore();
   const { user, profile, isLoading } = useUserProfile();
 
   const isAdminRoute = pathname.startsWith('/admin');
@@ -82,53 +67,10 @@ export default function MainLayout({
   const isSettingsRoute = pathname.startsWith('/admin/settings');
   const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsRoute);
 
-  // --- Dynamic Navigation ---
-  const navItemsRef = useMemo(
-    () =>
-      firestore
-        ? query(collection(firestore, 'navigationItems'), orderBy('order'))
-        : null,
-    [firestore]
-  );
-  const { data: navItemsData, isLoading: isNavLoading } =
-    useCollection<NavigationItem>(navItemsRef);
-  
-  // Seed or update navigation data
-  useEffect(() => {
-    if (firestore && profile?.role === 'Super Admin' && navItemsData && !isNavLoading) {
-      const seedNavData = async () => {
-        const batch = writeBatch(firestore);
-        
-        // Simple check: if the number of items in db is different from our default list, re-seed everything.
-        if (navItemsData.length !== defaultNavItems.length) {
-          console.log('Navigation items out of sync. Re-seeding...');
-          
-          // First, delete all existing items to ensure a clean slate
-          const snapshot = await getDocs(navItemsRef!);
-          snapshot.docs.forEach(doc => {
-              batch.delete(doc.ref);
-          });
-
-          // Then, add all items from the default list
-          defaultNavItems.forEach((item) => {
-            const itemDocRef = doc(firestore, 'navigationItems', item.id);
-            batch.set(itemDocRef, item);
-          });
-          
-          await batch.commit();
-          console.log('Navigation items re-seeding complete.');
-        }
-      };
-      seedNavData().catch(console.error);
-    }
-  }, [firestore, profile, navItemsData, isNavLoading, navItemsRef]);
-
-
   const filteredNavItems = useMemo(() => {
-    if (!navItemsData || !profile) return [];
-    return navItemsData.filter(item => item.roles.includes(profile.role));
-  }, [navItemsData, profile]);
-  // --- End Dynamic Navigation ---
+    if (!profile) return [];
+    return defaultNavItems.filter(item => item.roles.includes(profile.role));
+  }, [profile]);
 
 
   useEffect(() => {
@@ -137,7 +79,7 @@ export default function MainLayout({
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || isNavLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -145,14 +87,12 @@ export default function MainLayout({
     );
   }
 
-  // This check is important as an early exit before render, but redirection is handled in useEffect
   if (!user || !profile) {
     return null;
   }
 
   const isAdminOrManager = profile?.role === 'Super Admin' || profile?.role === 'Manager';
 
-  // Redirect non-admins/managers trying to access admin pages.
   if (!isAdminOrManager && isAdminRoute) {
     router.push('/dashboard');
     return (
