@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -12,11 +12,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore } from '@/firebase';
 import type { NavigationItem } from '@/lib/types';
-import { collection, doc, query, orderBy, updateDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  query,
+  orderBy,
+  updateDoc,
+  writeBatch,
+} from 'firebase/firestore';
 import { Loader2, Icon as LucideIcon } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
+import { defaultNavItems } from '@/lib/navigation-items';
 
 // Helper to get Lucide icon component by name
 const Icon = ({
@@ -44,6 +52,37 @@ export default function NavigationSettingsPage() {
   );
   const { data: navItems, isLoading: isNavItemsLoading } =
     useCollection<NavigationItem>(navItemsCollectionRef);
+
+  useEffect(() => {
+    if (isNavItemsLoading || !firestore || !navItems) return;
+
+    const existingItemIds = new Set(navItems.map((item) => item.id));
+    const missingItems = defaultNavItems.filter(
+      (defaultItem) => !existingItemIds.has(defaultItem.id)
+    );
+
+    if (missingItems.length > 0) {
+      const batch = writeBatch(firestore);
+      missingItems.forEach((item) => {
+        const docRef = doc(firestore, 'navigationItems', item.id);
+        batch.set(docRef, item);
+      });
+
+      batch.commit().then(() => {
+        toast({
+          title: 'Navigation Synced',
+          description: `${missingItems.length} new navigation item(s) have been added.`,
+        });
+      }).catch(err => {
+        console.error("Failed to sync navigation items", err);
+        toast({
+            variant: 'destructive',
+            title: 'Sync Failed',
+            description: 'Could not add new navigation items automatically.',
+        });
+      });
+    }
+  }, [navItems, isNavItemsLoading, firestore, toast]);
 
   const handleRoleChange = async (
     itemId: string,
