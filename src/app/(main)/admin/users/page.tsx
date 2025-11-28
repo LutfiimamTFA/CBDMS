@@ -65,7 +65,7 @@ const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
   email: z.string().email('Invalid email address.'),
   role: z.enum(['Super Admin', 'Manager', 'Employee', 'Client']),
-  password: z.string().min(6, 'Password must be at least 6 characters.').optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters.'),
 });
 
 const editUserSchema = userSchema.omit({ password: true });
@@ -133,6 +133,7 @@ export default function UsersPage() {
       name: '',
       email: '',
       role: 'Employee',
+      password: '',
     },
   });
 
@@ -172,6 +173,11 @@ export default function UsersPage() {
   const handleCreateUser = async (data: UserFormValues) => {
     setIsLoading(true);
     try {
+      // Managers can only create Employees or Clients
+      if (currentUserProfile?.role === 'Manager' && (data.role === 'Super Admin' || data.role === 'Manager')) {
+        throw new Error("Managers can only create Employee or Client users.");
+      }
+      
       const response = await fetch('/api/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -519,7 +525,7 @@ export default function UsersPage() {
                     control={editForm.control}
                     name="role"
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={currentUserProfile?.role !== 'Super Admin'}>
                         <SelectTrigger id="role-edit">
                           <SelectValue placeholder="Select a role" />
                         </SelectTrigger>
@@ -593,7 +599,7 @@ export default function UsersPage() {
                 Please copy this password and share it securely with the user.
                 <strong className="text-destructive"> This password will only be shown once.</strong>
             </DialogDescription>
-          </DialogHeader>
+          </Header>
           <div className="flex items-center space-x-2 my-4">
             <Input id="temp-password" value={generatedPassword} readOnly className="font-mono text-lg h-12"/>
             <Button type="button" size="icon" className="h-12 w-12" onClick={() => copyToClipboard(generatedPassword)}>
@@ -612,3 +618,4 @@ export default function UsersPage() {
       </Dialog>
     </div>
   );
+}
