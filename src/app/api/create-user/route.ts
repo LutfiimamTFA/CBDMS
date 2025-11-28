@@ -1,3 +1,4 @@
+
 import { initializeApp, cert, getApps, App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
     const db = getFirestore(app);
 
     const data = await req.json();
-    const { name, email, password, role } = data;
+    const { name, email, password, role, companyId } = data;
 
     if (!email || !password || !name || !role) {
       return new Response(JSON.stringify({ message: 'Name, email, password, and role are required.' }), { status: 400 });
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
       name,
       email,
       role,
-      companyId: 'company-a', // Default company ID
+      companyId: companyId || 'company-a', // Use provided companyId or default
       avatarUrl: `https://i.pravatar.cc/150?u=${userRecord.uid}`,
       createdAt: new Date().toISOString()
     });
