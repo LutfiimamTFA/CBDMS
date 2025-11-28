@@ -1,5 +1,6 @@
+
 'use client';
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   Table,
   TableBody,
@@ -43,7 +44,7 @@ export default function NavigationSettingsPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  const navItemsCollectionRef = React.useMemo(
+  const navItemsCollectionRef = useMemo(
     () =>
       firestore
         ? query(collection(firestore, 'navigationItems'), orderBy('order'))
