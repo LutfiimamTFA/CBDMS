@@ -126,11 +126,21 @@ export default function MainLayout({
     }
   }, [user, isLoading, router]);
 
-  if (isLoading || isNavLoading || !user) {
+  if (isLoading || isNavLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
+    );
+  }
+
+  // Final guard in case profile hasn't loaded yet or user is unauthorized
+  if (!user || !profile) {
+    // This case should ideally be handled by the useEffect, but serves as a final guard.
+    return (
+        <div className="flex h-screen w-full items-center justify-center bg-background">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
     );
   }
 

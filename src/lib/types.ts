@@ -138,7 +138,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
-export interface jsPDFWithAutoTable extends jsPDF {
-  autoTable: (options: any) => jsPDFWithAutoTable;
-}

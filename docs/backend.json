@@ -315,5 +315,3 @@
     "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee."
   }
 }
-
-    

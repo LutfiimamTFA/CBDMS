@@ -1,27 +1,16 @@
 
 'use client';
 
-import { useMemo, useState, useRef } from 'react';
+import { useMemo } from 'react';
 import { useUserProfile, useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Task, User, jsPDFWithAutoTable } from '@/lib/types';
-import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, FileDown, Calendar as CalendarIcon, Briefcase } from 'lucide-react';
+import type { Task, User } from '@/lib/types';
+import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { TaskStatusChart } from '@/components/reports/task-status-chart';
-import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { DateRange } from 'react-day-picker';
-import { addDays, format, parseISO, isWithinInterval, startOfDay, endOfDay, subMonths, subYears, subDays } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { Timestamp } from 'firebase/firestore';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import html2canvas from 'html2canvas';
-
 
 // --- Komponen untuk Laporan Karyawan ---
 function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading: boolean }) {
@@ -92,126 +81,6 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
 
 // --- Komponen untuk Dasbor Admin/Manager ---
 function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
-    const [date, setDate] = useState<DateRange | undefined>({
-        from: subDays(new Date(), 29),
-        to: new Date(),
-    });
-    const [isExporting, setIsExporting] = useState(false);
-    const reportRef = useRef<HTMLDivElement>(null);
-    const chartsRef = useRef<HTMLDivElement>(null);
-
-
-    const filteredTasks = useMemo(() => {
-        if (!allTasks || !date?.from) return [];
-        // Ensure the end of the day is included in the interval
-        const to = date.to ? endOfDay(date.to) : endOfDay(date.from);
-        const from = startOfDay(date.from);
-
-        return allTasks.filter(task => {
-            if (!task.createdAt) return false;
-            
-            let taskDate: Date;
-            if (task.createdAt instanceof Timestamp) {
-                taskDate = task.createdAt.toDate();
-            } else if (typeof task.createdAt === 'string') {
-                taskDate = parseISO(task.createdAt);
-            } else if (task.createdAt && typeof task.createdAt === 'object' && 'seconds' in task.createdAt) {
-                taskDate = new Timestamp(task.createdAt.seconds, task.createdAt.nanoseconds).toDate();
-            }
-            else {
-                return false;
-            }
-
-            return isWithinInterval(taskDate, { start: from, end: to });
-        });
-    }, [allTasks, date]);
-
-  const handleExportPdf = async () => {
-    if (!allUsers || !filteredTasks) return;
-    setIsExporting(true);
-    
-    const doc = new jsPDF() as jsPDFWithAutoTable;
-    
-    // 1. KOP SURAT
-    doc.setFontSize(18);
-    doc.setFont("helvetica", "bold");
-    doc.text("WorkWise", 14, 22);
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("Alamat: Jl. Jati Mataram No.284B 2nd Floor, Karangjati, Sinduadi, Mlati, Sleman", 14, 30);
-    doc.text("Telepon: (0274) 454000", 14, 35);
-    doc.setLineWidth(0.5);
-    doc.line(14, 40, 196, 40);
-
-    // 2. JUDUL LAPORAN
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Laporan Kinerja Tim", 105, 50, { align: 'center' });
-
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    const dateFrom = date?.from ? format(date.from, "dd MMM yyyy") : 'N/A';
-    const dateTo = date?.to ? format(date.to, "dd MMM yyyy") : 'N/A';
-    doc.text(`Periode: ${dateFrom} - ${dateTo}`, 105, 56, { align: 'center' });
-    doc.text(`Dicetak pada: ${format(new Date(), "dd MMM yyyy, HH:mm")}`, 105, 61, { align: 'center' });
-    
-    // 3. TABEL KINERJA
-    const head = [['Nama Karyawan', 'Tugas Ditugaskan', 'Tugas Selesai', 'Jam Kerja (h)', 'Produktivitas (%)']];
-    
-    const body = allUsers
-        .filter(user => user.role === 'Employee' || user.role === 'Manager')
-        .map(user => {
-            const userTasks = filteredTasks.filter(task => task.assigneeIds.includes(user.id));
-            const assignedCount = userTasks.length;
-            const completedCount = userTasks.filter(t => t.status === 'Done').length;
-            const totalHours = userTasks.reduce((acc, t) => acc + (t.timeTracked || 0), 0);
-            const productivity = assignedCount > 0 ? ((completedCount / assignedCount) * 100).toFixed(1) : '0.0';
-
-            return [
-                user.name,
-                assignedCount,
-                completedCount,
-                totalHours.toFixed(2),
-                `${productivity}%`
-            ];
-        });
-
-    doc.autoTable({
-        startY: 70,
-        head: head,
-        body: body,
-        theme: 'striped',
-        headStyles: { fillColor: [41, 128, 185] },
-    });
-
-    // 4. GRAFIK (sebagai gambar)
-    if (chartsRef.current) {
-        try {
-            const canvas = await html2canvas(chartsRef.current, { scale: 2, backgroundColor: null });
-            const imgData = canvas.toDataURL('image/png');
-            
-            const lastTableY = (doc as any).lastAutoTable.finalY || 120;
-            const remainingSpace = doc.internal.pageSize.height - lastTableY;
-            
-            const imgWidth = 180;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-            if (remainingSpace > imgHeight + 20) {
-                 doc.addImage(imgData, 'PNG', 14, lastTableY + 10, imgWidth, imgHeight);
-            } else {
-                 doc.addPage();
-                 doc.addImage(imgData, 'PNG', 14, 20, imgWidth, imgHeight);
-            }
-        } catch (error) {
-            console.error("Gagal menambahkan grafik ke PDF:", error);
-        }
-    }
-    
-    doc.save(`laporan-kinerja-tim-${format(new Date(), "yyyy-MM-dd")}.pdf`);
-    setIsExporting(false);
-  };
-
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -221,132 +90,80 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
   }
 
   const totalUsers = allUsers?.length || 0;
-  const totalTasks = filteredTasks.length || 0;
-  const completedTasks = filteredTasks.filter((t) => t.status === 'Done').length || 0;
-  const inProgressTasks = filteredTasks.filter((t) => t.status === 'Doing').length || 0;
+  const totalTasks = allTasks?.length || 0;
+  const completedTasks = allTasks?.filter((t) => t.status === 'Done').length || 0;
+  const inProgressTasks = allTasks?.filter((t) => t.status === 'Doing').length || 0;
 
   return (
     <>
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
-        <div>
-            <h2 className="text-2xl font-bold tracking-tight">Pusat Analisis Kinerja</h2>
-            <p className="text-muted-foreground">Analisis data operasional untuk pengambilan keputusan strategis.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(new Date()), to: endOfDay(new Date()) })}>Hari Ini</Button>
-            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -6)), to: endOfDay(new Date()) })}>7 Hari</Button>
-            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(addDays(new Date(), -29)), to: endOfDay(new Date()) })}>30 Hari</Button>
-            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(subMonths(new Date(), 6)), to: endOfDay(new Date()) })}>6 Bulan</Button>
-            <Button size="sm" variant="outline" onClick={() => setDate({ from: startOfDay(subYears(new Date(), 1)), to: endOfDay(new Date()) })}>1 Tahun</Button>
-            <Popover>
-                <PopoverTrigger asChild>
-                <Button
-                    id="date"
-                    size="sm"
-                    variant={"outline"}
-                    className={cn(
-                    "w-[240px] justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                    )}
-                >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {date?.from ? (
-                    date.to ? (
-                        <>
-                        {format(date.from, "LLL dd, y")} -{" "}
-                        {format(date.to, "LLL dd, y")}
-                        </>
-                    ) : (
-                        format(date.from, "LLL dd, y")
-                    )
-                    ) : (
-                    <span>Pilih tanggal</span>
-                    )}
-                </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={date?.from}
-                    selected={date}
-                    onSelect={setDate}
-                    numberOfMonths={2}
-                />
-                </PopoverContent>
-            </Popover>
-            <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isExporting}>
-                {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <FileDown className="mr-2 h-4 w-4" />}
-                Ekspor ke PDF
-            </Button>
-        </div>
+      <div className="mb-6">
+          <h2 className="text-2xl font-bold tracking-tight">Pusat Analisis Kinerja</h2>
+          <p className="text-muted-foreground">Analisis data operasional untuk pengambilan keputusan strategis.</p>
       </div>
-      <div id="report-content" ref={reportRef} className="p-4 bg-background">
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Pengguna</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalUsers}</div>
+            <p className="text-xs text-muted-foreground">pengguna terdaftar</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Tugas</CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalTasks}</div>
+            <p className="text-xs text-muted-foreground">di seluruh proyek</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{completedTasks}</div>
+            <p className="text-xs text-muted-foreground">dari {totalTasks} tugas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
+            <CircleDashed className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{inProgressTasks}</div>
+            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
+          </CardContent>
+        </Card>
+      </div>
+      <div className="mt-6">
+        <h3 className="text-xl font-bold tracking-tight">Analisis Tim & Proyek</h3>
+        <p className="text-muted-foreground">Visualisasi data untuk wawasan performa tim dan status proyek.</p>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Beban Kerja Tim</CardTitle>
+              <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">{totalUsers}</div>
-                <p className="text-xs text-muted-foreground">pengguna terdaftar</p>
+              <TeamWorkloadChart tasks={allTasks || []} users={allUsers || []} />
             </CardContent>
-            </Card>
-            <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Tugas</CardTitle>
-                <ClipboardList className="h-4 w-4 text-muted-foreground" />
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Distribusi Status Tugas</CardTitle>
+              <CardDescription>Proporsi tugas dalam setiap kategori status.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">{totalTasks}</div>
-                <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
+              <TaskStatusChart tasks={allTasks || []} />
             </CardContent>
-            </Card>
-            <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
-                <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{completedTasks}</div>
-                <p className="text-xs text-muted-foreground">dalam rentang waktu terpilih</p>
-            </CardContent>
-            </Card>
-            <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
-                <CircleDashed className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{inProgressTasks}</div>
-                <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
-            </CardContent>
-            </Card>
-        </div>
-        <div className="mt-6" ref={chartsRef}>
-            <h3 className="text-xl font-bold tracking-tight">Analisis Tim & Proyek</h3>
-            <p className="text-muted-foreground">Visualisasi data untuk wawasan performa tim dan status proyek.</p>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-            <Card className="lg:col-span-2">
-                <CardHeader>
-                <CardTitle>Beban Kerja Tim</CardTitle>
-                <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim dalam rentang waktu terpilih.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                <TeamWorkloadChart tasks={filteredTasks || []} users={allUsers || []} />
-                </CardContent>
-            </Card>
-            <Card>
-                <CardHeader>
-                <CardTitle>Distribusi Status Tugas</CardTitle>
-                <CardDescription>Proporsi tugas dalam setiap kategori status dalam rentang waktu terpilih.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                <TaskStatusChart tasks={filteredTasks || []} />
-                </CardContent>
-            </Card>
-            </div>
+          </Card>
         </div>
       </div>
     </>
