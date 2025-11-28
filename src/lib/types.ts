@@ -9,6 +9,7 @@ export type User = {
   email: string;
   role: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
   createdAt?: string;
+  companyId: string;
 };
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
@@ -75,6 +76,7 @@ export type Task = {
     name: string;
     avatarUrl: string;
   };
+  companyId: string;
 };
 
 export type PriorityInfo = {

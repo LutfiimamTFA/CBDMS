@@ -18,11 +18,19 @@ export const defaultNavItems: NavigationItem[] = [
     roles: ['Super Admin', 'Manager', 'Employee'],
   },
   {
+    id: 'nav_calendar',
+    label: 'Calendar',
+    path: '/calendar',
+    icon: 'CalendarDays',
+    order: 3,
+    roles: ['Super Admin', 'Manager'],
+  },
+  {
     id: 'nav_reports',
     label: 'Reports',
     path: '/reports',
     icon: 'FileText',
-    order: 3,
+    order: 4,
     roles: ['Super Admin', 'Manager'],
   },
 ];
