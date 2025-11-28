@@ -4,10 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Download, AlertTriangle, Database, Trash2 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, writeBatch } from 'firebase/firestore';
+import { collection, writeBatch, getDocs } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,23 +102,26 @@ export default function DataManagementPage() {
           const collectionsToDelete = ['tasks', 'users', 'permissions', 'navigationItems'];
           try {
             const batch = writeBatch(firestore);
+            
             for (const collectionName of collectionsToDelete) {
-              // This is a simplified deletion. For large collections, a Cloud Function is better.
-              // For this context, we assume small collections.
               const collRef = collection(firestore, collectionName);
-              // In a real app, you'd query all docs and delete them.
-              // This is a placeholder for a more complex operation.
+              const snapshot = await getDocs(collRef);
+              snapshot.docs.forEach(doc => {
+                  batch.delete(doc.ref);
+              });
             }
-            // Since we can't easily delete all docs on client, we just show a toast
-             toast({
-              title: 'Process Initiated',
-              description: `A server process to delete all application data has been started.`
+            await batch.commit();
+
+            toast({
+              title: 'Process Complete',
+              description: `All application data has been deleted.`
             });
+
           } catch (e) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not initiate database deletion.' });
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not complete database deletion.' });
           }
            setDeleteConfirmation({isOpen: false, type: '', onConfirm: () => {}});
-          setConfirmationInput('');
+           setConfirmationInput('');
         }
       }
 
@@ -202,5 +205,3 @@ export default function DataManagementPage() {
     </div>
   );
 }
-
-    
