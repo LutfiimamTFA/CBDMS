@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -38,7 +38,7 @@ export default function RoleSettingsPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
-  const permsDocRef = useMemoFirebase(
+  const permsDocRef = useMemo(
     () => (firestore ? doc(firestore, 'permissions', 'roles') : null),
     [firestore]
   );
