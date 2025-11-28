@@ -98,38 +98,30 @@ export default function MainLayout({
     if (firestore && profile?.role === 'Super Admin' && navItemsData && !isNavLoading) {
       const seedNavData = async () => {
         const batch = writeBatch(firestore);
-        let batchHasWrites = false;
+        
+        // Simple check: if the number of items in db is different from our default list, re-seed everything.
+        if (navItemsData.length !== defaultNavItems.length) {
+          console.log('Navigation items out of sync. Re-seeding...');
+          
+          // First, delete all existing items to ensure a clean slate
+          const snapshot = await getDocs(navItemsRef!);
+          snapshot.docs.forEach(doc => {
+              batch.delete(doc.ref);
+          });
 
-        // Check if the base navigation items exist, if not, seed them all.
-        if (navItemsData.length === 0) {
-            console.log('Seeding initial navigation items...');
-            defaultNavItems.forEach((item) => {
-              const itemDocRef = doc(firestore, 'navigationItems', item.id);
-              batch.set(itemDocRef, item);
-            });
-            batchHasWrites = true;
-        } else {
-            // If items exist, check if 'Calendar' is one of them. If not, add it.
-            const calendarItemExists = navItemsData.some(item => item.id === 'nav_calendar');
-            if (!calendarItemExists) {
-                console.log('Adding missing "Calendar" navigation item...');
-                const calendarItem = defaultNavItems.find(item => item.id === 'nav_calendar');
-                if (calendarItem) {
-                    const itemDocRef = doc(firestore, 'navigationItems', calendarItem.id);
-                    batch.set(itemDocRef, calendarItem);
-                    batchHasWrites = true;
-                }
-            }
-        }
-
-        if (batchHasWrites) {
+          // Then, add all items from the default list
+          defaultNavItems.forEach((item) => {
+            const itemDocRef = doc(firestore, 'navigationItems', item.id);
+            batch.set(itemDocRef, item);
+          });
+          
           await batch.commit();
-          console.log('Navigation items seeding/update complete.');
+          console.log('Navigation items re-seeding complete.');
         }
       };
       seedNavData().catch(console.error);
     }
-  }, [firestore, profile, navItemsData, isNavLoading]);
+  }, [firestore, profile, navItemsData, isNavLoading, navItemsRef]);
 
 
   const filteredNavItems = useMemo(() => {
