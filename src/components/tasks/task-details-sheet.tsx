@@ -269,7 +269,7 @@ export function TaskDetailsSheet({
   };
   
   const handlePostComment = () => {
-    if (!newComment.trim() || !currentUser) return;
+    if (!newComment.trim() || !currentUser || !firestore) return;
     const comment: Comment = {
       id: `c-${Date.now()}`,
       user: {
@@ -286,6 +286,29 @@ export function TaskDetailsSheet({
     setComments([...comments, comment]);
     setActivities(prev => [{id: `a-${Date.now()}`, user: comment.user, action: `commented: "${newComment.substring(0, 30)}..."`, timestamp: new Date().toISOString()}, ...prev]);
     setNewComment('');
+
+    // --- Creator Notification on New Comment ---
+    const taskCreatorId = initialTask.createdBy.id;
+    if (taskCreatorId !== currentUser.id) {
+        const batch = writeBatch(firestore);
+        const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
+        const notification: Omit<Notification, 'id'> = {
+            userId: taskCreatorId,
+            title: `New comment on: ${initialTask.title}`,
+            message: `${currentUser.name} left a comment.`,
+            taskId: initialTask.id,
+            taskTitle: initialTask.title,
+            isRead: false,
+            createdAt: serverTimestamp(),
+            createdBy: {
+                id: currentUser.id,
+                name: currentUser.name,
+                avatarUrl: currentUser.avatarUrl || '',
+            },
+        };
+        batch.set(notifRef, notification);
+        batch.commit().catch(e => console.error("Failed to send comment notification to creator", e));
+    }
   };
 
   const handleToggleSubtask = (subtaskId: string) => {
@@ -404,6 +427,24 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     // Check for status change
     if (initialTask.status !== data.status) {
         notificationMessages.push(`${currentUser.name} changed status to "${data.status}" on task: ${data.title}`);
+        // Notify creator if status changes to Done or Doing
+        const taskCreatorId = initialTask.createdBy.id;
+        if (taskCreatorId !== currentUser.id && (data.status === 'Done' || (initialTask.status === 'To Do' && data.status === 'Doing'))) {
+            const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
+            const message = data.status === 'Done' 
+                ? `${currentUser.name} has completed the task: "${data.title}"`
+                : `${currentUser.name} has started working on the task: "${data.title}"`;
+            batch.set(notifRef, {
+                userId: taskCreatorId,
+                title: data.status === 'Done' ? 'Task Completed' : 'Task In Progress',
+                message,
+                taskId: initialTask.id,
+                taskTitle: data.title,
+                isRead: false,
+                createdAt: serverTimestamp(),
+                createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+            });
+        }
     }
     // Check for priority change
     if (initialTask.priority !== data.priority) {

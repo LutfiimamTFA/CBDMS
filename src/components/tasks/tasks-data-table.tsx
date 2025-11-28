@@ -142,11 +142,28 @@ export function TasksDataTable() {
         
         // --- Notification Logic ---
         const userIdsToNotify = new Set<string>();
-        // Add creator
-        if (taskToUpdate.createdBy.id !== profile.id) {
-            userIdsToNotify.add(taskToUpdate.createdBy.id);
+        
+        // Notify creator if not the one making the change
+        const taskCreatorId = taskToUpdate.createdBy.id;
+        if (taskCreatorId !== profile.id && (newStatus === 'Done' || (taskToUpdate.status === 'To Do' && newStatus === 'Doing'))) {
+            const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
+            const message = newStatus === 'Done'
+                ? `${profile.name} has completed the task: "${taskToUpdate.title}"`
+                : `${profile.name} has started working on the task: "${taskToUpdate.title}"`;
+
+            batch.set(notifRef, {
+                userId: taskCreatorId,
+                title: newStatus === 'Done' ? 'Task Completed' : 'Task In Progress',
+                message,
+                taskId: taskToUpdate.id,
+                taskTitle: taskToUpdate.title,
+                isRead: false,
+                createdAt: serverTimestamp(),
+                createdBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
+            });
         }
-        // Add all assignees (except the one making the change)
+        
+        // Notify other assignees
         taskToUpdate.assigneeIds.forEach(id => {
             if (id !== profile.id) {
                 userIdsToNotify.add(id);
