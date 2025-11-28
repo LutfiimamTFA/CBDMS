@@ -68,6 +68,8 @@ import { useCollection, useFirestore, useUserProfile, useStorage } from '@/fireb
 import { collection, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Calendar as CalendarComponent } from '../ui/calendar';
+import { cn } from '@/lib/utils';
 
 
 const taskSchema = z.object({
@@ -78,7 +80,7 @@ const taskSchema = z.object({
   assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required'),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
   startDate: z.string().optional(),
-  dueDate: z.string().optional(),
+  dueDate: z.date().optional(),
   recurring: z.string().optional(),
   tags: z.array(z.string()).optional(),
 });
@@ -183,7 +185,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       assigneeIds: [],
       recurring: 'never',
       startDate: '',
-      dueDate: '',
+      dueDate: undefined,
       timeEstimate: undefined,
       tags: [],
     },
@@ -219,7 +221,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     const newTaskRef = doc(collection(firestore, 'tasks'));
     const cleanedData = Object.entries(data).reduce((acc, [key, value]) => {
       if (value !== undefined) {
-        (acc as any)[key] = value;
+        if (key === 'dueDate' && value instanceof Date) {
+          (acc as any)[key] = value.toISOString();
+        } else {
+          (acc as any)[key] = value;
+        }
       }
       return acc;
     }, {} as Partial<TaskFormValues>);
@@ -358,8 +364,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     form.setValue('tags', newTags.map(t => t.label));
   }
 
-  const setDateValue = (field: 'startDate' | 'dueDate', date: Date) => {
-    form.setValue(field, format(date, 'yyyy-MM-dd'));
+  const setDateValue = (field: 'startDate' | 'dueDate', date: Date | undefined) => {
+    if (field === 'dueDate') {
+      form.setValue('dueDate', date);
+    } else {
+      form.setValue('startDate', date ? format(date, 'yyyy-MM-dd') : undefined);
+    }
   };
 
   const handleAddCustomField = (type: CustomFieldType) => {
@@ -568,6 +578,24 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const isEmployee = currentUserProfile?.role === 'Employee';
 
+  const dueDates = useMemo(() => {
+    if (!allTasks) return new Set();
+    const dates = new Set<Date>();
+    allTasks.forEach(task => {
+      if (task.dueDate) {
+        dates.add(parseISO(task.dueDate));
+      }
+    });
+    return dates;
+  }, [allTasks]);
+
+  const modifiers = {
+    due: Array.from(dueDates)
+  };
+
+  const modifiersClassNames = {
+    due: 'has-due-date',
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -692,9 +720,49 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.startdate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
-                            <FormField control={form.control} name="dueDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.duedate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
+                             <FormField
+                                control={form.control}
+                                name="dueDate"
+                                render={({ field }) => (
+                                  <FormItem className="flex flex-col">
+                                    <FormLabel>{t('addtask.form.duedate')}</FormLabel>
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <FormControl>
+                                          <Button
+                                            variant={"outline"}
+                                            className={cn(
+                                              "w-full pl-3 text-left font-normal",
+                                              !field.value && "text-muted-foreground"
+                                            )}
+                                          >
+                                            {field.value ? (
+                                              format(field.value, "PPP")
+                                            ) : (
+                                              <span>Pick a date</span>
+                                            )}
+                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                          </Button>
+                                        </FormControl>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-auto p-0" align="start">
+                                        <CalendarComponent
+                                          mode="single"
+                                          selected={field.value}
+                                          onSelect={field.onChange}
+                                          disabled={(date) => date < new Date("1900-01-01")}
+                                          initialFocus
+                                          modifiers={modifiers}
+                                          modifiersClassNames={modifiersClassNames}
+                                        />
+                                      </PopoverContent>
+                                    </Popover>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
                         </div>
-                        <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', '')}>{t('addtask.form.quickselect.clear')}</Button></div></div>
+                        <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>{t('addtask.form.quickselect.clear')}</Button></div></div>
                     </div>
 
                     <div className="space-y-4 rounded-lg border p-4">
@@ -891,4 +959,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
