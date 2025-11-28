@@ -45,10 +45,8 @@ export async function POST(request: Request) {
       password: tempPassword,
     });
     
-    // In a real-world scenario, you might want to flag the user account
-    // to force a password change on their next login. This requires
-    // additional logic both here (e.g., setting a custom claim) and on the client-side.
-    // For now, we return the password to the admin.
+    // Set a custom claim to force password change on next login
+    await auth.setCustomUserClaims(uid, { mustChangePassword: true });
 
     return NextResponse.json({ tempPassword }, { status: 200 });
 
