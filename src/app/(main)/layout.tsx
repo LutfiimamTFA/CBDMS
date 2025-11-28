@@ -160,7 +160,7 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {profile?.role === 'Super Admin' && (
+            {isAdminOrManager && (
                <SidebarMenuItem>
                 <Link href='/admin/dashboard'>
                   <SidebarMenuButton
