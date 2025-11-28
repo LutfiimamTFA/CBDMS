@@ -1,6 +1,6 @@
 'use client';
 import { useMemo } from 'react';
-import { useFirebase, useMemoFirebase } from '@/firebase/provider';
+import { useFirebase } from '@/firebase/provider';
 import { useDoc, type WithId } from '@/firebase/firestore/use-doc';
 import { doc } from 'firebase/firestore';
 
@@ -37,9 +37,9 @@ export function useUserProfile(): UseUserProfileResult {
   } = useFirebase();
 
   // Create a memoized reference to the user's profile document.
-  // useMemoFirebase is critical here to prevent re-creating the doc reference
+  // useMemo is critical here to prevent re-creating the doc reference
   // on every render, which would cause an infinite loop in useDoc.
-  const profileDocRef = useMemoFirebase(() => {
+  const profileDocRef = useMemo(() => {
     if (!user?.uid || !firestore) return null;
     return doc(firestore, 'users', user.uid);
   }, [user?.uid, firestore]);

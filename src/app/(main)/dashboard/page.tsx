@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { SmartSuggestions } from '@/components/smart-suggestions/page';
-import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import type { Task } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
@@ -15,7 +14,7 @@ export default function DashboardPage() {
   const firestore = useFirestore();
 
   // The query now depends on the user's role
-  const tasksQuery = useMemoFirebase(() => {
+  const tasksQuery = useMemo(() => {
     if (!firestore || !profile) return null;
 
     // Admins and Managers see all tasks

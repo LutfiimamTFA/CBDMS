@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
-import { useDoc, useFirestore, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirestore } from '@/firebase';
 import type { PermissionSettings } from '@/lib/types';
 import { doc } from 'firebase/firestore';
 
@@ -47,7 +47,7 @@ export function PermissionsProvider({ children }: { children: React.ReactNode })
   const firestore = useFirestore();
 
   // Memoize the document reference to prevent re-renders.
-  const permsDocRef = useMemoFirebase(
+  const permsDocRef = useMemo(
     () => (firestore ? doc(firestore, 'permissions', 'roles') : null),
     [firestore]
   );
