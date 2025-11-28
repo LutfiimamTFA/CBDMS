@@ -26,6 +26,7 @@ export default function RootPage() {
     // If there is a user, check their token for custom claims.
     if (auth?.currentUser) {
       // Force a token refresh to get the latest claims.
+      // The `true` argument is critical here.
       getIdTokenResult(auth.currentUser, true)
         .then((idTokenResult) => {
           if (idTokenResult.claims.mustChangePassword) {
