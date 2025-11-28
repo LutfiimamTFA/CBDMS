@@ -329,7 +329,7 @@ export function TasksDataTable() {
         const task = row.original;
         const currentStatus = row.getValue('status') as Status;
         
-        if (profile?.role === 'Super Admin') {
+        if (profile?.role === 'Super Admin' || profile?.role === 'Manager') {
             const status = statusInfo[currentStatus];
             if (!status) return null;
             const Icon = status.icon;
@@ -722,3 +722,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
