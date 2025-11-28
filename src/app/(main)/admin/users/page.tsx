@@ -395,35 +395,38 @@ export default function UsersPage() {
                     </TableCell>
                     {canManageUsers && (
                         <TableCell>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                <span className="sr-only">Open menu</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuItem onClick={() => openEditDialog(user)}>
-                                <Edit className="mr-2 h-4 w-4" /> Edit
-                            </DropdownMenuItem>
-                            {currentUserProfile?.role === 'Super Admin' && (
-                                <DropdownMenuItem onClick={() => openConfirmTempPassDialog(user)}>
-                                    <KeyRound className="mr-2 h-4 w-4" />
-                                    Generate Temp Password
+                         {/* Prevent Super Admin from editing their own account from this table */}
+                         {currentUserProfile?.id !== user.id && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                                    <Edit className="mr-2 h-4 w-4" /> Edit
                                 </DropdownMenuItem>
-                            )}
-                            {canDeleteUsers && <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                    className="text-destructive focus:text-destructive"
-                                    onClick={() => openDeleteDialog(user)}
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                </DropdownMenuItem>
-                            </>}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                                {currentUserProfile?.role === 'Super Admin' && (
+                                    <DropdownMenuItem onClick={() => openConfirmTempPassDialog(user)}>
+                                        <KeyRound className="mr-2 h-4 w-4" />
+                                        Generate Temp Password
+                                    </DropdownMenuItem>
+                                )}
+                                {canDeleteUsers && <>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => openDeleteDialog(user)}
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                    </DropdownMenuItem>
+                                </>}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                         )}
                         </TableCell>
                     )}
                   </TableRow>
