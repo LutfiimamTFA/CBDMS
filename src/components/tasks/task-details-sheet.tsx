@@ -137,7 +137,7 @@ export function TaskDetailsSheet({
 
   const { data: allUsers } = useCollection<User>(usersCollectionRef);
 
-  const { profile: currentUser } = useUserProfile();
+  const { user: authUser, profile: currentUser } = useUserProfile();
 
   const isControlled = openProp !== undefined && onOpenChangeProp !== undefined;
   const open = isControlled ? openProp : internalOpen;
@@ -372,77 +372,118 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if (!firestore || !currentUser) return;
-
+  
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-    
+  
     const updatedTaskData = {
-        ...data,
-        assignees: currentAssignees,
-        tags: currentTags,
-        subtasks: subtasks,
-        comments: comments,
-        timeTracked: timeTracked,
-        timeLogs: timeLogs,
-        attachments: attachments,
-        updatedAt: serverTimestamp(),
+      ...data,
+      assignees: currentAssignees,
+      assigneeIds: currentAssignees.map(a => a.id),
+      tags: currentTags,
+      subtasks: subtasks,
+      comments: comments,
+      timeTracked: timeTracked,
+      timeLogs: timeLogs,
+      attachments: attachments,
+      updatedAt: serverTimestamp(),
     };
-    
+  
     batch.update(taskDocRef, updatedTaskData);
-
-    // --- Notification Logic ---
-    const originalStatus = initialTask.status;
-    const newStatus = data.status;
-
-    if (originalStatus !== newStatus) {
-        const userIdsToNotify = new Set<string>();
-        // Add creator
-        if (initialTask.createdBy.id !== currentUser.id) {
-            userIdsToNotify.add(initialTask.createdBy.id);
-        }
-        // Add all assignees (except the one making the change)
-        currentAssignees.forEach(assignee => {
-            if (assignee.id !== currentUser.id) {
-                userIdsToNotify.add(assignee.id);
-            }
-        });
-        
-        const notificationMessage = `${currentUser.name} changed the status of "${data.title}" to ${newStatus}.`;
-
-        userIdsToNotify.forEach(userId => {
-            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-            const newNotification: Omit<Notification, 'id'> = {
-                userId,
-                title: 'Task Status Updated',
-                message: notificationMessage,
+  
+    const userIdsToNotify = new Set<string>();
+    currentAssignees.forEach(assignee => {
+      if (assignee.id !== currentUser.id) {
+        userIdsToNotify.add(assignee.id);
+      }
+    });
+  
+    const createNotification = (message: string) => {
+      userIdsToNotify.forEach(userId => {
+        const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+        const newNotification: Omit<Notification, 'id'> = {
+          userId,
+          title: 'Task Updated',
+          message: message,
+          taskId: initialTask.id,
+          taskTitle: data.title,
+          isRead: false,
+          createdAt: serverTimestamp(),
+          createdBy: {
+            id: currentUser.id,
+            name: currentUser.name,
+            avatarUrl: currentUser.avatarUrl || '',
+          },
+        };
+        batch.set(notifRef, newNotification);
+      });
+    };
+  
+    if (initialTask.status !== data.status) {
+      createNotification(`${currentUser.name} changed status to "${data.status}" on task: ${data.title}`);
+    }
+    if (initialTask.priority !== data.priority) {
+      createNotification(`${currentUser.name} changed priority to "${data.priority}" on task: ${data.title}`);
+    }
+    if (initialTask.dueDate !== data.dueDate) {
+      const formattedDate = data.dueDate ? format(parseISO(data.dueDate), 'MMM d, yyyy') : 'removed';
+      createNotification(`${currentUser.name} changed the due date to ${formattedDate} on task: ${data.title}`);
+    }
+    if (initialTask.description !== data.description) {
+      createNotification(`${currentUser.name} updated the description on task: ${data.title}`);
+    }
+  
+    const initialAssigneeIds = new Set(initialTask.assigneeIds);
+    const currentAssigneeIds = new Set(currentAssignees.map(a => a.id));
+    
+    // Notify added users
+    currentAssignees.forEach(assignee => {
+        if (!initialAssigneeIds.has(assignee.id) && assignee.id !== currentUser.id) {
+            const notifRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
+            batch.set(notifRef, {
+                userId: assignee.id,
+                title: 'You were added to a task',
+                message: `${currentUser.name} added you to task: ${data.title}`,
                 taskId: initialTask.id,
                 taskTitle: data.title,
                 isRead: false,
                 createdAt: serverTimestamp(),
-                createdBy: {
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    avatarUrl: currentUser.avatarUrl || '',
-                },
-            };
-            batch.set(notifRef, newNotification);
-        });
-    }
+                createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+            });
+        }
+    });
+
+    // Notify removed users
+    initialTask.assignees.forEach(assignee => {
+        if (!currentAssigneeIds.has(assignee.id) && assignee.id !== currentUser.id) {
+             const notifRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
+             batch.set(notifRef, {
+                userId: assignee.id,
+                title: 'You were removed from a task',
+                message: `${currentUser.name} removed you from task: ${data.title}`,
+                taskId: initialTask.id,
+                taskTitle: data.title,
+                isRead: false,
+                createdAt: serverTimestamp(),
+                createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+            });
+        }
+    });
 
     try {
-        await batch.commit();
-        toast({
-            title: 'Task Updated',
-            description: `"${data.title}" has been saved.`,
-        });
-        setIsEditing(false);
+      await batch.commit();
+      toast({
+        title: 'Task Updated',
+        description: `"${data.title}" has been saved.`,
+      });
+      setIsEditing(false);
     } catch (error) {
-        console.error("Failed to update task:", error);
-        toast({
-            variant: 'destructive',
-            title: 'Update Failed',
-            description: 'Could not save task changes.'
-        });
+      console.error("Failed to update task:", error);
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: 'Could not save task changes.'
+      });
     }
   };
   
@@ -816,3 +857,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
