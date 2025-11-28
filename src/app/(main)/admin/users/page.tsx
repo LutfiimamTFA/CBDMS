@@ -52,13 +52,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { MoreHorizontal, Plus, Trash2, Edit, Loader2, KeyRound, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { User } from '@/lib/types';
-import { collection } from 'firebase/firestore';
+import { collection, doc } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { usePermissions } from '@/context/permissions-provider';
 import { Header } from '@/components/layout/header';
+import { setDoc } from 'firebase/firestore';
 
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
@@ -90,14 +91,19 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const usersCollectionRef = useMemoFirebase(
+  const usersCollectionRef = useMemo(
     () => (firestore ? collection(firestore, 'users') : null),
     [firestore]
   );
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersCollectionRef);
 
   const sortedAndGroupedUsers = useMemo(() => {
-    if (!users) return [];
+    if (!users || !currentUserProfile) return [];
+
+    // Filter users based on manager role
+    const filteredUsers = currentUserProfile.role === 'Manager'
+      ? users.filter(user => user.role === 'Employee' || user.role === 'Client' || user.id === currentUserProfile.id)
+      : users;
     
     const roleOrder: Record<User['role'], number> = {
         'Super Admin': 0,
@@ -106,8 +112,8 @@ export default function UsersPage() {
         'Client': 3,
     };
 
-    return [...users].sort((a, b) => {
-        // Current Super Admin always on top
+    return [...filteredUsers].sort((a, b) => {
+        // Current user always on top
         if (a.id === currentUserProfile?.id) return -1;
         if (b.id === currentUserProfile?.id) return 1;
         
@@ -118,7 +124,7 @@ export default function UsersPage() {
         // Then sort by name
         return a.name.localeCompare(b.name);
     });
-  }, [users, currentUserProfile?.id]);
+  }, [users, currentUserProfile]);
 
 
   const createForm = useForm<UserFormValues>({
@@ -195,18 +201,24 @@ export default function UsersPage() {
   };
 
   const handleUpdateUser = async (data: EditUserFormValues) => {
-    if (!selectedUser) return;
+    if (!selectedUser || !firestore) return;
     setIsLoading(true);
     try {
-      const response = await fetch('/api/update-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ uid: selectedUser.id, ...data }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update user.');
+      // Direct update for manager, API for super admin
+      if (currentUserProfile?.role === 'Manager') {
+        const userRef = doc(firestore, 'users', selectedUser.id);
+        await setDoc(userRef, { name: data.name, role: data.role }, { merge: true });
+      } else {
+        const response = await fetch('/api/update-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid: selectedUser.id, ...data }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update user.');
+        }
       }
 
       toast({
@@ -368,7 +380,7 @@ export default function UsersPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                   {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                                  <SelectItem value="Manager">Manager</SelectItem>
+                                  {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
                                   <SelectItem value="Employee">Employee</SelectItem>
                                   <SelectItem value="Client">Client</SelectItem>
                                 </SelectContent>
@@ -413,17 +425,23 @@ export default function UsersPage() {
                 sortedAndGroupedUsers.map((user) => {
                   const showRoleHeader = user.role !== lastRole;
                   lastRole = user.role;
+                  const isCurrentUser = user.id === currentUserProfile?.id;
+                  
+                  // A manager cannot edit another manager or a super admin
+                  const canEditThisUser = currentUserProfile?.role === 'Super Admin' || (currentUserProfile?.role === 'Manager' && user.role !== 'Manager' && user.role !== 'Super Admin');
+
+
                   return (
                     <React.Fragment key={user.id}>
                       {showRoleHeader && (
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableCell colSpan={5} className="py-2 px-4 text-sm font-semibold text-muted-foreground">
-                            {user.role === 'Super Admin' ? 'Administrators' : `${user.role}s`}
+                            {user.role === 'Super Admin' ? 'Administrators' : user.role === 'Manager' ? 'Managers' : `${user.role}s`}
                           </TableCell>
                         </TableRow>
                       )}
-                      <TableRow data-state={user.id === currentUserProfile?.id ? 'selected' : ''}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
+                      <TableRow data-state={isCurrentUser ? 'selected' : ''}>
+                        <TableCell className="font-medium">{user.name}{isCurrentUser && " (You)"}</TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
                             <Badge className={roleColors[user.role]}>{user.role}</Badge>
@@ -433,7 +451,7 @@ export default function UsersPage() {
                         </TableCell>
                         {canManageUsers && (
                             <TableCell>
-                             {currentUserProfile?.id !== user.id && (
+                             {!isCurrentUser && canEditThisUser && (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                     <Button variant="ghost" className="h-8 w-8 p-0">
@@ -507,7 +525,7 @@ export default function UsersPage() {
                         </SelectTrigger>
                         <SelectContent>
                           {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                          <SelectItem value="Manager">Manager</SelectItem>
+                          {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
                           <SelectItem value="Employee">Employee</SelectItem>
                           <SelectItem value="Client">Client</SelectItem>
                         </SelectContent>
@@ -594,5 +612,3 @@ export default function UsersPage() {
       </Dialog>
     </div>
   );
-
-    

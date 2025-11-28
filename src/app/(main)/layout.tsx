@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -39,7 +40,6 @@ import {
   useUserProfile,
   useCollection,
   useFirestore,
-  useMemoFirebase,
   useAuth,
 } from '@/firebase';
 import { useEffect, useState, useMemo } from 'react';
@@ -83,7 +83,7 @@ export default function MainLayout({
   const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsRoute);
 
   // --- Dynamic Navigation ---
-  const navItemsRef = useMemoFirebase(
+  const navItemsRef = useMemo(
     () =>
       firestore
         ? query(collection(firestore, 'navigationItems'), orderBy('order'))
@@ -140,9 +140,10 @@ export default function MainLayout({
     return null;
   }
 
-  // Super Admins see everything, but normal users can only access non-admin routes.
-  if (profile?.role !== 'Super Admin' && isAdminRoute) {
-    // Redirect non-admins trying to access admin pages.
+  const isAdminOrManager = profile?.role === 'Super Admin' || profile?.role === 'Manager';
+
+  // Redirect non-admins/managers trying to access admin pages.
+  if (!isAdminOrManager && isAdminRoute) {
     router.push('/dashboard');
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -187,7 +188,7 @@ export default function MainLayout({
               </SidebarMenuItem>
             ))}
 
-            {profile?.role === 'Super Admin' && (
+            {isAdminOrManager && (
               <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -219,20 +220,22 @@ export default function MainLayout({
                         </SidebarMenuButton>
                       </Link>
                     </SidebarMenuItem>
-                     <SidebarMenuItem>
-                      <Link href='/admin/data'>
-                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/data')} className="w-full justify-start">
-                          <Database/>
-                          <span>Data</span>
-                        </SidebarMenuButton>
-                      </Link>
-                    </SidebarMenuItem>
+                     {profile?.role === 'Super Admin' && (
+                       <SidebarMenuItem>
+                        <Link href='/admin/data'>
+                          <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/data')} className="w-full justify-start">
+                            <Database/>
+                            <span>Data</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                     )}
                   </SidebarMenu>
                 </CollapsibleContent>
               </Collapsible>
             )}
 
-            {profile?.role === 'Super Admin' && (
+            {isAdminOrManager && (
               <Collapsible open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -256,6 +259,16 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
+                     {profile?.role === 'Super Admin' && (
+                        <SidebarMenuItem>
+                            <Link href='/admin/settings'>
+                                <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings'} className="w-full justify-start">
+                                    <LucideIcon name="Building" />
+                                    <span>Company</span>
+                                </SidebarMenuButton>
+                            </Link>
+                        </SidebarMenuItem>
+                     )}
                      <SidebarMenuItem>
                       <Link href='/admin/settings/roles'>
                         <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings/roles'} className="w-full justify-start">
@@ -272,6 +285,16 @@ export default function MainLayout({
                         </SidebarMenuButton>
                       </Link>
                     </SidebarMenuItem>
+                    {profile?.role === 'Super Admin' && (
+                        <SidebarMenuItem>
+                            <Link href='/admin/settings/theme'>
+                                <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/settings/theme')} className="w-full justify-start">
+                                    <Palette />
+                                    <span>Theme</span>
+                                </SidebarMenuButton>
+                            </Link>
+                        </SidebarMenuItem>
+                    )}
                   </SidebarMenu>
                 </CollapsibleContent>
               </Collapsible>
