@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -75,7 +74,6 @@ export default function MainLayout({
   const { t } = useI18n();
   const router = useRouter();
   const firestore = useFirestore();
-  const auth = useAuth();
   const { user, profile, isLoading } = useUserProfile();
 
   const isAdminRoute = pathname.startsWith('/admin');
@@ -126,15 +124,8 @@ export default function MainLayout({
   useEffect(() => {
     if (!isLoading && !user) {
       router.push('/login');
-    } else if (user && auth?.currentUser) {
-      // Check for mustChangePassword claim
-      getIdTokenResult(auth.currentUser).then((idTokenResult) => {
-        if (idTokenResult.claims.mustChangePassword) {
-          router.push('/force-change-password');
-        }
-      });
     }
-  }, [user, isLoading, auth, router]);
+  }, [user, isLoading, router]);
 
   if (isLoading || isNavLoading) {
     return (
@@ -146,17 +137,12 @@ export default function MainLayout({
 
   // This check is important as an early exit before render, but redirection is handled in useEffect
   if (!user || !profile) {
-    return (
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-            <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-    );
+    return null;
   }
 
   // Super Admins see everything, but normal users can only access non-admin routes.
   if (profile?.role !== 'Super Admin' && isAdminRoute) {
     // Redirect non-admins trying to access admin pages.
-    // This is one of the few safe places for a render-time redirect.
     router.push('/dashboard');
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">

@@ -2,22 +2,49 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useFirebase } from '@/firebase';
+import { useFirebase, useAuth } from '@/firebase';
+import { getIdTokenResult } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
 
 export default function RootPage() {
   const { user, isUserLoading } = useFirebase();
+  const auth = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isUserLoading) {
-      if (user) {
-        router.replace('/dashboard');
-      } else {
-        router.replace('/login');
-      }
+    // Wait until the initial user loading state is resolved.
+    if (isUserLoading) {
+      return;
     }
-  }, [user, isUserLoading, router]);
+
+    if (!user) {
+      // If no user, redirect to login.
+      router.replace('/login');
+      return;
+    }
+
+    // If there is a user, check their token for custom claims.
+    if (auth?.currentUser) {
+      // Force a token refresh to get the latest claims.
+      getIdTokenResult(auth.currentUser, true)
+        .then((idTokenResult) => {
+          if (idTokenResult.claims.mustChangePassword) {
+            // If the claim exists, force redirect to the change password page.
+            router.replace('/force-change-password');
+          } else {
+            // Otherwise, proceed to the main dashboard.
+            router.replace('/dashboard');
+          }
+        })
+        .catch(() => {
+          // If token check fails, fall back to login.
+          router.replace('/login');
+        });
+    } else {
+      // Fallback for edge cases where user object exists but currentUser doesn't.
+      router.replace('/login');
+    }
+  }, [user, isUserLoading, auth, router]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
