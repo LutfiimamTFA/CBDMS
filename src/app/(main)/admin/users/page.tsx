@@ -314,6 +314,8 @@ export default function UsersPage() {
     'Employee': 'bg-green-500 text-white',
     'Client': 'bg-gray-500 text-white',
   }
+  
+  let lastRole: string | null = null;
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -408,53 +410,66 @@ export default function UsersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedAndGroupedUsers.map((user) => (
-                  <TableRow key={user.id} data-state={user.id === currentUserProfile?.id ? 'selected' : ''}>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                        <Badge className={roleColors[user.role]}>{user.role}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      {user.createdAt ? format(parseISO(user.createdAt), 'PPpp') : 'N/A'}
-                    </TableCell>
-                    {canManageUsers && (
+                sortedAndGroupedUsers.map((user) => {
+                  const showRoleHeader = user.role !== lastRole;
+                  lastRole = user.role;
+                  return (
+                    <React.Fragment key={user.id}>
+                      {showRoleHeader && (
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                          <TableCell colSpan={5} className="py-2 px-4 text-sm font-semibold text-muted-foreground">
+                            {user.role === 'Super Admin' ? 'Administrators' : `${user.role}s`}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      <TableRow data-state={user.id === currentUserProfile?.id ? 'selected' : ''}>
+                        <TableCell className="font-medium">{user.name}</TableCell>
+                        <TableCell>{user.email}</TableCell>
                         <TableCell>
-                         {currentUserProfile?.id !== user.id && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                    <span className="sr-only">Open menu</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                <DropdownMenuItem onClick={() => openEditDialog(user)}>
-                                    <Edit className="mr-2 h-4 w-4" /> Edit
-                                </DropdownMenuItem>
-                                {currentUserProfile?.role === 'Super Admin' && (
-                                    <DropdownMenuItem onClick={() => openConfirmTempPassDialog(user)}>
-                                        <KeyRound className="mr-2 h-4 w-4" />
-                                        Generate Temp Password
-                                    </DropdownMenuItem>
-                                )}
-                                {canDeleteUsers && <>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem
-                                        className="text-destructive focus:text-destructive"
-                                        onClick={() => openDeleteDialog(user)}
-                                    >
-                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                    </DropdownMenuItem>
-                                </>}
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                         )}
+                            <Badge className={roleColors[user.role]}>{user.role}</Badge>
                         </TableCell>
-                    )}
-                  </TableRow>
-                ))
+                        <TableCell>
+                          {user.createdAt ? format(parseISO(user.createdAt), 'PPpp') : 'N/A'}
+                        </TableCell>
+                        {canManageUsers && (
+                            <TableCell>
+                             {currentUserProfile?.id !== user.id && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" className="h-8 w-8 p-0">
+                                        <span className="sr-only">Open menu</span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                    <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                    <DropdownMenuItem onClick={() => openEditDialog(user)}>
+                                        <Edit className="mr-2 h-4 w-4" /> Edit
+                                    </DropdownMenuItem>
+                                    {currentUserProfile?.role === 'Super Admin' && (
+                                        <DropdownMenuItem onClick={() => openConfirmTempPassDialog(user)}>
+                                            <KeyRound className="mr-2 h-4 w-4" />
+                                            Generate Temp Password
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canDeleteUsers && <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onClick={() => openDeleteDialog(user)}
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                        </DropdownMenuItem>
+                                    </>}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                             )}
+                            </TableCell>
+                        )}
+                      </TableRow>
+                    </React.Fragment>
+                  )
+                })
               )}
             </TableBody>
           </Table>
@@ -579,4 +594,5 @@ export default function UsersPage() {
       </Dialog>
     </div>
   );
-}
+
+    
