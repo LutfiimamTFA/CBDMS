@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -28,12 +29,13 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useRouter } from 'next/navigation';
+import { Badge } from '../ui/badge';
 
 export function NotificationBell() {
   const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUserProfile();
-  const [hasUnread, setHasUnread] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const notificationsQuery = useMemo(
     () =>
@@ -52,12 +54,12 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (notifications) {
-      setHasUnread(notifications.some((n) => !n.isRead));
+      setUnreadCount(notifications.filter((n) => !n.isRead).length);
     }
   }, [notifications]);
 
   const handleOpenChange = async (isOpen: boolean) => {
-    if (isOpen && hasUnread && firestore && user && notifications) {
+    if (isOpen && unreadCount > 0 && firestore && user && notifications) {
       const unreadNotifications = notifications.filter((n) => !n.isRead);
       if (unreadNotifications.length === 0) return;
 
@@ -73,7 +75,7 @@ export function NotificationBell() {
 
       try {
         await batch.commit();
-        setHasUnread(false);
+        setUnreadCount(0);
       } catch (error) {
         console.error('Failed to mark notifications as read:', error);
       }
@@ -91,12 +93,17 @@ export function NotificationBell() {
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-[1.2rem] w-[1.2rem]" />
           {isLoading ? (
-            <div className="absolute top-1 right-1 flex h-3 w-3 items-center justify-center">
+            <div className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center">
               <Loader2 className="h-full w-full animate-spin text-xs" />
             </div>
           ) : (
-            hasUnread && (
-              <div className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive" />
+            unreadCount > 0 && (
+              <Badge 
+                variant="destructive" 
+                className="absolute -top-2 -right-2 h-5 w-5 justify-center rounded-full p-0 text-xs"
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Badge>
             )
           )}
           <span className="sr-only">Toggle notifications</span>

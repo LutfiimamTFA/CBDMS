@@ -391,52 +391,58 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
     batch.update(taskDocRef, updatedTaskData);
   
+    // Determine who to notify: all assignees except the current user
     const userIdsToNotify = new Set<string>();
     currentAssignees.forEach(assignee => {
       if (assignee.id !== currentUser.id) {
         userIdsToNotify.add(assignee.id);
       }
     });
-  
-    const createNotification = (message: string) => {
-      userIdsToNotify.forEach(userId => {
-        const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-        const newNotification: Omit<Notification, 'id'> = {
-          userId,
-          title: 'Task Updated',
-          message: message,
-          taskId: initialTask.id,
-          taskTitle: data.title,
-          isRead: false,
-          createdAt: serverTimestamp(),
-          createdBy: {
-            id: currentUser.id,
-            name: currentUser.name,
-            avatarUrl: currentUser.avatarUrl || '',
-          },
-        };
-        batch.set(notifRef, newNotification);
-      });
-    };
-  
+
+    const notificationMessages: string[] = [];
+
+    // Check for specific field changes and build notification messages
     if (initialTask.status !== data.status) {
-      createNotification(`${currentUser.name} changed status to "${data.status}" on task: ${data.title}`);
+        notificationMessages.push(`${currentUser.name} changed status to "${data.status}" on task: ${data.title}`);
     }
     if (initialTask.priority !== data.priority) {
-      createNotification(`${currentUser.name} changed priority to "${data.priority}" on task: ${data.title}`);
+        notificationMessages.push(`${currentUser.name} changed priority to "${data.priority}" on task: ${data.title}`);
     }
-    if (initialTask.dueDate !== data.dueDate) {
-      const formattedDate = data.dueDate ? format(parseISO(data.dueDate), 'MMM d, yyyy') : 'removed';
-      createNotification(`${currentUser.name} changed the due date to ${formattedDate} on task: ${data.title}`);
+    const initialDueDate = initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined;
+    if (initialDueDate !== data.dueDate) {
+        const formattedDate = data.dueDate ? format(parseISO(data.dueDate), 'MMM d, yyyy') : 'removed';
+        notificationMessages.push(`${currentUser.name} changed the due date to ${formattedDate} on task: ${data.title}`);
     }
     if (initialTask.description !== data.description) {
-      createNotification(`${currentUser.name} updated the description on task: ${data.title}`);
+        notificationMessages.push(`${currentUser.name} updated the description on task: ${data.title}`);
     }
+
+    // Create notifications for each message and each user
+    notificationMessages.forEach(message => {
+        userIdsToNotify.forEach(userId => {
+            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+            const newNotification: Omit<Notification, 'id'> = {
+                userId,
+                title: 'Task Updated',
+                message: message,
+                taskId: initialTask.id,
+                taskTitle: data.title,
+                isRead: false,
+                createdAt: serverTimestamp(),
+                createdBy: {
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    avatarUrl: currentUser.avatarUrl || '',
+                },
+            };
+            batch.set(notifRef, newNotification);
+        });
+    });
   
     const initialAssigneeIds = new Set(initialTask.assigneeIds);
     const currentAssigneeIds = new Set(currentAssignees.map(a => a.id));
     
-    // Notify added users
+    // Notify newly added users
     currentAssignees.forEach(assignee => {
         if (!initialAssigneeIds.has(assignee.id) && assignee.id !== currentUser.id) {
             const notifRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
@@ -857,5 +863,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    
