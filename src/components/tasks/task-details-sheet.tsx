@@ -391,7 +391,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
     batch.update(taskDocRef, updatedTaskData);
   
-    // Determine who to notify: all assignees except the current user
+    // --- NOTIFICATION LOGIC ---
     const userIdsToNotify = new Set<string>();
     currentAssignees.forEach(assignee => {
       if (assignee.id !== currentUser.id) {
@@ -401,23 +401,26 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
     const notificationMessages: string[] = [];
 
-    // Check for specific field changes and build notification messages
+    // Check for status change
     if (initialTask.status !== data.status) {
         notificationMessages.push(`${currentUser.name} changed status to "${data.status}" on task: ${data.title}`);
     }
+    // Check for priority change
     if (initialTask.priority !== data.priority) {
         notificationMessages.push(`${currentUser.name} changed priority to "${data.priority}" on task: ${data.title}`);
     }
+    // Check for due date change
     const initialDueDate = initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined;
     if (initialDueDate !== data.dueDate) {
         const formattedDate = data.dueDate ? format(parseISO(data.dueDate), 'MMM d, yyyy') : 'removed';
         notificationMessages.push(`${currentUser.name} changed the due date to ${formattedDate} on task: ${data.title}`);
     }
+    // Check for description change
     if (initialTask.description !== data.description) {
         notificationMessages.push(`${currentUser.name} updated the description on task: ${data.title}`);
     }
 
-    // Create notifications for each message and each user
+    // Create a notification for each distinct change for each user
     notificationMessages.forEach(message => {
         userIdsToNotify.forEach(userId => {
             const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
@@ -439,6 +442,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         });
     });
   
+    // --- Assignee Change Notifications ---
     const initialAssigneeIds = new Set(initialTask.assigneeIds);
     const currentAssigneeIds = new Set(currentAssignees.map(a => a.id));
     
@@ -475,6 +479,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             });
         }
     });
+    // --- END NOTIFICATION LOGIC ---
 
     try {
       await batch.commit();
