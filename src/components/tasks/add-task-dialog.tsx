@@ -64,7 +64,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
-import { useCollection, useFirestore, useMemoFirebase, useUserProfile, useStorage } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
 import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -129,14 +129,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const firestore = useFirestore();
   const storage = useStorage();
 
-  const usersCollectionRef = useMemoFirebase(() => 
+  const usersCollectionRef = React.useMemo(() => 
     firestore ? collection(firestore, 'users') : null, 
   [firestore]);
   const { data: users } = useCollection<UserType>(usersCollectionRef);
 
   const { user, profile: currentUserProfile } = useUserProfile();
 
-  const tasksCollectionRef = useMemoFirebase(() => {
+  const tasksCollectionRef = React.useMemo(() => {
     if (!firestore) return null;
     return collection(firestore, 'tasks');
   }, [firestore]);
@@ -865,5 +865,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    

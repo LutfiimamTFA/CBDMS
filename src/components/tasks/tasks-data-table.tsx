@@ -49,7 +49,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
-import { useCollection, useFirestore, useMemoFirebase, useUserProfile } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, doc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
@@ -76,7 +76,7 @@ export function TasksDataTable() {
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
 
-  const tasksQuery = useMemoFirebase(() => {
+  const tasksQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
     // Admins and Managers see all tasks
     if (profile.role === 'Super Admin' || profile.role === 'Manager') {
