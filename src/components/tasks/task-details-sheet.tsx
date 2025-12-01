@@ -382,20 +382,23 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
     const newActivities: Activity[] = [...activities];
   
-    const getChangedFields = (
-      oldTask: Task,
-      newData: TaskDetailsFormValues
-    ): string[] => {
+    const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string[] => {
       const changes: string[] = [];
-      if (oldTask.title !== newData.title)
+      if (oldTask.title !== newData.title) {
         changes.push(`changed the title from "${oldTask.title}" to "${newData.title}"`);
-      if (oldTask.status !== newData.status)
+      }
+      if (oldTask.status !== newData.status) {
         changes.push(`changed status from "${oldTask.status}" to "${newData.status}"`);
-      if (oldTask.priority !== newData.priority)
+      }
+      if (oldTask.priority !== newData.priority) {
         changes.push(`changed priority from "${oldTask.priority}" to "${newData.priority}"`);
-      if (oldTask.description !== newData.description)
+      }
+      if ((oldTask.description || '') !== (newData.description || '')) {
         changes.push('updated the description');
-      if (oldTask.dueDate !== newData.dueDate) changes.push('updated the due date');
+      }
+      if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : '') !== (newData.dueDate || '')) {
+         changes.push('updated the due date');
+      }
       return changes;
     };
   
@@ -858,7 +861,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               {activities.length > 0 ? (
                 activities
                   .slice()
-                  .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0))
+                  .sort((a, b) => {
+                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : 0;
+                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : 0;
+                    if (!dateA || !dateB) return 0;
+                    return dateB - dateA;
+                  })
                   .map((activity, index) => (
                     <div key={index} className="flex items-start gap-4">
                       <Avatar className="h-9 w-9">
@@ -870,7 +878,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
+                          {activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
                         </p>
                       </div>
                     </div>
