@@ -15,6 +15,7 @@ import {
 } from '../ui/tooltip';
 import { useMemo } from 'react';
 import { Droppable } from 'react-beautiful-dnd';
+import { useUserProfile } from '@/firebase';
 
 interface KanbanColumnProps {
   status: Status;
@@ -30,6 +31,14 @@ export function KanbanColumn({
   const { t } = useI18n();
   const translationKey =
     `status.${status.toLowerCase().replace(' ', '')}` as any;
+  const { profile } = useUserProfile();
+
+  const isDropDisabled = useMemo(() => {
+    if (!profile) return true;
+    if (profile.role === 'Client') return true;
+    return false;
+  }, [profile]);
+
 
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
@@ -94,7 +103,7 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <Droppable droppableId={status}>
+      <Droppable droppableId={status} isDropDisabled={isDropDisabled}>
         {(provided, snapshot) => (
           <ScrollArea 
             ref={provided.innerRef}
