@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Table,
   TableBody,
@@ -20,6 +20,7 @@ import {
   orderBy,
   updateDoc,
   writeBatch,
+  getDocs,
 } from 'firebase/firestore';
 import { Loader2, Icon as LucideIcon } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
@@ -44,6 +45,9 @@ export default function NavigationSettingsPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
 
+  const [isLoading, setIsLoading] = useState(true);
+  const [navItems, setNavItems] = useState<NavigationItem[]>([]);
+
   const navItemsCollectionRef = useMemo(
     () =>
       firestore
@@ -51,39 +55,57 @@ export default function NavigationSettingsPage() {
         : null,
     [firestore]
   );
-  const { data: navItems, isLoading: isNavItemsLoading } =
-    useCollection<NavigationItem>(navItemsCollectionRef);
+  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
   useEffect(() => {
-    if (isNavItemsLoading || !firestore || !navItems) return;
-
-    const existingItemIds = new Set(navItems.map((item) => item.id));
-    const missingItems = defaultNavItems.filter(
-      (defaultItem) => !existingItemIds.has(defaultItem.id)
-    );
-
-    if (missingItems.length > 0) {
-      const batch = writeBatch(firestore);
-      missingItems.forEach((item) => {
-        const docRef = doc(firestore, 'navigationItems', item.id);
-        batch.set(docRef, item);
-      });
-
-      batch.commit().then(() => {
-        toast({
-          title: 'Navigation Synced',
-          description: `${missingItems.length} new navigation item(s) have been added.`,
-        });
-      }).catch(err => {
-        console.error("Failed to sync navigation items", err);
-        toast({
-            variant: 'destructive',
-            title: 'Sync Failed',
-            description: 'Could not add new navigation items automatically.',
-        });
-      });
+    // This effect ensures the local state is synced with Firestore on initial load and updates.
+    if (navItemsFromDB) {
+      setNavItems(navItemsFromDB);
     }
-  }, [navItems, isNavItemsLoading, firestore, toast]);
+  }, [navItemsFromDB]);
+
+
+  useEffect(() => {
+    if (isNavItemsLoading || !firestore) return;
+
+    // This effect syncs default items TO Firestore if they don't exist yet.
+    const syncDefaultsToFirestore = async () => {
+        setIsLoading(true);
+        try {
+            const existingItemsSnapshot = await getDocs(collection(firestore, 'navigationItems'));
+            const existingItemIds = new Set(existingItemsSnapshot.docs.map(doc => doc.id));
+            const missingItems = defaultNavItems.filter(
+                (defaultItem) => !existingItemIds.has(defaultItem.id)
+            );
+
+            if (missingItems.length > 0) {
+                const batch = writeBatch(firestore);
+                missingItems.forEach((item) => {
+                    const docRef = doc(firestore, 'navigationItems', item.id);
+                    batch.set(docRef, item);
+                });
+
+                await batch.commit();
+                toast({
+                    title: 'Navigation Synced',
+                    description: `${missingItems.length} new navigation item(s) have been added.`,
+                });
+            }
+        } catch (err) {
+            console.error("Failed to sync navigation items", err);
+            toast({
+                variant: 'destructive',
+                title: 'Sync Failed',
+                description: 'Could not add new navigation items automatically.',
+            });
+        } finally {
+           setIsLoading(false);
+        }
+    };
+    
+    syncDefaultsToFirestore();
+
+  }, [isNavItemsLoading, firestore, toast]);
 
   const handleRoleChange = async (
     itemId: string,
@@ -101,7 +123,6 @@ export default function NavigationSettingsPage() {
     } else {
       updatedRoles = itemToUpdate.roles.filter((r) => r !== role);
     }
-    // Remove duplicates just in case
     updatedRoles = [...new Set(updatedRoles)];
 
     const itemDocRef = doc(firestore, 'navigationItems', itemId);
@@ -154,7 +175,7 @@ export default function NavigationSettingsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                navItems?.map((item) => (
+                navItems?.sort((a,b) => a.order - b.order).map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">

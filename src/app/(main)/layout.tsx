@@ -36,11 +36,11 @@ import {
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useUserProfile } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { useEffect, useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
-import { defaultNavItems } from '@/lib/navigation-items';
+import { collection, query, orderBy } from 'firebase/firestore';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -59,25 +59,34 @@ export default function MainLayout({
   const pathname = usePathname();
   const { t } = useI18n();
   const router = useRouter();
-  const { user, profile, isLoading } = useUserProfile();
+  const { user, profile, isLoading: isUserLoading } = useUserProfile();
+  const firestore = useFirestore();
 
   const isAdminRoute = pathname.startsWith('/admin');
   const [isAdminOpen, setIsAdminOpen] = useState(isAdminRoute);
   
   const isSettingsRoute = pathname.startsWith('/admin/settings');
   const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsRoute);
+  
+  const navItemsCollectionRef = useMemo(() => 
+    firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
+  [firestore]);
+
+  const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
   const filteredNavItems = useMemo(() => {
-    if (!profile) return [];
-    return defaultNavItems.filter(item => item.roles.includes(profile.role));
-  }, [profile]);
+    if (!profile || !navItems) return [];
+    return navItems.filter(item => item.roles.includes(profile.role));
+  }, [profile, navItems]);
 
 
   useEffect(() => {
-    if (!isLoading && !user) {
+    if (!isUserLoading && !user) {
       router.push('/login');
     }
-  }, [user, isLoading, router]);
+  }, [user, isUserLoading, router]);
+
+  const isLoading = isUserLoading || isNavItemsLoading;
 
   if (isLoading) {
     return (
