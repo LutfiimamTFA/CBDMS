@@ -1,6 +1,4 @@
 
-
-
 'use client';
 
 import {
@@ -36,7 +34,7 @@ import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -59,7 +57,7 @@ import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
-import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment, Notification, WorkflowStatus } from '@/lib/types';
+import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment, Notification, WorkflowStatus, Brand } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Progress } from '../ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -75,6 +73,7 @@ import { cn } from '@/lib/utils';
 
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
+  brandId: z.string().min(1, 'Brand is required'),
   description: z.string().optional(),
   status: z.string().min(1, 'Status is required'),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
@@ -153,6 +152,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     [firestore]
   );
   const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
+  
+  const brandsQuery = React.useMemo(() =>
+    firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null,
+  [firestore]);
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
   const userWorkload = useMemo(() => {
     const workloadMap = new Map<string, number>();
@@ -188,6 +192,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     resolver: zodResolver(taskSchema),
     defaultValues: {
       title: '',
+      brandId: '',
       description: '',
       status: statuses?.[0]?.name || '',
       priority: 'Medium',
@@ -735,6 +740,38 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <FormControl>
                             <Input placeholder={t('addtask.form.title.placeholder')} {...field} />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="brandId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Brand</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a brand for this task" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {areBrandsLoading ? (
+                                <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                              ) : (
+                                brands?.map((brand) => (
+                                  <SelectItem key={brand.id} value={brand.id}>
+                                    <div className="flex items-center gap-2">
+                                      <Building2 className="h-4 w-4" />
+                                      {brand.name}
+                                    </div>
+                                  </SelectItem>
+                                ))
+                              )}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}

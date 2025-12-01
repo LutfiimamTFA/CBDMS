@@ -61,9 +61,16 @@ export type WorkflowStatus = {
   companyId: string;
 };
 
+export type Brand = {
+  id: string;
+  name: string;
+  createdAt: any;
+};
+
 export type Task = {
   id: string;
   title: string;
+  brandId: string;
   description?: string;
   status: Status;
   priority: Priority;

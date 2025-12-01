@@ -49,6 +49,28 @@
         "createdAt"
       ]
     },
+    "Brand": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Brand",
+      "type": "object",
+      "description": "Represents a brand or division within the company.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Brand entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the brand."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the brand was created.",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "name", "createdAt"]
+    },
     "Task": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Task",
@@ -58,6 +80,10 @@
         "id": {
           "type": "string",
           "description": "Unique identifier for the Task entity."
+        },
+        "brandId": {
+          "type": "string",
+          "description": "Reference to the Brand this task belongs to."
         },
         "title": {
           "type": "string",
@@ -110,6 +136,7 @@
       },
       "required": [
         "id",
+        "brandId",
         "title",
         "description",
         "status",
@@ -278,6 +305,22 @@
         }
       },
       {
+        "path": "/brands/{brandId}",
+        "definition": {
+          "entityName": "Brand",
+          "schema": {
+            "$ref": "#/backend/entities/Brand"
+          },
+          "description": "Stores company brands or divisions.",
+          "params": [
+            {
+              "name": "brandId",
+              "description": "The unique identifier for the brand."
+            }
+          ]
+        }
+      },
+      {
         "path": "/tasks/{taskId}",
         "definition": {
           "entityName": "Task",
@@ -353,6 +396,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee."
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee."
   }
 }

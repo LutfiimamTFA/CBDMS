@@ -33,6 +33,7 @@ import {
   SlidersHorizontal,
   Palette,
   Workflow,
+  Building2,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -102,6 +103,7 @@ export default function MainLayout({
   }
 
   const isAdminOrManager = profile?.role === 'Super Admin' || profile?.role === 'Manager';
+  const isSuperAdmin = profile?.role === 'Super Admin';
 
   if (!isAdminOrManager && isAdminRoute) {
     router.push('/dashboard');
@@ -219,7 +221,7 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                     {profile?.role === 'Super Admin' && (
+                     {isSuperAdmin && (
                         <SidebarMenuItem>
                             <Link href='/admin/settings'>
                                 <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings'} className="w-full justify-start">
@@ -227,6 +229,16 @@ export default function MainLayout({
                                     <span>Company</span>
                                 </SidebarMenuButton>
                             </Link>
+                        </SidebarMenuItem>
+                     )}
+                     {isSuperAdmin && (
+                        <SidebarMenuItem>
+                          <Link href='/admin/settings/brands'>
+                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings/brands'} className="w-full justify-start">
+                              <Building2 />
+                              <span>Brands</span>
+                            </SidebarMenuButton>
+                          </Link>
                         </SidebarMenuItem>
                      )}
                      <SidebarMenuItem>
