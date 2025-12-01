@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, History } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, History, Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -55,6 +55,7 @@ import { useRouter } from 'next/navigation';
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
+  brandId: z.string().min(1, 'Brand is required'),
   description: z.string().optional(),
   status: z.enum(['To Do', 'Doing', 'Done']),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
@@ -123,6 +124,11 @@ export function TaskDetailsSheet({
   [firestore]);
   const { data: allUsers } = useCollection<User>(usersCollectionRef);
 
+  const brandsQuery = React.useMemo(() =>
+    firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null,
+  [firestore]);
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+
   const activityQuery = useMemo(() =>
       firestore && initialTask ? query(collection(firestore, `tasks/${initialTask.id}/activities`), orderBy('timestamp', 'desc')) : null,
   [firestore, initialTask]);
@@ -139,6 +145,7 @@ export function TaskDetailsSheet({
     if (initialTask && open) {
         form.reset({
             title: initialTask.title,
+            brandId: initialTask.brandId,
             description: initialTask.description || '',
             status: initialTask.status,
             priority: initialTask.priority,
@@ -251,7 +258,9 @@ export function TaskDetailsSheet({
         name: currentUser.name,
         email: currentUser.email,
         avatarUrl: currentUser.avatarUrl || '',
-        role: currentUser.role
+        role: currentUser.role,
+        companyId: currentUser.companyId,
+        createdAt: currentUser.createdAt
       },
       text: newComment,
       timestamp: new Date().toISOString(),
@@ -374,6 +383,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
     const updatedTaskData: Partial<Task> = {
       title: data.title,
+      brandId: data.brandId,
       description: data.description,
       status: data.status,
       priority: data.priority,
@@ -484,6 +494,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   );
 
   const priorityValue = form.watch('priority');
+  const brandId = form.watch('brandId');
+  const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
 
 
   return (
@@ -629,6 +641,34 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                       <Separator/>
                        {isEditing ? (
                          <>
+                           <FormField control={form.control} name="brandId" render={({ field }) => (
+                                <FormItem className="grid grid-cols-3 items-center gap-2">
+                                  <FormLabel className="text-muted-foreground">Brand</FormLabel>
+                                  <div className="col-span-2">
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select a brand" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        {areBrandsLoading ? (
+                                          <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                                        ) : (
+                                          brands?.map((brand) => (
+                                            <SelectItem key={brand.id} value={brand.id}>
+                                              <div className="flex items-center gap-2">
+                                                <Building2 className="h-4 w-4" />
+                                                {brand.name}
+                                              </div>
+                                            </SelectItem>
+                                          ))
+                                        )}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </FormItem>
+                              )}/>
                            <FormField control={form.control} name="status" render={({ field }) => (
                                <FormItem className="grid grid-cols-3 items-center gap-2">
                                   <FormLabel className="text-muted-foreground">Status</FormLabel>
@@ -660,6 +700,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                          </>
                        ) : (
                          <>
+                            <ReadOnlyField label="Brand">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-muted-foreground" />
+                                {brand?.name || 'N/A'}
+                              </div>
+                            </ReadOnlyField>
                             <ReadOnlyField label="Status">
                               <div className="flex items-center gap-2">
                                 <span className={`h-2 w-2 rounded-full ${form.getValues('status') === 'To Do' ? 'bg-yellow-500' : form.getValues('status') === 'Doing' ? 'bg-blue-500' : 'bg-green-500'}`}></span>
@@ -814,5 +860,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    
