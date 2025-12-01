@@ -11,14 +11,15 @@ import { Loader2 } from 'lucide-react';
 
 export default function TaskPage({ params }: { params: { id: string } }) {
   const router = useRouter();
+  const resolvedParams = React.use(params);
   
   const [isOpen, setIsOpen] = useState(true); // Always start open
   const firestore = useFirestore();
 
   const taskRef = useMemo(() => {
-    if (!firestore || !params.id) return null;
-    return doc(firestore, 'tasks', params.id);
-  }, [firestore, params.id]);
+    if (!firestore || !resolvedParams.id) return null;
+    return doc(firestore, 'tasks', resolvedParams.id);
+  }, [firestore, resolvedParams.id]);
 
   const { data: task, isLoading, error } = useDoc<Task>(taskRef);
 
