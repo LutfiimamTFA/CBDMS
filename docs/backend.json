@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -68,7 +69,7 @@
         },
         "status": {
           "type": "string",
-          "description": "The current status of the task (e.g., To Do, Doing, Done)."
+          "description": "The current status of the task. References the name of a document in the /statuses collection."
         },
         "assigneeIds": {
           "type": "array",
@@ -222,6 +223,35 @@
         }
       },
       "required": ["id", "userId", "title", "message", "taskId", "isRead", "createdAt", "createdBy"]
+    },
+    "WorkflowStatus": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WorkflowStatus",
+      "type": "object",
+      "description": "Represents a customizable status column in the Kanban board.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the status."
+        },
+        "name": {
+          "type": "string",
+          "description": "The display name of the status (e.g., 'In Review')."
+        },
+        "order": {
+          "type": "number",
+          "description": "The display order of the column in the Kanban board."
+        },
+        "color": {
+          "type": "string",
+          "description": "A Tailwind CSS color class for the status indicator (e.g., 'bg-blue-500')."
+        },
+        "companyId": {
+          "type": "string",
+          "description": "The ID of the company this status belongs to."
+        }
+      },
+      "required": ["id", "name", "order", "color", "companyId"]
     }
   },
   "auth": {
@@ -310,8 +340,19 @@
             { "name": "notificationId", "description": "The ID of the notification." }
           ]
         }
+      },
+      {
+        "path": "/statuses/{statusId}",
+        "definition": {
+          "entityName": "WorkflowStatus",
+          "schema": { "$ref": "#/backend/entities/WorkflowStatus" },
+          "description": "Stores the customizable columns for the Kanban workflow.",
+          "params": [
+            { "name": "statusId", "description": "The unique ID for the workflow status." }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee."
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee."
   }
 }

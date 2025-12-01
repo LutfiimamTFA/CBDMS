@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import {
@@ -32,7 +33,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
-import { priorityInfo, statusInfo } from '@/lib/utils';
+import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText } from 'lucide-react';
@@ -58,7 +59,7 @@ import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
-import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment, Notification } from '@/lib/types';
+import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment, Notification, WorkflowStatus } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Progress } from '../ui/progress';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
@@ -66,8 +67,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, serverTimestamp, writeBatch, doc } from 'firebase/firestore';
-import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { collection, serverTimestamp, writeBatch, doc, query, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Calendar as CalendarComponent } from '../ui/calendar';
 import { cn } from '@/lib/utils';
@@ -76,7 +76,7 @@ import { cn } from '@/lib/utils';
 const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  status: z.enum(['To Do', 'Doing', 'Done']),
+  status: z.string().min(1, 'Status is required'),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required'),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
@@ -148,6 +148,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const { data: allTasks } = useCollection<Task>(tasksCollectionRef);
 
+  const statusesQuery = React.useMemo(() => 
+    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    [firestore]
+  );
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
+
   const userWorkload = useMemo(() => {
     const workloadMap = new Map<string, number>();
     if (!allTasks || !users) return workloadMap;
@@ -183,7 +189,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     defaultValues: {
       title: '',
       description: '',
-      status: 'To Do',
+      status: statuses?.[0]?.name || '',
       priority: 'Medium',
       assigneeIds: [],
       recurring: 'never',
@@ -193,8 +199,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       tags: [],
     },
   });
+  
+  useEffect(() => {
+    if (statuses && statuses.length > 0 && !form.getValues('status')) {
+      form.setValue('status', statuses[0].name);
+    }
+  }, [statuses, form]);
 
-  // Effect to auto-assign task to current user if their role is 'Employee'
   useEffect(() => {
     if (currentUserProfile && user && open) {
       if (currentUserProfile.role === 'Employee') {
@@ -204,6 +215,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
           email: currentUserProfile.email,
           avatarUrl: currentUserProfile.avatarUrl || '',
           role: currentUserProfile.role,
+          companyId: currentUserProfile.companyId,
+          createdAt: currentUserProfile.createdAt,
         };
         setSelectedUsers([selfUser]);
         form.setValue('assigneeIds', [selfUser.id]);
@@ -220,7 +233,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     const batch = writeBatch(firestore);
 
-    // 1. Create the new task document
     const newTaskRef = doc(collection(firestore, 'tasks'));
     const cleanedData = Object.entries(data).reduce((acc, [key, value]) => {
       if (value !== undefined) {
@@ -246,6 +258,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         blocking,
         comments,
         attachments,
+        companyId: currentUserProfile.companyId,
         createdBy: {
           id: currentUserProfile.id,
           name: currentUserProfile.name,
@@ -254,9 +267,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     };
     batch.set(newTaskRef, newTaskData);
 
-    // 2. Create notifications for each assignee (initial assignment)
     selectedUsers.forEach(assignee => {
-        if (assignee.id === currentUserProfile.id) return; // Don't notify self
+        if (assignee.id === currentUserProfile.id) return; 
         const notificationRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
         const notification: Omit<Notification, 'id'> = {
             userId: assignee.id,
@@ -275,13 +287,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         batch.set(notificationRef, notification);
     });
     
-    // 3. Create notifications for mentions in comments
     comments.forEach(comment => {
         const mentionedUsernames = comment.text.match(/@(\w+)/g)?.map(m => m.substring(1));
         if (mentionedUsernames) {
             const mentionedUsers = (users || []).filter(u => mentionedUsernames.includes(u.name.split(' ')[0]));
             mentionedUsers.forEach(mentionedUser => {
-                if (mentionedUser.id === currentUserProfile.id) return; // Don't notify self
+                if (mentionedUser.id === currentUserProfile.id) return;
                 
                 const notifRef = doc(collection(firestore, `users/${mentionedUser.id}/notifications`));
                 const notification: Omit<Notification, 'id'> = {
@@ -374,7 +385,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
 
   const handleRemoveUser = (userId: string) => {
-    // Employees cannot remove themselves
     if (currentUserProfile?.role === 'Employee') return;
     
     const newSelectedUsers = selectedUsers.filter((u) => u.id !== userId);
@@ -457,7 +467,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload files. Please try again.' });
     } finally {
         setIsUploading(false);
-        // Reset file input
         if(fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -545,6 +554,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         email: currentUserProfile.email || '',
         avatarUrl: currentUserProfile.avatarUrl || '',
         role: currentUserProfile.role,
+        companyId: currentUserProfile.companyId,
+        createdAt: currentUserProfile.createdAt,
       },
       text: newComment,
       timestamp: new Date().toISOString(),
@@ -748,7 +759,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <FormItem>
                               <FormLabel>{t('addtask.form.status')}</FormLabel>
                               <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.status.placeholder')} /></SelectTrigger></FormControl>
-                              <SelectContent>{Object.values(statusInfo).map((s) => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}</div></SelectItem>))}</SelectContent>
+                              <SelectContent>
+                                {areStatusesLoading ? (
+                                    <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                                ) : (
+                                    statuses?.map((s) => (<SelectItem key={s.id} value={s.name}><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${s.color}`}></span>{s.name}</div></SelectItem>))
+                                )}
+                              </SelectContent>
                               </Select><FormMessage />
                           </FormItem>
                       )}/>

@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import * as React from 'react';
@@ -27,13 +28,12 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Status, Priority, User, Notification } from '@/lib/types';
-import { priorityInfo, statusInfo } from '@/lib/utils';
+import type { Task, Priority, User, Notification, WorkflowStatus } from '@/lib/types';
+import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2 } from 'lucide-react';
-import { TaskDetailsSheet } from './task-details-sheet';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
@@ -51,10 +51,11 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, doc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, query, where, writeBatch, serverTimestamp, orderBy } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
+import Link from 'next/link';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -82,11 +83,9 @@ export function TasksDataTable() {
 
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
-    // Admins and Managers see all tasks
     if (profile.role === 'Super Admin' || profile.role === 'Manager') {
       return query(collection(firestore, 'tasks'));
     }
-    // Employees only see tasks assigned to them.
     return query(
       collection(firestore, 'tasks'),
       where('assigneeIds', 'array-contains', profile.id)
@@ -94,6 +93,12 @@ export function TasksDataTable() {
   }, [firestore, profile]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  
+  const statusesQuery = React.useMemo(() => 
+    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    [firestore]
+  );
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
   const [data, setData] = React.useState<Task[]>([]);
   React.useEffect(() => {
@@ -121,12 +126,14 @@ export function TasksDataTable() {
   const [aiValidation, setAiValidation] = React.useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
 
-
-  const statusOptions = Object.values(statusInfo).map(s => ({
-      value: s.value,
-      label: t(`status.${s.value.toLowerCase().replace(' ', '')}` as any),
-      icon: s.icon
-  }));
+  const statusOptions = React.useMemo(() => {
+    if (!statuses) return [];
+    return statuses.map(s => ({
+        value: s.name,
+        label: s.name,
+        icon: s.name === 'To Do' ? Circle : s.name === 'Doing' ? CircleDashed : CheckCircle2,
+    }));
+  }, [statuses]);
 
   const priorityOptions = Object.values(priorityInfo).map(p => ({
       value: p.value,
@@ -134,7 +141,7 @@ export function TasksDataTable() {
       icon: p.icon
   }));
 
-  const handleStatusChange = (taskId: string, newStatus: Status) => {
+  const handleStatusChange = (taskId: string, newStatus: string) => {
     if (!firestore || !profile) return;
     const taskToUpdate = data.find(task => task.id === taskId);
     if (!taskToUpdate) return;
@@ -147,7 +154,6 @@ export function TasksDataTable() {
         // --- Notification Logic ---
         const userIdsToNotify = new Set<string>();
         
-        // Notify creator if not the one making the change
         const taskCreatorId = taskToUpdate.createdBy.id;
         if (taskCreatorId !== profile.id && (newStatus === 'Done' || (taskToUpdate.status === 'To Do' && newStatus === 'Doing'))) {
             const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
@@ -167,7 +173,6 @@ export function TasksDataTable() {
             });
         }
         
-        // Notify other assignees
         taskToUpdate.assigneeIds.forEach(id => {
             if (id !== profile.id) {
                 userIdsToNotify.add(id);
@@ -317,9 +322,9 @@ export function TasksDataTable() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <TaskDetailsSheet task={task}>
+                <Link href={`/tasks/${task.id}`}>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
-                </TaskDetailsSheet>
+                </Link>
                 <DropdownMenuItem
                   onClick={() => copyTaskLink(task.id)}
                 >
@@ -345,9 +350,7 @@ export function TasksDataTable() {
       cell: ({ row }) => {
         const task = row.original;
         return (
-          <TaskDetailsSheet task={task}>
-            <div className="font-medium cursor-pointer hover:underline">{task.title}</div>
-          </TaskDetailsSheet>
+            <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline">{task.title}</Link>
         );
       }
     },
@@ -356,31 +359,31 @@ export function TasksDataTable() {
       header: t('tasks.column.status'),
       cell: ({ row }) => {
         const task = row.original;
-        const currentStatus = row.getValue('status') as Status;
+        const currentStatus = row.getValue('status') as string;
         
+        const statusOption = statusOptions.find(s => s.value === currentStatus);
+        const Icon = statusOption?.icon || Circle;
+
         if (profile?.role === 'Super Admin' || profile?.role === 'Manager') {
-            const status = statusInfo[currentStatus];
-            if (!status) return null;
-            const Icon = status.icon;
             return (
                 <Badge variant="outline" className='font-normal'>
                     <Icon className="h-4 w-4 mr-2 text-muted-foreground" />
-                    <span>{t(`status.${status.value.toLowerCase().replace(' ', '')}` as any)}</span>
+                    <span>{currentStatus}</span>
                 </Badge>
             )
         }
 
         return (
-          <Select value={currentStatus} onValueChange={(newStatus: Status) => handleStatusChange(task.id, newStatus)}>
+          <Select value={currentStatus} onValueChange={(newStatus: string) => handleStatusChange(task.id, newStatus)}>
             <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.values(statusInfo).map((s) => (
+              {statusOptions.map((s) => (
                 <SelectItem key={s.value} value={s.value}>
                   <div className="flex items-center gap-2">
                     <s.icon className="h-4 w-4 text-muted-foreground" />
-                    <span>{t(`status.${s.value.toLowerCase().replace(' ', '')}` as any)}</span>
+                    <span>{s.label}</span>
                   </div>
                 </SelectItem>
               ))}
@@ -400,11 +403,12 @@ export function TasksDataTable() {
           const task = row.original;
           const currentPriority = row.getValue('priority') as Priority;
           const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
+          
+          const priority = priorityInfo[currentPriority];
+          if (!priority) return null;
+          const Icon = priority.icon;
 
           if (profile?.role === 'Employee') {
-              const priority = priorityInfo[currentPriority];
-              if (!priority) return null;
-              const Icon = priority.icon;
               return (
                 <Badge variant="outline" className='font-normal'>
                     <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
@@ -555,7 +559,7 @@ export function TasksDataTable() {
   });
 
   const isFiltered = table.getState().columnFilters.length > 0
-  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading;
+  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading;
 
   return (
     <>
@@ -753,5 +757,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-    

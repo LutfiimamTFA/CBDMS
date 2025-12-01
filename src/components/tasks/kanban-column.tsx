@@ -2,8 +2,7 @@
 'use client';
 
 import { TaskCard } from './task-card';
-import type { Task, Status, User } from '@/lib/types';
-import { statusInfo } from '@/lib/utils';
+import type { Task, User, WorkflowStatus } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/context/i18n-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -18,7 +17,7 @@ import { Droppable } from 'react-beautiful-dnd';
 import { useUserProfile } from '@/firebase';
 
 interface KanbanColumnProps {
-  status: Status;
+  status: WorkflowStatus;
   tasks: Task[];
 }
 
@@ -26,11 +25,6 @@ export function KanbanColumn({
   status,
   tasks,
 }: KanbanColumnProps) {
-  const info = statusInfo[status];
-  const Icon = info.icon;
-  const { t } = useI18n();
-  const translationKey =
-    `status.${status.toLowerCase().replace(' ', '')}` as any;
   const { profile } = useUserProfile();
 
   const isDropDisabled = useMemo(() => {
@@ -58,8 +52,8 @@ export function KanbanColumn({
     >
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <Icon className="h-5 w-5 text-muted-foreground" />
-          <h2 className="font-headline font-semibold">{t(translationKey)}</h2>
+          <div className={`h-3 w-3 rounded-full ${status.color}`}></div>
+          <h2 className="font-headline font-semibold">{status.name}</h2>
           <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
             {tasks.length}
           </span>
@@ -103,7 +97,7 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <Droppable droppableId={status} isDropDisabled={isDropDisabled} isCombineEnabled={false} ignoreContainerClipping={false}>
+      <Droppable droppableId={status.name} isDropDisabled={isDropDisabled} isCombineEnabled={false} ignoreContainerClipping={false}>
         {(provided, snapshot) => (
           <ScrollArea 
             ref={provided.innerRef}

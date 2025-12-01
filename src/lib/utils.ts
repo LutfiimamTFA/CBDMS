@@ -1,3 +1,4 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import {
@@ -43,8 +44,9 @@ export const priorityInfo: Record<Priority, PriorityInfo> = {
   },
 };
 
-export const statusInfo: Record<Status, StatusInfo> = {
-  'To Do': { label: 'To Do', value: 'To Do', icon: Circle },
-  'Doing': { label: 'Doing', value: 'Doing', icon: CircleDashed },
-  'Done': { label: 'Done', value: 'Done', icon: CheckCircle2 },
+// This is now just a fallback/icon mapping, not the source of truth for statuses
+export const statusInfo: Record<string, Omit<StatusInfo, 'value' | 'label'>> = {
+  'To Do': { icon: Circle },
+  'Doing': { icon: CircleDashed },
+  'Done': { icon: CheckCircle2 },
 };

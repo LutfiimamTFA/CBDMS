@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -14,7 +15,8 @@ export type User = {
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 
-export type Status = 'To Do' | 'Doing' | 'Done';
+// This is now a dynamic string, not a fixed literal type
+export type Status = string;
 
 export type Tag = {
   label: string;
@@ -50,6 +52,14 @@ export type Attachment = {
   url: string; 
 };
 
+// New type for the dynamic status/column
+export type WorkflowStatus = {
+  id: string;
+  name: string;
+  order: number;
+  color: string; // e.g., 'bg-blue-500'
+  companyId: string;
+};
 
 export type Task = {
   id: string;
@@ -86,9 +96,10 @@ export type PriorityInfo = {
   color: string;
 };
 
+// This is now used as a fallback or for icons, not for dropdowns
 export type StatusInfo = {
-  label: Status;
-  value: Status;
+  label: string;
+  value: string;
   icon: LucideIcon;
 };
 

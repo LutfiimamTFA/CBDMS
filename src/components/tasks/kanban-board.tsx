@@ -1,21 +1,19 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './kanban-column';
-import type { Task, Status } from '@/lib/types';
+import type { Task, WorkflowStatus } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   DragDropContext,
   DropResult,
-  Droppable,
 } from 'react-beautiful-dnd';
-import { useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useCollection, useFirestore } from '@/firebase';
+import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { useToast } from '@/hooks/use-toast';
-
-const statuses: Status[] = ['To Do', 'Doing', 'Done'];
+import { Loader2 } from 'lucide-react';
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -26,6 +24,13 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
   const { toast } = useToast();
+
+  const statusesQuery = useMemo(() => 
+    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    [firestore]
+  );
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
+
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -38,12 +43,10 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const onDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
 
-    // Do nothing if dropped outside a valid droppable area
     if (!destination) {
       return;
     }
 
-    // Do nothing if the item is dropped in the same place
     if (
       source.droppableId === destination.droppableId &&
       source.index === destination.index
@@ -51,8 +54,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
       return;
     }
 
-    const startColumnStatus = source.droppableId as Status;
-    const endColumnStatus = destination.droppableId as Status;
+    const endColumnStatus = destination.droppableId;
     
     // Optimistically update the UI
     const updatedTasks = Array.from(tasks);
@@ -62,13 +64,9 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
     const [movedTask] = updatedTasks.splice(movedTaskIndex, 1);
     movedTask.status = endColumnStatus;
 
-    // Find the new index in the destination column
     const tasksInEndColumn = updatedTasks
       .filter(t => t.status === endColumnStatus)
-      .sort((a, b) => {
-        // This is a simple sort, replace with your actual task order logic if you have one
-        return a.createdAt > b.createdAt ? 1 : -1;
-      });
+      .sort((a, b) => a.createdAt > b.createdAt ? 1 : -1);
 
     let newIndexInFullArray = updatedTasks.length;
     if (tasksInEndColumn[destination.index]) {
@@ -91,18 +89,10 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
     }
   };
 
-  if (!isClient) {
-    // Render a skeleton or placeholder on the server to avoid hydration mismatches
+  if (!isClient || areStatusesLoading) {
     return (
-      <div className="flex h-full gap-4">
-        {statuses.map((status) => (
-          <div
-            key={status}
-            className="flex-1 h-full rounded-lg bg-secondary/50"
-          >
-            <div className="p-4 h-12" />
-          </div>
-        ))}
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
@@ -111,11 +101,11 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
     <DragDropContext onDragEnd={onDragEnd}>
       <ScrollArea className="h-full w-full">
         <div className="flex h-full gap-4 pb-4">
-          {statuses.map((status) => (
+          {statuses?.map((status) => (
             <KanbanColumn
-              key={status}
+              key={status.id}
               status={status}
-              tasks={tasks.filter((task) => task.status === status)}
+              tasks={tasks.filter((task) => task.status === status.name)}
             />
           ))}
         </div>

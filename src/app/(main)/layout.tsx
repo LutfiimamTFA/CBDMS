@@ -32,6 +32,7 @@ import {
   KeyRound,
   SlidersHorizontal,
   Palette,
+  Workflow,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -244,6 +245,16 @@ export default function MainLayout({
                         </SidebarMenuButton>
                       </Link>
                     </SidebarMenuItem>
+                     {profile?.role === 'Super Admin' && (
+                        <SidebarMenuItem>
+                            <Link href='/admin/settings/workflow'>
+                                <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/settings/workflow')} className="w-full justify-start">
+                                    <Workflow />
+                                    <span>Workflow</span>
+                                </SidebarMenuButton>
+                            </Link>
+                        </SidebarMenuItem>
+                     )}
                     {profile?.role === 'Super Admin' && (
                         <SidebarMenuItem>
                             <Link href='/admin/settings/theme'>
