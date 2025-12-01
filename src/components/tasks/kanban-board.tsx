@@ -9,8 +9,8 @@ import {
   DragDropContext,
   DropResult,
 } from 'react-beautiful-dnd';
-import { useCollection, useFirestore } from '@/firebase';
-import { doc, collection, query, orderBy } from 'firebase/firestore';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { doc, collection, query, orderBy, where } from 'firebase/firestore';
 import { updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
@@ -23,14 +23,8 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const [isClient, setIsClient] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
+  const { profile } = useUserProfile();
   const { toast } = useToast();
-
-  const statusesQuery = useMemo(() => 
-    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
-
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -39,6 +33,20 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   useEffect(() => {
     setIsClient(true);
   }, []);
+  
+  const statusesQuery = useMemo(
+    () =>
+      firestore && profile
+        ? query(
+            collection(firestore, 'statuses'),
+            // where('companyId', '==', profile.companyId),
+            orderBy('order')
+          )
+        : null,
+    [firestore, profile]
+  );
+
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
 
   const onDragEnd = (result: DropResult) => {
     const { source, destination, draggableId } = result;
@@ -66,7 +74,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
     const tasksInEndColumn = updatedTasks
       .filter(t => t.status === endColumnStatus)
-      .sort((a, b) => a.createdAt > b.createdAt ? 1 : -1);
+      .sort((a, b) => (a.createdAt as any) > (b.createdAt as any) ? 1 : -1);
 
     let newIndexInFullArray = updatedTasks.length;
     if (tasksInEndColumn[destination.index]) {
