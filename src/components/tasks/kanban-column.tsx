@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import { useMemo } from 'react';
+import { Droppable } from 'react-beautiful-dnd';
 
 interface KanbanColumnProps {
   status: Status;
@@ -44,7 +45,7 @@ export function KanbanColumn({
 
   return (
     <div
-      className="flex h-full w-72 shrink-0 flex-col rounded-lg bg-secondary/50"
+      className="flex h-full w-80 shrink-0 flex-col rounded-lg bg-secondary/50"
     >
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
@@ -93,13 +94,22 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <ScrollArea className="flex-1">
-        <div className="flex flex-col gap-3 p-4">
-          {tasks.map((task) => (
-            <TaskCard key={task.id} task={task} isBoardView={true} />
-          ))}
-        </div>
-      </ScrollArea>
+      <Droppable droppableId={status}>
+        {(provided, snapshot) => (
+          <ScrollArea 
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={`flex-1 transition-colors ${snapshot.isDraggingOver ? 'bg-primary/10' : ''}`}
+          >
+            <div className="flex flex-col gap-3 p-4">
+              {tasks.map((task, index) => (
+                <TaskCard key={task.id} task={task} index={index} />
+              ))}
+              {provided.placeholder}
+            </div>
+          </ScrollArea>
+        )}
+      </Droppable>
     </div>
   );
 }
