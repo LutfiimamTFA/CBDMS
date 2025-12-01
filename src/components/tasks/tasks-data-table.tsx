@@ -375,7 +375,7 @@ export function TasksDataTable() {
       cell: ({ row }) => {
         const brandId = row.getValue('brandId') as string;
         const brand = brands?.find(b => b.id === brandId);
-        return brand ? <Badge variant="outline">{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
+        return brand ? <Badge variant="secondary">{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
@@ -792,4 +792,5 @@ export function TasksDataTable() {
   );
 }
 
+    
     
