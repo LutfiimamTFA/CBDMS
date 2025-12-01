@@ -33,7 +33,7 @@ export default function TaskPage({ params }: { params: { id: string } }) {
     setIsOpen(open);
     if (!open) {
       // When the sheet is closed, navigate back to the main dashboard.
-      router.push('/dashboard');
+      router.back();
     }
   };
 
@@ -57,10 +57,7 @@ export default function TaskPage({ params }: { params: { id: string } }) {
             task={task} 
             open={isOpen}
             onOpenChange={handleOpenChange}
-        >
-            {/* The trigger is now implicit; the page itself controls the sheet */}
-            <div className="sr-only">Task details page</div>
-        </TaskDetailsSheet>
+        />
     </div>
   );
 }

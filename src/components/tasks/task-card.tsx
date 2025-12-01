@@ -6,17 +6,15 @@ import { priorityInfo } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { TaskDetailsSheet } from './task-details-sheet';
 import { Progress } from '../ui/progress';
 import { useI18n } from '@/context/i18n-provider';
 import Link from 'next/link';
 
 interface TaskCardProps {
   task: Task;
-  isBoardView?: boolean;
 }
 
-export function TaskCard({ task, isBoardView = false }: TaskCardProps) {
+export function TaskCard({ task }: TaskCardProps) {
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
   const { t } = useI18n();
@@ -28,7 +26,7 @@ export function TaskCard({ task, isBoardView = false }: TaskCardProps) {
   const priorityTranslationKey = `priority.${task.priority.toLowerCase()}` as any;
 
   return (
-    <TaskDetailsSheet task={task} isReadOnly={isBoardView}>
+    <Link href={`/tasks/${task.id}`} className="block">
         <Card
             className="cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full"
         >
@@ -106,6 +104,6 @@ export function TaskCard({ task, isBoardView = false }: TaskCardProps) {
             </div>
             </CardContent>
         </Card>
-    </TaskDetailsSheet>
+    </Link>
   );
 }

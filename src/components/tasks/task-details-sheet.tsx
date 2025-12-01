@@ -88,22 +88,17 @@ type AIValidationState = {
 
 export function TaskDetailsSheet({ 
   task: initialTask, 
-  children, 
-  open: openProp,
-  onOpenChange: onOpenChangeProp,
-  isReadOnly = false
+  open,
+  onOpenChange,
 }: { 
   task: Task; 
-  children?: React.ReactNode, 
-  open?: boolean,
-  onOpenChange?: (open: boolean) => void; 
-  isReadOnly?: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
-  const [internalOpen, setInternalOpen] = useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
 
 
@@ -139,9 +134,6 @@ export function TaskDetailsSheet({
 
   const { user: authUser, profile: currentUser } = useUserProfile();
 
-  const isControlled = openProp !== undefined && onOpenChangeProp !== undefined;
-  const open = isControlled ? openProp : internalOpen;
-
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
   });
@@ -167,21 +159,6 @@ export function TaskDetailsSheet({
         setIsEditing(false);
     }
   }, [initialTask, form, open]);
-
-
-  const handleOpenChange = (isOpen: boolean) => {
-    if (isControlled) {
-        onOpenChangeProp(isOpen);
-    } else {
-        setInternalOpen(isOpen);
-    }
-    if (!isOpen) {
-        setIsEditing(false);
-        if (window.location.pathname.startsWith('/tasks/')) {
-          router.push('/dashboard');
-        }
-    }
-  }
 
   const handlePriorityChange = async (newPriority: Priority) => {
     const currentPriority = form.getValues('priority');
@@ -446,10 +423,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             });
         }
     }
+    
     // Check for priority change
     if (initialTask.priority !== data.priority) {
-        notificationMessages.push(`${currentUser.name} changed priority to "${data.priority}" on task: ${data.title}`);
+      notificationMessages.push(`${currentUser.name} changed priority to "${data.priority}" on task: ${data.title}`);
     }
+
     // Check for due date change
     const initialDueDate = initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined;
     if (initialDueDate !== data.dueDate) {
@@ -587,8 +566,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   return (
     <>
-      <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetTrigger asChild onClick={() => handleOpenChange(true)}>{children}</SheetTrigger>
+      <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="w-full sm:max-w-4xl grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
@@ -874,8 +852,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     Delete Task
                 </Button>
             </div>
-            {!isReadOnly && (
-              isEditing ? (
+              {isEditing ? (
                 <div className="flex justify-end gap-2">
                     <Button variant="ghost" type="button" onClick={() => setIsEditing(false)}>Cancel</Button>
                     <Button type="submit" form="task-details-form">Save Changes</Button>
@@ -886,7 +863,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     Edit Task
                 </Button>
               )
-            )}
+            }
           </SheetFooter>
         </SheetContent>
       </Sheet>
