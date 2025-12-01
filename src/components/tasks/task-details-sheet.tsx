@@ -867,8 +867,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     if (!dateA || !dateB) return 0;
                     return dateB - dateA;
                   })
-                  .map((activity, index) => (
-                    <div key={index} className="flex items-start gap-4">
+                  .map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-4">
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
                         <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
@@ -895,3 +895,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
