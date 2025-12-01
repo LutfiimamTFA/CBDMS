@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/header';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { SmartSuggestions } from '@/components/smart-suggestions/page';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import type { Task } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 
@@ -14,33 +14,23 @@ export default function DashboardPage() {
   const { profile, isLoading: isProfileLoading } = useUserProfile();
   const firestore = useFirestore();
 
-  // The query now depends on the user's role
+  // Query is now optimized to filter tasks on the server-side based on role.
   const tasksQuery = useMemo(() => {
     if (!firestore || !profile) return null;
 
-    // Admins and Managers see all tasks
+    // Admins and Managers see all tasks within their company.
     if (profile.role === 'Super Admin' || profile.role === 'Manager') {
       return query(collection(firestore, 'tasks'));
     }
 
-    // Employees see only tasks assigned to them
-    // This part is now implicitly handled by the KanbanBoard component logic,
-    // but a more robust implementation would filter here based on profile.id.
-    // For now, we rely on the KanbanBoard's internal filter.
-    return query(collection(firestore, 'tasks'));
-
+    // Employees see only tasks where their ID is in the 'assigneeIds' array.
+    return query(
+      collection(firestore, 'tasks'),
+      where('assigneeIds', 'array-contains', profile.id)
+    );
   }, [firestore, profile]);
   
-  const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
-  
-  const tasksForBoard = useMemo(() => {
-    if (!allTasks || !profile) return [];
-    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
-      return allTasks;
-    }
-    // Filter tasks for employees client-side from the full list
-    return allTasks.filter(task => task.assigneeIds.includes(profile.id));
-  }, [allTasks, profile]);
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   const isLoading = isProfileLoading || isTasksLoading;
 
@@ -60,15 +50,17 @@ export default function DashboardPage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <>
+          <div className="flex h-full flex-col">
             <div className="mb-6">
               <h2 className="text-2xl font-bold tracking-tight">Selamat Datang, {profile?.name}!</h2>
               <p className="text-muted-foreground">
                 Anda masuk sebagai {profile?.role}. Selamat bekerja dan semoga harimu produktif!
               </p>
             </div>
-            <KanbanBoard tasks={tasksForBoard} />
-          </>
+            <div className="flex-1 overflow-hidden">
+                <KanbanBoard tasks={tasks || []} />
+            </div>
+          </div>
         )}
       </main>
     </div>
