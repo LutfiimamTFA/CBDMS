@@ -75,7 +75,7 @@ export type Activity = {
     avatarUrl: string;
   };
   action: string;
-  timestamp: string;
+  timestamp: any;
 };
 
 export type Task = {
@@ -104,14 +104,6 @@ export type Task = {
     id: string;
     name: string;
     avatarUrl: string;
-  };
-  lastActivity?: {
-    user: {
-        name: string;
-        avatarUrl: string;
-    };
-    timestamp: any;
-    action: string;
   };
   companyId: string;
 };

@@ -44,6 +44,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, query, orderBy } from 'firebase/firestore';
@@ -108,9 +109,12 @@ export function TaskDetailsSheet({
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
   const [timeTracked, setTimeTracked] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  
+  const [activities, setActivities] = useState<Activity[]>([]);
+
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
+
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -154,6 +158,7 @@ export function TaskDetailsSheet({
         setTimeLogs(initialTask.timeLogs || []);
         setTimeTracked(initialTask.timeTracked || 0);
         setAttachments(initialTask.attachments || []);
+        setActivities(initialTask.activities || []);
         setIsEditing(false);
     }
   }, [initialTask, form, open]);
@@ -375,17 +380,42 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
   
-    let lastAction = "updated the task"; 
+    const newActivities: Activity[] = [...activities];
   
-    if (initialTask.title !== data.title) {
-        lastAction = `changed the title to "${data.title}"`;
-    } else if (initialTask.status !== data.status) {
-        lastAction = `changed status from "${initialTask.status}" to "${data.status}"`;
-    } else if (initialTask.priority !== data.priority) {
-        lastAction = `changed priority from "${initialTask.priority}" to "${data.priority}"`;
+    const getChangedFields = (
+      oldTask: Task,
+      newData: TaskDetailsFormValues
+    ): string[] => {
+      const changes: string[] = [];
+      if (oldTask.title !== newData.title)
+        changes.push(`changed the title from "${oldTask.title}" to "${newData.title}"`);
+      if (oldTask.status !== newData.status)
+        changes.push(`changed status from "${oldTask.status}" to "${newData.status}"`);
+      if (oldTask.priority !== newData.priority)
+        changes.push(`changed priority from "${oldTask.priority}" to "${newData.priority}"`);
+      if (oldTask.description !== newData.description)
+        changes.push('updated the description');
+      if (oldTask.dueDate !== newData.dueDate) changes.push('updated the due date');
+      return changes;
+    };
+  
+    const changedFields = getChangedFields(initialTask, data);
+  
+    if (changedFields.length > 0) {
+      const activity: Activity = {
+        id: `act-${Date.now()}`,
+        user: {
+          id: currentUser.id,
+          name: currentUser.name,
+          avatarUrl: currentUser.avatarUrl || '',
+        },
+        action: changedFields.join(', '),
+        timestamp: serverTimestamp(),
+      };
+      newActivities.push(activity);
     }
   
-    const updatedTaskData: Partial<Task> & { lastActivity: any } = {
+    const updatedTaskData = {
       title: data.title,
       brandId: data.brandId,
       description: data.description,
@@ -394,25 +424,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       dueDate: data.dueDate,
       timeEstimate: data.timeEstimate,
       assignees: currentAssignees,
-      assigneeIds: currentAssignees.map(a => a.id),
+      assigneeIds: currentAssignees.map((a) => a.id),
       tags: currentTags,
       subtasks: subtasks,
       comments: comments,
       timeTracked: timeTracked,
       timeLogs: timeLogs,
       attachments: attachments,
+      activities: newActivities,
       updatedAt: serverTimestamp(),
-      lastActivity: {
-        user: {
-          name: currentUser.name,
-          avatarUrl: currentUser.avatarUrl || '',
-        },
-        timestamp: serverTimestamp(),
-        action: lastAction,
-      },
     };
   
-    batch.update(taskDocRef, updatedTaskData as any);
+    batch.update(taskDocRef, updatedTaskData);
   
     try {
       await batch.commit();
@@ -422,11 +445,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       });
       setIsEditing(false);
     } catch (error) {
-      console.error("Failed to update task:", error);
+      console.error('Failed to update task:', error);
       toast({
         variant: 'destructive',
         title: 'Update Failed',
-        description: 'Could not save task changes.'
+        description: 'Could not save task changes.',
       });
     }
   };
@@ -495,6 +518,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)}><History className="h-4 w-4 mr-2"/> View History</Button>
                     <Button variant="ghost" size="sm" onClick={copyTaskLink}><LinkIcon className="h-4 w-4 mr-2"/> Copy Link</Button>
                     <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
                 </div>
@@ -821,6 +845,45 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Task Activity Log</DialogTitle>
+            <DialogDescription>
+              A complete history of all changes made to this task.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+            <div className="space-y-6 py-4">
+              {activities.length > 0 ? (
+                activities
+                  .slice()
+                  .sort((a, b) => (b.timestamp?.toDate() || 0) - (a.timestamp?.toDate() || 0))
+                  .map((activity, index) => (
+                    <div key={index} className="flex items-start gap-4">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
+                        <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm">
+                          <span className="font-semibold">{activity.user.name}</span> {activity.action}.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {activity.timestamp ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No activities recorded for this task yet.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

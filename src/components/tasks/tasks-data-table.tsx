@@ -517,45 +517,6 @@ export function TasksDataTable() {
         );
       },
     },
-    {
-      accessorKey: 'lastActivity',
-      header: 'Last Modified By',
-      cell: ({ row }) => {
-        const lastActivity = row.original.lastActivity;
-        if (!lastActivity) return <div className="text-muted-foreground">-</div>;
-        return (
-           <div className="flex items-center gap-2">
-             <TooltipProvider>
-                <Tooltip>
-                <TooltipTrigger asChild>
-                    <Avatar className="h-7 w-7">
-                    <AvatarImage src={lastActivity.user.avatarUrl} alt={lastActivity.user.name} />
-                    <AvatarFallback>{lastActivity.user.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>{lastActivity.user.name}</p>
-                </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
-            <span className="font-medium">{lastActivity.user.name}</span>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: 'lastActivity.timestamp',
-      header: 'Last Modified At',
-      cell: ({ row }) => {
-        const lastActivity = row.original.lastActivity;
-        if (!lastActivity?.timestamp) return <div className="text-muted-foreground">-</div>;
-        return (
-            <div className="text-sm text-muted-foreground">
-                {formatDistanceToNow(lastActivity.timestamp.toDate(), { addSuffix: true })}
-            </div>
-        );
-      }
-    },
   ];
 
   const table = useReactTable({
