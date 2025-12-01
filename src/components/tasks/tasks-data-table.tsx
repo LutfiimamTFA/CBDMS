@@ -1,6 +1,5 @@
 
 
-
 'use client';
 
 import * as React from 'react';
@@ -28,12 +27,12 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Priority, User, Notification, WorkflowStatus } from '@/lib/types';
+import type { Task, Priority, User, Notification, WorkflowStatus, Brand } from '@/lib/types';
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2 } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
@@ -100,6 +99,12 @@ export function TasksDataTable() {
   );
   const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
+  const brandsQuery = React.useMemo(
+    () => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null),
+    [firestore]
+  );
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+
   const [data, setData] = React.useState<Task[]>([]);
   React.useEffect(() => {
     setData(tasks || []);
@@ -140,6 +145,16 @@ export function TasksDataTable() {
       label: t(`priority.${p.value.toLowerCase()}` as any),
       icon: p.icon
   }));
+  
+  const brandOptions = React.useMemo(() => {
+    if (!brands) return [];
+    return brands.map((brand) => ({
+      value: brand.id,
+      label: brand.name,
+      icon: Building2,
+    }));
+  }, [brands]);
+
 
   const handleStatusChange = (taskId: string, newStatus: string) => {
     if (!firestore || !profile) return;
@@ -355,6 +370,18 @@ export function TasksDataTable() {
       }
     },
     {
+      accessorKey: 'brandId',
+      header: 'Brand',
+      cell: ({ row }) => {
+        const brandId = row.getValue('brandId') as string;
+        const brand = brands?.find(b => b.id === brandId);
+        return brand ? <Badge variant="secondary">{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id))
+      },
+    },
+    {
       accessorKey: 'status',
       header: t('tasks.column.status'),
       cell: ({ row }) => {
@@ -559,7 +586,7 @@ export function TasksDataTable() {
   });
 
   const isFiltered = table.getState().columnFilters.length > 0
-  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading;
+  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading;
 
   return (
     <>
@@ -574,6 +601,13 @@ export function TasksDataTable() {
               }
               className="h-8 w-[150px] lg:w-[250px]"
             />
+            {table.getColumn("brandId") && (
+              <DataTableFacetedFilter
+                column={table.getColumn("brandId")}
+                title="Brand"
+                options={brandOptions}
+              />
+            )}
             {table.getColumn("status") && (
               <DataTableFacetedFilter
                 column={table.getColumn("status")}
