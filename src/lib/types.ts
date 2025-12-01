@@ -67,6 +67,17 @@ export type Brand = {
   createdAt: any;
 };
 
+export type Activity = {
+  id: string;
+  user: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+  };
+  action: string;
+  timestamp: string;
+};
+
 export type Task = {
   id: string;
   title: string;
@@ -87,6 +98,7 @@ export type Task = {
   tags?: Tag[];
   comments?: Comment[];
   attachments?: Attachment[];
+  activities?: Activity[];
   createdAt: any;
   createdBy: {
     id: string;
@@ -158,3 +170,5 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+    

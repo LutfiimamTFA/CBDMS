@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, statusInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, History } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -46,7 +46,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, query, orderBy } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -70,13 +70,6 @@ const formatStopwatch = (time: number) => {
   const minutes = Math.floor((time % 3600) / 60);
   const seconds = time % 60;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-};
-
-type Activity = {
-    id: string;
-    user: User;
-    action: string;
-    timestamp: string;
 };
 
 type AIValidationState = {
@@ -114,8 +107,6 @@ export function TaskDetailsSheet({
   const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
   const [timeTracked, setTimeTracked] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-
-  const [activities, setActivities] = useState<Activity[]>([]);
   
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
@@ -126,11 +117,17 @@ export function TaskDetailsSheet({
 
   const firestore = useFirestore();
   const storage = useStorage();
+  
   const usersCollectionRef = useMemo(() => 
     firestore ? collection(firestore, 'users') : null,
   [firestore]);
-
   const { data: allUsers } = useCollection<User>(usersCollectionRef);
+
+  const activityQuery = useMemo(() =>
+      firestore && initialTask ? query(collection(firestore, `tasks/${initialTask.id}/activities`), orderBy('timestamp', 'desc')) : null,
+  [firestore, initialTask]);
+  const { data: activities } = useCollection<Activity>(activityQuery);
+
 
   const { user: authUser, profile: currentUser } = useUserProfile();
 
@@ -261,7 +258,6 @@ export function TaskDetailsSheet({
       replies: [],
     };
     setComments([...comments, comment]);
-    setActivities(prev => [{id: `a-${Date.now()}`, user: comment.user, action: `commented: "${newComment.substring(0, 30)}..."`, timestamp: new Date().toISOString()}, ...prev]);
     setNewComment('');
 
     // --- Creator Notification on New Comment ---
@@ -372,12 +368,17 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if (!firestore || !currentUser) return;
-  
+
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-  
-    const updatedTaskData = {
-      ...data,
+
+    const updatedTaskData: Partial<Task> = {
+      title: data.title,
+      description: data.description,
+      status: data.status,
+      priority: data.priority,
+      dueDate: data.dueDate,
+      timeEstimate: data.timeEstimate,
       assignees: currentAssignees,
       assigneeIds: currentAssignees.map(a => a.id),
       tags: currentTags,
@@ -388,118 +389,39 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       attachments: attachments,
       updatedAt: serverTimestamp(),
     };
-  
+
     batch.update(taskDocRef, updatedTaskData);
-  
-    // --- NOTIFICATION LOGIC ---
-    const userIdsToNotify = new Set<string>();
-    currentAssignees.forEach(assignee => {
-      if (assignee.id !== currentUser.id) {
-        userIdsToNotify.add(assignee.id);
-      }
-    });
 
-    const notificationMessages: string[] = [];
+    const createActivityLog = (action: string) => {
+      const activityRef = doc(collection(firestore, `tasks/${initialTask.id}/activities`));
+      batch.set(activityRef, {
+        user: {
+          id: currentUser.id,
+          name: currentUser.name,
+          avatarUrl: currentUser.avatarUrl || '',
+        },
+        action,
+        timestamp: new Date().toISOString(),
+      });
+    };
 
-    // Check for status change
+    if (initialTask.title !== data.title) {
+        createActivityLog(`changed the title to "${data.title}"`);
+    }
     if (initialTask.status !== data.status) {
-        notificationMessages.push(`${currentUser.name} changed status to "${data.status}" on task: ${data.title}`);
-        // Notify creator if status changes to Done or Doing
-        const taskCreatorId = initialTask.createdBy.id;
-        if (taskCreatorId !== currentUser.id && (data.status === 'Done' || (initialTask.status === 'To Do' && data.status === 'Doing'))) {
-            const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
-            const message = data.status === 'Done' 
-                ? `${currentUser.name} has completed the task: "${data.title}"`
-                : `${currentUser.name} has started working on the task: "${data.title}"`;
-            batch.set(notifRef, {
-                userId: taskCreatorId,
-                title: data.status === 'Done' ? 'Task Completed' : 'Task In Progress',
-                message,
-                taskId: initialTask.id,
-                taskTitle: data.title,
-                isRead: false,
-                createdAt: serverTimestamp(),
-                createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-            });
-        }
+        createActivityLog(`changed status from "${initialTask.status}" to "${data.status}"`);
     }
-    
-    // Check for priority change
     if (initialTask.priority !== data.priority) {
-      notificationMessages.push(`${currentUser.name} changed priority to "${data.priority}" on task: ${data.title}`);
+        createActivityLog(`changed priority from "${initialTask.priority}" to "${data.priority}"`);
     }
-
-    // Check for due date change
+    if (initialTask.description !== data.description) {
+        createActivityLog(`updated the description`);
+    }
     const initialDueDate = initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined;
     if (initialDueDate !== data.dueDate) {
-        const formattedDate = data.dueDate ? format(parseISO(data.dueDate), 'MMM d, yyyy') : 'removed';
-        notificationMessages.push(`${currentUser.name} changed the due date to ${formattedDate} on task: ${data.title}`);
+        const dateStr = data.dueDate ? format(parseISO(data.dueDate), 'MMM d, yyyy') : 'removed';
+        createActivityLog(`changed the due date to ${dateStr}`);
     }
-    // Check for description change
-    if (initialTask.description !== data.description) {
-        notificationMessages.push(`${currentUser.name} updated the description on task: ${data.title}`);
-    }
-
-    // Create a notification for each distinct change for each user
-    notificationMessages.forEach(message => {
-        userIdsToNotify.forEach(userId => {
-            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-            const newNotification: Omit<Notification, 'id'> = {
-                userId,
-                title: 'Task Updated',
-                message: message,
-                taskId: initialTask.id,
-                taskTitle: data.title,
-                isRead: false,
-                createdAt: serverTimestamp(),
-                createdBy: {
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    avatarUrl: currentUser.avatarUrl || '',
-                },
-            };
-            batch.set(notifRef, newNotification);
-        });
-    });
-  
-    // --- Assignee Change Notifications ---
-    const initialAssigneeIds = new Set(initialTask.assigneeIds);
-    const currentAssigneeIds = new Set(currentAssignees.map(a => a.id));
-    
-    // Notify newly added users
-    currentAssignees.forEach(assignee => {
-        if (!initialAssigneeIds.has(assignee.id) && assignee.id !== currentUser.id) {
-            const notifRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
-            batch.set(notifRef, {
-                userId: assignee.id,
-                title: 'You were added to a task',
-                message: `${currentUser.name} added you to task: ${data.title}`,
-                taskId: initialTask.id,
-                taskTitle: data.title,
-                isRead: false,
-                createdAt: serverTimestamp(),
-                createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-            });
-        }
-    });
-
-    // Notify removed users
-    initialTask.assignees.forEach(assignee => {
-        if (!currentAssigneeIds.has(assignee.id) && assignee.id !== currentUser.id) {
-             const notifRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
-             batch.set(notifRef, {
-                userId: assignee.id,
-                title: 'You were removed from a task',
-                message: `${currentUser.name} removed you from task: ${data.title}`,
-                taskId: initialTask.id,
-                taskTitle: data.title,
-                isRead: false,
-                createdAt: serverTimestamp(),
-                createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-            });
-        }
-    });
-    // --- END NOTIFICATION LOGIC ---
 
     try {
       await batch.commit();
@@ -681,12 +603,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             </TabsContent>
                              <TabsContent value="activity" className="mt-4">
                                 <div className="space-y-6">
-                                    {activities.map(activity => (
+                                    {activities?.map(activity => (
                                         <div key={activity.id} className="flex gap-3 text-sm">
                                             <Avatar className="h-8 w-8"><AvatarImage src={activity.user.avatarUrl}/><AvatarFallback>{activity.user.name?.charAt(0)}</AvatarFallback></Avatar>
                                             <div><span className="font-semibold">{activity.user.name}</span> <span className="text-muted-foreground">{activity.action}</span><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(parseISO(activity.timestamp), { addSuffix: true })}</p></div>
                                         </div>
                                     ))}
+                                    {(!activities || activities.length === 0) && (
+                                        <div className="text-center text-muted-foreground py-8">
+                                            <History className="mx-auto h-8 w-8 mb-2"/>
+                                            No activity recorded yet.
+                                        </div>
+                                    )}
                                 </div>
                             </TabsContent>
                         </Tabs>
@@ -886,3 +814,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    

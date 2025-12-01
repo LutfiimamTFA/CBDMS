@@ -92,6 +92,24 @@ service cloud.firestore {
                                (isRole('Manager') && isSameCompanyAsRequestingUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId)) ||
                                (isRole('Employee') && request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds && hasPermission('Employee', 'canTrackTime'));
       }
+      
+      // Rules for activities subcollection
+      match /activities/{activityId} {
+        // Any user who can read the task can also read its activities.
+        allow read: if isSignedIn() && (
+            isSuperAdmin() ||
+            (isRole('Manager') && isSameCompanyAsRequestingUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId)) ||
+            (request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds)
+        );
+        // Only users who can update the task can create activity logs.
+        allow create: if isSignedIn() && (
+             isSuperAdmin() || 
+             (isRole('Manager') && isSameCompanyAsRequestingUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId)) ||
+             (isRole('Employee') && request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds)
+        );
+        // Activities are immutable.
+        allow update, delete: if false;
+      }
     }
     
     // Rules for 'navigationItems' collection
@@ -108,3 +126,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
