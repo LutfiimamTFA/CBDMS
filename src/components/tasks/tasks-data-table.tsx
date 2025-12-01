@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -53,6 +54,7 @@ import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, doc, query, where, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
+import { usePermissions } from '@/context/permissions-provider';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -75,6 +77,8 @@ const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
 export function TasksDataTable() {
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
+  const { permissions, isLoading: arePermsLoading } = usePermissions();
+
 
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
@@ -147,7 +151,7 @@ export function TasksDataTable() {
         const taskCreatorId = taskToUpdate.createdBy.id;
         if (taskCreatorId !== profile.id && (newStatus === 'Done' || (taskToUpdate.status === 'To Do' && newStatus === 'Doing'))) {
             const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
-            const message = newStatus === 'Done'
+            const message = newStatus === 'Done' 
                 ? `${profile.name} has completed the task: "${taskToUpdate.title}"`
                 : `${profile.name} has started working on the task: "${taskToUpdate.title}"`;
 
@@ -287,6 +291,14 @@ export function TasksDataTable() {
         setPendingPriorityChange(null);
     }
   };
+
+  const canCreateTasks = React.useMemo(() => {
+    if (!profile || !permissions) return false;
+    if (profile.role === 'Super Admin') return true;
+    if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
+    if (profile.role === 'Employee') return permissions.Employee.canCreateTasks;
+    return false;
+  }, [profile, permissions]);
 
 
   const columns: ColumnDef<Task>[] = [
@@ -543,7 +555,7 @@ export function TasksDataTable() {
   });
 
   const isFiltered = table.getState().columnFilters.length > 0
-  const isLoading = isTasksLoading || isProfileLoading;
+  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading;
 
   return (
     <>
@@ -585,12 +597,14 @@ export function TasksDataTable() {
           </div>
           <div className="flex items-center gap-2">
               <DataTableViewOptions table={table}/>
-            <AddTaskDialog>
-              <Button size="sm" className="h-8">
-                <Plus className="mr-2 h-4 w-4" />
-                {t('tasks.createtask')}
-              </Button>
-            </AddTaskDialog>
+            {canCreateTasks && (
+              <AddTaskDialog>
+                <Button size="sm" className="h-8">
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t('tasks.createtask')}
+                </Button>
+              </AddTaskDialog>
+            )}
           </div>
         </div>
         <div className="rounded-md border">
@@ -739,3 +753,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
