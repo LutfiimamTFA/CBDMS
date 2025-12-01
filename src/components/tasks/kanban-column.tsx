@@ -103,7 +103,7 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <Droppable droppableId={status} isDropDisabled={isDropDisabled} isCombineEnabled={false}>
+      <Droppable droppableId={status} isDropDisabled={isDropDisabled} isCombineEnabled={false} ignoreContainerClipping={false}>
         {(provided, snapshot) => (
           <ScrollArea 
             ref={provided.innerRef}
