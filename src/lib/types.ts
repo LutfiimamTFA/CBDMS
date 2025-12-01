@@ -105,6 +105,14 @@ export type Task = {
     name: string;
     avatarUrl: string;
   };
+  lastActivity?: {
+    user: {
+        name: string;
+        avatarUrl: string;
+    };
+    timestamp: any;
+    action: string;
+  };
   companyId: string;
 };
 
@@ -170,5 +178,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
-    

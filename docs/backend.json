@@ -129,6 +129,23 @@
             "type": "string"
           }
         },
+        "lastActivity": {
+          "type": "object",
+          "description": "A summary of the last activity that occurred on this task for quick auditing in table views.",
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "avatarUrl": { "type": "string" }
+              },
+              "required": ["name"]
+            },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "action": { "type": "string" }
+          },
+          "required": ["user", "timestamp", "action"]
+        },
         "companyId": {
             "type": "string",
             "description": "The ID of the company this task belongs to, for client visibility."
@@ -432,5 +449,3 @@
     "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task."
   }
 }
-
-    

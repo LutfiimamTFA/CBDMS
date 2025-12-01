@@ -31,7 +31,7 @@ import type { Task, Priority, User, Notification, WorkflowStatus, Brand } from '
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2 } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
@@ -518,37 +518,42 @@ export function TasksDataTable() {
       },
     },
     {
-      accessorKey: 'createdBy',
-      header: 'Dibuat Oleh',
+      accessorKey: 'lastActivity',
+      header: 'Last Modified By',
       cell: ({ row }) => {
-        const createdBy = row.original.createdBy;
-        if (!createdBy) return <div className="text-muted-foreground">-</div>;
+        const lastActivity = row.original.lastActivity;
+        if (!lastActivity) return <div className="text-muted-foreground">-</div>;
         return (
            <div className="flex items-center gap-2">
              <TooltipProvider>
                 <Tooltip>
                 <TooltipTrigger asChild>
                     <Avatar className="h-7 w-7">
-                    <AvatarImage src={createdBy.avatarUrl} alt={createdBy.name} />
-                    <AvatarFallback>{createdBy.name.charAt(0)}</AvatarFallback>
+                    <AvatarImage src={lastActivity.user.avatarUrl} alt={lastActivity.user.name} />
+                    <AvatarFallback>{lastActivity.user.name.charAt(0)}</AvatarFallback>
                     </Avatar>
                 </TooltipTrigger>
                 <TooltipContent>
-                    <p>{createdBy.name}</p>
+                    <p>{lastActivity.user.name}</p>
                 </TooltipContent>
                 </Tooltip>
             </TooltipProvider>
-            <span className="font-medium">{createdBy.name}</span>
+            <span className="font-medium">{lastActivity.user.name}</span>
           </div>
         );
       },
     },
     {
-      accessorKey: 'dueDate',
-      header: t('tasks.column.duedate'),
+      accessorKey: 'lastActivity.timestamp',
+      header: 'Last Modified At',
       cell: ({ row }) => {
-          const dueDate = row.getValue('dueDate') as string;
-          return dueDate ? <div>{format(parseISO(dueDate), 'MMM d, yyyy')}</div> : <div className="text-muted-foreground">-</div>;
+        const lastActivity = row.original.lastActivity;
+        if (!lastActivity?.timestamp) return <div className="text-muted-foreground">-</div>;
+        return (
+            <div className="text-sm text-muted-foreground">
+                {formatDistanceToNow(lastActivity.timestamp.toDate(), { addSuffix: true })}
+            </div>
+        );
       }
     },
   ];
@@ -791,6 +796,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-    
-    

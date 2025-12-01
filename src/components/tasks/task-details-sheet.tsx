@@ -129,12 +129,6 @@ export function TaskDetailsSheet({
   [firestore]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
-  const activityQuery = useMemo(() =>
-      firestore && initialTask ? query(collection(firestore, `tasks/${initialTask.id}/activities`), orderBy('timestamp', 'desc')) : null,
-  [firestore, initialTask]);
-  const { data: activities } = useCollection<Activity>(activityQuery);
-
-
   const { user: authUser, profile: currentUser } = useUserProfile();
 
   const form = useForm<TaskDetailsFormValues>({
@@ -377,11 +371,21 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if (!firestore || !currentUser) return;
-
+  
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-
-    const updatedTaskData: Partial<Task> = {
+  
+    let lastAction = "updated the task"; 
+  
+    if (initialTask.title !== data.title) {
+        lastAction = `changed the title to "${data.title}"`;
+    } else if (initialTask.status !== data.status) {
+        lastAction = `changed status from "${initialTask.status}" to "${data.status}"`;
+    } else if (initialTask.priority !== data.priority) {
+        lastAction = `changed priority from "${initialTask.priority}" to "${data.priority}"`;
+    }
+  
+    const updatedTaskData: Partial<Task> & { lastActivity: any } = {
       title: data.title,
       brandId: data.brandId,
       description: data.description,
@@ -398,41 +402,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       timeLogs: timeLogs,
       attachments: attachments,
       updatedAt: serverTimestamp(),
-    };
-
-    batch.update(taskDocRef, updatedTaskData);
-
-    const createActivityLog = (action: string) => {
-      const activityRef = doc(collection(firestore, `tasks/${initialTask.id}/activities`));
-      batch.set(activityRef, {
+      lastActivity: {
         user: {
-          id: currentUser.id,
           name: currentUser.name,
           avatarUrl: currentUser.avatarUrl || '',
         },
-        action,
-        timestamp: new Date().toISOString(),
-      });
+        timestamp: serverTimestamp(),
+        action: lastAction,
+      },
     };
-
-    if (initialTask.title !== data.title) {
-        createActivityLog(`changed the title to "${data.title}"`);
-    }
-    if (initialTask.status !== data.status) {
-        createActivityLog(`changed status from "${initialTask.status}" to "${data.status}"`);
-    }
-    if (initialTask.priority !== data.priority) {
-        createActivityLog(`changed priority from "${initialTask.priority}" to "${data.priority}"`);
-    }
-    if (initialTask.description !== data.description) {
-        createActivityLog(`updated the description`);
-    }
-    const initialDueDate = initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined;
-    if (initialDueDate !== data.dueDate) {
-        const dateStr = data.dueDate ? format(parseISO(data.dueDate), 'MMM d, yyyy') : 'removed';
-        createActivityLog(`changed the due date to ${dateStr}`);
-    }
-
+  
+    batch.update(taskDocRef, updatedTaskData as any);
+  
     try {
       await batch.commit();
       toast({
@@ -572,7 +553,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <TabsList>
                                 <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
                                 <TabsTrigger value="comments">Comments</TabsTrigger>
-                                <TabsTrigger value="activity">Activity</TabsTrigger>
                             </TabsList>
                             <TabsContent value="subtasks" className="mt-4 space-y-4">
                                 <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
@@ -611,22 +591,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </TabsContent>
-                             <TabsContent value="activity" className="mt-4">
-                                <div className="space-y-6">
-                                    {activities?.map(activity => (
-                                        <div key={activity.id} className="flex gap-3 text-sm">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={activity.user.avatarUrl}/><AvatarFallback>{activity.user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                            <div><span className="font-semibold">{activity.user.name}</span> <span className="text-muted-foreground">{activity.action}</span><p className="text-xs text-muted-foreground mt-1">{formatDistanceToNow(parseISO(activity.timestamp), { addSuffix: true })}</p></div>
-                                        </div>
-                                    ))}
-                                    {(!activities || activities.length === 0) && (
-                                        <div className="text-center text-muted-foreground py-8">
-                                            <History className="mx-auto h-8 w-8 mb-2"/>
-                                            No activity recorded yet.
-                                        </div>
-                                    )}
                                 </div>
                             </TabsContent>
                         </Tabs>
