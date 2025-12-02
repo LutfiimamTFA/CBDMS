@@ -81,6 +81,8 @@ import {
   FormItem,
   FormMessage,
 } from '@/components/ui/form';
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 const templateSchema = z.object({
   title: z.string().min(2, 'Title is required.'),
@@ -312,12 +314,21 @@ export default function RecurringTasksPage() {
                      </div>
                     <div className="flex items-start gap-2 text-sm text-muted-foreground">
                         <Users className="h-4 w-4 mt-0.5" />
+                         <TooltipProvider>
                          <span>
                            Assigned to:
                            <div className="flex flex-wrap gap-1 mt-1">
-                            {assignedUsers.map(u => <Badge key={u.id} variant="secondary">{u.name}</Badge>)}
+                            {assignedUsers.map(user => (
+                                <Tooltip key={user.id}>
+                                    <TooltipTrigger>
+                                        <Badge variant="secondary">{user.name.split(' ')[0]}</Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>{user.name}</p></TooltipContent>
+                                </Tooltip>
+                            ))}
                           </div>
                         </span>
+                        </TooltipProvider>
                      </div>
                   </CardContent>
                 </Card>
