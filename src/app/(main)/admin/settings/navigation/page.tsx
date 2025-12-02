@@ -204,7 +204,6 @@ export default function NavigationSettingsPage() {
                   handleRoleChange(item.id, role, !!checked);
                 }}
                 aria-label={`Allow ${role} to see ${item.label}`}
-                disabled={role === 'Super Admin'}
               />
             </TableCell>
           ))}
@@ -286,5 +285,3 @@ export default function NavigationSettingsPage() {
     </div>
   );
 }
-
-    
