@@ -475,8 +475,14 @@
             { "name": "statusId", "description": "The unique ID for the workflow status." }
           ]
         }
+      },
+      {
+        "path": "/api/run-scheduler",
+        "definition": {
+          "description": "An API endpoint that, when called, runs the scheduler to generate recurring tasks."
+        }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks."
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks. Finally, a new API route `/api/run-scheduler` is added to handle the server-side logic for task generation."
   }
 }
