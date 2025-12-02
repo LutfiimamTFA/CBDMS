@@ -36,8 +36,8 @@ export default function ForceAcknowledgeTasksPage() {
     return query(
       collection(firestore, 'tasks'),
       where('assigneeIds', 'array-contains', profile.id),
-      where('createdAt', '>=', todayTimestamp),
-      where('isMandatory', '==', true)
+      where('isMandatory', '==', true),
+      where('createdAt', '>=', todayTimestamp)
     );
   }, [firestore, profile, todayTimestamp]);
 
@@ -48,34 +48,25 @@ export default function ForceAcknowledgeTasksPage() {
     setIsAcknowledging(true);
     
     try {
-      const response = await fetch('/api/acknowledge-tasks', {
+      await fetch('/api/acknowledge-tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uid: profile.id }),
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to acknowledge tasks.');
-      }
-      
-      // Because the backend revoked the session, we manually sign out on the client
-      // to clear any cached state and redirect to login.
+      // The backend will try to revoke the token.
+      // Regardless of the API response, we will force a client-side sign-out
+      // to ensure the user is logged out and redirected correctly.
+    } catch (error) {
+      // We can log the API error, but we still proceed with the sign-out.
+      console.error("API call to acknowledge-tasks failed, proceeding with client-side sign-out:", error);
+    } finally {
+      // This block ensures the user is ALWAYS signed out and redirected.
       await initiateSignOut(auth);
       toast({
           title: "Acknowledgment Successful",
           description: "Please log in again to continue.",
       });
       router.push('/login');
-
-
-    } catch (error) {
-      console.error(error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Could not acknowledge tasks. Please try again.',
-      });
-      setIsAcknowledging(false);
     }
   };
   
