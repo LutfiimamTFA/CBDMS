@@ -1,3 +1,4 @@
+
 import type { NavigationItem } from './types';
 
 export const defaultNavItems: NavigationItem[] = [
