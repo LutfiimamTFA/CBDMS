@@ -32,6 +32,9 @@ export default function RootPage() {
           if (idTokenResult.claims.mustChangePassword) {
             // If the claim exists, force redirect to the change password page.
             router.replace('/force-change-password');
+          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
+            // If recurring tasks claim exists, redirect to acknowledgment page.
+            router.replace('/force-acknowledge-tasks');
           } else {
             // Otherwise, proceed to the main dashboard.
             router.replace('/dashboard');
