@@ -37,6 +37,7 @@ function shouldGenerateTask(template: RecurringTaskTemplate): boolean {
     case 'weekly':
       return template.daysOfWeek?.includes(dayOfWeek) || false;
     case 'monthly':
+      // dayOfMonth is 1-based, getDate() is 1-based
       return template.dayOfMonth === today.getDate();
     default:
       return false;
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ message: 'No recurring task templates found.' }, { status: 200 });
     }
 
-    const tasksToCreate: Omit<Task, 'id' | 'createdAt'>[] = [];
+    const tasksToCreate: Omit<Task, 'id'>[] = [];
     const usersToFlag: { [userId: string]: boolean } = {};
     const templatesToUpdate: { id: string; lastGeneratedAt: Timestamp }[] = [];
 
@@ -136,8 +137,12 @@ export async function GET(request: Request) {
     );
   } catch (error: any) {
     console.error('Error in scheduler:', error);
+    let errorMessage = 'An unexpected error occurred.';
+     if (error.message?.includes('FIREBASE_SERVICE_ACCOUNT_KEY') || error.code === 'app/invalid-credential') {
+        errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials.';
+    }
     return NextResponse.json(
-      { message: 'An unexpected error occurred.', error: error.message },
+      { message: errorMessage, error: error.message },
       { status: 500 }
     );
   }
