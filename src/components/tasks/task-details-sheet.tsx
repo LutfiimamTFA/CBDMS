@@ -384,42 +384,34 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
   
-    const newActivities: Activity[] = [...activities];
+    const currentActivities = [...(initialTask.activities || [])];
+    let newActivity: Activity | null = null;
   
-    const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string[] => {
+    const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
       const changes: string[] = [];
-      if (oldTask.title !== newData.title) {
-        changes.push(`changed the title from "${oldTask.title}" to "${newData.title}"`);
-      }
-      if (oldTask.status !== newData.status) {
-        changes.push(`changed status from "${oldTask.status}" to "${newData.status}"`);
-      }
-      if (oldTask.priority !== newData.priority) {
-        changes.push(`changed priority from "${oldTask.priority}" to "${newData.priority}"`);
-      }
-      if ((oldTask.description || '') !== (newData.description || '')) {
-        changes.push('updated the description');
-      }
-      if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : '') !== (newData.dueDate || '')) {
-         changes.push('updated the due date');
-      }
-      return changes;
+      if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
+      if (oldTask.status !== newData.status) changes.push(`changed status from "${oldTask.status}" to "${newData.status}"`);
+      if (oldTask.priority !== newData.priority) changes.push(`set priority to ${newData.priority}`);
+      if ((oldTask.description || '') !== (newData.description || '')) changes.push('updated the description');
+      if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : '') !== (newData.dueDate || '')) changes.push('updated the due date');
+      
+      return changes.length > 0 ? changes.join(', ') : null;
     };
   
-    const changedFields = getChangedFields(initialTask, data);
+    const actionDescription = getChangedFields(initialTask, data);
   
-    if (changedFields.length > 0) {
-      const activity: Activity = {
+    if (actionDescription) {
+      newActivity = {
         id: `act-${Date.now()}`,
         user: {
           id: currentUser.id,
           name: currentUser.name,
           avatarUrl: currentUser.avatarUrl || '',
         },
-        action: changedFields.join(', '),
+        action: actionDescription,
         timestamp: serverTimestamp(),
       };
-      newActivities.push(activity);
+      currentActivities.push(newActivity);
     }
   
     const updatedTaskData = {
@@ -432,7 +424,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       timeTracked: timeTracked,
       timeLogs: timeLogs,
       attachments: attachments,
-      activities: newActivities,
+      activities: currentActivities,
+      lastActivity: newActivity || initialTask.lastActivity, // Update lastActivity or keep the old one
       updatedAt: serverTimestamp(),
     };
   
@@ -748,7 +741,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                   </div>
                                   {canEdit && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
                               </div>
-                          ))}
+                           ))}
                           {canEdit && (
                               <Popover>
                                   <PopoverTrigger asChild>

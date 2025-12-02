@@ -27,12 +27,12 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Priority, User, Notification, WorkflowStatus, Brand } from '@/lib/types';
+import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activity } from '@/lib/types';
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2 } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
@@ -48,6 +48,8 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { ScrollArea } from '../ui/scroll-area';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, doc, query, where, writeBatch, serverTimestamp, orderBy } from 'firebase/firestore';
@@ -122,6 +124,8 @@ export function TasksDataTable() {
   const { t } = useI18n();
   const { toast } = useToast();
   
+  const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
+
   const [confirmationDialog, setConfirmationDialog] = React.useState<{
     isOpen: boolean;
     task?: Task;
@@ -323,49 +327,50 @@ export function TasksDataTable() {
 
   const columns: ColumnDef<Task>[] = [
     {
-        id: "actions",
-        cell: ({ row }) => {
-          const task = row.original
-     
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <Link href={`/tasks/${task.id}`}>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
-                </Link>
-                <DropdownMenuItem
-                  onClick={() => copyTaskLink(task.id)}
-                >
-                  <LinkIcon className="mr-2 h-4 w-4" />
-                  Copy Link
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                    className='text-destructive focus:text-destructive focus:bg-destructive/10'
-                    onClick={() => handleDeleteTask(task.id)}
-                >
-                    <Trash2 className='mr-2 h-4 w-4'/>
-                    Delete Task
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )
-        },
+      id: "actions",
+      cell: ({ row }) => {
+        const task = row.original;
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <Link href={`/tasks/${task.id}`}>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
+              </Link>
+              <DropdownMenuItem onClick={() => copyTaskLink(task.id)}>
+                <LinkIcon className="mr-2 h-4 w-4" />
+                Copy Link
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className='text-destructive focus:text-destructive focus:bg-destructive/10'
+                onClick={() => handleDeleteTask(task.id)}
+              >
+                <Trash2 className='mr-2 h-4 w-4' />
+                Delete Task
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
       },
+    },
     {
       accessorKey: 'title',
       header: t('tasks.column.title'),
       cell: ({ row }) => {
         const task = row.original;
         return (
+          <div className='max-w-xs'>
             <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline">{task.title}</Link>
+            <p className='text-xs text-muted-foreground truncate'>{task.description}</p>
+          </div>
         );
       }
     },
@@ -375,7 +380,7 @@ export function TasksDataTable() {
       cell: ({ row }) => {
         const brandId = row.getValue('brandId') as string;
         const brand = brands?.find(b => b.id === brandId);
-        return brand ? <Badge variant="secondary">{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
+        return brand ? <Badge variant="outline" className="font-medium bg-secondary text-secondary-foreground"><Building2 className='mr-2'/>{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
@@ -517,6 +522,37 @@ export function TasksDataTable() {
         );
       },
     },
+    {
+      accessorKey: 'lastActivity',
+      header: 'Last Activity',
+      cell: ({ row }) => {
+        const task = row.original;
+        const lastActivity = task.lastActivity;
+
+        if (!lastActivity || !lastActivity.user) {
+          return <div className="text-muted-foreground">-</div>;
+        }
+
+        return (
+          <div className="flex flex-col gap-2">
+             <div className="flex items-center gap-2">
+                <Avatar className="h-7 w-7">
+                    <AvatarImage src={lastActivity.user.avatarUrl} />
+                    <AvatarFallback>{lastActivity.user.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div className='text-xs'>
+                    <p className='font-medium'>{lastActivity.user.name}</p>
+                    <p className='text-muted-foreground'>{lastActivity.timestamp?.toDate ? formatDistanceToNow(lastActivity.timestamp.toDate(), { addSuffix: true }) : 'just now'}</p>
+                </div>
+            </div>
+            <Button variant="outline" size="sm" className='h-7' onClick={() => setHistoryTask(task)}>
+              <History className='mr-2 h-3 w-3'/>
+              View History
+            </Button>
+          </div>
+        );
+      },
+    }
   ];
 
   const table = useReactTable({
@@ -721,6 +757,50 @@ export function TasksDataTable() {
           </div>
         </div>
       </div>
+      <Dialog open={!!historyTask} onOpenChange={(isOpen) => !isOpen && setHistoryTask(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Activity Log: {historyTask?.title}</DialogTitle>
+            <DialogDescription>
+              A complete history of all changes made to this task.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+            <div className="space-y-6 py-4">
+              {historyTask?.activities && historyTask.activities.length > 0 ? (
+                historyTask.activities
+                  .slice()
+                  .sort((a, b) => {
+                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : 0;
+                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : 0;
+                    if (!dateA || !dateB) return 0;
+                    return dateB.getTime() - dateA.getTime();
+                  })
+                  .map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-4">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
+                        <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm">
+                          <span className="font-semibold">{activity.user.name}</span> {activity.action}.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No activities recorded for this task yet.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={confirmationDialog.isOpen} onOpenChange={(isOpen) => setConfirmationDialog({ ...confirmationDialog, isOpen })}>
         <AlertDialogContent>
             <AlertDialogHeader>

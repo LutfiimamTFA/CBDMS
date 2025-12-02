@@ -99,6 +99,7 @@ export type Task = {
   comments?: Comment[];
   attachments?: Attachment[];
   activities?: Activity[];
+  lastActivity?: Activity;
   createdAt: any;
   createdBy: {
     id: string;
