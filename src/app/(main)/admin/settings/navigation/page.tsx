@@ -133,7 +133,7 @@ export default function NavigationSettingsPage() {
                 } else {
                     updatedRoles = item.roles.filter((r) => r !== role);
                 }
-                return { ...item, roles: [...new Set(updatedRoles)] };
+                return { ...item, roles: [...new Set(updatedRoles)] as Role[] };
             }
             return item;
         });
