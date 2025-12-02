@@ -57,6 +57,7 @@ import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase
 import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
+import { TaskDetailsSheet } from './task-details-sheet';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -132,6 +133,8 @@ export function TasksDataTable() {
 
   const [aiValidation, setAiValidation] = React.useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
+  
+  const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
 
   const statusOptions = React.useMemo(() => {
     if (!statuses) return [];
@@ -157,6 +160,14 @@ export function TasksDataTable() {
     }));
   }, [brands]);
 
+  const createActivity = (user: User, action: string): Activity => {
+    return {
+      id: `act-${Date.now()}`,
+      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+      action: action,
+      timestamp: serverTimestamp(),
+    };
+  };
 
   const handleStatusChange = (taskId: string, newStatus: string) => {
     if (!firestore || !profile) return;
@@ -166,7 +177,16 @@ export function TasksDataTable() {
     const performUpdate = async () => {
         const batch = writeBatch(firestore);
         const taskRef = doc(firestore, 'tasks', taskId);
-        batch.update(taskRef, { status: newStatus });
+
+        const newActivity = createActivity(profile, `changed status from "${taskToUpdate.status}" to "${newStatus}"`);
+        const updatedActivities = [...(taskToUpdate.activities || []), newActivity];
+        
+        batch.update(taskRef, { 
+          status: newStatus,
+          activities: updatedActivities,
+          lastActivity: newActivity,
+          updatedAt: serverTimestamp(),
+        });
         
         // --- Notification Logic ---
         const userIdsToNotify = new Set<string>();
@@ -263,7 +283,7 @@ export function TasksDataTable() {
   }
   
   const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
-    if (!firestore) return;
+    if (!firestore || !profile) return;
     const task = data.find(t => t.id === taskId);
     if (!task) return;
 
@@ -272,7 +292,15 @@ export function TasksDataTable() {
 
     const applyPriorityChange = (id: string, priority: Priority) => {
         const taskRef = doc(firestore, 'tasks', id);
-        updateDocumentNonBlocking(taskRef, { priority: priority });
+        const newActivity = createActivity(profile, `set priority to ${priority}`);
+        const updatedActivities = [...(task.activities || []), newActivity];
+        
+        updateDocumentNonBlocking(taskRef, {
+            priority: priority,
+            activities: updatedActivities,
+            lastActivity: newActivity,
+            updatedAt: serverTimestamp(),
+        });
     };
 
     if (priorityValues[newPriority] <= priorityValues[currentPriority]) {
@@ -561,6 +589,10 @@ export function TasksDataTable() {
               <Link href={`/tasks/${task.id}`}>
                 <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
               </Link>
+              <DropdownMenuItem onClick={() => setHistoryTask(task)}>
+                  <History className="mr-2 h-4 w-4" />
+                  View History
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => copyTaskLink(task.id)}>
                 <LinkIcon className="mr-2 h-4 w-4" />
                 Copy Link
@@ -815,6 +847,50 @@ export function TasksDataTable() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+       <Dialog open={!!historyTask} onOpenChange={() => setHistoryTask(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Task Activity Log: {historyTask?.title}</DialogTitle>
+            <DialogDescription>
+              A complete history of all changes made to this task.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+            <div className="space-y-6 py-4">
+              {historyTask && historyTask.activities && historyTask.activities.length > 0 ? (
+                historyTask.activities
+                  .slice()
+                  .sort((a, b) => {
+                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : 0;
+                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : 0;
+                    if (!dateA || !dateB) return 0;
+                    return dateB.getTime() - dateA.getTime();
+                  })
+                  .map((activity) => (
+                    <div key={activity.id} className="flex items-start gap-4">
+                      <Avatar className="h-9 w-9">
+                        <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
+                        <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm">
+                          <span className="font-semibold">{activity.user.name}</span> {activity.action}.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <p className="text-center text-muted-foreground py-8">
+                  No activities recorded for this task yet.
+                </p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
