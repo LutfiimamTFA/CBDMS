@@ -36,7 +36,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User, X } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { RecurringTaskTemplate, Brand, User as UserType } from '@/lib/types';
@@ -55,6 +55,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { X } from 'lucide-react';
 
 const templateSchema = z.object({
   title: z.string().min(3, 'Title is required.'),
@@ -310,7 +311,7 @@ export default function RecurringTasksPage() {
                             control={form.control}
                             render={({ field }) => (
                                 <ToggleGroup type="multiple" variant="outline" value={field.value} onValueChange={field.onChange} className="flex-wrap justify-start">
-                                    {days.map(d => <ToggleGroupItem key={d} value={d} className="h-9 w-9 p-0">{d.charAt(0)}</ToggleGroupItem>)}
+                                    {days.map(d => <ToggleGroupItem key={d} value={d} className="h-9 px-3">{d.substring(0, 2)}</ToggleGroupItem>)}
                                 </ToggleGroup>
                             )}
                          />
