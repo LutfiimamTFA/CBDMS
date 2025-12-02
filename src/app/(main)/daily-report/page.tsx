@@ -7,7 +7,6 @@ import type { RecurringTaskTemplate, DailyReport, User } from '@/lib/types';
 import { collection, query, where, doc, writeBatch, Timestamp } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -38,7 +37,7 @@ export default function DailyReportPage() {
 
   const usersQuery = useMemo(() => {
     if (!firestore || !profile || profile.role === 'Employee') return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
+    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId), where('role', '==', 'Employee'));
   }, [firestore, profile]);
   const { data: users, isLoading: usersLoading } = useCollection<User>(usersQuery);
 
@@ -69,8 +68,8 @@ export default function DailyReportPage() {
     const reportRef = doc(firestore, 'dailyReports', reportId);
 
     try {
-      await writeBatch(firestore)
-        .set(reportRef, {
+      const batch = writeBatch(firestore);
+      batch.set(reportRef, {
           userId: selectedUser.id,
           userName: selectedUser.name,
           templateId,
@@ -78,8 +77,10 @@ export default function DailyReportPage() {
           isCompleted: isChecked,
           companyId: selectedUser.companyId,
           completedAt: isChecked ? Timestamp.now() : null
-        }, { merge: true })
-        .commit();
+        }, { merge: true });
+      
+      await batch.commit();
+
     } catch (error) {
       console.error("Failed to update daily report:", error);
       toast({
@@ -96,8 +97,18 @@ export default function DailyReportPage() {
   const isLoading = profileLoading || templatesLoading || reportsLoading || (profile?.role !== 'Employee' && usersLoading);
   
   const employeeUsers = useMemo(() => {
-    return (users || []).filter(u => u.role === 'Employee');
-  }, [users]);
+    const userList = users || [];
+    if (profile?.role === 'Employee' && profile) {
+      return [profile as User];
+    }
+    return userList;
+  }, [users, profile]);
+
+
+  const relevantTemplates = useMemo(() => {
+      if (!templates || !selectedUser) return [];
+      return templates.filter(t => t.defaultAssigneeIds.includes(selectedUser.id));
+  }, [templates, selectedUser]);
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -113,13 +124,13 @@ export default function DailyReportPage() {
             </p>
           </div>
           <div className="flex items-center gap-4">
-            {profile?.role !== 'Employee' && (
+            {(profile?.role === 'Manager' || profile?.role === 'Super Admin') && (
               <Select onValueChange={(userId) => setSelectedUser(users?.find(u => u.id === userId) || null)} value={selectedUser?.id}>
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Select Employee" />
                 </SelectTrigger>
                 <SelectContent>
-                  {usersLoading ? <Loader2 className="animate-spin" /> : employeeUsers.map(user => (
+                  {usersLoading ? <div className='p-2'><Loader2 className="animate-spin h-4 w-4" /></div> : employeeUsers.map(user => (
                     <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -149,9 +160,9 @@ export default function DailyReportPage() {
 
         {isLoading ? (
           <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin"/></div>
-        ) : templates && templates.length > 0 ? (
+        ) : relevantTemplates && relevantTemplates.length > 0 ? (
           <div className="space-y-4">
-            {templates.map(template => (
+            {relevantTemplates.map(template => (
               <Card key={template.id}>
                 <CardContent className="p-4 flex items-center gap-4">
                   <Checkbox 
@@ -172,7 +183,9 @@ export default function DailyReportPage() {
         ) : (
           <Card>
             <CardContent className="p-12 text-center">
-              <p className="mt-2 text-sm text-muted-foreground">No recurring task templates have been configured for your company.</p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                { selectedUser ? `No recurring tasks assigned to ${selectedUser.name}.` : `No recurring task templates have been configured for your company.`}
+              </p>
             </CardContent>
           </Card>
         )}

@@ -89,12 +89,20 @@ export const defaultNavItems: NavigationItem[] = [
     order: 22,
     roles: ['Super Admin', 'Manager'],
   },
+   {
+    id: 'nav_settings_recurring',
+    label: 'Recurring Tasks',
+    path: '/admin/settings/recurring',
+    icon: 'Repeat',
+    order: 23,
+    roles: ['Super Admin', 'Manager'],
+  },
   {
     id: 'nav_settings_navigation',
     label: 'Navigation',
     path: '/admin/settings/navigation',
     icon: 'SlidersHorizontal',
-    order: 23,
+    order: 24,
     roles: ['Super Admin', 'Manager'],
   },
    {
@@ -102,7 +110,7 @@ export const defaultNavItems: NavigationItem[] = [
     label: 'Workflow',
     path: '/admin/settings/workflow',
     icon: 'Workflow',
-    order: 24,
+    order: 25,
     roles: ['Super Admin'],
   },
   {
@@ -110,7 +118,7 @@ export const defaultNavItems: NavigationItem[] = [
     label: 'Theme',
     path: '/admin/settings/theme',
     icon: 'Palette',
-    order: 25,
+    order: 26,
     roles: ['Super Admin'],
   },
 ];
