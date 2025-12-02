@@ -101,6 +101,12 @@ export default function MainLayout({
     }
   }, [user, isUserLoading, router]);
   
+  useEffect(() => {
+    if(pathname.startsWith('/tasks')){
+      setIsTasksOpen(true);
+    }
+  }, [pathname]);
+
   const isLoading = isUserLoading || isNavItemsLoading;
 
   if (isLoading) {
@@ -168,7 +174,7 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                    {filteredNavItems.tasksGroup.map((item) => (
+                    {filteredNavItems.tasksGroup.sort((a, b) => a.order - b.order).map((item) => (
                        <SidebarMenuItem key={item.id}>
                           <Link href={item.path}>
                             <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
