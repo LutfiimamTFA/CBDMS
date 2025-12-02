@@ -87,6 +87,7 @@ import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/comp
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
+import { MultiSelect } from '@/components/ui/multi-select';
 
 
 const templateSchema = z.object({
@@ -273,6 +274,11 @@ export default function RecurringTasksPage() {
     Friday: 'Fri',
     Saturday: 'Sat',
   }
+
+  const userOptions = useMemo(() => {
+    return (users || []).map(user => ({ value: user.id, label: user.name }));
+  }, [users]);
+
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -526,25 +532,24 @@ export default function RecurringTasksPage() {
                       </FormItem>
                     )}
                   />
-                <Controller
+                <FormField
                   control={form.control}
                   name="defaultAssigneeIds"
                   render={({ field }) => (
                     <FormItem>
                       <Label>Default Assignees</Label>
                       <FormControl>
-                       <Select onValueChange={(val) => field.onChange([val])} value={field.value.length > 0 ? field.value[0] : ''}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select an employee" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {usersLoading ? <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div> : users?.map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                              {user.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        {usersLoading ? (
+                           <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div>
+                        ) : (
+                          <MultiSelect
+                            options={userOptions}
+                            onValueChange={field.onChange}
+                            defaultValue={field.value}
+                            placeholder="Select employees..."
+                            variant="inverted"
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -613,3 +618,4 @@ export default function RecurringTasksPage() {
     </div>
   );
 }
+
