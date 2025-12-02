@@ -2,8 +2,8 @@ import type { NavigationItem } from './types';
 
 export const defaultNavItems: NavigationItem[] = [
   {
-    id: 'nav_dashboard_main',
-    label: 'Dashboard',
+    id: 'nav_task_board',
+    label: 'Task Board',
     path: '/dashboard',
     icon: 'KanbanSquare',
     order: 1,

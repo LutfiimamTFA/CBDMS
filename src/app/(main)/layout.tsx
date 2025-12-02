@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -20,21 +19,13 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import {
-  LayoutDashboard,
-  Users,
-  Database,
-  Settings as SettingsIcon,
   Loader2,
   Shield,
   ChevronDown,
   User,
   Icon as LucideIcon,
-  KeyRound,
-  SlidersHorizontal,
-  Palette,
-  Workflow,
-  Building2,
-  Building,
+  Settings as SettingsIcon,
+  Repeat,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -65,7 +56,10 @@ export default function MainLayout({
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
 
-  const isAdminRoute = pathname.startsWith('/admin');
+  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/dashboard') || pathname.startsWith('/calendar');
+  const [isTasksOpen, setIsTasksOpen] = useState(isTasksRoute);
+  
+  const isAdminRoute = pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings');
   const [isAdminOpen, setIsAdminOpen] = useState(isAdminRoute);
   
   const isSettingsRoute = pathname.startsWith('/admin/settings');
@@ -78,7 +72,7 @@ export default function MainLayout({
   const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
   const filteredNavItems = useMemo(() => {
-    if (!profile || !navItems) return [];
+    if (!profile || !navItems) return { mainItems: [], adminItems: [], settingsItems: [] };
     
     // Split items into categories for rendering
     const mainItems = [];
@@ -87,7 +81,7 @@ export default function MainLayout({
 
     for (const item of navItems) {
       if (!item.roles.includes(profile.role)) continue;
-
+      
       if (item.path.startsWith('/admin/settings')) {
         settingsItems.push(item);
       } else if (item.path.startsWith('/admin')) {
@@ -120,18 +114,9 @@ export default function MainLayout({
   if (!user || !profile) {
     return null;
   }
-
-  const isAdminOrManager = profile?.role === 'Super Admin' || profile?.role === 'Manager';
-  const isSuperAdmin = profile?.role === 'Super Admin';
-
-  if (!isAdminOrManager && isAdminRoute) {
-    router.push('/dashboard');
-    return (
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-            <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-    );
-  }
+  
+  const hasAdminItems = filteredNavItems.adminItems.length > 0;
+  const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
 
   return (
     <SidebarProvider>
@@ -141,26 +126,61 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {filteredNavItems.mainItems.map((item) => (
-              <SidebarMenuItem key={item.id}>
-                <Link href={item.path}>
+            {/* Main Task Navigation Group */}
+            <Collapsible open={isTasksOpen} onOpenChange={setIsTasksOpen}>
+              <SidebarMenuItem>
+                <CollapsibleTrigger asChild>
                   <SidebarMenuButton
-                    isActive={pathname === item.path}
-                    tooltip={item.label}
+                    isActive={isTasksRoute}
+                    className="w-full justify-between"
+                    tooltip='Tasks'
                   >
-                    <Icon name={item.icon} />
-                    <span>{item.label}</span>
+                    <div className="flex items-center gap-2">
+                      <Icon name="ClipboardList" />
+                      <span>Tasks</span>
+                    </div>
+                    <ChevronDown
+                      className={cn(
+                        'h-4 w-4 transition-transform',
+                        isTasksOpen && 'rotate-180'
+                      )}
+                    />
                   </SidebarMenuButton>
-                </Link>
+                </CollapsibleTrigger>
               </SidebarMenuItem>
-            ))}
+              <CollapsibleContent className="pl-6">
+                <SidebarMenu>
+                  {filteredNavItems.mainItems.map((item) => (
+                     <SidebarMenuItem key={item.id}>
+                        <Link href={item.path}>
+                          <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
+                            <Icon name={item.icon}/>
+                            <span>{item.label}</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                  ))}
+                   {profile.role !== 'Employee' && profile.role !== 'Client' && (
+                     <SidebarMenuItem>
+                        <Link href="/tasks/recurring">
+                          <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/tasks/recurring')} className="w-full justify-start">
+                              <Repeat />
+                              <span>Recurring Tasks</span>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                   )}
+                </SidebarMenu>
+              </CollapsibleContent>
+            </Collapsible>
 
-            {filteredNavItems.adminItems.length > 0 && (
+            {/* Admin Section */}
+            {hasAdminItems && (
               <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={isAdminRoute && !isSettingsRoute}
+                      isActive={isAdminRoute}
                       className="w-full justify-between"
                       tooltip='Admin'
                     >
@@ -193,8 +213,9 @@ export default function MainLayout({
                 </CollapsibleContent>
               </Collapsible>
             )}
-
-            {filteredNavItems.settingsItems.length > 0 && (
+            
+            {/* Settings Section */}
+            {hasSettingsItems && (
               <Collapsible open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>

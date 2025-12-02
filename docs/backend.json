@@ -208,6 +208,27 @@
         "duration"
       ]
     },
+    "RecurringTaskTemplate": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RecurringTaskTemplate",
+      "type": "object",
+      "description": "A template for creating tasks on a recurring schedule.",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "description": "The title for the tasks created by this template." },
+        "description": { "type": "string", "description": "Default description for generated tasks." },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly"], "description": "How often the task should be created." },
+        "daysOfWeek": { "type": "array", "items": { "type": "string" }, "description": "For weekly tasks, which days to create them on (e.g., ['Monday', 'Wednesday'])." },
+        "dayOfMonth": { "type": "number", "description": "For monthly tasks, which day of the month to create it on." },
+        "defaultAssigneeIds": { "type": "array", "items": { "type": "string" } },
+        "defaultPriority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
+        "defaultBrandId": { "type": "string" },
+        "companyId": { "type": "string" },
+        "lastGeneratedAt": { "type": "string", "format": "date-time", "description": "The timestamp when a task was last generated from this template." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "frequency", "defaultAssigneeIds", "companyId", "createdAt"]
+    },
     "NavigationItem": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "NavigationItem",
@@ -377,6 +398,17 @@
         }
       },
       {
+        "path": "/recurringTaskTemplates/{templateId}",
+        "definition": {
+          "entityName": "RecurringTaskTemplate",
+          "schema": { "$ref": "#/backend/entities/RecurringTaskTemplate" },
+          "description": "Stores templates for automatically generating recurring tasks.",
+          "params": [
+            { "name": "templateId", "description": "The unique ID for the recurring task template." }
+          ]
+        }
+      },
+      {
         "path": "/tasks/{taskId}/timeTracking/{timeTrackingId}",
         "definition": {
           "entityName": "TimeTracking",
@@ -448,6 +480,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views."
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks."
   }
 }

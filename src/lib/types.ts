@@ -82,6 +82,22 @@ export type Activity = {
   timestamp: any;
 };
 
+export type RecurringTaskTemplate = {
+  id: string;
+  title: string;
+  description?: string;
+  frequency: 'daily' | 'weekly' | 'monthly';
+  daysOfWeek?: string[]; // e.g., ['Monday', 'Wednesday']
+  dayOfMonth?: number;
+  defaultAssigneeIds: string[];
+  defaultPriority: Priority;
+  defaultBrandId: string;
+  companyId: string;
+  lastGeneratedAt?: any;
+  createdAt: any;
+};
+
+
 export type Task = {
   id: string;
   title: string;
