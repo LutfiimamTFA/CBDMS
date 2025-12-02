@@ -114,12 +114,4 @@ export const defaultNavItems: NavigationItem[] = [
     order: 25,
     roles: ['Super Admin'],
   },
-  {
-    id: 'nav_settings_theme',
-    label: 'Theme',
-    path: '/admin/settings/theme',
-    icon: 'Palette',
-    order: 26,
-    roles: ['Super Admin'],
-  },
 ];

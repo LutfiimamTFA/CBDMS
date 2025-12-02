@@ -56,14 +56,8 @@ export default function MainLayout({
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
 
-  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports') || pathname.startsWith('/daily-report');
-  const [isTasksOpen, setIsTasksOpen] = useState(isTasksRoute);
-  
-  const isAdminRoute = pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings');
-  const [isAdminOpen, setIsAdminOpen] = useState(isAdminRoute);
-  
-  const isSettingsRoute = pathname.startsWith('/admin/settings');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(isSettingsRoute);
+  const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings'));
+  const [isSettingsOpen, setIsSettingsOpen] = useState(pathname.startsWith('/admin/settings'));
   
   const navItemsCollectionRef = useMemo(() => 
     firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
@@ -100,12 +94,6 @@ export default function MainLayout({
     }
   }, [user, isUserLoading, router]);
   
-   useEffect(() => {
-    if (pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports') || pathname.startsWith('/daily-report')) {
-      setIsTasksOpen(true);
-    }
-  }, [pathname]);
-
   const isLoading = isUserLoading || isNavItemsLoading;
 
   if (isLoading) {
@@ -153,7 +141,7 @@ export default function MainLayout({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={isAdminRoute}
+                      isActive={pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings')}
                       className="w-full justify-between"
                       tooltip='Admin'
                     >
@@ -193,7 +181,7 @@ export default function MainLayout({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={isSettingsRoute}
+                      isActive={pathname.startsWith('/admin/settings')}
                       className="w-full justify-between"
                       tooltip='Settings'
                     >
