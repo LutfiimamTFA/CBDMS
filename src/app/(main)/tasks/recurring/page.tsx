@@ -36,11 +36,11 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { RecurringTaskTemplate, Brand, User as UserType } from '@/lib/types';
-import { collection, query, orderBy, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, updateDoc, deleteDoc, serverTimestamp, doc } from 'firebase/firestore';
 import {
   Card,
   CardContent,
@@ -54,6 +54,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const templateSchema = z.object({
   title: z.string().min(3, 'Title is required.'),
@@ -82,8 +83,8 @@ export default function RecurringTasksPage() {
   const [selectedUsers, setSelectedUsers] = useState<UserType[]>([]);
 
   const templatesCollectionRef = useMemo(() => 
-    firestore ? collection(firestore, 'recurringTaskTemplates') : null, 
-  [firestore]);
+    firestore ? query(collection(firestore, 'recurringTaskTemplates'), where('companyId', '==', profile?.companyId || '')) : null, 
+  [firestore, profile]);
   const { data: templates, isLoading: templatesLoading } = useCollection<RecurringTaskTemplate>(templatesCollectionRef);
 
   const brandsQuery = useMemo(() => 
@@ -92,8 +93,8 @@ export default function RecurringTasksPage() {
   const { data: brands, isLoading: brandsLoading } = useCollection<Brand>(brandsQuery);
 
   const usersQuery = useMemo(() => 
-    firestore ? collection(firestore, 'users') : null, 
-  [firestore]);
+    firestore ? query(collection(firestore, 'users'), where('companyId', '==', profile?.companyId || '')) : null, 
+  [firestore, profile]);
   const { data: users, isLoading: usersLoading } = useCollection<UserType>(usersQuery);
 
   const form = useForm<TemplateFormValues>({
@@ -170,9 +171,10 @@ export default function RecurringTasksPage() {
     
     try {
         if (selectedTemplate) {
-            // Update
+            const templateRef = doc(firestore, 'recurringTaskTemplates', selectedTemplate.id);
+            await updateDoc(templateRef, templateData);
+            toast({ title: 'Template Updated', description: `Template "${data.title}" has been saved.` });
         } else {
-            // Create
             await addDoc(collection(firestore, 'recurringTaskTemplates'), templateData);
             toast({ title: 'Template Created', description: `Template "${data.title}" has been saved.` });
         }
@@ -181,6 +183,25 @@ export default function RecurringTasksPage() {
         toast({ variant: 'destructive', title: 'Error', description: e.message });
     } finally {
         setIsLoading(false);
+    }
+  };
+
+  const handleDeleteTemplate = async () => {
+    if (!selectedTemplate || !firestore) return;
+    setIsLoading(true);
+    try {
+      const templateRef = doc(firestore, 'recurringTaskTemplates', selectedTemplate.id);
+      await deleteDoc(templateRef);
+      toast({ title: 'Template Deleted', description: `Template "${selectedTemplate.title}" has been removed.` });
+      setDeleteDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Deletion Failed',
+        description: error.message,
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -380,6 +401,26 @@ export default function RecurringTasksPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action will permanently delete the template "{selectedTemplate?.title}". This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteTemplate} className="bg-destructive hover:bg-destructive/90" disabled={isLoading}>
+              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+              Yes, delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+    
