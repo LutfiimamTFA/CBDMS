@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -16,12 +17,14 @@ import type { Task } from '@/lib/types';
 import { collection, query, where, Timestamp } from 'firebase/firestore';
 import { BellRing, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ForceAcknowledgeTasksPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
   const [isAcknowledging, setIsAcknowledging] = useState(false);
+  const { toast } = useToast();
 
   // For now, we'll fetch tasks created "today" assigned to the user.
   // This logic will be refined when the recurring task generation is complete.
@@ -41,10 +44,32 @@ export default function ForceAcknowledgeTasksPage() {
   const { data: newTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   const handleAcknowledge = async () => {
+    if (!profile) return;
     setIsAcknowledging(true);
-    // In the next step, we will call an API here to remove the custom claim.
-    // For now, we just redirect.
-    router.replace('/dashboard');
+    
+    try {
+      const response = await fetch('/api/acknowledge-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid: profile.id }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to acknowledge tasks.');
+      }
+      
+      // On success, redirect to the dashboard.
+      router.replace('/dashboard');
+
+    } catch (error) {
+      console.error(error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Could not acknowledge tasks. Please try again.',
+      });
+      setIsAcknowledging(false);
+    }
   };
   
   const isLoading = isProfileLoading || isTasksLoading;
@@ -85,7 +110,7 @@ export default function ForceAcknowledgeTasksPage() {
         <CardFooter>
           <Button
             onClick={handleAcknowledge}
-            disabled={isAcknowledging}
+            disabled={isAcknowledging || isLoading}
             className="w-full"
           >
             {isAcknowledging && (
