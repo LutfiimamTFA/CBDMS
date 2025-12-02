@@ -654,7 +654,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                     <div className="flex gap-3 pt-4 border-t">
                                         <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
                                         <div className="flex-1 relative">
-                                            <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-20" />
+                                            <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-24" />
                                             {commentAttachment && (
                                               <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
                                                 <Paperclip className="h-4 w-4 text-muted-foreground" />
@@ -664,9 +664,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                                 </Button>
                                               </div>
                                             )}
-                                            <div className="absolute top-2 right-2 flex gap-1">
+                                            <div className="absolute top-2 right-2 flex items-center gap-1">
                                                 <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
-                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
+                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
                                                     <Paperclip className="h-4 w-4"/>
                                                 </Button>
                                                 <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
