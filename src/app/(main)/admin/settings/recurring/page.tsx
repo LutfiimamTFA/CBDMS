@@ -38,6 +38,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   MoreHorizontal,
   Plus,
   Trash2,
@@ -50,7 +56,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { RecurringTaskTemplate, User, Brand, Priority } from '@/lib/types';
+import type { RecurringTaskTemplate, User, Brand } from '@/lib/types';
 import {
   collection,
   doc,
@@ -68,6 +74,13 @@ import * as z from 'zod';
 import { Header } from '@/components/layout/header';
 import { priorityInfo } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormMessage,
+} from '@/components/ui/form';
 
 const templateSchema = z.object({
   title: z.string().min(2, 'Title is required.'),
@@ -117,7 +130,6 @@ export default function RecurringTasksPage() {
     if (!firestore || !profile) return null;
     return query(
       collection(firestore, 'brands'),
-      where('companyId', '==', profile.companyId),
       orderBy('name')
     );
   }, [firestore, profile]);
@@ -151,6 +163,11 @@ export default function RecurringTasksPage() {
       form.reset();
     }
     setDialogOpen(true);
+  };
+  
+  const handleOpenDeleteDialog = (template: RecurringTaskTemplate) => {
+    setSelectedTemplate(template);
+    setDeleteDialogOpen(true);
   };
 
   const handleSubmit = async (data: TemplateFormValues) => {
@@ -242,7 +259,7 @@ export default function RecurringTasksPage() {
           <div className="flex justify-center items-center h-64">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
-        ) : (
+        ) : templates && templates.length > 0 ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {(templates || []).map((template) => {
               const assignedUsers =
@@ -266,7 +283,7 @@ export default function RecurringTasksPage() {
                             <DropdownMenuItem onClick={() => handleOpenDialog(template)}>
                               <Edit className="mr-2 h-4 w-4"/> Edit
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)} className="text-destructive">
+                            <DropdownMenuItem onClick={() => handleOpenDeleteDialog(template)} className="text-destructive">
                               <Trash2 className="mr-2 h-4 w-4"/> Delete
                             </DropdownMenuItem>
                           </DropdownMenuContent>
@@ -307,6 +324,15 @@ export default function RecurringTasksPage() {
               );
             })}
           </div>
+        ) : (
+          <Card>
+            <CardContent className="p-12 text-center text-muted-foreground">
+              <h3 className="text-lg font-semibold text-foreground">No Templates Found</h3>
+              <p className="mt-2">
+                Click "Create Template" to get started with automated recurring tasks.
+              </p>
+            </CardContent>
+          </Card>
         )}
       </main>
 
@@ -317,6 +343,7 @@ export default function RecurringTasksPage() {
               {selectedTemplate ? 'Edit Template' : 'Create New Template'}
             </DialogTitle>
           </DialogHeader>
+          <Form {...form}>
           <form
             onSubmit={form.handleSubmit(handleSubmit)}
             className="space-y-4"
@@ -325,25 +352,26 @@ export default function RecurringTasksPage() {
               control={form.control}
               name="title"
               render={({ field }) => (
-                <div className="space-y-2">
+                <FormItem>
                   <Label htmlFor="title">Template Title</Label>
-                  <Input id="title" {...field} />
-                  {form.formState.errors.title && (
-                    <p className="text-sm text-destructive">
-                      {form.formState.errors.title.message}
-                    </p>
-                  )}
-                </div>
+                  <FormControl>
+                    <Input id="title" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
              <FormField
               control={form.control}
               name="description"
               render={({ field }) => (
-                <div className="space-y-2">
+                <FormItem>
                   <Label htmlFor="description">Description</Label>
-                  <Input id="description" {...field} />
-                </div>
+                  <FormControl>
+                    <Input id="description" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
 
@@ -352,36 +380,42 @@ export default function RecurringTasksPage() {
                 control={form.control}
                 name="frequency"
                 render={({ field }) => (
-                  <div className="space-y-2">
+                  <FormItem>
                     <Label>Frequency</Label>
                     <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
                       <SelectContent>
                         <SelectItem value="daily">Daily</SelectItem>
                         <SelectItem value="weekly">Weekly</SelectItem>
                         <SelectItem value="monthly">Monthly</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
               <FormField
                 control={form.control}
                 name="defaultPriority"
                 render={({ field }) => (
-                  <div className="space-y-2">
+                  <FormItem>
                     <Label>Default Priority</Label>
                     <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
                       <SelectContent>
                          {Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}
                       </SelectContent>
                     </Select>
-                  </div>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
             </div>
@@ -389,48 +423,44 @@ export default function RecurringTasksPage() {
                 control={form.control}
                 name="defaultBrandId"
                 render={({ field }) => (
-                  <div className="space-y-2">
+                  <FormItem>
                     <Label>Default Brand</Label>
                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Select a brand" />
-                        </SelectTrigger>
+                        <FormControl>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select a brand" />
+                            </SelectTrigger>
+                        </FormControl>
                         <SelectContent>
-                            {brandsLoading ? <Loader2 className="animate-spin" /> : brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                            {brandsLoading ? <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div> : brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
-                    {form.formState.errors.defaultBrandId && (
-                        <p className="text-sm text-destructive">
-                        {form.formState.errors.defaultBrandId.message}
-                        </p>
-                    )}
-                  </div>
+                    <FormMessage />
+                  </FormItem>
                 )}
               />
             <Controller
               control={form.control}
               name="defaultAssigneeIds"
               render={({ field }) => (
-                <div className="space-y-2">
+                <FormItem>
                   <Label>Default Assignees</Label>
+                  <FormControl>
                    <Select onValueChange={(val) => field.onChange([val])} value={field.value.length > 0 ? field.value[0] : ''}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select an employee" />
                     </SelectTrigger>
                     <SelectContent>
-                      {usersLoading ? <Loader2 className="animate-spin" /> : users?.map((user) => (
+                      {usersLoading ? <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div> : users?.map((user) => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {form.formState.errors.defaultAssigneeIds && (
-                    <p className="text-sm text-destructive">
-                      {form.formState.errors.defaultAssigneeIds.message}
-                    </p>
-                  )}
-                </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )}
             />
             <DialogFooter>
@@ -449,6 +479,7 @@ export default function RecurringTasksPage() {
               </Button>
             </DialogFooter>
           </form>
+          </Form>
         </DialogContent>
       </Dialog>
       
