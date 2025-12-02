@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -79,15 +80,21 @@ import {
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from '@/components/ui/form';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 
 
 const templateSchema = z.object({
   title: z.string().min(2, 'Title is required.'),
   description: z.string().optional(),
   frequency: z.enum(['daily', 'weekly', 'monthly']),
+  daysOfWeek: z.array(z.string()).optional(),
+  isMandatory: z.boolean().optional(),
   defaultBrandId: z.string().min(1, 'Brand is required.'),
   defaultPriority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   defaultAssigneeIds: z
@@ -96,6 +103,7 @@ const templateSchema = z.object({
 });
 
 type TemplateFormValues = z.infer<typeof templateSchema>;
+type Day = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
 
 export default function RecurringTasksPage() {
   const { toast } = useToast();
@@ -144,11 +152,15 @@ export default function RecurringTasksPage() {
       title: '',
       description: '',
       frequency: 'daily',
+      daysOfWeek: [],
+      isMandatory: false,
       defaultBrandId: '',
       defaultPriority: 'Medium',
       defaultAssigneeIds: [],
     },
   });
+  
+  const frequency = form.watch('frequency');
 
   const handleOpenDialog = (template: RecurringTaskTemplate | null = null) => {
     setSelectedTemplate(template);
@@ -157,12 +169,23 @@ export default function RecurringTasksPage() {
         title: template.title,
         description: template.description || '',
         frequency: template.frequency,
+        daysOfWeek: template.daysOfWeek || [],
+        isMandatory: template.isMandatory || false,
         defaultBrandId: template.defaultBrandId,
         defaultPriority: template.defaultPriority,
         defaultAssigneeIds: template.defaultAssigneeIds,
       });
     } else {
-      form.reset();
+      form.reset({
+        title: '',
+        description: '',
+        frequency: 'daily',
+        daysOfWeek: [],
+        isMandatory: false,
+        defaultBrandId: '',
+        defaultPriority: 'Medium',
+        defaultAssigneeIds: [],
+      });
     }
     setDialogOpen(true);
   };
@@ -241,6 +264,16 @@ export default function RecurringTasksPage() {
     }
   };
 
+  const dayAbbreviations = {
+    Sunday: 'Sun',
+    Monday: 'Mon',
+    Tuesday: 'Tue',
+    Wednesday: 'Wed',
+    Thursday: 'Thu',
+    Friday: 'Fri',
+    Saturday: 'Sat',
+  }
+
   return (
     <div className="flex h-svh flex-col bg-background">
       <Header title="Recurring Task Templates" />
@@ -270,11 +303,27 @@ export default function RecurringTasksPage() {
                 ) || [];
               const brand = brands?.find(b => b.id === template.defaultBrandId);
               const priority = priorityInfo[template.defaultPriority];
+              
+              let repeatsText;
+              if (template.frequency === 'weekly' && template.daysOfWeek && template.daysOfWeek.length > 0) {
+                  if (template.daysOfWeek.length > 3) {
+                      repeatsText = `${template.daysOfWeek.length} days a week`;
+                  } else {
+                      repeatsText = template.daysOfWeek.map(d => dayAbbreviations[d as Day]).join(', ');
+                  }
+              } else {
+                  repeatsText = template.frequency;
+              }
+
+
               return (
                 <Card key={template.id} className="flex flex-col">
                   <CardHeader>
                     <CardTitle className="flex justify-between items-start">
-                      {template.title}
+                      <div className="flex items-center gap-2">
+                         {template.title}
+                         {template.isMandatory && <Badge>Mandatory</Badge>}
+                      </div>
                        <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -297,7 +346,7 @@ export default function RecurringTasksPage() {
                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Repeat className="h-4 w-4" />
                         <span>
-                          Repeats <Badge variant="secondary" className='capitalize'>{template.frequency}</Badge>
+                          Repeats <Badge variant="secondary" className='capitalize'>{repeatsText}</Badge>
                         </span>
                      </div>
                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -348,149 +397,198 @@ export default function RecurringTasksPage() {
       </main>
 
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
               {selectedTemplate ? 'Edit Template' : 'Create New Template'}
             </DialogTitle>
           </DialogHeader>
-          <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(handleSubmit)}
-            className="space-y-4"
-          >
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <Label htmlFor="title">Template Title</Label>
-                  <FormControl>
-                    <Input id="title" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <Label htmlFor="description">Description</Label>
-                  <FormControl>
-                    <Input id="description" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="frequency"
-                render={({ field }) => (
-                  <FormItem>
-                    <Label>Frequency</Label>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="daily">Daily</SelectItem>
-                        <SelectItem value="weekly">Weekly</SelectItem>
-                        <SelectItem value="monthly">Monthly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="defaultPriority"
-                render={({ field }) => (
-                  <FormItem>
-                    <Label>Default Priority</Label>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                         {Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-             <FormField
-                control={form.control}
-                name="defaultBrandId"
-                render={({ field }) => (
-                  <FormItem>
-                    <Label>Default Brand</Label>
-                     <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select a brand" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            {brandsLoading ? <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div> : brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                        </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            <Controller
-              control={form.control}
-              name="defaultAssigneeIds"
-              render={({ field }) => (
-                <FormItem>
-                  <Label>Default Assignees</Label>
-                  <FormControl>
-                   <Select onValueChange={(val) => field.onChange([val])} value={field.value.length > 0 ? field.value[0] : ''}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select an employee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {usersLoading ? <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div> : users?.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setDialogOpen(false)}
+          <ScrollArea className="max-h-[70vh] p-1">
+            <div className="p-4">
+              <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(handleSubmit)}
+                className="space-y-6"
               >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Label htmlFor="title">Template Title</Label>
+                      <FormControl>
+                        <Input id="title" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Label htmlFor="description">Description</Label>
+                      <FormControl>
+                        <Input id="description" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="frequency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label>Frequency</Label>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="daily">Daily</SelectItem>
+                            <SelectItem value="weekly">Weekly</SelectItem>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="defaultPriority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label>Default Priority</Label>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                             {Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {frequency === 'weekly' && (
+                    <FormField
+                    control={form.control}
+                    name="daysOfWeek"
+                    render={({ field }) => (
+                        <FormItem>
+                        <Label>Days of the Week</Label>
+                          <ToggleGroup 
+                            type="multiple" 
+                            variant="outline" 
+                            className="flex-wrap justify-start"
+                            value={field.value}
+                            onValueChange={field.onChange}
+                          >
+                            {(['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as Day[]).map(day => (
+                                <ToggleGroupItem key={day} value={day}>{dayAbbreviations[day]}</ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        <FormMessage />
+                        </FormItem>
+                    )}
+                    />
                 )}
-                {selectedTemplate ? 'Save Changes' : 'Create Template'}
-              </Button>
-            </DialogFooter>
-          </form>
-          </Form>
+
+                 <FormField
+                    control={form.control}
+                    name="defaultBrandId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <Label>Default Brand</Label>
+                         <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a brand" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                                {brandsLoading ? <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div> : brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                <Controller
+                  control={form.control}
+                  name="defaultAssigneeIds"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Label>Default Assignees</Label>
+                      <FormControl>
+                       <Select onValueChange={(val) => field.onChange([val])} value={field.value.length > 0 ? field.value[0] : ''}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select an employee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {usersLoading ? <div className="flex items-center justify-center p-2"><Loader2 className="animate-spin h-4 w-4" /></div> : users?.map((user) => (
+                            <SelectItem key={user.id} value={user.id}>
+                              {user.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="isMandatory"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                      <div className="space-y-0.5">
+                        <FormLabel>Mandatory Task</FormLabel>
+                        <DialogDescription>
+                          If enabled, users must acknowledge new tasks from this template.
+                        </DialogDescription>
+                      </div>
+                       <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter className="pt-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isLoading}>
+                    {isLoading && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {selectedTemplate ? 'Save Changes' : 'Create Template'}
+                  </Button>
+                </DialogFooter>
+              </form>
+              </Form>
+            </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
       

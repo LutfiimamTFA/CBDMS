@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -217,8 +218,16 @@
         "title": { "type": "string", "description": "The title for the tasks created by this template." },
         "description": { "type": "string", "description": "Default description for generated tasks." },
         "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly"], "description": "How often the task should be created." },
-        "daysOfWeek": { "type": "array", "items": { "type": "string" }, "description": "For weekly tasks, which days to create them on (e.g., ['Monday', 'Wednesday'])." },
+        "daysOfWeek": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+          },
+          "description": "For weekly tasks, which days to create them on."
+        },
         "dayOfMonth": { "type": "number", "description": "For monthly tasks, which day of the month to create it on." },
+        "isMandatory": { "type": "boolean", "description": "If true, users must acknowledge the creation of tasks from this template." },
         "defaultAssigneeIds": { "type": "array", "items": { "type": "string" } },
         "defaultPriority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
         "defaultBrandId": { "type": "string" },

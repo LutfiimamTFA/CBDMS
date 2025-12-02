@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -86,8 +87,9 @@ export type RecurringTaskTemplate = {
   title: string;
   description?: string;
   frequency: 'daily' | 'weekly' | 'monthly';
-  daysOfWeek?: string[]; // e.g., ['Monday', 'Wednesday']
+  daysOfWeek?: ('Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday')[];
   dayOfMonth?: number;
+  isMandatory?: boolean;
   defaultAssigneeIds: string[];
   defaultPriority: Priority;
   defaultBrandId: string;
