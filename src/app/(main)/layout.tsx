@@ -26,6 +26,8 @@ import {
   Icon as LucideIcon,
   Settings as SettingsIcon,
   Repeat,
+  KanbanSquare,
+  LayoutDashboard,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -56,7 +58,7 @@ export default function MainLayout({
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
 
-  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/dashboard') || pathname.startsWith('/calendar');
+  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports');
   const [isTasksOpen, setIsTasksOpen] = useState(isTasksRoute);
   
   const isAdminRoute = pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings');
@@ -72,17 +74,22 @@ export default function MainLayout({
   const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
   const filteredNavItems = useMemo(() => {
-    if (!profile || !navItems) return { mainItems: [], adminItems: [], settingsItems: [] };
+    if (!profile || !navItems) return { mainItems: [], adminItems: [], settingsItems: [], taskBoard: null, adminDashboard: null };
     
-    // Split items into categories for rendering
-    const mainItems = [];
-    const adminItems = [];
-    const settingsItems = [];
+    const mainItems: NavigationItem[] = [];
+    const adminItems: NavigationItem[] = [];
+    const settingsItems: NavigationItem[] = [];
+    let taskBoard: NavigationItem | null = null;
+    let adminDashboard: NavigationItem | null = null;
 
     for (const item of navItems) {
       if (!item.roles.includes(profile.role)) continue;
       
-      if (item.path.startsWith('/admin/settings')) {
+      if (item.id === 'nav_task_board') {
+        taskBoard = item;
+      } else if (item.id === 'nav_admin_dashboard') {
+        adminDashboard = item;
+      } else if (item.path.startsWith('/admin/settings')) {
         settingsItems.push(item);
       } else if (item.path.startsWith('/admin')) {
         adminItems.push(item);
@@ -91,7 +98,7 @@ export default function MainLayout({
       }
     }
     
-    return { mainItems, adminItems, settingsItems };
+    return { mainItems, adminItems, settingsItems, taskBoard, adminDashboard };
   }, [profile, navItems]);
 
 
@@ -115,6 +122,7 @@ export default function MainLayout({
     return null;
   }
   
+  const hasTasksGroup = filteredNavItems.mainItems.length > 0;
   const hasAdminItems = filteredNavItems.adminItems.length > 0;
   const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
 
@@ -126,53 +134,75 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {/* Main Task Navigation Group */}
-            <Collapsible open={isTasksOpen} onOpenChange={setIsTasksOpen}>
+            {/* Standalone Task Board */}
+            {filteredNavItems.taskBoard && (
               <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
+                <Link href={filteredNavItems.taskBoard.path}>
                   <SidebarMenuButton
-                    isActive={isTasksRoute}
-                    className="w-full justify-between"
-                    tooltip='Tasks'
+                    isActive={pathname === filteredNavItems.taskBoard.path}
+                    tooltip={filteredNavItems.taskBoard.label}
                   >
-                    <div className="flex items-center gap-2">
-                      <Icon name="ClipboardList" />
-                      <span>Tasks</span>
-                    </div>
-                    <ChevronDown
-                      className={cn(
-                        'h-4 w-4 transition-transform',
-                        isTasksOpen && 'rotate-180'
-                      )}
-                    />
+                    <Icon name={filteredNavItems.taskBoard.icon} />
+                    <span>{filteredNavItems.taskBoard.label}</span>
                   </SidebarMenuButton>
-                </CollapsibleTrigger>
+                </Link>
               </SidebarMenuItem>
-              <CollapsibleContent className="pl-6">
-                <SidebarMenu>
-                  {filteredNavItems.mainItems.map((item) => (
-                     <SidebarMenuItem key={item.id}>
-                        <Link href={item.path}>
-                          <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
-                            <Icon name={item.icon}/>
-                            <span>{item.label}</span>
-                          </SidebarMenuButton>
-                        </Link>
-                      </SidebarMenuItem>
-                  ))}
-                   {profile.role !== 'Employee' && profile.role !== 'Client' && (
-                     <SidebarMenuItem>
-                        <Link href="/tasks/recurring">
-                          <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/tasks/recurring')} className="w-full justify-start">
-                              <Repeat />
-                              <span>Recurring Tasks</span>
-                          </SidebarMenuButton>
-                        </Link>
-                      </SidebarMenuItem>
-                   )}
-                </SidebarMenu>
-              </CollapsibleContent>
-            </Collapsible>
+            )}
+
+            {/* Standalone Admin Dashboard */}
+            {filteredNavItems.adminDashboard && (
+              <SidebarMenuItem>
+                <Link href={filteredNavItems.adminDashboard.path}>
+                  <SidebarMenuButton
+                    isActive={pathname === filteredNavItems.adminDashboard.path}
+                    tooltip={filteredNavItems.adminDashboard.label}
+                  >
+                    <Icon name={filteredNavItems.adminDashboard.icon} />
+                    <span>{filteredNavItems.adminDashboard.label}</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            )}
+            
+            {/* Other Tasks Navigation Group */}
+            {hasTasksGroup && (
+              <Collapsible open={isTasksOpen} onOpenChange={setIsTasksOpen}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={isTasksRoute}
+                      className="w-full justify-between"
+                      tooltip='Tasks'
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon name="ClipboardList" />
+                        <span>Tasks</span>
+                      </div>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          isTasksOpen && 'rotate-180'
+                        )}
+                      />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                </SidebarMenuItem>
+                <CollapsibleContent className="pl-6">
+                  <SidebarMenu>
+                    {filteredNavItems.mainItems.map((item) => (
+                      <SidebarMenuItem key={item.id}>
+                          <Link href={item.path}>
+                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
+                              <Icon name={item.icon}/>
+                              <span>{item.label}</span>
+                            </SidebarMenuButton>
+                          </Link>
+                        </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
             {/* Admin Section */}
             {hasAdminItems && (
