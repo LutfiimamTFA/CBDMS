@@ -283,7 +283,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             taskId: newTaskRef.id,
             taskTitle: data.title,
             isRead: false,
-            createdAt: serverTimestamp(),
+            createdAt: new Date().toISOString(),
             createdBy: {
                 id: currentUserProfile.id,
                 name: currentUserProfile.name,
@@ -308,7 +308,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     taskId: newTaskRef.id,
                     taskTitle: data.title,
                     isRead: false,
-                    createdAt: serverTimestamp(),
+                    createdAt: new Date().toISOString(),
                     createdBy: {
                         id: comment.user.id,
                         name: comment.user.name,
@@ -1044,8 +1044,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <div className="flex gap-3 pt-4 border-t">
                              <Avatar className="h-8 w-8"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{currentUserProfile?.name?.charAt(0)}</AvatarFallback></Avatar>
                              <div className="flex-1 relative">
-                                <Textarea value={newComment} onChange={handleCommentChange} placeholder="Write a comment... use @ to mention" className="pr-10" />
-                                <div className="absolute top-2 right-2 flex gap-1"><Button type="button" variant="ghost" size="icon" className="h-6 w-6"><AtSign className="h-4 w-4"/></Button><Button type="button" variant="ghost" size="icon" className="h-6 w-6" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button></div>
+                                <Textarea value={newComment} onChange={handleCommentChange} placeholder="Write a comment... use @ to mention" className="pr-24" />
+                                <div className="absolute top-2 right-2 flex gap-1">
+                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><AtSign className="h-4 w-4"/></Button>
+                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><Paperclip className="h-4 w-4"/></Button>
+                                    <Button type="button" size="icon" className="h-7 w-7" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                                </div>
                              </div>
                         </div>
                       </TabsContent>
