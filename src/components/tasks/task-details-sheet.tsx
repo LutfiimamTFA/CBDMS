@@ -284,7 +284,7 @@ export function TaskDetailsSheet({
             taskId: initialTask.id,
             taskTitle: initialTask.title,
             isRead: false,
-            createdAt: serverTimestamp(),
+            createdAt: new Date().toISOString(),
             createdBy: {
                 id: currentUser.id,
                 name: currentUser.name,
@@ -409,7 +409,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           avatarUrl: currentUser.avatarUrl || '',
         },
         action: actionDescription,
-        timestamp: serverTimestamp(),
+        timestamp: new Date().toISOString(),
       };
       currentActivities.push(newActivity);
     }
@@ -855,10 +855,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 activities
                   .slice()
                   .sort((a, b) => {
-                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : 0;
-                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : 0;
-                    if (!dateA || !dateB) return 0;
-                    return dateB.getTime() - dateA.getTime();
+                    const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                    const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                    return dateB - dateA;
                   })
                   .map((activity) => (
                     <div key={activity.id} className="flex items-start gap-4">
@@ -871,7 +870,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
+                          {activity.timestamp ? formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true }) : 'just now'}
                         </p>
                       </div>
                     </div>
@@ -888,5 +887,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    

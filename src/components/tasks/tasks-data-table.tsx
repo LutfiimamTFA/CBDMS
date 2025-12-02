@@ -165,7 +165,7 @@ export function TasksDataTable() {
       id: `act-${Date.now()}`,
       user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
       action: action,
-      timestamp: serverTimestamp(),
+      timestamp: new Date().toISOString(),
     };
   };
 
@@ -361,18 +361,7 @@ export function TasksDataTable() {
 
         return (
           <div className="flex items-center gap-2 max-w-xs">
-            <TooltipProvider>
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                    <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
-                </TooltipTrigger>
-                {hasDescription && (
-                  <TooltipContent align="start" className="max-w-xs break-words">
-                    <p>{task.description}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            </TooltipProvider>
+            <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
             {hasDescription && (
                 <TooltipProvider>
                     <Tooltip>
@@ -542,9 +531,9 @@ export function TasksDataTable() {
       header: 'Last Activity',
       cell: ({ row }) => {
         const activity = row.original.lastActivity;
-        if (!activity) return <span className="text-muted-foreground">-</span>;
+        if (!activity || !activity.timestamp) return <span className="text-muted-foreground">-</span>;
         
-        const time = activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'N/A';
+        const time = formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true });
         const actionText = `${activity.user.name} ${activity.action}`
 
         return (
@@ -861,10 +850,9 @@ export function TasksDataTable() {
                 historyTask.activities
                   .slice()
                   .sort((a, b) => {
-                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : 0;
-                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : 0;
-                    if (!dateA || !dateB) return 0;
-                    return dateB.getTime() - dateA.getTime();
+                    const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                    const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                    return dateB - dateA;
                   })
                   .map((activity) => (
                     <div key={activity.id} className="flex items-start gap-4">
@@ -877,7 +865,7 @@ export function TasksDataTable() {
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
+                          {activity.timestamp ? formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true }) : 'just now'}
                         </p>
                       </div>
                     </div>

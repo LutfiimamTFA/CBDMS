@@ -76,7 +76,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
           id: `act-${Date.now()}`,
           user: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
           action: `moved task from "${startColumnStatus}" to "${endColumnStatus}"`,
-          timestamp: serverTimestamp(),
+          timestamp: new Date().toISOString(),
         };
 
         const updatedActivities = [...(movedTask.activities || []), newActivity];
