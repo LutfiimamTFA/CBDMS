@@ -183,12 +183,15 @@ export default function RecurringTasksPage() {
     if (!firestore || !profile) return;
     setIsLoading(true);
 
-    const templateData = {
+    const templateData: any = {
         ...data,
         companyId: profile.companyId,
         createdAt: selectedTemplate ? selectedTemplate.createdAt : serverTimestamp(),
-        lastGeneratedAt: selectedTemplate?.lastGeneratedAt,
     };
+    
+    if (selectedTemplate && selectedTemplate.lastGeneratedAt) {
+      templateData.lastGeneratedAt = selectedTemplate.lastGeneratedAt;
+    }
     
     try {
         if (selectedTemplate) {
