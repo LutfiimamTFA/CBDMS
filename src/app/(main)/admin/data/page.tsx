@@ -121,6 +121,39 @@ export default function DataManagementPage() {
         downloadCSV(statuses, 'workflow-export.csv', headers);
     }
 
+    const handleExportAllData = () => {
+        if (!users && !tasks && !brands && !statuses) {
+             toast({
+                variant: 'destructive',
+                title: 'No Data Available',
+                description: `There is no application data to export.`,
+            });
+            return;
+        }
+
+        const allData = {
+            users: users || [],
+            tasks: tasks || [],
+            brands: brands || [],
+            statuses: statuses || [],
+        };
+        
+        const jsonString = JSON.stringify(allData, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'workwise-backup.json');
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast({
+            title: 'Full Export Successful',
+            description: `workwise-backup.json has been downloaded.`,
+        });
+    };
+
     const openDeleteDialog = () => {
       if (!firestore) return;
       
@@ -171,26 +204,25 @@ export default function DataManagementPage() {
                 <CardHeader>
                     <CardTitle>Data Export</CardTitle>
                     <CardDescription>
-                        Backup your application data by exporting collections to CSV files. 
-                        This is a complete backup of all data.
+                        Backup your application data by exporting collections to individual CSV files or a single JSON file.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className='flex flex-wrap gap-4'>
-                    <Button onClick={handleExportUsers}>
+                    <Button onClick={handleExportAllData} variant="default">
                         <Download className="mr-2 h-4 w-4" />
-                        Export Users
+                        Export All Data (JSON)
                     </Button>
-                    <Button onClick={handleExportTasks}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Export Tasks
+                    <Button onClick={handleExportUsers} variant="outline">
+                        Export Users (CSV)
                     </Button>
-                    <Button onClick={handleExportBrands}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Export Brands
+                    <Button onClick={handleExportTasks} variant="outline">
+                        Export Tasks (CSV)
                     </Button>
-                     <Button onClick={handleExportWorkflow}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Export Workflow
+                    <Button onClick={handleExportBrands} variant="outline">
+                        Export Brands (CSV)
+                    </Button>
+                     <Button onClick={handleExportWorkflow} variant="outline">
+                        Export Workflow (CSV)
                     </Button>
                 </CardContent>
             </Card>
