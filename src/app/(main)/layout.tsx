@@ -58,7 +58,7 @@ export default function MainLayout({
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
 
-  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports');
+  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports') || pathname.startsWith('/recurring');
   const [isTasksOpen, setIsTasksOpen] = useState(isTasksRoute);
   
   const isAdminRoute = pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings');
@@ -134,21 +134,6 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {/* Standalone Task Board */}
-            {filteredNavItems.taskBoard && (
-              <SidebarMenuItem>
-                <Link href={filteredNavItems.taskBoard.path}>
-                  <SidebarMenuButton
-                    isActive={pathname === filteredNavItems.taskBoard.path}
-                    tooltip={filteredNavItems.taskBoard.label}
-                  >
-                    <Icon name={filteredNavItems.taskBoard.icon} />
-                    <span>{filteredNavItems.taskBoard.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            )}
-
             {/* Standalone Admin Dashboard */}
             {filteredNavItems.adminDashboard && (
               <SidebarMenuItem>
@@ -159,6 +144,21 @@ export default function MainLayout({
                   >
                     <Icon name={filteredNavItems.adminDashboard.icon} />
                     <span>{filteredNavItems.adminDashboard.label}</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            )}
+
+            {/* Standalone Task Board */}
+            {filteredNavItems.taskBoard && (
+              <SidebarMenuItem>
+                <Link href={filteredNavItems.taskBoard.path}>
+                  <SidebarMenuButton
+                    isActive={pathname === filteredNavItems.taskBoard.path}
+                    tooltip={filteredNavItems.taskBoard.label}
+                  >
+                    <Icon name={filteredNavItems.taskBoard.icon} />
+                    <span>{filteredNavItems.taskBoard.label}</span>
                   </SidebarMenuButton>
                 </Link>
               </SidebarMenuItem>
