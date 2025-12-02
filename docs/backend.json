@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -394,17 +393,6 @@
               "name": "taskId",
               "description": "The unique identifier for the task."
             }
-          ]
-        }
-      },
-      {
-        "path": "/recurringTaskTemplates/{templateId}",
-        "definition": {
-          "entityName": "RecurringTaskTemplate",
-          "schema": { "$ref": "#/backend/entities/RecurringTaskTemplate" },
-          "description": "Stores templates for automatically generating recurring tasks.",
-          "params": [
-            { "name": "templateId", "description": "The unique ID for the recurring task template." }
           ]
         }
       },

@@ -1,4 +1,3 @@
-
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -95,6 +94,17 @@ export type RecurringTaskTemplate = {
   companyId: string;
   lastGeneratedAt?: any;
   createdAt: any;
+};
+
+export type DailyReport = {
+  id: string;
+  userId: string;
+  userName: string;
+  templateId: string;
+  date: any; // Firestore Timestamp
+  isCompleted: boolean;
+  completedAt: any; // Firestore Timestamp
+  companyId: string;
 };
 
 

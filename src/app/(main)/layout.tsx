@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -110,7 +109,7 @@ export default function MainLayout({
   }, [user, isUserLoading, router]);
   
    useEffect(() => {
-    if (pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports') || pathname.startsWith('/tasks/recurring')) {
+    if (pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports') || pathname.startsWith('/daily-report')) {
       setIsTasksOpen(true);
     }
   }, [pathname]);
