@@ -255,8 +255,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
     const newTaskData = {
         ...cleanedData,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
         assignees: selectedUsers,
         tags: selectedTags,
         timeLogs,
@@ -1048,7 +1048,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                              <div className="flex-1 relative">
                                 <Textarea value={newComment} onChange={handleCommentChange} placeholder="Write a comment... use @ to mention" className="pr-24" />
                                 <div className="absolute top-2 right-2 flex gap-1">
-                                    <input type="file" ref={commentFileInputRef} className="hidden" />
+                                    <input type="file" ref={commentFileInputRef} onChange={(e) => {}} className="hidden" />
                                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><AtSign className="h-4 w-4"/></Button>
                                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()}><Paperclip className="h-4 w-4"/></Button>
                                     <Button type="button" size="icon" className="h-7 w-7" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
