@@ -18,11 +18,19 @@ export const defaultNavItems: NavigationItem[] = [
     roles: ['Super Admin', 'Manager', 'Employee'],
   },
   {
+    id: 'nav_recurring',
+    label: 'Recurring',
+    path: '/tasks/recurring',
+    icon: 'Repeat',
+    order: 3,
+    roles: ['Super Admin', 'Manager'],
+  },
+  {
     id: 'nav_calendar',
     label: 'Calendar',
     path: '/calendar',
     icon: 'CalendarDays',
-    order: 3,
+    order: 4,
     roles: ['Super Admin', 'Manager'],
   },
   {
@@ -30,7 +38,7 @@ export const defaultNavItems: NavigationItem[] = [
     label: 'Reports',
     path: '/reports',
     icon: 'FileText',
-    order: 4,
+    order: 5,
     roles: ['Super Admin', 'Manager', 'Employee'],
   },
   {

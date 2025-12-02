@@ -59,7 +59,7 @@ export default function MainLayout({
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
 
-  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports') || pathname.startsWith('/recurring');
+  const isTasksRoute = pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports');
   const [isTasksOpen, setIsTasksOpen] = useState(isTasksRoute);
   
   const isAdminRoute = pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings');
@@ -108,6 +108,12 @@ export default function MainLayout({
       router.push('/login');
     }
   }, [user, isUserLoading, router]);
+  
+   useEffect(() => {
+    if (pathname.startsWith('/tasks') || pathname.startsWith('/calendar') || pathname.startsWith('/reports') || pathname.startsWith('/tasks/recurring')) {
+      setIsTasksOpen(true);
+    }
+  }, [pathname]);
 
   const isLoading = isUserLoading || isNavItemsLoading;
 
