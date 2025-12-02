@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -112,7 +113,7 @@ export default function DailyReportPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Daily Report" />
+      <Header title="Daily Task Checklist" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>

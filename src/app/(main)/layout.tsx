@@ -26,6 +26,7 @@ import {
   User,
   Icon as LucideIcon,
   Settings as SettingsIcon,
+  AreaChart,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -58,6 +59,7 @@ export default function MainLayout({
 
   const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings'));
   const [isSettingsOpen, setIsSettingsOpen] = useState(pathname.startsWith('/admin/settings'));
+  const [isReportsOpen, setIsReportsOpen] = useState(pathname.startsWith('/reports'));
   
   const navItemsCollectionRef = useMemo(() => 
     firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
@@ -66,16 +68,19 @@ export default function MainLayout({
   const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
   const filteredNavItems = useMemo(() => {
-    if (!profile || !navItems) return { mainItems: [], adminItems: [], settingsItems: [] };
+    if (!profile || !navItems) return { mainItems: [], adminItems: [], settingsItems: [], reportsItems: [] };
     
     const mainItems: NavigationItem[] = [];
     const adminItems: NavigationItem[] = [];
     const settingsItems: NavigationItem[] = [];
+    const reportsItems: NavigationItem[] = [];
 
     for (const item of navItems) {
       if (!item.roles.includes(profile.role)) continue;
       
-      if (item.path.startsWith('/admin/settings')) {
+      if (item.path.startsWith('/reports')) {
+        reportsItems.push(item);
+      } else if (item.path.startsWith('/admin/settings')) {
         settingsItems.push(item);
       } else if (item.path.startsWith('/admin')) {
         adminItems.push(item);
@@ -84,7 +89,7 @@ export default function MainLayout({
       }
     }
     
-    return { mainItems, adminItems, settingsItems };
+    return { mainItems, adminItems, settingsItems, reportsItems };
   }, [profile, navItems]);
 
 
@@ -111,6 +116,7 @@ export default function MainLayout({
   const hasMainItems = filteredNavItems.mainItems.length > 0;
   const hasAdminItems = filteredNavItems.adminItems.length > 0;
   const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
+  const hasReportsItems = filteredNavItems.reportsItems.length > 0;
 
   return (
     <SidebarProvider>
@@ -135,6 +141,46 @@ export default function MainLayout({
               </SidebarMenuItem>
             ))}
             
+            {/* Reports Section */}
+            {hasReportsItems && (
+              <Collapsible open={isReportsOpen} onOpenChange={setIsReportsOpen}>
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={pathname.startsWith('/reports')}
+                      className="w-full justify-between"
+                      tooltip='Reports'
+                    >
+                      <div className="flex items-center gap-2">
+                        <AreaChart />
+                        <span>Reports</span>
+                      </div>
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          isReportsOpen && 'rotate-180'
+                        )}
+                      />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                </SidebarMenuItem>
+                <CollapsibleContent className="pl-6">
+                  <SidebarMenu>
+                    {filteredNavItems.reportsItems.map((item) => (
+                       <SidebarMenuItem key={item.id}>
+                          <Link href={item.path}>
+                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
+                              <Icon name={item.icon}/>
+                              <span>{item.label}</span>
+                            </SidebarMenuButton>
+                          </Link>
+                        </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
             {/* Admin Section */}
             {hasAdminItems && (
               <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
