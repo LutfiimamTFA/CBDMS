@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,7 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { priorityInfo, statusInfo } from '@/lib/utils';
+import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, History, Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -58,7 +58,7 @@ const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   brandId: z.string().min(1, 'Brand is required'),
   description: z.string().optional(),
-  status: z.enum(['To Do', 'Doing', 'Done']),
+  status: z.string(),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assigneeIds: z.array(z.string()).optional(),
   timeEstimate: z.coerce.number().min(0).optional(),
@@ -93,7 +93,6 @@ export function TaskDetailsSheet({
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
-  const [isEditing, setIsEditing] = useState(false);
   const [isUploading, setIsUploading] = React.useState(false);
 
 
@@ -127,6 +126,12 @@ export function TaskDetailsSheet({
     firestore ? collection(firestore, 'users') : null,
   [firestore]);
   const { data: allUsers } = useCollection<User>(usersCollectionRef);
+  
+  const statusesQuery = useMemo(() => 
+    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    [firestore]
+  );
+  const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
 
   const brandsQuery = React.useMemo(() =>
     firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null,
@@ -159,7 +164,6 @@ export function TaskDetailsSheet({
         setTimeTracked(initialTask.timeTracked || 0);
         setAttachments(initialTask.attachments || []);
         setActivities(initialTask.activities || []);
-        setIsEditing(false);
     }
   }, [initialTask, form, open]);
 
@@ -419,13 +423,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   
     const updatedTaskData = {
-      title: data.title,
-      brandId: data.brandId,
-      description: data.description,
-      status: data.status,
-      priority: data.priority,
-      dueDate: data.dueDate,
-      timeEstimate: data.timeEstimate,
+      ...data,
       assignees: currentAssignees,
       assigneeIds: currentAssignees.map((a) => a.id),
       tags: currentTags,
@@ -446,7 +444,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         title: 'Task Updated',
         description: `"${data.title}" has been saved.`,
       });
-      setIsEditing(false);
     } catch (error) {
       console.error('Failed to update task:', error);
       toast({
@@ -504,6 +501,23 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const brandId = form.watch('brandId');
   const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
 
+  const canEdit = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || currentUser.role === 'Employee');
+
+  const availableStatuses = useMemo(() => {
+    if (!currentUser || !allStatuses) return [];
+    if (currentUser.role === 'Super Admin' || currentUser.role === 'Manager') {
+      return allStatuses; // Full access
+    }
+    if (currentUser.role === 'Employee') {
+      const currentStatusName = form.getValues('status');
+      const currentStatus = allStatuses.find(s => s.name === currentStatusName);
+      if (!currentStatus) return [allStatuses[0]].filter(Boolean); // Fallback to first status if not found
+      // Allow moving to any status with a higher or equal order
+      return allStatuses.filter(s => s.order >= currentStatus.order);
+    }
+    return []; // Clients can't change status
+  }, [currentUser, allStatuses, form.getValues('status')]);
+
 
   return (
     <>
@@ -516,7 +530,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     {initialTask.createdBy && (
                         <div className='flex items-center gap-2'>
                            <Avatar className="h-6 w-6"><AvatarImage src={initialTask.createdBy.avatarUrl} /><AvatarFallback>{initialTask.createdBy.name.charAt(0)}</AvatarFallback></Avatar>
-                           <span>Dibuat oleh {initialTask.createdBy.name}</span>
+                           <span>Created by {initialTask.createdBy.name}</span>
                         </div>
                     )}
                 </div>
@@ -533,19 +547,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Main Content */}
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
-                        {isEditing ? (
-                           <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
-                        ) : (
-                           <h2 className="text-2xl font-bold">{form.getValues('title')}</h2>
-                        )}
+                        <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEdit} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
                         <div className="space-y-2">
                           <h3 className="font-semibold text-sm">Description</h3>
-                          {isEditing ? (
-                            <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
-                          ) : (
-                            <p className="text-muted-foreground text-sm">{form.getValues('description') || 'No description provided.'}</p>
-                          )}
+                          <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} readOnly={!canEdit} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
                         </div>
 
                         <div className="space-y-4">
@@ -558,7 +564,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                     {getFileIcon(att.name)}
                                     <span className="truncate" title={att.name}>{att.name}</span>
                                   </a>
-                                  {isEditing && (
+                                  {canEdit && (
                                     <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
                                       <X className="h-4 w-4" />
                                     </Button>
@@ -567,7 +573,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               ))}
                             </div>
                           )}
-                          {isEditing && (
+                          {canEdit && (
                             <div className="grid grid-cols-2 gap-4">
                               <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
                               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
@@ -586,13 +592,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                     {subtasks.map((subtask) => (
                                         <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
-                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!isEditing} />
+                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canEdit} />
                                             <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                            {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}
+                                            {canEdit && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}
                                         </div>
                                     ))}
                                 </div>
-                                {isEditing && <div className="flex items-center gap-2">
+                                {canEdit && <div className="flex items-center gap-2">
                                     <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}/>
                                     <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
                                 </div>}
@@ -630,90 +636,103 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     <div className='space-y-4 p-4 rounded-lg border'>
                       <h3 className='font-semibold text-sm'>Task Details</h3>
                       <Separator/>
-                       {isEditing ? (
-                         <>
-                           <FormField control={form.control} name="brandId" render={({ field }) => (
-                                <FormItem className="grid grid-cols-3 items-center gap-2">
-                                  <FormLabel className="text-muted-foreground">Brand</FormLabel>
-                                  <div className="col-span-2">
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                      <FormControl>
-                                        <SelectTrigger>
-                                          <SelectValue placeholder="Select a brand" />
-                                        </SelectTrigger>
-                                      </FormControl>
-                                      <SelectContent>
-                                        {areBrandsLoading ? (
-                                          <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                                        ) : (
-                                          brands?.map((brand) => (
-                                            <SelectItem key={brand.id} value={brand.id}>
-                                              <div className="flex items-center gap-2">
-                                                <Building2 className="h-4 w-4" />
-                                                {brand.name}
-                                              </div>
-                                            </SelectItem>
-                                          ))
-                                        )}
-                                      </SelectContent>
+                        <FormField control={form.control} name="brandId" render={({ field }) => (
+                            <FormItem className="grid grid-cols-3 items-center gap-2">
+                              <FormLabel className="text-muted-foreground">Brand</FormLabel>
+                              <div className="col-span-2">
+                                { !canEdit ? (
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                                        {brand?.name || 'N/A'}
+                                    </div>
+                                ) : (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a brand" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {areBrandsLoading ? (
+                                      <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                                    ) : (
+                                      brands?.map((brand) => (
+                                        <SelectItem key={brand.id} value={brand.id}>
+                                          <div className="flex items-center gap-2">
+                                            <Building2 className="h-4 w-4" />
+                                            {brand.name}
+                                          </div>
+                                        </SelectItem>
+                                      ))
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                                )}
+                              </div>
+                            </FormItem>
+                          )}/>
+                       <FormField control={form.control} name="status" render={({ field }) => (
+                           <FormItem className="grid grid-cols-3 items-center gap-2">
+                              <FormLabel className="text-muted-foreground">Status</FormLabel>
+                              <div className="col-span-2">
+                                  { !canEdit || currentUser?.role === 'Client' ? (
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                       <span className={`h-2 w-2 rounded-full ${form.getValues('status') === 'To Do' ? 'bg-yellow-500' : form.getValues('status') === 'Doing' ? 'bg-blue-500' : 'bg-green-500'}`}></span>
+                                       {form.getValues('status')}
+                                    </div>
+                                  ) : (
+                                  <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                      {availableStatuses.map(s => (
+                                        <SelectItem key={s.id} value={s.name}>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`h-2 w-2 rounded-full ${s.color}`}></span>
+                                                {s.name}
+                                            </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  )}
+                              </div>
+                           </FormItem>
+                       )}/>
+                       <FormField control={form.control} name="priority" render={({ field }) => (
+                           <FormItem className="grid grid-cols-3 items-center gap-2">
+                              <FormLabel className="text-muted-foreground">Priority</FormLabel>
+                              <div className="col-span-2 flex items-center gap-2">
+                                  { !canEdit ? (
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                      {priorityValue && React.createElement(priorityInfo[priorityValue].icon, { className: `h-4 w-4 ${priorityInfo[priorityValue].color}` })}
+                                      {priorityValue}
+                                    </div>
+                                  ) : (
+                                  <>
+                                    <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                        <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
                                     </Select>
-                                  </div>
-                                </FormItem>
-                              )}/>
-                           <FormField control={form.control} name="status" render={({ field }) => (
-                               <FormItem className="grid grid-cols-3 items-center gap-2">
-                                  <FormLabel className="text-muted-foreground">Status</FormLabel>
-                                  <div className="col-span-2">
-                                      <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                      <SelectContent>{Object.values(statusInfo).map(s => (<SelectItem key={s.value} value={s.value}><div className="flex items-center gap-2"><s.icon className="h-4 w-4" />{s.label}</div></SelectItem>))}</SelectContent>
-                                      </Select>
-                                  </div>
-                               </FormItem>
-                           )}/>
-                           <FormField control={form.control} name="priority" render={({ field }) => (
-                               <FormItem className="grid grid-cols-3 items-center gap-2">
-                                  <FormLabel className="text-muted-foreground">Priority</FormLabel>
-                                  <div className="col-span-2 flex items-center gap-2">
-                                      <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
-                                          <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                          <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
-                                      </Select>
-                                      {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
-                                  </div>
-                               </FormItem>
-                           )}/>
-                           <FormField control={form.control} name="dueDate" render={({ field }) => (
-                                <FormItem className="grid grid-cols-3 items-center gap-2">
-                                   <FormLabel className="text-muted-foreground">Due Date</FormLabel>
-                                   <div className="col-span-2"><Input type="date" {...field} value={field.value || ''} /></div>
-                                </FormItem>
-                            )}/>
-                         </>
-                       ) : (
-                         <>
-                            <ReadOnlyField label="Brand">
-                              <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4 text-muted-foreground" />
-                                {brand?.name || 'N/A'}
+                                    {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+                                  </>
+                                  )}
                               </div>
-                            </ReadOnlyField>
-                            <ReadOnlyField label="Status">
-                              <div className="flex items-center gap-2">
-                                <span className={`h-2 w-2 rounded-full ${form.getValues('status') === 'To Do' ? 'bg-yellow-500' : form.getValues('status') === 'Doing' ? 'bg-blue-500' : 'bg-green-500'}`}></span>
-                                {form.getValues('status')}
-                              </div>
-                            </ReadOnlyField>
-                            <ReadOnlyField label="Priority">
-                               <div className="flex items-center gap-2">
-                                  {priorityValue && React.createElement(priorityInfo[priorityValue].icon, { className: `h-4 w-4 ${priorityInfo[priorityValue].color}` })}
-                                  {priorityValue}
+                           </FormItem>
+                       )}/>
+                       <FormField control={form.control} name="dueDate" render={({ field }) => (
+                            <FormItem className="grid grid-cols-3 items-center gap-2">
+                               <FormLabel className="text-muted-foreground">Due Date</FormLabel>
+                               <div className="col-span-2">
+                                 {!canEdit ? (
+                                     <div className="text-sm font-medium">
+                                         {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}
+                                     </div>
+                                 ) : (
+                                     <Input type="date" {...field} value={field.value || ''} />
+                                 )}
                                </div>
-                            </ReadOnlyField>
-                            <ReadOnlyField label="Due Date">
-                              {form.getValues('dueDate') ? format(parseISO(form.getValues('dueDate')!), 'MMM d, yyyy') : 'No due date'}
-                            </ReadOnlyField>
-                         </>
-                       )}
+                            </FormItem>
+                        )}/>
                     </div>
 
                     <div className='space-y-4 p-4 rounded-lg border'>
@@ -727,10 +746,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                       <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                       <p className="text-sm font-medium">{user.name}</p>
                                   </div>
-                                  {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
+                                  {canEdit && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
                               </div>
                           ))}
-                          {isEditing && (
+                          {canEdit && (
                               <Popover>
                                   <PopoverTrigger asChild>
                                       <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
@@ -759,10 +778,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               {currentTags.map(tag => (
                                   <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
                                       {tag.label}
-                                      {isEditing && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
+                                      {canEdit && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
                                   </div>
                               ))}
-                              {isEditing && (
+                              {canEdit && (
                                    <Popover>
                                       <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
                                       <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
@@ -775,16 +794,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     <div className='space-y-4 p-4 rounded-lg border'>
                       <h3 className='font-semibold text-sm'>Time Management</h3>
                       <Separator/>
-                       {isEditing ? (
-                         <FormField control={form.control} name="timeEstimate" render={({ field }) => (
-                           <FormItem className="grid grid-cols-3 items-center gap-2">
-                              <FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel>
-                              <div className="col-span-2"><Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" /></div>
-                           </FormItem>
-                         )}/>
-                       ) : (
-                         <ReadOnlyField label="Estimate">{timeEstimateValue} hours</ReadOnlyField>
-                       )}
+                       <FormField control={form.control} name="timeEstimate" render={({ field }) => (
+                         <FormItem className="grid grid-cols-3 items-center gap-2">
+                            <FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel>
+                            <div className="col-span-2">
+                              {!canEdit ? (
+                                <div className="text-sm font-medium">{timeEstimateValue} hours</div>
+                              ) : (
+                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" />
+                              )}
+                            </div>
+                         </FormItem>
+                       )}/>
                        
                        <div className="space-y-2">
                           <div className="grid grid-cols-3 items-center gap-2">
@@ -810,24 +831,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 </ScrollArea>
               </form>
           </Form>
-          <SheetFooter className="p-4 border-t flex justify-between items-center w-full">
-            <div className="flex gap-2">
-                 <Button variant="destructive" onClick={() => {}} className={isEditing ? 'visible' : 'invisible'}>
-                    <Trash2 className="mr-2 h-4 w-4"/>
-                    Delete Task
-                </Button>
-            </div>
-              {isEditing ? (
+          <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
+              {canEdit ? (
                 <div className="flex justify-end gap-2">
-                    <Button variant="ghost" type="button" onClick={() => setIsEditing(false)}>Cancel</Button>
                     <Button type="submit" form="task-details-form">Save Changes</Button>
                 </div>
-              ) : (
-                <Button type="button" onClick={() => setIsEditing(true)}>
-                    <Edit className="mr-2 h-4 w-4"/>
-                    Edit Task
-                </Button>
-              )
+              ) : null
             }
           </SheetFooter>
         </SheetContent>
@@ -865,7 +874,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : 0;
                     const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : 0;
                     if (!dateA || !dateB) return 0;
-                    return dateB - dateA;
+                    return dateB.getTime() - dateA.getTime();
                   })
                   .map((activity) => (
                     <div key={activity.id} className="flex items-start gap-4">
@@ -895,5 +904,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    

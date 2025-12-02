@@ -115,7 +115,6 @@ export type PriorityInfo = {
   color: string;
 };
 
-// This is now used as a fallback or for icons, not for dropdowns
 export type StatusInfo = {
   label: string;
   value: string;
