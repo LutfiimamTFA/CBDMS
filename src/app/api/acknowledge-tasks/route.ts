@@ -30,13 +30,19 @@ export async function POST(request: Request) {
     const user = await auth.getUser(uid);
     const { mustAcknowledgeTasks, ...currentClaims } = user.customClaims || {};
 
-    // If the claim exists, update the claims without it.
+    // Only proceed if the claim actually exists
     if (mustAcknowledgeTasks) {
+        // 1. Update claims to remove the mandatory task flag.
         await auth.setCustomUserClaims(uid, currentClaims);
+        
+        // 2. Revoke refresh tokens. This forces the user to log in again,
+        // ensuring they get a new ID token with the updated claims.
+        // This is the most reliable way to make claim changes take effect immediately.
+        await auth.revokeRefreshTokens(uid);
     }
     
     return NextResponse.json(
-      { message: 'Task acknowledgment claim removed successfully.' },
+      { message: 'Task acknowledgment successful. User must re-authenticate.' },
       { status: 200 }
     );
   } catch (error: any) {

@@ -12,7 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile, useAuth, initiateSignOut } from '@/firebase';
 import type { Task } from '@/lib/types';
 import { collection, query, where, Timestamp } from 'firebase/firestore';
 import { BellRing, Loader2 } from 'lucide-react';
@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 export default function ForceAcknowledgeTasksPage() {
   const router = useRouter();
   const firestore = useFirestore();
+  const auth = useAuth();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const { toast } = useToast();
@@ -35,14 +36,15 @@ export default function ForceAcknowledgeTasksPage() {
     return query(
       collection(firestore, 'tasks'),
       where('assigneeIds', 'array-contains', profile.id),
-      where('createdAt', '>=', todayTimestamp)
+      where('createdAt', '>=', todayTimestamp),
+      where('isMandatory', '==', true)
     );
   }, [firestore, profile, todayTimestamp]);
 
   const { data: newTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   const handleAcknowledge = async () => {
-    if (!profile) return;
+    if (!profile || !auth) return;
     setIsAcknowledging(true);
     
     try {
@@ -56,7 +58,15 @@ export default function ForceAcknowledgeTasksPage() {
         throw new Error('Failed to acknowledge tasks.');
       }
       
-      router.replace('/dashboard');
+      // Because the backend revoked the session, we manually sign out on the client
+      // to clear any cached state and redirect to login.
+      initiateSignOut(auth);
+      toast({
+          title: "Acknowledgment Successful",
+          description: "Please log in again to continue.",
+      });
+      router.replace('/login');
+
 
     } catch (error) {
       console.error(error);
