@@ -325,41 +325,6 @@ export function TasksDataTable() {
 
   const columns: ColumnDef<Task>[] = [
     {
-      id: "actions",
-      cell: ({ row }) => {
-        const task = row.original;
-
-        return (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8">
-                  Actions
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <Link href={`/tasks/${task.id}`}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
-              </Link>
-              <DropdownMenuItem onClick={() => copyTaskLink(task.id)}>
-                <LinkIcon className="mr-2 h-4 w-4" />
-                Copy Link
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className='text-destructive focus:text-destructive focus:bg-destructive/10'
-                onClick={() => handleDeleteTask(task.id)}
-              >
-                <Trash2 className='mr-2 h-4 w-4' />
-                Delete Task
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )
-      },
-    },
-    {
       accessorKey: 'title',
       header: t('tasks.column.title'),
       cell: ({ row }) => {
@@ -518,6 +483,41 @@ export function TasksDataTable() {
             )}
           </div>
         );
+      },
+    },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const task = row.original;
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8">
+                  Actions
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <Link href={`/tasks/${task.id}`}>
+                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
+              </Link>
+              <DropdownMenuItem onClick={() => copyTaskLink(task.id)}>
+                <LinkIcon className="mr-2 h-4 w-4" />
+                Copy Link
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className='text-destructive focus:text-destructive focus:bg-destructive/10'
+                onClick={() => handleDeleteTask(task.id)}
+              >
+                <Trash2 className='mr-2 h-4 w-4' />
+                Delete Task
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
       },
     },
   ];
