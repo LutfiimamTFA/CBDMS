@@ -78,6 +78,7 @@ export async function GET(request: Request) {
           // We can't resolve assignees object here, it will be done on client
           assignees: [], 
           companyId: template.companyId,
+          isMandatory: template.isMandatory || false, // CRITICAL FIX: Ensure isMandatory is carried over
           createdBy: { id: 'system', name: 'Scheduler', avatarUrl: '' },
           // Fields from Task that are not in template
           startDate: new Date().toISOString(),

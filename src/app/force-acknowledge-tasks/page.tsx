@@ -60,12 +60,12 @@ export default function ForceAcknowledgeTasksPage() {
       
       // Because the backend revoked the session, we manually sign out on the client
       // to clear any cached state and redirect to login.
-      initiateSignOut(auth);
+      await initiateSignOut(auth);
       toast({
           title: "Acknowledgment Successful",
           description: "Please log in again to continue.",
       });
-      router.replace('/login');
+      router.push('/login');
 
 
     } catch (error) {

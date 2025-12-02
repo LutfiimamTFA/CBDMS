@@ -127,6 +127,7 @@ export type Task = {
   dependencies?: string[];
   subtasks?: Subtask[];
   recurring?: string;
+  isMandatory?: boolean;
   tags?: Tag[];
   comments?: Comment[];
   attachments?: Attachment[];
