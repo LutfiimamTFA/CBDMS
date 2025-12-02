@@ -544,7 +544,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <h3 className="font-semibold flex items-center gap-2 text-sm"><Paperclip className='h-4 w-4'/> Attachments</h3>
                            {attachments.length > 0 && (
                             <div className="space-y-2">
-                              {attachments.map(att => (
+                              {attachments.map((att) => (
                                 <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
                                   <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
                                     {getFileIcon(att.name)}
@@ -888,3 +888,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
