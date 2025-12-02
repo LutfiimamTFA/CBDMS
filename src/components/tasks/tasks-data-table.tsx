@@ -336,7 +336,7 @@ export function TasksDataTable() {
             <TooltipProvider>
               <Tooltip delayDuration={300}>
                 <TooltipTrigger asChild>
-                  <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
+                    <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
                 </TooltipTrigger>
                 {hasDescription && (
                   <TooltipContent align="start" className="max-w-xs break-words">
@@ -346,16 +346,16 @@ export function TasksDataTable() {
               </Tooltip>
             </TooltipProvider>
             {hasDescription && (
-              <TooltipProvider>
-                <Tooltip delayDuration={300}>
-                  <TooltipTrigger>
-                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  </TooltipTrigger>
-                   <TooltipContent>
-                    <p>{task.description}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger>
+                            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{task.description}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
             )}
           </div>
         );
@@ -510,6 +510,40 @@ export function TasksDataTable() {
       },
     },
     {
+      accessorKey: 'lastActivity',
+      header: 'Last Activity',
+      cell: ({ row }) => {
+        const activity = row.original.lastActivity;
+        if (!activity) return <span className="text-muted-foreground">-</span>;
+        
+        const time = activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'N/A';
+        const actionText = `${activity.user.name} ${activity.action}`
+
+        return (
+            <div className="flex items-center gap-2">
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Avatar className="h-7 w-7">
+                                <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
+                                <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>{actionText}</p>
+                            <p className="text-xs text-muted-foreground">{time}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+                 <div className="flex flex-col">
+                    <span className="text-sm truncate max-w-40">{actionText}</span>
+                    <span className="text-xs text-muted-foreground">{time}</span>
+                </div>
+            </div>
+        )
+      },
+    },
+    {
       id: "actions",
       cell: ({ row }) => {
         const task = row.original;
@@ -517,9 +551,9 @@ export function TasksDataTable() {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8 p-0">
-                    <span className="sr-only">Open menu</span>
-                    <MoreHorizontal className="h-4 w-4" />
+                <Button variant="outline" className="h-8">
+                    Actions
+                    <ChevronDown className="ml-2 h-4 w-4" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
