@@ -36,7 +36,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { RecurringTaskTemplate, Brand, User as UserType } from '@/lib/types';
@@ -53,9 +53,8 @@ import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X } from 'lucide-react';
+
 
 const templateSchema = z.object({
   title: z.string().min(3, 'Title is required.'),
@@ -70,7 +69,15 @@ const templateSchema = z.object({
 
 type TemplateFormValues = z.infer<typeof templateSchema>;
 
-const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const days = {
+    Sunday: 'Su',
+    Monday: 'Mo',
+    Tuesday: 'Tu',
+    Wednesday: 'We',
+    Thursday: 'Th',
+    Friday: 'Fr',
+    Saturday: 'Sa',
+};
 
 export default function RecurringTasksPage() {
   const { toast } = useToast();
@@ -84,7 +91,7 @@ export default function RecurringTasksPage() {
   const [selectedUsers, setSelectedUsers] = useState<UserType[]>([]);
 
   const templatesCollectionRef = useMemo(() => 
-    firestore ? query(collection(firestore, 'recurringTaskTemplates'), where('companyId', '==', profile?.companyId || '')) : null, 
+    firestore && profile ? query(collection(firestore, 'recurringTaskTemplates'), where('companyId', '==', profile.companyId)) : null, 
   [firestore, profile]);
   const { data: templates, isLoading: templatesLoading } = useCollection<RecurringTaskTemplate>(templatesCollectionRef);
 
@@ -94,7 +101,7 @@ export default function RecurringTasksPage() {
   const { data: brands, isLoading: brandsLoading } = useCollection<Brand>(brandsQuery);
 
   const usersQuery = useMemo(() => 
-    firestore ? query(collection(firestore, 'users'), where('companyId', '==', profile?.companyId || '')) : null, 
+    firestore && profile ? query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)) : null, 
   [firestore, profile]);
   const { data: users, isLoading: usersLoading } = useCollection<UserType>(usersQuery);
 
@@ -133,7 +140,15 @@ export default function RecurringTasksPage() {
       const assignees = (users || []).filter(u => selectedTemplate.defaultAssigneeIds.includes(u.id));
       setSelectedUsers(assignees);
     } else {
-      form.reset();
+      form.reset({
+        title: '',
+        description: '',
+        frequency: 'weekly',
+        daysOfWeek: [],
+        defaultAssigneeIds: [],
+        defaultPriority: 'Medium',
+        defaultBrandId: '',
+      });
       setSelectedUsers([]);
     }
   }, [selectedTemplate, form, users]);
@@ -267,144 +282,151 @@ export default function RecurringTasksPage() {
       </main>
 
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+          <DialogHeader className="p-6 pb-4">
             <DialogTitle>{selectedTemplate ? 'Edit Template' : 'Create New Template'}</DialogTitle>
             <DialogDescription>
               Tasks will be automatically generated based on this template's schedule.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <div className="space-y-2">
-                <Label htmlFor="title">Template Title</Label>
-                <Input id="title" {...form.register('title')} placeholder="e.g., Weekly Social Media Post" />
-                {form.formState.errors.title && <p className="text-sm text-destructive">{form.formState.errors.title.message}</p>}
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="description">Default Description (optional)</Label>
-                <Textarea id="description" {...form.register('description')} placeholder="Default content for the generated tasks"/>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+          <ScrollArea className="px-6">
+            <div className="py-4">
+              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
                 <div className="space-y-2">
-                    <Label>Frequency</Label>
-                    <Controller
-                        control={form.control}
-                        name="frequency"
-                        render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger><SelectValue/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="daily">Daily</SelectItem>
-                                    <SelectItem value="weekly">Weekly</SelectItem>
-                                    <SelectItem value="monthly">Monthly</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        )}
-                    />
+                    <Label htmlFor="title">Template Title</Label>
+                    <Input id="title" {...form.register('title')} placeholder="e.g., Weekly Social Media Post" />
+                    {form.formState.errors.title && <p className="text-sm text-destructive">{form.formState.errors.title.message}</p>}
                 </div>
-                {frequency === 'weekly' && (
+                <div className="space-y-2">
+                    <Label htmlFor="description">Default Description (optional)</Label>
+                    <Textarea id="description" {...form.register('description')} placeholder="Default content for the generated tasks"/>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                         <Label>On these days</Label>
-                         <Controller
-                            name="daysOfWeek"
+                        <Label>Frequency</Label>
+                        <Controller
                             control={form.control}
+                            name="frequency"
                             render={({ field }) => (
-                                <ToggleGroup type="multiple" variant="outline" value={field.value} onValueChange={field.onChange} className="flex-wrap justify-start">
-                                    {days.map(d => <ToggleGroupItem key={d} value={d} className="h-9 px-3">{d.substring(0, 2)}</ToggleGroupItem>)}
-                                </ToggleGroup>
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="daily">Daily</SelectItem>
+                                        <SelectItem value="weekly">Weekly</SelectItem>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             )}
-                         />
+                        />
                     </div>
-                )}
-                 {frequency === 'monthly' && (
-                    <div className="space-y-2">
-                        <Label>Day of Month</Label>
-                        <Input type="number" min="1" max="31" {...form.register('dayOfMonth')} placeholder="e.g., 15"/>
+                    {frequency === 'weekly' && (
+                        <div className="space-y-2">
+                             <Label>On these days</Label>
+                             <Controller
+                                name="daysOfWeek"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <ToggleGroup type="multiple" variant="outline" value={field.value} onValueChange={field.onChange} className="flex-wrap justify-start">
+                                        {Object.entries(days).map(([fullName, shortName]) => <ToggleGroupItem key={fullName} value={fullName} className="h-9 px-3">{shortName}</ToggleGroupItem>)}
+                                    </ToggleGroup>
+                                )}
+                             />
+                        </div>
+                    )}
+                     {frequency === 'monthly' && (
+                        <div className="space-y-2">
+                            <Label>Day of Month</Label>
+                            <Input type="number" min="1" max="31" {...form.register('dayOfMonth')} placeholder="e.g., 15"/>
+                        </div>
+                    )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                     <div className="space-y-2">
+                        <Label>Default Priority</Label>
+                         <Controller
+                            control={form.control}
+                            name="defaultPriority"
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Urgent">Urgent</SelectItem>
+                                        <SelectItem value="High">High</SelectItem>
+                                        <SelectItem value="Medium">Medium</SelectItem>
+                                        <SelectItem value="Low">Low</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
                     </div>
-                )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-2">
-                    <Label>Default Priority</Label>
-                     <Controller
-                        control={form.control}
-                        name="defaultPriority"
-                        render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger><SelectValue/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Urgent">Urgent</SelectItem>
-                                    <SelectItem value="High">High</SelectItem>
-                                    <SelectItem value="Medium">Medium</SelectItem>
-                                    <SelectItem value="Low">Low</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        )}
-                    />
+                     <div className="space-y-2">
+                        <Label>Default Brand</Label>
+                         <Controller
+                            control={form.control}
+                            name="defaultBrandId"
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger><SelectValue placeholder="Select a brand"/></SelectTrigger>
+                                    <SelectContent>
+                                        {brandsLoading ? <Loader2 className="animate-spin"/> : brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                         {form.formState.errors.defaultBrandId && <p className="text-sm text-destructive">{form.formState.errors.defaultBrandId.message}</p>}
+                    </div>
                 </div>
-                 <div className="space-y-2">
-                    <Label>Default Brand</Label>
-                     <Controller
-                        control={form.control}
-                        name="defaultBrandId"
-                        render={({ field }) => (
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <SelectTrigger><SelectValue placeholder="Select a brand"/></SelectTrigger>
-                                <SelectContent>
-                                    {brandsLoading ? <Loader2 className="animate-spin"/> : brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        )}
-                    />
-                     {form.formState.errors.defaultBrandId && <p className="text-sm text-destructive">{form.formState.errors.defaultBrandId.message}</p>}
-                </div>
-            </div>
 
-            <div className="space-y-2">
-                <Label>Default Assignees</Label>
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start text-muted-foreground"><Plus className="mr-2 h-4 w-4"/> Add Assignees</Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width]">
-                        <ScrollArea className="h-48">
-                            {usersLoading ? <Loader2 className="animate-spin"/> : (employeeUsers).map(user => (
-                                <Button key={user.id} variant="ghost" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
-                                     <div className="flex items-center gap-2">
-                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                        {user.name}
+                <div className="space-y-2">
+                    <Label>Default Assignees</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-muted-foreground"><Plus className="mr-2 h-4 w-4"/> Add Assignees</Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width]">
+                            <ScrollArea className="h-48">
+                                {usersLoading ? <Loader2 className="animate-spin"/> : (employeeUsers).map(user => (
+                                    <Button key={user.id} variant="ghost" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
+                                         <div className="flex items-center gap-2">
+                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                            {user.name}
+                                        </div>
+                                    </Button>
+                                ))}
+                            </ScrollArea>
+                        </PopoverContent>
+                    </Popover>
+                     {selectedUsers.length > 0 && (
+                        <div className="space-y-2 pt-2">
+                            <ScrollArea className="max-h-32">
+                                <div className="space-y-2 pr-4">
+                                {selectedUsers.map((user) => (
+                                    <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
+                                        <div className="flex items-center gap-2">
+                                            <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                            <span className="text-sm font-medium">{user.name}</span>
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
                                     </div>
-                                </Button>
-                            ))}
-                        </ScrollArea>
-                    </PopoverContent>
-                </Popover>
-                 {selectedUsers.length > 0 && (
-                    <div className="space-y-2 pt-2">
-                        {selectedUsers.map((user) => (
-                            <div key={user.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2">
-                                <div className="flex items-center gap-2">
-                                    <Avatar className="h-7 w-7"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                    <span className="text-sm font-medium">{user.name}</span>
+                                ))}
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveUser(user.id)}><X className="h-4 w-4" /></Button>
-                            </div>
-                        ))}
-                    </div>
-                )}
-                 {form.formState.errors.defaultAssigneeIds && <p className="text-sm text-destructive">{form.formState.errors.defaultAssigneeIds.message}</p>}
+                            </ScrollArea>
+                        </div>
+                    )}
+                     {form.formState.errors.defaultAssigneeIds && <p className="text-sm text-destructive">{form.formState.errors.defaultAssigneeIds.message}</p>}
+                </div>
+              </form>
             </div>
-
-            <DialogFooter>
+          </ScrollArea>
+          <DialogFooter className="p-6 pt-4 border-t">
               <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isLoading}>
+              <Button type="submit" form="recurring-task-form" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                 {selectedTemplate ? 'Save Changes' : 'Create Template'}
               </Button>
-            </DialogFooter>
-          </form>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
