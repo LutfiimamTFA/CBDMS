@@ -275,7 +275,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
     selectedUsers.forEach(assignee => {
         if (assignee.id === currentUserProfile.id) return; 
-        const notificationRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
+        const notificationRef = doc(collection(firestore, `users/${'assignee.id'}/notifications`));
         const notification: Omit<Notification, 'id'> = {
             userId: assignee.id,
             title: 'New Task Assigned',
@@ -1052,7 +1052,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </Tabs>
 
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-2"><TagIcon className="w-4 h-4" />Tags</Label>
+                      <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
                       <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-10">
                         {selectedTags.map(tag => (<div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>{tag.label}<button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100"><X className="h-3 w-3" /></button></div>))}
                         <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 w-6 p-0">+</Button></PopoverTrigger>
@@ -1086,3 +1086,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
+    
