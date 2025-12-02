@@ -56,7 +56,7 @@ export default function ForceAcknowledgeTasksPage() {
         throw new Error('Failed to acknowledge tasks.');
       }
       
-      router.replace('/tasks/recurring');
+      router.replace('/daily-report');
 
     } catch (error) {
       console.error(error);
