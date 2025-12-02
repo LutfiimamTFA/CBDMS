@@ -32,7 +32,7 @@ import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, ChevronDown } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, ChevronDown, FileText } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
@@ -329,10 +329,34 @@ export function TasksDataTable() {
       header: t('tasks.column.title'),
       cell: ({ row }) => {
         const task = row.original;
+        const hasDescription = task.description && task.description.trim() !== '';
+
         return (
-          <div className='max-w-xs'>
-            <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline">{task.title}</Link>
-            <p className='text-xs text-muted-foreground truncate'>{task.description}</p>
+          <div className="flex items-center gap-2 max-w-xs">
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
+                </TooltipTrigger>
+                {hasDescription && (
+                  <TooltipContent align="start" className="max-w-xs break-words">
+                    <p>{task.description}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+            {hasDescription && (
+              <TooltipProvider>
+                <Tooltip delayDuration={300}>
+                  <TooltipTrigger>
+                      <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </TooltipTrigger>
+                   <TooltipContent>
+                    <p>This task has a description.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
           </div>
         );
       }
@@ -493,9 +517,9 @@ export function TasksDataTable() {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8">
-                  Actions
-                  <ChevronDown className="ml-2 h-4 w-4" />
+                <Button variant="ghost" className="h-8 w-8 p-0">
+                    <span className="sr-only">Open menu</span>
+                    <MoreHorizontal className="h-4 w-4" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
