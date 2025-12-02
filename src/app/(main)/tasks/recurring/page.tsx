@@ -97,6 +97,11 @@ export default function RecurringTasksPage() {
   [firestore, profile]);
   const { data: users, isLoading: usersLoading } = useCollection<UserType>(usersQuery);
 
+  const employeeUsers = useMemo(() => {
+    if (!users) return [];
+    return users.filter(user => user.role === 'Employee');
+  }, [users]);
+
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateSchema),
     defaultValues: {
@@ -364,7 +369,7 @@ export default function RecurringTasksPage() {
                     </PopoverTrigger>
                     <PopoverContent className="w-[--radix-popover-trigger-width]">
                         <ScrollArea className="h-48">
-                            {usersLoading ? <Loader2 className="animate-spin"/> : (users || []).map(user => (
+                            {usersLoading ? <Loader2 className="animate-spin"/> : (employeeUsers).map(user => (
                                 <Button key={user.id} variant="ghost" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
                                      <div className="flex items-center gap-2">
                                         <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
