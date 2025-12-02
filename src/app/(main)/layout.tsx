@@ -34,6 +34,7 @@ import {
   Palette,
   Workflow,
   Building2,
+  Building,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -78,7 +79,25 @@ export default function MainLayout({
 
   const filteredNavItems = useMemo(() => {
     if (!profile || !navItems) return [];
-    return navItems.filter(item => item.roles.includes(profile.role));
+    
+    // Split items into categories for rendering
+    const mainItems = [];
+    const adminItems = [];
+    const settingsItems = [];
+
+    for (const item of navItems) {
+      if (!item.roles.includes(profile.role)) continue;
+
+      if (item.path.startsWith('/admin/settings')) {
+        settingsItems.push(item);
+      } else if (item.path.startsWith('/admin')) {
+        adminItems.push(item);
+      } else {
+        mainItems.push(item);
+      }
+    }
+    
+    return { mainItems, adminItems, settingsItems };
   }, [profile, navItems]);
 
 
@@ -122,21 +141,7 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {isAdminOrManager && (
-               <SidebarMenuItem>
-                <Link href='/admin/dashboard'>
-                  <SidebarMenuButton
-                    isActive={pathname === '/admin/dashboard'}
-                    tooltip='Dashboard'
-                  >
-                    <LayoutDashboard/>
-                    <span>Dashboard</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            )}
-            
-            {filteredNavItems.map((item) => (
+            {filteredNavItems.mainItems.map((item) => (
               <SidebarMenuItem key={item.id}>
                 <Link href={item.path}>
                   <SidebarMenuButton
@@ -150,12 +155,12 @@ export default function MainLayout({
               </SidebarMenuItem>
             ))}
 
-            {isAdminOrManager && (
+            {filteredNavItems.adminItems.length > 0 && (
               <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={isAdminRoute && !isSettingsRoute && pathname !== '/admin/dashboard'}
+                      isActive={isAdminRoute && !isSettingsRoute}
                       className="w-full justify-between"
                       tooltip='Admin'
                     >
@@ -174,30 +179,22 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                    <SidebarMenuItem>
-                      <Link href='/admin/users'>
-                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/users')} className="w-full justify-start">
-                          <Users/>
-                          <span>Users</span>
-                        </SidebarMenuButton>
-                      </Link>
-                    </SidebarMenuItem>
-                     {profile?.role === 'Super Admin' && (
-                       <SidebarMenuItem>
-                        <Link href='/admin/data'>
-                          <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/data')} className="w-full justify-start">
-                            <Database/>
-                            <span>Data</span>
-                          </SidebarMenuButton>
-                        </Link>
-                      </SidebarMenuItem>
-                     )}
+                    {filteredNavItems.adminItems.map((item) => (
+                       <SidebarMenuItem key={item.id}>
+                          <Link href={item.path}>
+                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
+                              <Icon name={item.icon}/>
+                              <span>{item.label}</span>
+                            </SidebarMenuButton>
+                          </Link>
+                        </SidebarMenuItem>
+                    ))}
                   </SidebarMenu>
                 </CollapsibleContent>
               </Collapsible>
             )}
 
-            {isAdminOrManager && (
+            {filteredNavItems.settingsItems.length > 0 && (
               <Collapsible open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
@@ -221,62 +218,16 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                     {isSuperAdmin && (
-                        <SidebarMenuItem>
-                            <Link href='/admin/settings'>
-                                <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings'} className="w-full justify-start">
-                                    <Icon name="Building" />
-                                    <span>Company</span>
-                                </SidebarMenuButton>
-                            </Link>
-                        </SidebarMenuItem>
-                     )}
-                     {isSuperAdmin && (
-                        <SidebarMenuItem>
-                          <Link href='/admin/settings/brands'>
-                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings/brands'} className="w-full justify-start">
-                              <Building2 />
-                              <span>Brands</span>
+                      {filteredNavItems.settingsItems.map((item) => (
+                         <SidebarMenuItem key={item.id}>
+                          <Link href={item.path}>
+                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === item.path} className="w-full justify-start">
+                                <Icon name={item.icon} />
+                                <span>{item.label}</span>
                             </SidebarMenuButton>
                           </Link>
                         </SidebarMenuItem>
-                     )}
-                     <SidebarMenuItem>
-                      <Link href='/admin/settings/roles'>
-                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === '/admin/settings/roles'} className="w-full justify-start">
-                          <KeyRound/>
-                          <span>Roles & Permissions</span>
-                        </SidebarMenuButton>
-                      </Link>
-                    </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <Link href='/admin/settings/navigation'>
-                        <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/settings/navigation')} className="w-full justify-start">
-                          <SlidersHorizontal/>
-                          <span>Navigation</span>
-                        </SidebarMenuButton>
-                      </Link>
-                    </SidebarMenuItem>
-                     {profile?.role === 'Super Admin' && (
-                        <SidebarMenuItem>
-                            <Link href='/admin/settings/workflow'>
-                                <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/settings/workflow')} className="w-full justify-start">
-                                    <Workflow />
-                                    <span>Workflow</span>
-                                </SidebarMenuButton>
-                            </Link>
-                        </SidebarMenuItem>
-                     )}
-                    {profile?.role === 'Super Admin' && (
-                        <SidebarMenuItem>
-                            <Link href='/admin/settings/theme'>
-                                <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith('/admin/settings/theme')} className="w-full justify-start">
-                                    <Palette />
-                                    <span>Theme</span>
-                                </SidebarMenuButton>
-                            </Link>
-                        </SidebarMenuItem>
-                    )}
+                      ))}
                   </SidebarMenu>
                 </CollapsibleContent>
               </Collapsible>
