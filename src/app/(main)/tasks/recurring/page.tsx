@@ -40,7 +40,7 @@ import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User, X
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { RecurringTaskTemplate, Brand, User as UserType } from '@/lib/types';
-import { collection, query, orderBy, addDoc, updateDoc, deleteDoc, serverTimestamp, doc } from 'firebase/firestore';
+import { collection, query, orderBy, addDoc, updateDoc, deleteDoc, serverTimestamp, doc, where } from 'firebase/firestore';
 import {
   Card,
   CardContent,
@@ -422,5 +422,3 @@ export default function RecurringTasksPage() {
     </div>
   );
 }
-
-    
