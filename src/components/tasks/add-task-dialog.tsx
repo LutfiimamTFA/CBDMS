@@ -121,6 +121,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [customFields, setCustomFields] = React.useState<CustomField[]>([]);
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const commentFileInputRef = React.useRef<HTMLInputElement>(null);
+
 
   const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = React.useState('');
@@ -1046,8 +1048,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                              <div className="flex-1 relative">
                                 <Textarea value={newComment} onChange={handleCommentChange} placeholder="Write a comment... use @ to mention" className="pr-24" />
                                 <div className="absolute top-2 right-2 flex gap-1">
+                                    <input type="file" ref={commentFileInputRef} className="hidden" />
                                     <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><AtSign className="h-4 w-4"/></Button>
-                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><Paperclip className="h-4 w-4"/></Button>
+                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()}><Paperclip className="h-4 w-4"/></Button>
                                     <Button type="button" size="icon" className="h-7 w-7" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
                                 </div>
                              </div>
@@ -1090,5 +1093,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
-
-    
