@@ -13,7 +13,7 @@ export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_list',
     label: 'List',
-    path: '/tasks',
+    path: '/tasks/list',
     icon: 'ClipboardList',
     order: 2,
     roles: ['Super Admin', 'Manager', 'Employee'],
@@ -21,7 +21,7 @@ export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_daily_checklist',
     label: 'Daily Checklist',
-    path: '/daily-report',
+    path: '/tasks/daily',
     icon: 'ClipboardCheck',
     order: 3,
     roles: ['Super Admin', 'Manager', 'Employee'],
@@ -29,7 +29,7 @@ export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_recurring_templates',
     label: 'Recurring Task Templates',
-    path: '/admin/settings/recurring',
+    path: '/tasks/recurring',
     icon: 'Repeat',
     order: 4,
     roles: ['Super Admin', 'Manager'],
@@ -37,7 +37,7 @@ export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_calendar',
     label: 'Calendar',
-    path: '/calendar',
+    path: '/tasks/calendar',
     icon: 'CalendarDays',
     order: 5,
     roles: ['Super Admin', 'Manager', 'Employee'],

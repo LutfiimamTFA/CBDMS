@@ -149,7 +149,7 @@ export default function MainLayout({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
-                      isActive={pathname.startsWith('/tasks') || pathname.startsWith('/daily-report') || pathname.startsWith('/calendar')}
+                      isActive={pathname.startsWith('/tasks')}
                       className="w-full justify-between"
                       tooltip='Tasks'
                     >
