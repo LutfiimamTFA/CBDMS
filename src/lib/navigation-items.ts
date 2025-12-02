@@ -23,7 +23,7 @@ export const defaultNavItems: NavigationItem[] = [
     path: '/tasks/recurring',
     icon: 'Repeat',
     order: 3,
-    roles: ['Super Admin', 'Manager'],
+    roles: ['Super Admin', 'Manager', 'Employee'],
   },
   {
     id: 'nav_calendar',

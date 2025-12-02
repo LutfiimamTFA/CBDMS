@@ -110,6 +110,8 @@ export default function RecurringTasksPage() {
     return users.filter(user => user.role === 'Employee');
   }, [users]);
 
+  const canManageTemplates = useMemo(() => profile?.role === 'Super Admin' || profile?.role === 'Manager', [profile]);
+
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateSchema),
     defaultValues: {
@@ -155,11 +157,13 @@ export default function RecurringTasksPage() {
 
 
   const handleOpenDialog = (template: RecurringTaskTemplate | null = null) => {
+    if (!canManageTemplates) return;
     setSelectedTemplate(template);
     setDialogOpen(true);
   };
   
   const handleOpenDeleteDialog = (template: RecurringTaskTemplate) => {
+    if (!canManageTemplates) return;
     setSelectedTemplate(template);
     setDeleteDialogOpen(true);
   }
@@ -186,11 +190,15 @@ export default function RecurringTasksPage() {
     const templateData: any = {
         ...data,
         companyId: profile.companyId,
-        createdAt: selectedTemplate ? selectedTemplate.createdAt : serverTimestamp(),
     };
     
-    if (selectedTemplate && selectedTemplate.lastGeneratedAt) {
-      templateData.lastGeneratedAt = selectedTemplate.lastGeneratedAt;
+    if (selectedTemplate) {
+      templateData.createdAt = selectedTemplate.createdAt;
+      if (selectedTemplate.lastGeneratedAt) {
+          templateData.lastGeneratedAt = selectedTemplate.lastGeneratedAt;
+      }
+    } else {
+        templateData.createdAt = serverTimestamp();
     }
     
     try {
@@ -237,13 +245,18 @@ export default function RecurringTasksPage() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Recurring Task Templates</h2>
             <p className="text-muted-foreground">
-              Create and manage templates for tasks that need to be done on a regular schedule.
+              {canManageTemplates 
+                ? "Create and manage templates for tasks that need to be done on a regular schedule."
+                : "A list of all scheduled tasks that are generated automatically."
+              }
             </p>
           </div>
-          <Button onClick={() => handleOpenDialog()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Template
-          </Button>
+          {canManageTemplates && (
+            <Button onClick={() => handleOpenDialog()}>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Template
+            </Button>
+          )}
         </div>
 
         {templatesLoading ? (
@@ -263,10 +276,12 @@ export default function RecurringTasksPage() {
                 </CardContent>
                 <CardFooter className="flex justify-between">
                     <Badge variant={template.defaultPriority === 'Urgent' ? 'destructive' : 'secondary'}>{template.defaultPriority}</Badge>
-                    <div>
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(template)}><Edit className="h-4 w-4"/></Button>
-                        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleOpenDeleteDialog(template)}><Trash2 className="h-4 w-4"/></Button>
-                    </div>
+                    {canManageTemplates && (
+                        <div>
+                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(template)}><Edit className="h-4 w-4"/></Button>
+                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleOpenDeleteDialog(template)}><Trash2 className="h-4 w-4"/></Button>
+                        </div>
+                    )}
                 </CardFooter>
               </Card>
             ))}
@@ -277,7 +292,10 @@ export default function RecurringTasksPage() {
               <Repeat className="mx-auto h-12 w-12 text-muted-foreground" />
               <h3 className="mt-4 text-lg font-medium">No Templates Found</h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                Get started by creating a new recurring task template.
+                {canManageTemplates 
+                  ? "Get started by creating a new recurring task template."
+                  : "There are no recurring task templates configured yet."
+                }
               </p>
             </CardContent>
           </Card>
@@ -331,7 +349,7 @@ export default function RecurringTasksPage() {
                                 control={form.control}
                                 render={({ field }) => (
                                     <ToggleGroup type="multiple" variant="outline" value={field.value} onValueChange={field.onChange} className="flex-wrap justify-start">
-                                        {Object.entries(days).map(([fullName, shortName]) => <ToggleGroupItem key={fullName} value={fullName} className="h-9 px-3">{shortName}</ToggleGroupItem>)}
+                                        {Object.entries(days).map(([fullName, shortName]) => <ToggleGroupItem key={fullName} value={fullName} aria-label={fullName} className="h-9 w-10">{shortName}</ToggleGroupItem>)}
                                     </ToggleGroup>
                                 )}
                              />

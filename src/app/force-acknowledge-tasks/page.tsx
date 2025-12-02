@@ -26,8 +26,6 @@ export default function ForceAcknowledgeTasksPage() {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const { toast } = useToast();
 
-  // For now, we'll fetch tasks created "today" assigned to the user.
-  // This logic will be refined when the recurring task generation is complete.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayTimestamp = Timestamp.fromDate(today);
@@ -58,8 +56,7 @@ export default function ForceAcknowledgeTasksPage() {
         throw new Error('Failed to acknowledge tasks.');
       }
       
-      // On success, redirect to the dashboard.
-      router.replace('/dashboard');
+      router.replace('/tasks/recurring');
 
     } catch (error) {
       console.error(error);
@@ -116,7 +113,7 @@ export default function ForceAcknowledgeTasksPage() {
             {isAcknowledging && (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             )}
-            Saya Mengerti, Lanjutkan ke Dashboard
+            Saya Mengerti, Lanjutkan
           </Button>
         </CardFooter>
       </Card>
