@@ -26,6 +26,14 @@ export const defaultNavItems: NavigationItem[] = [
     order: 3,
     roles: ['Super Admin', 'Manager', 'Employee'],
   },
+   {
+    id: 'nav_settings_recurring',
+    label: 'Recurring Tasks',
+    path: '/tasks/recurring',
+    icon: 'Repeat',
+    order: 4,
+    roles: ['Super Admin', 'Manager'],
+  },
   {
     id: 'nav_calendar',
     label: 'Calendar',
@@ -88,14 +96,6 @@ export const defaultNavItems: NavigationItem[] = [
     path: '/admin/settings/roles',
     icon: 'KeyRound',
     order: 22,
-    roles: ['Super Admin', 'Manager'],
-  },
-   {
-    id: 'nav_settings_recurring',
-    label: 'Recurring Tasks',
-    path: '/tasks/recurring',
-    icon: 'Repeat',
-    order: 4,
     roles: ['Super Admin', 'Manager'],
   },
   {
