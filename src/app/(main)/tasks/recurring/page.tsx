@@ -11,7 +11,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -36,7 +35,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, Repeat, Building2, User, X } from 'lucide-react';
+import { Plus, Trash2, Edit, Loader2, Repeat, Building2, User, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { RecurringTaskTemplate, Brand, User as UserType } from '@/lib/types';
@@ -54,6 +53,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
 const templateSchema = z.object({
@@ -190,15 +190,12 @@ export default function RecurringTasksPage() {
     const templateData: any = {
         ...data,
         companyId: profile.companyId,
+        createdAt: selectedTemplate?.createdAt || serverTimestamp(),
     };
     
-    if (selectedTemplate) {
-      templateData.createdAt = selectedTemplate.createdAt;
-      if (selectedTemplate.lastGeneratedAt) {
-          templateData.lastGeneratedAt = selectedTemplate.lastGeneratedAt;
-      }
-    } else {
-        templateData.createdAt = serverTimestamp();
+    // Only include lastGeneratedAt if it exists (for updates)
+    if (selectedTemplate?.lastGeneratedAt) {
+      templateData.lastGeneratedAt = selectedTemplate.lastGeneratedAt;
     }
     
     try {
@@ -236,18 +233,32 @@ export default function RecurringTasksPage() {
       setIsLoading(false);
     }
   };
+  
+  const getScheduleText = (template: RecurringTaskTemplate) => {
+      switch (template.frequency) {
+          case 'daily':
+              return 'Repeats daily';
+          case 'weekly':
+              const sortedDays = template.daysOfWeek?.sort((a,b) => Object.keys(days).indexOf(a) - Object.keys(days).indexOf(b));
+              return `Repeats weekly on ${sortedDays?.join(', ')}`;
+          case 'monthly':
+              return `Repeats monthly on day ${template.dayOfMonth}`;
+          default:
+              return 'No schedule';
+      }
+  }
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Recurring Tasks" />
+      <Header title="Recurring Task Templates" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Recurring Task Templates</h2>
             <p className="text-muted-foreground">
               {canManageTemplates 
-                ? "Create and manage templates for tasks that need to be done on a regular schedule."
-                : "A list of all scheduled tasks that are generated automatically."
+                ? "This is not a list of active tasks. This is where you create templates for tasks that will be generated automatically on a schedule."
+                : "This is a view-only list of templates that automatically create tasks for you on a schedule."
               }
             </p>
           </div>
@@ -263,28 +274,60 @@ export default function RecurringTasksPage() {
             <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin"/></div>
         ) : templates && templates.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {templates.map((template) => (
-              <Card key={template.id}>
-                <CardHeader>
-                  <CardTitle>{template.title}</CardTitle>
-                  <CardDescription>{template.description || 'No description'}</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                    <div className='flex items-center gap-2'><Repeat className='h-4 w-4 text-muted-foreground'/> <span>Repeats {template.frequency}</span></div>
-                    <div className='flex items-center gap-2'><Building2 className='h-4 w-4 text-muted-foreground'/> <span>{(brands || []).find(b => b.id === template.defaultBrandId)?.name}</span></div>
-                    <div className='flex items-center gap-2'><User className='h-4 w-4 text-muted-foreground'/> <span>Assigned to {template.defaultAssigneeIds.length} users</span></div>
-                </CardContent>
-                <CardFooter className="flex justify-between">
-                    <Badge variant={template.defaultPriority === 'Urgent' ? 'destructive' : 'secondary'}>{template.defaultPriority}</Badge>
-                    {canManageTemplates && (
-                        <div>
-                            <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(template)}><Edit className="h-4 w-4"/></Button>
-                            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleOpenDeleteDialog(template)}><Trash2 className="h-4 w-4"/></Button>
+            {templates.map((template) => {
+                const templateUsers = (users || []).filter(u => template.defaultAssigneeIds.includes(u.id));
+                return (
+                  <Card key={template.id} className="flex flex-col">
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        {template.title}
+                         {canManageTemplates && (
+                            <div>
+                                <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(template)}><Edit className="h-4 w-4"/></Button>
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => handleOpenDeleteDialog(template)}><Trash2 className="h-4 w-4"/></Button>
+                            </div>
+                        )}
+                      </CardTitle>
+                      <CardDescription>{template.description || 'No description provided.'}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4 text-sm flex-1">
+                        <div className='flex items-center gap-3 p-3 rounded-md bg-secondary/50'>
+                            <Repeat className='h-5 w-5 text-muted-foreground'/>
+                            <div>
+                                <p className='font-semibold'>{getScheduleText(template)}</p>
+                                <p className='text-xs text-muted-foreground'>Tasks will be created based on this schedule.</p>
+                            </div>
                         </div>
-                    )}
-                </CardFooter>
-              </Card>
-            ))}
+                         <div className="flex items-center gap-3">
+                            <span className='font-semibold w-20'>Brand:</span> 
+                            <span>{(brands || []).find(b => b.id === template.defaultBrandId)?.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <span className='font-semibold w-20'>Priority:</span>
+                           <Badge variant={template.defaultPriority === 'Urgent' ? 'destructive' : 'secondary'}>{template.defaultPriority}</Badge>
+                        </div>
+                    </CardContent>
+                    <CardFooter className="flex-col items-start gap-2">
+                        <p className="text-sm font-semibold">Default Assignees ({templateUsers.length})</p>
+                         <div className="flex -space-x-2">
+                            <TooltipProvider>
+                            {templateUsers.map(user => (
+                                <Tooltip key={user.id}>
+                                    <TooltipTrigger asChild>
+                                        <Avatar className="h-8 w-8 border-2 border-background">
+                                            <AvatarImage src={user.avatarUrl} alt={user.name}/>
+                                            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                                        </Avatar>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>{user.name}</p></TooltipContent>
+                                </Tooltip>
+                            ))}
+                            </TooltipProvider>
+                        </div>
+                    </CardFooter>
+                  </Card>
+                )
+            })}
           </div>
         ) : (
           <Card>
@@ -471,3 +514,5 @@ export default function RecurringTasksPage() {
     </div>
   );
 }
+
+    
