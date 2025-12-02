@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, History, Building2 } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -133,7 +133,7 @@ export function TaskDetailsSheet({
   );
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
 
-  const brandsQuery = React.useMemo(() =>
+  const brandsQuery = useMemo(() =>
     firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null,
   [firestore]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
@@ -483,13 +483,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     });
   }
 
-  const ReadOnlyField = ({ label, children }: { label: string, children: React.ReactNode }) => (
-    <div className="grid grid-cols-3 items-center gap-2">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <div className="col-span-2 text-sm font-medium">{children}</div>
-    </div>
-  );
-
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
   const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
@@ -733,7 +726,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                       <Separator/>
                       <FormItem>
                           <FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
-                           {currentAssignees.map(user => (
+                           {currentAssignees.map((user) => (
                               <div key={user.id} className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-3">
                                       <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
@@ -768,7 +761,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                       <FormItem>
                           <FormLabel className="text-muted-foreground text-sm">Tags</FormLabel>
                            <div className="flex flex-wrap gap-2">
-                              {currentTags.map(tag => (
+                              {currentTags.map((tag) => (
                                   <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
                                       {tag.label}
                                       {canEdit && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
@@ -826,9 +819,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           </Form>
           <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
               {canEdit ? (
-                <div className="flex justify-end gap-2">
-                    <Button type="submit" form="task-details-form">Save Changes</Button>
-                </div>
+                <Button type="submit" form="task-details-form">Save Changes</Button>
               ) : null
             }
           </SheetFooter>

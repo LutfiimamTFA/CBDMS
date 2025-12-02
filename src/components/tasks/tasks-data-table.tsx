@@ -124,8 +124,6 @@ export function TasksDataTable() {
   const { t } = useI18n();
   const { toast } = useToast();
   
-  const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
-
   const [confirmationDialog, setConfirmationDialog] = React.useState<{
     isOpen: boolean;
     task?: Task;
@@ -522,37 +520,6 @@ export function TasksDataTable() {
         );
       },
     },
-    {
-      accessorKey: 'lastActivity',
-      header: 'Last Activity',
-      cell: ({ row }) => {
-        const task = row.original;
-        const lastActivity = task.lastActivity;
-
-        if (!lastActivity || !lastActivity.user) {
-          return <div className="text-muted-foreground">-</div>;
-        }
-
-        return (
-          <div className="flex flex-col gap-2">
-             <div className="flex items-center gap-2">
-                <Avatar className="h-7 w-7">
-                    <AvatarImage src={lastActivity.user.avatarUrl} />
-                    <AvatarFallback>{lastActivity.user.name.charAt(0)}</AvatarFallback>
-                </Avatar>
-                <div className='text-xs'>
-                    <p className='font-medium'>{lastActivity.user.name}</p>
-                    <p className='text-muted-foreground'>{lastActivity.timestamp?.toDate ? formatDistanceToNow(lastActivity.timestamp.toDate(), { addSuffix: true }) : 'just now'}</p>
-                </div>
-            </div>
-            <Button variant="outline" size="sm" className='h-7' onClick={() => setHistoryTask(task)}>
-              <History className='mr-2 h-3 w-3'/>
-              View History
-            </Button>
-          </div>
-        );
-      },
-    }
   ];
 
   const table = useReactTable({
@@ -757,50 +724,6 @@ export function TasksDataTable() {
           </div>
         </div>
       </div>
-      <Dialog open={!!historyTask} onOpenChange={(isOpen) => !isOpen && setHistoryTask(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Activity Log: {historyTask?.title}</DialogTitle>
-            <DialogDescription>
-              A complete history of all changes made to this task.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-            <div className="space-y-6 py-4">
-              {historyTask?.activities && historyTask.activities.length > 0 ? (
-                historyTask.activities
-                  .slice()
-                  .sort((a, b) => {
-                    const dateA = a.timestamp?.toDate ? a.timestamp.toDate() : 0;
-                    const dateB = b.timestamp?.toDate ? b.timestamp.toDate() : 0;
-                    if (!dateA || !dateB) return 0;
-                    return dateB.getTime() - dateA.getTime();
-                  })
-                  .map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-4">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
-                        <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm">
-                          <span className="font-semibold">{activity.user.name}</span> {activity.action}.
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp?.toDate ? formatDistanceToNow(activity.timestamp.toDate(), { addSuffix: true }) : 'just now'}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-              ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  No activities recorded for this task yet.
-                </p>
-              )}
-            </div>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
       <AlertDialog open={confirmationDialog.isOpen} onOpenChange={(isOpen) => setConfirmationDialog({ ...confirmationDialog, isOpen })}>
         <AlertDialogContent>
             <AlertDialogHeader>
