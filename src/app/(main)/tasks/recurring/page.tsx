@@ -69,7 +69,7 @@ const templateSchema = z.object({
 
 type TemplateFormValues = z.infer<typeof templateSchema>;
 
-const days = {
+const days: Record<string, string> = {
     Sunday: 'Su',
     Monday: 'Mo',
     Tuesday: 'Tu',
@@ -291,7 +291,7 @@ export default function RecurringTasksPage() {
           </DialogHeader>
           <ScrollArea className="px-6">
             <div className="py-4">
-              <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <form id="recurring-task-form" onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
                 <div className="space-y-2">
                     <Label htmlFor="title">Template Title</Label>
                     <Input id="title" {...form.register('title')} placeholder="e.g., Weekly Social Media Post" />
