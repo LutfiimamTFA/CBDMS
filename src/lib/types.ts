@@ -43,6 +43,10 @@ export type Comment = {
     text: string;
     timestamp: string;
     replies: Comment[];
+    attachment?: {
+      name: string;
+      url: string;
+    };
 };
 
 export type Attachment = {

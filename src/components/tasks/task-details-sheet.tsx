@@ -52,6 +52,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 
 const taskDetailsSchema = z.object({
@@ -102,6 +103,8 @@ export function TaskDetailsSheet({
 
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
+  const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
+  const [isUploadingCommentAttachment, setIsUploadingCommentAttachment] = useState(false);
   
   const [currentAssignees, setCurrentAssignees] = useState<User[]>([]);
   const [currentTags, setCurrentTags] = useState<Tag[]>([]);
@@ -116,6 +119,7 @@ export function TaskDetailsSheet({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const commentFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
 
@@ -164,6 +168,8 @@ export function TaskDetailsSheet({
         setTimeTracked(initialTask.timeTracked || 0);
         setAttachments(initialTask.attachments || []);
         setActivities(initialTask.activities || []);
+        setNewComment('');
+        setCommentAttachment(null);
     }
   }, [initialTask, form, open]);
 
@@ -252,49 +258,86 @@ export function TaskDetailsSheet({
     setTimerStartTime(null);
   };
   
-  const handlePostComment = () => {
-    if (!newComment.trim() || !currentUser || !firestore) return;
-    const comment: Comment = {
-      id: `c-${Date.now()}`,
-      user: {
-        id: currentUser.id,
-        name: currentUser.name,
-        email: currentUser.email,
-        avatarUrl: currentUser.avatarUrl || '',
-        role: currentUser.role,
-        companyId: currentUser.companyId,
-        createdAt: currentUser.createdAt
-      },
-      text: newComment,
-      timestamp: new Date().toISOString(),
-      replies: [],
-    };
-    setComments([...comments, comment]);
-    setNewComment('');
+  const handlePostComment = async () => {
+    if ((!newComment.trim() && !commentAttachment) || !currentUser || !firestore || !storage) return;
 
-    // --- Creator Notification on New Comment ---
-    const taskCreatorId = initialTask.createdBy.id;
-    if (taskCreatorId !== currentUser.id) {
-        const batch = writeBatch(firestore);
-        const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
-        const notification: Omit<Notification, 'id'> = {
-            userId: taskCreatorId,
-            title: `New comment on: ${initialTask.title}`,
-            message: `${currentUser.name} left a comment.`,
-            taskId: initialTask.id,
-            taskTitle: initialTask.title,
-            isRead: false,
-            createdAt: new Date().toISOString(),
-            createdBy: {
-                id: currentUser.id,
-                name: currentUser.name,
-                avatarUrl: currentUser.avatarUrl || '',
-            },
+    setIsUploadingCommentAttachment(true);
+    
+    let attachmentData;
+
+    try {
+        if (commentAttachment) {
+            const attachmentId = `${Date.now()}-${commentAttachment.name}`;
+            const storageRef = ref(storage, `attachments/${initialTask.id}/comments/${attachmentId}`);
+            await uploadBytes(storageRef, commentAttachment);
+            const url = await getDownloadURL(storageRef);
+            attachmentData = {
+                name: commentAttachment.name,
+                url: url,
+            };
+        }
+
+        const comment: Comment = {
+          id: `c-${Date.now()}`,
+          user: {
+            id: currentUser.id,
+            name: currentUser.name,
+            email: currentUser.email,
+            avatarUrl: currentUser.avatarUrl || '',
+            role: currentUser.role,
+            companyId: currentUser.companyId,
+            createdAt: currentUser.createdAt
+          },
+          text: newComment,
+          timestamp: new Date().toISOString(),
+          replies: [],
+          ...(attachmentData && { attachment: attachmentData }),
         };
-        batch.set(notifRef, notification);
-        batch.commit().catch(e => console.error("Failed to send comment notification to creator", e));
+        setComments([...comments, comment]);
+        setNewComment('');
+        setCommentAttachment(null);
+
+        // --- Creator Notification on New Comment ---
+        const taskCreatorId = initialTask.createdBy.id;
+        if (taskCreatorId !== currentUser.id) {
+            const batch = writeBatch(firestore);
+            const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
+            const notification: Omit<Notification, 'id'> = {
+                userId: taskCreatorId,
+                title: `New comment on: ${initialTask.title}`,
+                message: `${currentUser.name} left a comment.`,
+                taskId: initialTask.id,
+                taskTitle: initialTask.title,
+                isRead: false,
+                createdAt: new Date().toISOString(),
+                createdBy: {
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    avatarUrl: currentUser.avatarUrl || '',
+                },
+            };
+            batch.set(notifRef, notification);
+            await batch.commit();
+        }
+    } catch (error) {
+        console.error("Failed to post comment or upload attachment:", error);
+        toast({
+            variant: "destructive",
+            title: "Comment Failed",
+            description: "Could not post your comment. Please try again.",
+        });
+    } finally {
+        setIsUploadingCommentAttachment(false);
     }
   };
+
+  const handleCommentFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setCommentAttachment(file);
+    }
+  };
+
 
   const handleToggleSubtask = (subtaskId: string) => {
     const newSubtasks = subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
@@ -596,7 +639,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                             <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
-                                                <p className="text-sm bg-secondary p-3 rounded-lg mt-1">{comment.text}</p>
+                                                <div className="text-sm bg-secondary p-3 rounded-lg mt-1 space-y-2">
+                                                  <p>{comment.text}</p>
+                                                  {comment.attachment && (
+                                                    <a href={comment.attachment.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+                                                      <Paperclip className="h-4 w-4" />
+                                                      <span>{comment.attachment.name}</span>
+                                                    </a>
+                                                  )}
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -604,9 +655,23 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                         <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
                                         <div className="flex-1 relative">
                                             <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-20" />
+                                            {commentAttachment && (
+                                              <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
+                                                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                                <span className="truncate">{commentAttachment.name}</span>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setCommentAttachment(null)}>
+                                                  <X className="h-4 w-4" />
+                                                </Button>
+                                              </div>
+                                            )}
                                             <div className="absolute top-2 right-2 flex gap-1">
-                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7"><AtSign className="h-4 w-4"/></Button>
-                                                <Button type="button" size="sm" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4 mr-2"/>Send</Button>
+                                                <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
+                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
+                                                    <Paperclip className="h-4 w-4"/>
+                                                </Button>
+                                                <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
+                                                    {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
