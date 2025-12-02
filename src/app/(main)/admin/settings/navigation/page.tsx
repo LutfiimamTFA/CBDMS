@@ -165,7 +165,7 @@ export default function NavigationSettingsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isNavItemsLoading ? (
+              {isLoading || isNavItemsLoading ? (
                 <TableRow>
                   <TableCell
                     colSpan={1 + availableRoles.length}
