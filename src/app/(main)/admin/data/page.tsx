@@ -3,7 +3,7 @@
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, AlertTriangle, Database, Trash2 } from 'lucide-react';
+import { Download, AlertTriangle, Database, Trash2, Upload } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, writeBatch, getDocs, query, orderBy } from 'firebase/firestore';
 import type { Task, User, Brand, WorkflowStatus } from '@/lib/types';
@@ -51,7 +51,6 @@ export default function DataManagementPage() {
         
         let stringData = String(cellData);
         
-        // Handle objects by JSON stringifying them
         if (typeof cellData === 'object' && cellData !== null) {
             stringData = JSON.stringify(cellData);
         }
@@ -224,6 +223,27 @@ export default function DataManagementPage() {
                      <Button onClick={handleExportWorkflow} variant="outline">
                         Export Workflow (CSV)
                     </Button>
+                </CardContent>
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Data Import / Restore</CardTitle>
+                    <CardDescription>
+                        Panduan untuk melakukan restore data menggunakan file backup.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground mb-4">
+                        Fitur import data secara langsung dari aplikasi tidak disediakan untuk menjaga keamanan dan integritas data. Proses restore paling aman dan andal dilakukan melalui konsol Firebase.
+                    </p>
+                    <ol className="list-decimal list-inside space-y-2 text-sm">
+                        <li>Buka <a href="https://console.firebase.google.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Konsol Firebase</a> proyek Anda.</li>
+                        <li>Navigasi ke menu <strong>Build &gt; Firestore Database</strong>.</li>
+                        <li>Klik ikon titik tiga (opsi) di sebelah tab data Anda, lalu pilih <strong>Import data</strong>.</li>
+                        <li>Upload file <code>workwise-backup.json</code> yang sudah Anda unduh sebelumnya.</li>
+                        <li>Ikuti instruksi di layar untuk menyelesaikan proses import.</li>
+                    </ol>
                 </CardContent>
             </Card>
 
