@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Download, AlertTriangle, Database, Trash2 } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, writeBatch, getDocs } from 'firebase/firestore';
-import type { Task, User } from '@/lib/types';
+import { collection, writeBatch, getDocs, query, orderBy } from 'firebase/firestore';
+import type { Task, User, Brand, WorkflowStatus } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useMemo, useState } from 'react';
 import {
@@ -30,6 +30,12 @@ export default function DataManagementPage() {
     
     const usersCollectionRef = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
     const { data: users } = useCollection<User>(usersCollectionRef);
+    
+    const brandsCollectionRef = useMemo(() => firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null, [firestore]);
+    const { data: brands } = useCollection<Brand>(brandsCollectionRef);
+    
+    const statusesCollectionRef = useMemo(() => firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null, [firestore]);
+    const { data: statuses } = useCollection<WorkflowStatus>(statusesCollectionRef);
 
     const [deleteConfirmation, setDeleteConfirmation] = useState({
       isOpen: false,
@@ -43,7 +49,12 @@ export default function DataManagementPage() {
             return '';
         }
         
-        const stringData = String(cellData);
+        let stringData = String(cellData);
+        
+        // Handle objects by JSON stringifying them
+        if (typeof cellData === 'object' && cellData !== null) {
+            stringData = JSON.stringify(cellData);
+        }
         
         if (stringData.includes(',') || stringData.includes('"') || stringData.includes('\n')) {
             const escapedData = stringData.replace(/"/g, '""');
@@ -87,20 +98,35 @@ export default function DataManagementPage() {
     }
 
     const handleExportTasks = () => {
-        const headers = ['id', 'title', 'status', 'priority', 'dueDate', 'timeEstimate', 'timeTracked'];
-        downloadCSV(tasks || [], 'tasks-export.csv', headers);
+        if (!tasks) return;
+        const headers = ['id', 'title', 'brandId', 'status', 'priority', 'dueDate', 'timeEstimate', 'timeTracked', 'assigneeIds', 'companyId', 'createdAt'];
+        downloadCSV(tasks, 'tasks-export.csv', headers);
     }
     
     const handleExportUsers = () => {
-        const headers = ['id', 'name', 'email', 'role', 'createdAt'];
-        downloadCSV(users || [], 'users-export.csv', headers);
+        if (!users) return;
+        const headers = ['id', 'name', 'email', 'role', 'companyId', 'createdAt'];
+        downloadCSV(users, 'users-export.csv', headers);
+    }
+    
+    const handleExportBrands = () => {
+        if (!brands) return;
+        const headers = ['id', 'name', 'createdAt'];
+        downloadCSV(brands, 'brands-export.csv', headers);
     }
 
-    const openDeleteDialog = (type: 'tasks' | 'users' | 'database') => {
-      let confirmAction = () => {};
-      if (type === 'database' && firestore) {
-        confirmAction = async () => {
-          const collectionsToDelete = ['tasks', 'users', 'permissions', 'navigationItems'];
+    const handleExportWorkflow = () => {
+        if (!statuses) return;
+        const headers = ['id', 'name', 'order', 'color', 'companyId'];
+        downloadCSV(statuses, 'workflow-export.csv', headers);
+    }
+
+    const openDeleteDialog = () => {
+      if (!firestore) return;
+      
+      const confirmAction = async () => {
+          // Collections for "Smart Reset". Users and Permissions are intentionally excluded.
+          const collectionsToDelete = ['tasks', 'brands', 'statuses', 'navigationItems'];
           try {
             const batch = writeBatch(firestore);
             
@@ -114,21 +140,24 @@ export default function DataManagementPage() {
             await batch.commit();
 
             toast({
-              title: 'Process Complete',
-              description: `All application data has been deleted.`
+              title: 'Application Reset',
+              description: `All transactional data has been cleared. User accounts are safe.`
             });
 
-          } catch (e) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not complete database deletion.' });
+          } catch (e: any) {
+            toast({ 
+                variant: 'destructive', 
+                title: 'Error', 
+                description: e.message || 'Could not complete the data reset.' 
+            });
           }
            setDeleteConfirmation({isOpen: false, type: '', onConfirm: () => {}});
            setConfirmationInput('');
         }
-      }
 
       setDeleteConfirmation({
         isOpen: true,
-        type,
+        type: 'APP-DATA-RESET',
         onConfirm: confirmAction
       });
     }
@@ -142,10 +171,11 @@ export default function DataManagementPage() {
                 <CardHeader>
                     <CardTitle>Data Export</CardTitle>
                     <CardDescription>
-                        Backup your application data by exporting collections to CSV files.
+                        Backup your application data by exporting collections to CSV files. 
+                        This is a complete backup of all data.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className='flex gap-4'>
+                <CardContent className='flex flex-wrap gap-4'>
                     <Button onClick={handleExportUsers}>
                         <Download className="mr-2 h-4 w-4" />
                         Export Users
@@ -153,6 +183,14 @@ export default function DataManagementPage() {
                     <Button onClick={handleExportTasks}>
                         <Download className="mr-2 h-4 w-4" />
                         Export Tasks
+                    </Button>
+                    <Button onClick={handleExportBrands}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export Brands
+                    </Button>
+                     <Button onClick={handleExportWorkflow}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Export Workflow
                     </Button>
                 </CardContent>
             </Card>
@@ -164,14 +202,14 @@ export default function DataManagementPage() {
                         Danger Zone
                     </CardTitle>
                     <CardDescription>
-                        These are highly destructive actions that can result in permanent data loss. 
-                        Proceed with extreme caution.
+                        Reset the application by deleting all transactional data. 
+                        This action is irreversible but will preserve all user accounts and roles.
                     </CardDescription>
                 </CardHeader>
                 <CardContent className='flex gap-4'>
-                     <Button variant="destructive" onClick={() => openDeleteDialog('database')}>
+                     <Button variant="destructive" onClick={openDeleteDialog}>
                         <Trash2 className="mr-2 h-4 w-4" />
-                        Delete All App Data
+                        Reset Application Data
                     </Button>
                 </CardContent>
             </Card>
@@ -183,22 +221,26 @@ export default function DataManagementPage() {
               <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                      This action is irreversible. You are about to delete all <strong>{deleteConfirmation.type}</strong> from the database. 
-                      To confirm, please type <code className="font-mono bg-muted text-destructive-foreground p-1 rounded-sm">DELETE-{deleteConfirmation.type.toUpperCase()}</code> below.
+                      This action is irreversible and will delete all transactional application data, including 
+                      <strong> tasks, brands, workflow statuses, and navigation settings</strong>.
+                      <br/><br/>
+                      <strong className="text-foreground">User accounts and permissions will NOT be deleted.</strong> The application will be reset to a "fresh" state, but all users can still log in.
+                      <br/><br/>
+                      To confirm, please type <code className="font-mono bg-muted text-destructive-foreground p-1 rounded-sm">{deleteConfirmation.type}</code> below.
                   </AlertDialogDescription>
               </AlertDialogHeader>
               <Input 
                 value={confirmationInput}
                 onChange={(e) => setConfirmationInput(e.target.value)}
-                placeholder={`Type DELETE-${deleteConfirmation.type.toUpperCase()}`}
+                placeholder={`Type ${deleteConfirmation.type}`}
               />
               <AlertDialogFooter>
                   <AlertDialogCancel onClick={() => setConfirmationInput('')}>Cancel</AlertDialogCancel>
                   <AlertDialogAction 
                     onClick={deleteConfirmation.onConfirm} 
-                    disabled={confirmationInput !== `DELETE-${deleteConfirmation.type.toUpperCase()}`}
+                    disabled={confirmationInput !== deleteConfirmation.type}
                     className="bg-destructive hover:bg-destructive/90">
-                    Confirm Deletion
+                    Confirm Reset
                   </AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>
