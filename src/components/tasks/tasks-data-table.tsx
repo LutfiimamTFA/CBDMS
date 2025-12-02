@@ -352,7 +352,7 @@ export function TasksDataTable() {
                       <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                   </TooltipTrigger>
                    <TooltipContent>
-                    <p>This task has a description.</p>
+                    <p>{task.description}</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -367,7 +367,7 @@ export function TasksDataTable() {
       cell: ({ row }) => {
         const brandId = row.getValue('brandId') as string;
         const brand = brands?.find(b => b.id === brandId);
-        return brand ? <Badge variant="outline" className="font-medium bg-secondary text-secondary-foreground"><Building2 className='mr-2'/>{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
+        return brand ? <Badge variant="outline" className="font-normal bg-secondary/50"><Building2 className='mr-2 h-4 w-4'/>{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
