@@ -8,6 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TableCaption,
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -18,17 +19,26 @@ import {
   doc,
   query,
   orderBy,
-  updateDoc,
   writeBatch,
   getDocs,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { defaultNavItems } from '@/lib/navigation-items';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
-// Helper to get Lucide icon component by name
 const Icon = ({
   name,
   ...props
@@ -46,7 +56,10 @@ export default function NavigationSettingsPage() {
   const firestore = useFirestore();
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isConfirmOpen, setConfirmOpen] = useState(false);
   const [navItems, setNavItems] = useState<NavigationItem[]>([]);
+  const [initialNavItems, setInitialNavItems] = useState<NavigationItem[]>([]);
 
   const navItemsCollectionRef = useMemo(
     () =>
@@ -58,9 +71,9 @@ export default function NavigationSettingsPage() {
   const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
   useEffect(() => {
-    // This effect ensures the local state is synced with Firestore on initial load and updates.
     if (navItemsFromDB) {
       setNavItems(navItemsFromDB);
+      setInitialNavItems(JSON.parse(JSON.stringify(navItemsFromDB))); // Deep copy for initial state
     }
   }, [navItemsFromDB]);
 
@@ -68,7 +81,6 @@ export default function NavigationSettingsPage() {
   useEffect(() => {
     if (isNavItemsLoading || !firestore) return;
 
-    // This effect syncs default items TO Firestore if they don't exist yet.
     const syncDefaultsToFirestore = async () => {
         setIsLoading(true);
         try {
@@ -106,57 +118,126 @@ export default function NavigationSettingsPage() {
     syncDefaultsToFirestore();
 
   }, [isNavItemsLoading, firestore, toast]);
+  
+  const hasChanges = useMemo(() => {
+    return JSON.stringify(initialNavItems) !== JSON.stringify(navItems);
+  }, [initialNavItems, navItems]);
 
-  const handleRoleChange = async (
-    itemId: string,
-    role: Role,
-    isChecked: boolean
-  ) => {
-    if (!firestore || !navItems) return;
+  const handleRoleChange = (itemId: string, role: Role, isChecked: boolean) => {
+    setNavItems(currentItems => {
+        return currentItems.map(item => {
+            if (item.id === itemId) {
+                let updatedRoles: Role[];
+                if (isChecked) {
+                    updatedRoles = [...item.roles, role];
+                } else {
+                    updatedRoles = item.roles.filter((r) => r !== role);
+                }
+                return { ...item, roles: [...new Set(updatedRoles)] };
+            }
+            return item;
+        });
+    });
+  };
+  
+  const handleSaveChanges = async () => {
+    if (!firestore || !hasChanges) return;
+    setIsSaving(true);
+    setConfirmOpen(false);
 
-    const itemToUpdate = navItems.find((item) => item.id === itemId);
-    if (!itemToUpdate) return;
-
-    let updatedRoles: Role[];
-    if (isChecked) {
-      updatedRoles = [...itemToUpdate.roles, role];
-    } else {
-      updatedRoles = itemToUpdate.roles.filter((r) => r !== role);
-    }
-    updatedRoles = [...new Set(updatedRoles)];
-
-    const itemDocRef = doc(firestore, 'navigationItems', itemId);
     try {
-      await updateDoc(itemDocRef, { roles: updatedRoles });
-      toast({
-        title: 'Permissions Updated',
-        description: `Access for ${role} on "${itemToUpdate.label}" has been ${isChecked ? 'granted' : 'revoked'}.`,
-      });
+        const batch = writeBatch(firestore);
+        navItems.forEach(item => {
+            const docRef = doc(firestore, 'navigationItems', item.id);
+            batch.update(docRef, { roles: item.roles });
+        });
+        await batch.commit();
+
+        setInitialNavItems(JSON.parse(JSON.stringify(navItems))); // Update initial state after save
+        toast({
+            title: 'Permissions Saved',
+            description: 'All navigation visibility changes have been saved.',
+        });
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: error.message,
-      });
+        toast({
+            variant: 'destructive',
+            title: 'Save Failed',
+            description: error.message,
+        });
+    } finally {
+        setIsSaving(false);
     }
   };
+
+  const groupedNavItems = useMemo(() => {
+    const mainItems = navItems.filter(item => !item.path.startsWith('/admin'));
+    const adminItems = navItems.filter(item => item.path.startsWith('/admin') && !item.path.startsWith('/admin/settings'));
+    const settingsItems = navItems.filter(item => item.path.startsWith('/admin/settings'));
+    return { mainItems, adminItems, settingsItems };
+  }, [navItems]);
+
+  const renderGroup = (title: string, items: NavigationItem[]) => (
+    <>
+      <TableRow className="bg-muted/50 hover:bg-muted/50">
+        <TableCell colSpan={1 + availableRoles.length} className="py-2 px-4 text-sm font-semibold text-muted-foreground">
+          {title}
+        </TableCell>
+      </TableRow>
+      {items.length > 0 ? items.sort((a,b) => a.order - b.order).map((item) => (
+        <TableRow key={item.id}>
+          <TableCell className="font-medium">
+            <div className="flex items-center gap-3">
+              <Icon name={item.icon} className="h-5 w-5" />
+              <div>
+                <span>{item.label}</span>
+                <Badge variant="outline" className="ml-2 font-mono text-xs">
+                  {item.path}
+                </Badge>
+              </div>
+            </div>
+          </TableCell>
+          {availableRoles.map((role) => (
+            <TableCell key={role} className="text-center">
+              <Checkbox
+                checked={item.roles.includes(role)}
+                onCheckedChange={(checked) => {
+                  handleRoleChange(item.id, role, !!checked);
+                }}
+                aria-label={`Allow ${role} to see ${item.label}`}
+                disabled={role === 'Super Admin'}
+              />
+            </TableCell>
+          ))}
+        </TableRow>
+      )) : (
+        <TableRow>
+            <TableCell colSpan={1 + availableRoles.length} className="text-center text-muted-foreground py-4">No items in this group.</TableCell>
+        </TableRow>
+      )}
+    </>
+  );
 
   return (
     <div className="h-svh flex flex-col bg-background">
       <Header title="Navigation Settings" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="mb-4">
-          <h2 className="text-2xl font-bold">Manage Sidebar Visibility</h2>
-          <p className="text-muted-foreground">
-            Control which user roles can see each sidebar menu item. Changes are
-            saved automatically.
-          </p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold">Manage Sidebar Visibility</h2>
+            <p className="text-muted-foreground">
+              Control which user roles can see each sidebar menu item.
+            </p>
+          </div>
+           <Button onClick={() => setConfirmOpen(true)} disabled={!hasChanges || isSaving}>
+            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
+            Save Changes
+          </Button>
         </div>
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[250px]">Menu Item</TableHead>
+                <TableHead className="w-[350px]">Menu Item</TableHead>
                 {availableRoles.map((role) => (
                   <TableHead key={role} className="text-center">
                     {role}
@@ -169,47 +250,41 @@ export default function NavigationSettingsPage() {
                 <TableRow>
                   <TableCell
                     colSpan={1 + availableRoles.length}
-                    className="h-24 text-center"
+                    className="h-64 text-center"
                   >
                     <Loader2 className="h-6 w-6 animate-spin mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : (
-                navItems?.sort((a,b) => a.order - b.order).map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <Icon name={item.icon} className="h-5 w-5" />
-                        <div>
-                          <span>{item.label}</span>
-                          <Badge
-                            variant="outline"
-                            className="ml-2 font-mono text-xs"
-                          >
-                            {item.path}
-                          </Badge>
-                        </div>
-                      </div>
-                    </TableCell>
-                    {availableRoles.map((role) => (
-                      <TableCell key={role} className="text-center">
-                        <Checkbox
-                          checked={item.roles.includes(role)}
-                          onCheckedChange={(checked) => {
-                            handleRoleChange(item.id, role, !!checked);
-                          }}
-                          aria-label={`Allow ${role} to see ${item.label}`}
-                          disabled={role === 'Super Admin'} // Super Admin always has access
-                        />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                <>
+                  {renderGroup("Main Menu", groupedNavItems.mainItems)}
+                  {renderGroup("Admin Section", groupedNavItems.adminItems)}
+                  {renderGroup("Settings Section", groupedNavItems.settingsItems)}
+                </>
               )}
             </TableBody>
           </Table>
         </div>
       </main>
+
+       <AlertDialog open={isConfirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Confirm Changes</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Are you sure you want to apply these navigation visibility changes?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSaveChanges}>
+                  Yes, Save Changes
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
+
+    
