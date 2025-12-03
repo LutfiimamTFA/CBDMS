@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { I18nProvider } from '@/context/i18n-provider';
 import { FirebaseClientProvider } from '@/firebase';
 import { PermissionsProvider } from '@/context/permissions-provider';
+import { CompanyProvider } from '@/context/company-provider';
 
 export const metadata: Metadata = {
   title: 'WorkWise',
@@ -35,9 +36,11 @@ export default function RootLayout({
         >
           <I18nProvider>
             <FirebaseClientProvider>
-              <PermissionsProvider>
-                {children}
-              </PermissionsProvider>
+                <CompanyProvider>
+                  <PermissionsProvider>
+                    {children}
+                  </PermissionsProvider>
+                </CompanyProvider>
             </FirebaseClientProvider>
             <Toaster />
           </I18nProvider>
