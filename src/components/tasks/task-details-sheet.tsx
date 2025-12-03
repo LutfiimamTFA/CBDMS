@@ -419,7 +419,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
     const actionDescription = getChangedFields(initialTask, data);
     
-    let activityData: { activities?: Activity[]; lastActivity?: Activity | null } = {};
+    const activityData: { activities?: Activity[]; lastActivity?: Activity | null } = {};
 
     if (actionDescription) {
         newActivity = {
@@ -436,7 +436,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         activityData.lastActivity = newActivity;
     }
 
-    const updatedTaskData = {
+    const updatedTaskData: Partial<Task> = {
         ...data,
         assignees: currentAssignees,
         assigneeIds: currentAssignees.map((a) => a.id),
@@ -445,19 +445,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         comments: comments,
         attachments: attachments,
         ...activityData,
-        updatedAt: serverTimestamp(),
+        updatedAt: serverTimestamp() as any,
     };
+    
+    // Clean up undefined values to prevent Firestore errors
+    Object.keys(updatedTaskData).forEach(key => {
+      const typedKey = key as keyof typeof updatedTaskData;
+      if (updatedTaskData[typedKey] === undefined) {
+        delete updatedTaskData[typedKey];
+      }
+    });
 
     batch.update(taskDocRef, updatedTaskData);
-
-        // Only update the 'activities' field if there's a new activity to add
-        if (newActivity) {
-            batch.update(taskDocRef, {
-                activities: [...(initialTask.activities || []), newActivity],
-                lastActivity: newActivity,
-            });
-        }
-    
 
     try {
         await batch.commit();
@@ -854,7 +853,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               { (isAssignee || canEdit) ? (
+                               { canEdit ? (
                                     <FormField control={form.control} name="status" render={({ field }) => (
                                     <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
