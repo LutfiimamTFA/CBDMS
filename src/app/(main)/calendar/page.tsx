@@ -11,7 +11,6 @@ import {
   endOfMonth,
   endOfWeek,
   format,
-  getDate,
   isSameMonth,
   startOfMonth,
   startOfWeek,
@@ -19,6 +18,9 @@ import {
   sub,
   isSameDay,
   parseISO,
+  differenceInDays,
+  max,
+  min,
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -40,6 +42,7 @@ const brandColors = [
   'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'
 ];
 const getBrandColor = (brandId: string) => {
+  if (!brandId) return 'bg-gray-500';
   let hash = 0;
   for (let i = 0; i < brandId.length; i++) {
     hash = brandId.charCodeAt(i) + ((hash << 5) - hash);
@@ -84,56 +87,68 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(sub(currentDate, { months: 1 }));
 
   // --- Task Processing for Calendar View ---
-  const tasksWithPositions = useMemo(() => {
-    if (!tasks) return [];
+ const tasksWithPositions = useMemo(() => {
+    if (!tasks || daysInGrid.length === 0) return [];
     
-    // Sort tasks to ensure consistent layout
-    const sortedTasks = [...tasks].sort((a,b) => parseISO(a.startDate!).getTime() - parseISO(b.startDate!).getTime());
-    const weekLaneOccupancy: Record<string, number[]> = {};
+    const sortedTasks = [...tasks].sort((a,b) => {
+        const startA = a.startDate ? parseISO(a.startDate).getTime() : 0;
+        const startB = b.startDate ? parseISO(b.startDate).getTime() : 0;
+        return startA - startB;
+    });
+
+    const weekLanes: Record<string, any[][]> = {};
 
     return sortedTasks.map((task) => {
-      if (!task.startDate || !task.dueDate) return { ...task, top: 0, left: 0, width: 0, color: 'bg-gray-500' };
+        if (!task.startDate || !task.dueDate) return { ...task };
 
-      const taskStart = parseISO(task.startDate);
-      const taskEnd = parseISO(task.dueDate);
-      const weekKey = format(startOfWeek(taskStart), 'yyyy-MM-dd');
-      
-      if (!weekLaneOccupancy[weekKey]) {
-        weekLaneOccupancy[weekKey] = [];
-      }
+        const taskStart = parseISO(task.startDate);
+        const taskEnd = parseISO(task.dueDate);
 
-      // Find the first available lane (vertical position) for this task's duration
-      let lane = 0;
-      while (true) {
-        const intervalToCheck = eachDayOfInterval({start: taskStart, end: taskEnd}).map(d => getDate(d));
-        
-        const isLaneOccupied = weekLaneOccupancy[weekKey]
-            .some(occupiedLane => (occupiedLane as any).lane === lane && (occupiedLane as any).days.some((d: number) => intervalToCheck.includes(d)));
+        const actualStart = max([taskStart, startDate]);
+        const actualEnd = min([taskEnd, endDate]);
 
-        if (!isLaneOccupied) {
-          weekLaneOccupancy[weekKey].push({ lane, days: intervalToCheck } as any);
-          break;
+        const startDayIndex = daysInGrid.findIndex(day => isSameDay(day, actualStart));
+        if (startDayIndex === -1) return { ...task };
+
+        const weekKey = format(startOfWeek(actualStart), 'yyyy-MM-dd');
+        if (!weekLanes[weekKey]) {
+            weekLanes[weekKey] = [];
         }
-        lane++;
-      }
-      
-      const gridStartIndex = daysInGrid.findIndex(day => isSameDay(day, taskStart));
-      const gridEndIndex = daysInGrid.findIndex(day => isSameDay(day, taskEnd));
-      
-      const left = (gridStartIndex % 7) * (100 / 7);
-      const width = ((gridEndIndex % 7) - (gridStartIndex % 7) + 1) * (100 / 7);
-      const top = Math.floor(gridStartIndex / 7);
-      
-      return {
-        ...task,
-        top: top, // The week row index
-        lane: lane, // The vertical lane within the week
-        left: left,
-        width: width,
-        color: getBrandColor(task.brandId),
-      };
-    });
-  }, [tasks, daysInGrid]);
+
+        let lane = 0;
+        while (true) {
+            if (!weekLanes[weekKey][lane]) {
+                weekLanes[weekKey][lane] = [];
+            }
+            
+            const isOccupied = weekLanes[weekKey][lane].some(occupiedTask => 
+                (actualStart >= occupiedTask.start && actualStart <= occupiedTask.end) ||
+                (actualEnd >= occupiedTask.start && actualEnd <= occupiedTask.end)
+            );
+
+            if (!isOccupied) {
+                weekLanes[weekKey][lane].push({ start: actualStart, end: actualEnd });
+                break;
+            }
+            lane++;
+        }
+
+        const startCol = startDayIndex % 7;
+        const duration = differenceInDays(actualEnd, actualStart) + 1;
+
+        return {
+            ...task,
+            lane: lane,
+            startDayIndex: startDayIndex,
+            gridProps: {
+                gridRowStart: Math.floor(startDayIndex / 7) + 2, // +2 because grid rows start at 1 and we have a header row
+                gridColumnStart: startCol + 1,
+                gridColumnEnd: `span ${duration}`,
+            },
+            color: getBrandColor(task.brandId),
+        };
+    }).filter(t => t.gridProps);
+  }, [tasks, daysInGrid, startDate, endDate]);
 
 
   const isLoading = isTasksLoading || areBrandsLoading || areStatusesLoading;
@@ -175,24 +190,18 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar Grid */}
-        <div className="grid grid-cols-7 border-t border-l rounded-lg overflow-hidden">
+        <div className="grid grid-cols-7 grid-rows-[auto] gap-px border-t border-l rounded-lg overflow-hidden bg-border">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-r bg-secondary/50">
+                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground bg-secondary/50">
                     {day}
                 </div>
             ))}
             
-            {daysInGrid.map((day, index) => {
-              const tasksOnThisDay = tasksWithPositions.filter(task => 
-                  task.startDate && task.dueDate &&
-                  isSameDay(day, parseISO(task.startDate))
-              );
-
-              return (
+            {daysInGrid.map((day) => (
                 <div 
                     key={day.toString()}
                     className={cn(
-                        "relative h-40 border-b border-r p-2",
+                        "relative min-h-40 bg-background p-2",
                         !isSameMonth(day, currentDate) && "bg-muted/30"
                     )}
                 >
@@ -202,75 +211,73 @@ export default function CalendarPage() {
                     )}>
                       {format(day, 'd')}
                     </span>
-                    
-                    {/* Render Task Bars */}
-                    <div className="absolute top-10 left-0 right-0 h-28 space-y-1 overflow-hidden">
-                       {tasksOnThisDay.map(task => {
-                         const PriorityIcon = priorityInfo[task.priority].icon;
-
-                         return (
-                          <Popover key={task.id} trigger="hover">
-                            <PopoverTrigger asChild>
-                              <Link href={`/tasks/${task.id}`}
-                                style={{
-                                  position: 'absolute',
-                                  top: `${task.lane! * 1.75}rem`, // 1.75rem height per lane
-                                  left: `${task.left}%`,
-                                  width: `${task.width}%`,
-                                }}
-                                className={cn(
-                                  "h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity",
-                                  task.color
-                                )}
-                              >
-                               <span className="truncate">{task.title}</span>
-                               <div className='flex items-center gap-1.5'>
-                                {task.assignees && task.assignees.length > 0 && (
-                                  <Avatar className="h-5 w-5 border border-white/50">
-                                    <AvatarImage src={task.assignees[0].avatarUrl} />
-                                    <AvatarFallback>{task.assignees[0].name.charAt(0)}</AvatarFallback>
-                                  </Avatar>
-                                )}
-                               </div>
-                              </Link>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80">
-                                <div className="space-y-3">
-                                  <div className='flex justify-between items-start'>
-                                    <h4 className="font-bold">{task.title}</h4>
-                                    <Badge variant="secondary" className={cn(task.color, "text-white")}>
-                                      {brands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
-                                    </Badge>
-                                  </div>
-                                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                    <div className='flex items-center gap-2'>
-                                      <PriorityIcon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
-                                      <span>{task.priority}</span>
-                                    </div>
-                                    <div className='flex items-center gap-2'>
-                                      <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
-                                      <span>{task.status}</span>
-                                    </div>
-                                  </div>
-                                  <div className='flex items-center gap-2'>
-                                     {task.assignees?.map(assignee => (
-                                        <div key={assignee.id} className='flex items-center gap-2'>
-                                          <Avatar className="h-7 w-7">
-                                              <AvatarImage src={assignee.avatarUrl} />
-                                              <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                                          </Avatar>
-                                          <span className="text-sm font-medium">{assignee.name}</span>
-                                        </div>
-                                     ))}
-                                  </div>
-                                </div>
-                            </PopoverContent>
-                          </Popover>
-                         )
-                       })}
-                    </div>
                 </div>
-              )
+            ))}
+            
+            {/* Render Task Bars */}
+            {tasksWithPositions.map(task => {
+                if (!task.gridProps) return null;
+                const PriorityIcon = priorityInfo[task.priority].icon;
+
+                return (
+                    <Popover key={task.id} trigger="hover">
+                    <PopoverTrigger asChild>
+                      <div
+                        style={{
+                          gridRowStart: task.gridProps.gridRowStart,
+                          gridColumnStart: task.gridProps.gridColumnStart,
+                          gridColumnEnd: task.gridProps.gridColumnEnd,
+                          top: `${task.lane! * 1.75 + 2.5}rem`,
+                        }}
+                         className={cn(
+                          "absolute h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity z-10",
+                          task.color
+                        )}
+                      >
+                        <span className="truncate">{task.title}</span>
+                        <div className='flex items-center gap-1.5'>
+                        {task.assignees && task.assignees.length > 0 && (
+                          <Avatar className="h-5 w-5 border border-white/50">
+                            <AvatarImage src={task.assignees[0].avatarUrl} />
+                            <AvatarFallback>{task.assignees[0].name.charAt(0)}</AvatarFallback>
+                          </Avatar>
+                        )}
+                        </div>
+                      </div>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                        <div className="space-y-3">
+                        <div className='flex justify-between items-start'>
+                            <h4 className="font-bold">{task.title}</h4>
+                            <Badge variant="secondary" className={cn(task.color, "text-white")}>
+                            {brands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
+                            </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className='flex items-center gap-2'>
+                            <PriorityIcon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
+                            <span>{task.priority}</span>
+                            </div>
+                            <div className='flex items-center gap-2'>
+                            <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
+                            <span>{task.status}</span>
+                            </div>
+                        </div>
+                        <div className='flex items-center gap-2'>
+                            {task.assignees?.map(assignee => (
+                                <div key={assignee.id} className='flex items-center gap-2'>
+                                <Avatar className="h-7 w-7">
+                                    <AvatarImage src={assignee.avatarUrl} />
+                                    <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm font-medium">{assignee.name}</span>
+                                </div>
+                            ))}
+                        </div>
+                        </div>
+                    </PopoverContent>
+                    </Popover>
+                )
             })}
         </div>
       </main>
