@@ -654,7 +654,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {(isAssignee || canEdit) && initialTask.status !== 'Done' && (
+                        {isAssignee && initialTask.status !== 'Done' && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
@@ -792,7 +792,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {(isAssignee || canEdit) && initialTask.status !== 'Done' && (
+                    {isAssignee && initialTask.status !== 'Done' && (
                           <div className="space-y-2">
                             <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
                                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -844,7 +844,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               { (canEdit) ? (
+                               { (isAssignee || canEdit) ? (
                                     <FormField control={form.control} name="status" render={({ field }) => (
                                     <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
