@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -31,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -564,57 +565,74 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
   const handleMarkComplete = async () => {
     if (!firestore || !currentUser || !initialTask.createdBy) return;
-    
-    const taskRef = doc(firestore, "tasks", initialTask.id);
+
+    const taskRef = doc(firestore, 'tasks', initialTask.id);
     const completionDate = new Date();
-    const isLate = initialTask.dueDate ? isAfter(completionDate, parseISO(initialTask.dueDate)) : false;
+    const isLate = initialTask.dueDate
+      ? isAfter(completionDate, parseISO(initialTask.dueDate))
+      : false;
 
     const newActivity: Activity = {
-        id: `act-${Date.now()}`,
-        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        action: `completed the task ${isLate ? '(Late)' : '(On Time)'}`,
-        timestamp: completionDate.toISOString(),
-    };
-
-    const managerNotifRef = doc(collection(firestore, `users/${initialTask.createdBy.id}/notifications`));
-    const notifMessage = `${currentUser.name} has completed the task: "${initialTask.title}".`;
-    const notifTitle = isLate ? `Task Completed (Late)` : `Task Completed (On Time)`;
-
-    const managerNotification: Omit<Notification, 'id'> = {
-        userId: initialTask.createdBy.id,
-        title: notifTitle,
-        message: notifMessage,
-        taskId: initialTask.id,
-        taskTitle: initialTask.title,
-        isRead: false,
-        createdAt: serverTimestamp(),
-        createdBy: {
-            id: currentUser.id,
-            name: currentUser.name,
-            avatarUrl: currentUser.avatarUrl || '',
-        },
+      id: `act-${Date.now()}`,
+      user: {
+        id: currentUser.id,
+        name: currentUser.name,
+        avatarUrl: currentUser.avatarUrl || '',
+      },
+      action: `completed the task ${isLate ? '(Late)' : '(On Time)'}`,
+      timestamp: completionDate.toISOString(),
     };
 
     try {
-        const batch = writeBatch(firestore);
-        batch.update(taskRef, {
-            status: 'Done',
-            actualCompletionDate: completionDate.toISOString(),
-            lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity]
-        });
+      const batch = writeBatch(firestore);
+      batch.update(taskRef, {
+        status: 'Done',
+        actualCompletionDate: completionDate.toISOString(),
+        lastActivity: newActivity,
+        activities: [...(initialTask.activities || []), newActivity],
+      });
+
+      // Only send a notification if the person completing the task is not the creator
+      if (currentUser.id !== initialTask.createdBy.id) {
+        const managerNotifRef = doc(
+          collection(firestore, `users/${initialTask.createdBy.id}/notifications`)
+        );
+        const notifMessage = `${currentUser.name} has completed the task: "${initialTask.title}".`;
+        const notifTitle = isLate
+          ? `Task Completed (Late)`
+          : `Task Completed (On Time)`;
+
+        const managerNotification: Omit<Notification, 'id'> = {
+          userId: initialTask.createdBy.id,
+          title: notifTitle,
+          message: notifMessage,
+          taskId: initialTask.id,
+          taskTitle: initialTask.title,
+          isRead: false,
+          createdAt: serverTimestamp(),
+          createdBy: {
+            id: currentUser.id,
+            name: currentUser.name,
+            avatarUrl: currentUser.avatarUrl || '',
+          },
+        };
         batch.set(managerNotifRef, managerNotification);
-        
-        await batch.commit();
-        toast({
-            title: 'Task Completed!',
-            description: `A notification has been sent to the manager.`,
-        });
+      }
+
+      await batch.commit();
+      toast({
+        title: 'Task Completed!',
+        description: 'Status updated and relevant parties notified.',
+      });
     } catch (error) {
-         console.error("Failed to complete task:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not complete the task.' });
+      console.error('Failed to complete task:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: 'Could not complete the task.',
+      });
     }
-  }
+  };
 
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
@@ -808,7 +826,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                                {!canEdit && currentUser?.role === 'Employee' ? (
+                               {currentUser?.role === 'Employee' ? (
                                      <Badge variant="outline">
                                         <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
                                         {form.getValues('status')}
