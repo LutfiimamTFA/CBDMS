@@ -224,7 +224,7 @@ export default function WorkflowSettingsPage() {
             
             <div className="rounded-lg border p-4">
                 <DragDropContext onDragEnd={onDragEnd}>
-                    <Droppable droppableId="statuses">
+                    <Droppable droppableId="statuses" isDropDisabled={statuses.length === 0}>
                         {(provided) => (
                              <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
                                 {statuses.map((status, index) => (
