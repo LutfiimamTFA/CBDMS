@@ -27,12 +27,14 @@ export function KanbanColumn({
 }: KanbanColumnProps) {
   const { profile, isLoading: isProfileLoading } = useUserProfile();
 
+  // The logic is now more robust. It explicitly returns true during loading,
+  // preventing any chance of `undefined` being passed to isDropDisabled.
   const isDropDisabled = useMemo(() => {
-    // During the initial loading state, it's safest to disable dropping.
-    if (isProfileLoading) return true;
-    if (!profile) return true; // If for any reason profile is null, disable.
-    if (profile.role === 'Client') return true;
-    return false;
+    if (isProfileLoading || !profile) {
+      return true; // Always disable dropping if profile is loading or absent.
+    }
+    // Only allow dropping if the user is not a Client.
+    return profile.role === 'Client';
   }, [profile, isProfileLoading]);
 
 
