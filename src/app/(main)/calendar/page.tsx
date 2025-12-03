@@ -154,7 +154,7 @@ export default function CalendarPage() {
   }, []);
 
   return (
-    <div className="flex h-svh flex-col bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <Header title="Team Calendar" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         {/* Calendar Header */}
@@ -246,7 +246,9 @@ export default function CalendarPage() {
                       {format(day, 'd')}
                     </span>
                     <div className="mt-1 space-y-1">
-                      {tasksOnThisDay.map(task => (
+                      {tasksOnThisDay.map(task => {
+                        const priority = priorityInfo[task.priority];
+                        return (
                         <Popover key={task.id}>
                           <PopoverTrigger asChild>
                               <Link href={`/tasks/${task.id}`} className={cn(
@@ -270,9 +272,9 @@ export default function CalendarPage() {
                                   </div>
                                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                                     <div className='flex items-center gap-2'>
-                                        {task.priority && priorityInfo[task.priority] &&
+                                        {priority &&
                                             <>
-                                                <priorityInfo[task.priority].icon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
+                                                <priority.icon className={`h-4 w-4 ${priority.color}`} />
                                                 <span>{task.priority}</span>
                                             </>
                                         }
@@ -296,7 +298,7 @@ export default function CalendarPage() {
                               </div>
                           </PopoverContent>
                       </Popover>
-                      ))}
+                      )})}
                     </div>
                 </div>
               )
@@ -307,4 +309,3 @@ export default function CalendarPage() {
   );
 }
 
-    
