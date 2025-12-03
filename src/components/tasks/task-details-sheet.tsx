@@ -96,6 +96,7 @@ export function TaskDetailsSheet({
   const router = useRouter();
   const [isUploading, setIsUploading] = React.useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
 
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -538,6 +539,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const handleStartWork = async () => {
     if (!firestore || !currentUser) return;
+    setIsStarting(true);
 
     const taskRef = doc(firestore, "tasks", initialTask.id);
     const newActivity: Activity = {
@@ -551,7 +553,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const batch = writeBatch(firestore);
         batch.update(taskRef, {
             status: 'Doing',
-            actualStartDate: new Date().toISOString(),
+            actualStartDate: initialTask.actualStartDate || new Date().toISOString(),
             lastActivity: newActivity,
             activities: [...(initialTask.activities || []), newActivity]
         });
@@ -560,6 +562,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     } catch (error) {
         console.error("Failed to start task:", error);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not start the task.' });
+    } finally {
+        setIsStarting(false);
     }
   }
   
@@ -639,7 +643,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     <div className="p-6 space-y-6">
                         
                         {isAssignee && initialTask.status === 'To Do' && (
-                            <Button className="w-full h-12 text-lg" onClick={handleStartWork}><PlayCircle className="mr-2"/> Start Work</Button>
+                            <Button className="w-full h-12 text-lg" onClick={handleStartWork} disabled={isStarting}>
+                                {isStarting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                <PlayCircle className="mr-2"/> Start Work
+                            </Button>
                         )}
                         {isAssignee && initialTask.status === 'Doing' && (
                             <Button className="w-full h-12 text-lg" onClick={handleMarkComplete} disabled={isCompleting}>
@@ -797,27 +804,27 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               { !canEdit ? (
+                               { (canEdit) ? (
+                                    <FormField control={form.control} name="status" render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                        <SelectContent>
+                                        {allStatuses?.map(s => (
+                                            <SelectItem key={s.id} value={s.name}>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`h-2 w-2 rounded-full ${s.color}`}></span>
+                                                    {s.name}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                        </SelectContent>
+                                    </Select>
+                                    )}/>
+                                ) : (
                                      <Badge variant="outline" className="font-normal">
                                         <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
                                         {form.getValues('status')}
                                     </Badge>
-                                ) : (
-                                <FormField control={form.control} name="status" render={({ field }) => (
-                                  <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit}>
-                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                      {allStatuses?.map(s => (
-                                        <SelectItem key={s.id} value={s.name}>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`h-2 w-2 rounded-full ${s.color}`}></span>
-                                                {s.name}
-                                            </div>
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}/>
                                 )}
                             </div>
                         </FormItem>

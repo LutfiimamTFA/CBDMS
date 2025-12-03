@@ -73,10 +73,11 @@ service cloud.firestore {
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
 
-      allow update: if (isSuperAdmin() || (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId))) ||
-                      // Employee-specific rule for completing a task
-                      (isRole('Employee') && isAssignee(taskId) && resource.data.status != 'Done' && request.resource.data.status == 'Done');
-
+      allow update: if 
+          // Admins/Managers can always update
+          (isSuperAdmin() || (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId))) ||
+          // Employees can update if they are an assignee AND the current status isn't "Done"
+          (isRole('Employee') && isAssignee(taskId) && resource.data.status != 'Done');
       
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks'));
 
