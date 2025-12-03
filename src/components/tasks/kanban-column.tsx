@@ -25,13 +25,15 @@ export function KanbanColumn({
   status,
   tasks,
 }: KanbanColumnProps) {
-  const { profile } = useUserProfile();
+  const { profile, isLoading: isProfileLoading } = useUserProfile();
 
   const isDropDisabled = useMemo(() => {
-    if (!profile) return true;
+    // During the initial loading state, it's safest to disable dropping.
+    if (isProfileLoading) return true;
+    if (!profile) return true; // If for any reason profile is null, disable.
     if (profile.role === 'Client') return true;
     return false;
-  }, [profile]);
+  }, [profile, isProfileLoading]);
 
 
   const uniqueAssignees = useMemo(() => {
