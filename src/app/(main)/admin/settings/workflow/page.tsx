@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import type { WorkflowStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Trash2, Edit, GripVertical } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -40,7 +40,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
 const defaultStatuses: Omit<WorkflowStatus, 'id' | 'companyId'>[] = [
     { name: 'To Do', order: 0, color: 'bg-gray-500' },
@@ -144,6 +143,16 @@ export default function WorkflowSettingsPage() {
       // TODO: Add logic to handle tasks that currently have this status
       const docRef = doc(firestore, 'statuses', deleteStatus.id);
       await deleteDoc(docRef);
+      // Re-order remaining statuses
+      const batch = writeBatch(firestore);
+      statuses
+        .filter(s => s.id !== deleteStatus.id)
+        .forEach((status, index) => {
+            const docRef = doc(firestore, 'statuses', status.id);
+            batch.update(docRef, { order: index });
+        });
+      await batch.commit();
+
       toast({ title: 'Status Deleted', description: `Status "${deleteStatus.name}" has been removed.` });
       setDeleteStatus(null);
     } catch (error) {
@@ -151,37 +160,6 @@ export default function WorkflowSettingsPage() {
       toast({ variant: 'destructive', title: 'Error', description: 'Could not delete status.' });
     }
   }
-  
-  const onDragEnd = async (result: DropResult) => {
-    if (!result.destination || !firestore) {
-      return;
-    }
-    
-    const items = Array.from(statuses);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
-    
-    // Optimistically update UI
-    setStatuses(items);
-
-    // Update 'order' field in Firestore
-    const batch = writeBatch(firestore);
-    items.forEach((status, index) => {
-        const docRef = doc(firestore, 'statuses', status.id);
-        batch.update(docRef, { order: index });
-    });
-
-    try {
-        await batch.commit();
-        toast({ title: 'Workflow Order Updated' });
-    } catch (error) {
-        console.error(error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not save the new order.' });
-        // Revert UI if Firestore update fails
-        setStatuses(dbStatuses || []);
-    }
-  };
-
 
   if (isLoading) {
       return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -196,7 +174,7 @@ export default function WorkflowSettingsPage() {
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Manage Workflow</h2>
                     <p className="text-muted-foreground">
-                        Customize the columns on your Kanban board. Drag to reorder.
+                        Customize the columns on your Kanban board.
                     </p>
                 </div>
                 <Dialog open={isNewStatusDialogOpen} onOpenChange={setNewStatusDialogOpen}>
@@ -223,43 +201,29 @@ export default function WorkflowSettingsPage() {
             </div>
             
             <div className="rounded-lg border p-4">
-                <DragDropContext onDragEnd={onDragEnd}>
-                    <Droppable droppableId="statuses" isDropDisabled={statuses.length === 0}>
-                        {(provided) => (
-                             <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                                {statuses.map((status, index) => (
-                                    <Draggable key={status.id} draggableId={status.id} index={index}>
-                                        {(provided) => (
-                                            <div
-                                                ref={provided.innerRef}
-                                                {...provided.draggableProps}
-                                                {...provided.dragHandleProps}
-                                                className="flex items-center justify-between rounded-md bg-secondary/50 p-3"
-                                            >
-                                                <div className='flex items-center gap-3'>
-                                                    <GripVertical className="h-5 w-5 text-muted-foreground"/>
-                                                    <span className={`h-3 w-3 rounded-full ${status.color}`}></span>
-                                                    <span className="font-medium">{status.name}</span>
-                                                </div>
-                                                <div className='flex items-center gap-2'>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditStatus(status)}>
-                                                        <Edit className="h-4 w-4"/>
-                                                    </Button>
-                                                    {status.name !== 'To Do' && status.name !== 'Done' && (
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteStatus(status)}>
-                                                            <Trash2 className="h-4 w-4"/>
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </Draggable>
-                                ))}
-                                {provided.placeholder}
+                <div className="space-y-2">
+                    {statuses.map((status) => (
+                        <div
+                            key={status.id}
+                            className="flex items-center justify-between rounded-md bg-secondary/50 p-3"
+                        >
+                            <div className='flex items-center gap-3'>
+                                <span className={`h-3 w-3 rounded-full ${status.color}`}></span>
+                                <span className="font-medium">{status.name}</span>
                             </div>
-                        )}
-                    </Droppable>
-                </DragDropContext>
+                            <div className='flex items-center gap-2'>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditStatus(status)}>
+                                    <Edit className="h-4 w-4"/>
+                                </Button>
+                                {status.name !== 'To Do' && status.name !== 'Done' && (
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteStatus(status)}>
+                                        <Trash2 className="h-4 w-4"/>
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
       </main>
@@ -301,3 +265,5 @@ export default function WorkflowSettingsPage() {
     </div>
   );
 }
+
+    
