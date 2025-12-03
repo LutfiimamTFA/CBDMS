@@ -92,10 +92,10 @@ export default function CalendarPage() {
   const filteredTasks = useMemo(() => {
     if (!allTasks) return [];
     return allTasks.filter(task => {
-      const brandMatch = selectedBrands.length === 0 || selectedBrands.includes(task.brandId);
+      const brandMatch = selectedBrands.length === 0 || (task.brandId && selectedBrands.includes(task.brandId));
       const userMatch = selectedUsers.length === 0 || task.assigneeIds.some(id => selectedUsers.includes(id));
-      const statusMatch = selectedStatuses.length === 0 || selectedStatuses.includes(task.status);
-      const priorityMatch = selectedPriorities.length === 0 || selectedPriorities.includes(task.priority);
+      const statusMatch = selectedStatuses.length === 0 || (task.status && selectedStatuses.includes(task.status));
+      const priorityMatch = selectedPriorities.length === 0 || (task.priority && selectedPriorities.includes(task.priority));
       return brandMatch && userMatch && statusMatch && priorityMatch;
     });
   }, [allTasks, selectedBrands, selectedUsers, selectedStatuses, selectedPriorities]);
@@ -270,8 +270,12 @@ export default function CalendarPage() {
                                   </div>
                                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                                     <div className='flex items-center gap-2'>
-                                        <priorityInfo[task.priority].icon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
-                                        <span>{task.priority}</span>
+                                        {task.priority && priorityInfo[task.priority] &&
+                                            <>
+                                                <priorityInfo[task.priority].icon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
+                                                <span>{task.priority}</span>
+                                            </>
+                                        }
                                     </div>
                                     <div className='flex items-center gap-2'>
                                         <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
@@ -302,3 +306,5 @@ export default function CalendarPage() {
     </div>
   );
 }
+
+    
