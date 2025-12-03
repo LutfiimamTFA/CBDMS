@@ -654,32 +654,33 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {isAssignee && initialTask.status === 'Doing' && !isRunning && (
-                           <Button className="w-full h-12 text-lg" onClick={handleStartSession}>
-                                <PlayCircle className="mr-2"/> Resume Session
-                            </Button>
-                        )}
-                        {isAssignee && initialTask.status === 'Doing' && isRunning && (
-                           <Button variant="destructive" className="w-full h-12 text-lg" onClick={handlePauseSession}>
-                                <PauseCircle className="mr-2"/> Pause Session
-                            </Button>
-                        )}
-                        
-                        {isAssignee && initialTask.status !== 'Doing' && initialTask.status !== 'Done' && (
-                           <Button className="w-full h-12 text-lg" onClick={handleStartSession}>
-                                <PlayCircle className="mr-2"/> Start Work
-                            </Button>
-                        )}
-
                         {(isAssignee || canEdit) && initialTask.status !== 'Done' && (
-                          <div className="space-y-2">
-                            <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
-                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                Mark as Complete
-                            </Button>
-                            {!allSubtasksCompleted && (
-                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk menandai tugas ini selesai.</p>
-                            )}
+                          <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
+                              <div className="flex items-center justify-between">
+                                  <div className="space-y-1">
+                                      <h3 className="font-semibold">Time Tracker</h3>
+                                      <p className="text-sm text-muted-foreground">
+                                          Total Logged: <span className="font-medium text-foreground">{formatHours(timeTracked)}</span>
+                                      </p>
+                                  </div>
+                                  {isRunning ? (
+                                      <Button variant="destructive" onClick={handlePauseSession}>
+                                          <PauseCircle className="mr-2"/> Stop Session
+                                      </Button>
+                                  ) : (
+                                      <Button onClick={handleStartSession}>
+                                          <PlayCircle className="mr-2"/> Start Session
+                                      </Button>
+                                  )}
+                              </div>
+                              {isRunning && (
+                                <div className="p-3 rounded-md bg-background border border-primary/20">
+                                  <div className="flex items-center justify-between">
+                                      <span className="text-sm font-medium text-primary">Current Session</span>
+                                      <span className="font-mono text-lg text-primary">{formatStopwatch(elapsedTime)}</span>
+                                  </div>
+                                </div>
+                              )}
                           </div>
                         )}
 
@@ -791,6 +792,17 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
+                    {(isAssignee || canEdit) && initialTask.status !== 'Done' && (
+                          <div className="space-y-2">
+                            <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
+                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                Mark as Complete
+                            </Button>
+                            {!allSubtasksCompleted && (
+                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat menyelesaikan tugas ini.</p>
+                            )}
+                          </div>
+                    )}
                     <div className='space-y-4 p-4 rounded-lg border'>
                       <h3 className='font-semibold text-sm'>Task Details</h3>
                       <Separator/>
@@ -899,7 +911,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                     {format(parseISO(initialTask.actualCompletionDate), 'MMM d, yyyy')}
                                  </span>
                                  {completionStatus && (
-                                    <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800' : ''}>
+                                    <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>
                                         {completionStatus}
                                     </Badge>
                                  )}
@@ -990,14 +1002,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <Progress value={timeTrackingProgress} />
                        </div>
 
-                       {isRunning && (
-                         <div className="space-y-2">
-                             <div className="flex items-center justify-between text-sm">
-                                 <span className="text-muted-foreground">Current Session</span>
-                                 <div className="font-mono text-primary">{formatStopwatch(elapsedTime)}</div>
-                             </div>
-                         </div>
-                       )}
                     </div>
 
                   </div>
