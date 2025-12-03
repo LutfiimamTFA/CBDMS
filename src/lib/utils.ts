@@ -50,3 +50,9 @@ export const statusInfo: Record<string, Omit<StatusInfo, 'value' | 'label'>> = {
   'Doing': { icon: CircleDashed },
   'Done': { icon: CheckCircle2 },
 };
+
+export const formatHours = (hours: number = 0) => {
+    const h = Math.floor(hours);
+    const m = Math.floor((hours - h) * 60);
+    return `${h}h ${m}m`;
+};

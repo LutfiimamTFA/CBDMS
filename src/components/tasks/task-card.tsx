@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { priorityInfo } from '@/lib/utils';
+import { priorityInfo, formatHours } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -78,7 +78,7 @@ export function TaskCard({ task, index }: TaskCardProps) {
                     <div className="mt-3 space-y-1">
                         <div className="flex justify-between text-xs text-muted-foreground">
                             <span>Time Tracking</span>
-                            <span>{task.timeTracked || 0}h / {task.timeEstimate}h</span>
+                            <span>{formatHours(task.timeTracked)} / {task.timeEstimate}h</span>
                         </div>
                         <Progress value={timeTrackingProgress} className="h-1" />
                     </div>
