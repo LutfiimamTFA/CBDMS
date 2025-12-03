@@ -565,13 +565,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
   const handleMarkComplete = async () => {
     if (!firestore || !currentUser) return;
-  
+
     const taskRef = doc(firestore, 'tasks', initialTask.id);
     const completionDate = new Date();
     const isLate = initialTask.dueDate
       ? isAfter(completionDate, parseISO(initialTask.dueDate))
       : false;
-  
+
     const newActivity: Activity = {
       id: `act-${Date.now()}`,
       user: {
@@ -582,17 +582,20 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       action: `completed the task ${isLate ? '(Late)' : '(On Time)'}`,
       timestamp: new Date().toISOString(),
     };
-  
+
     try {
       const batch = writeBatch(firestore);
-      batch.update(taskRef, {
+
+      const updateData: any = {
         status: 'Done',
         actualCompletionDate: completionDate.toISOString(),
         lastActivity: newActivity,
         activities: [...(initialTask.activities || []), newActivity],
-      });
-  
-      // Only send a notification if the person completing the task is not the creator
+        updatedAt: serverTimestamp(),
+      };
+
+      batch.update(taskRef, updateData);
+
       if (initialTask.createdBy && currentUser.id !== initialTask.createdBy.id) {
         const managerNotifRef = doc(
           collection(firestore, `users/${initialTask.createdBy.id}/notifications`)
@@ -601,7 +604,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const notifTitle = isLate
           ? `Task Completed (Late)`
           : `Task Completed (On Time)`;
-  
+
         const managerNotification: Omit<Notification, 'id'> = {
           userId: initialTask.createdBy.id,
           title: notifTitle,
@@ -618,7 +621,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         };
         batch.set(managerNotifRef, managerNotification);
       }
-  
+
       await batch.commit();
       toast({
         title: 'Task Completed!',
@@ -629,10 +632,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       toast({
         variant: 'destructive',
         title: 'Update Failed',
-        description: 'Could not complete the task.',
+        description: `Could not complete the task. Error: ${error}`,
       });
     }
   };
+
 
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
@@ -1068,3 +1072,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    

@@ -42,7 +42,7 @@ service cloud.firestore {
     function isAssignee(taskId) {
         return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds;
     }
-
+    
     // Rules for 'permissions' collection
     match /permissions/{docId} {
       // Only Super Admins can read or write the permission settings.
@@ -142,3 +142,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
