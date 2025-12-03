@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -430,7 +429,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             timestamp: new Date().toISOString(),
         };
         activityData = {
-            activities: [...(initialTask.activities || []), newActivity],
+            activities: [...(activities || []), newActivity],
             lastActivity: newActivity,
         };
     }
@@ -534,7 +533,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     
     try {
         await updateDoc(taskRef, {
-            status: 'Doing',
             actualStartDate: initialTask.actualStartDate || new Date().toISOString(),
             currentSessionStartTime: new Date().toISOString(),
             lastActivity: newActivity,
@@ -641,7 +639,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             status: 'Doing',
             actualCompletionDate: deleteField(),
             lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity],
+            activities: [...(activities || []), newActivity],
         });
         
         toast({
@@ -896,28 +894,21 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               {canEdit ? (
-                                    <FormField control={form.control} name="status" render={({ field }) => (
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                        <SelectContent>
-                                        {allStatuses?.map(s => (
-                                            <SelectItem key={s.id} value={s.name}>
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`h-2 w-2 rounded-full ${s.color}`}></span>
-                                                    {s.name}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                        </SelectContent>
-                                    </Select>
-                                    )}/>
-                                ) : (
-                                     <Badge variant="outline" className="font-normal">
-                                        <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
-                                        {form.getValues('status')}
-                                    </Badge>
-                                )}
+                               <FormField control={form.control} name="status" render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit && !isAssignee}>
+                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                    <SelectContent>
+                                    {allStatuses?.map(s => (
+                                        <SelectItem key={s.id} value={s.name}>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`h-2 w-2 rounded-full ${s.color}`}></span>
+                                                {s.name}
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                    </SelectContent>
+                                </Select>
+                                )}/>
                             </div>
                         </FormItem>
                        <FormField control={form.control} name="priority" render={({ field }) => (
@@ -1061,7 +1052,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               </form>
           </Form>
           <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
-              {canEdit && (
+              {(canEdit || isAssignee) && (
                 <Button type="submit" form="task-details-form" disabled={isSaving}>
                   {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
                   Save Changes
@@ -1096,7 +1087,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] -mx-6 px-6">
             <div className="space-y-6 py-4">
-              {activities.length > 0 ? (
+              {activities && activities.length > 0 ? (
                 activities
                   .slice()
                   .sort((a, b) => {

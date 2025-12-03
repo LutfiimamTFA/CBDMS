@@ -42,9 +42,9 @@ import {
 } from '@/components/ui/alert-dialog';
 
 const defaultStatuses: Omit<WorkflowStatus, 'id' | 'companyId'>[] = [
-    { name: 'To Do', order: 0, color: 'bg-gray-500' },
-    { name: 'Doing', order: 1, color: 'bg-blue-500' },
-    { name: 'Done', order: 2, color: 'bg-green-500' },
+    { name: 'To Do', order: 0, color: '#808080' },
+    { name: 'Doing', order: 1, color: '#3b82f6' },
+    { name: 'Done', order: 2, color: '#22c55e' },
 ];
 
 export default function WorkflowSettingsPage() {
@@ -57,6 +57,7 @@ export default function WorkflowSettingsPage() {
 
   const [isNewStatusDialogOpen, setNewStatusDialogOpen] = useState(false);
   const [newStatusName, setNewStatusName] = useState('');
+  const [newStatusColor, setNewStatusColor] = useState('#6b21a8');
   
   const [editStatus, setEditStatus] = useState<WorkflowStatus | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<WorkflowStatus | null>(null);
@@ -112,11 +113,12 @@ export default function WorkflowSettingsPage() {
       await addDoc(collection(firestore, 'statuses'), {
         name: newStatusName,
         order: statuses.length,
-        color: 'bg-purple-500', // Default color for new statuses
+        color: newStatusColor,
         companyId: profile.companyId,
       });
       toast({ title: 'Status Created', description: `Status "${newStatusName}" has been added.` });
       setNewStatusName('');
+      setNewStatusColor('#6b21a8');
       setNewStatusDialogOpen(false);
     } catch (error) {
       console.error(error);
@@ -128,8 +130,8 @@ export default function WorkflowSettingsPage() {
     if (!editStatus || !editStatus.name.trim() || !firestore) return;
      try {
       const docRef = doc(firestore, 'statuses', editStatus.id);
-      await updateDoc(docRef, { name: editStatus.name });
-      toast({ title: 'Status Updated', description: 'Status name has been changed.' });
+      await updateDoc(docRef, { name: editStatus.name, color: editStatus.color });
+      toast({ title: 'Status Updated', description: 'Status has been changed.' });
       setEditStatus(null);
     } catch (error) {
       console.error(error);
@@ -188,9 +190,18 @@ export default function WorkflowSettingsPage() {
                                This will add a new column to your team's Kanban board.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="space-y-2">
-                           <Label htmlFor="new-status-name">Status Name</Label>
-                           <Input id="new-status-name" value={newStatusName} onChange={(e) => setNewStatusName(e.target.value)} placeholder="e.g. In Review"/>
+                        <div className="space-y-4">
+                           <div className='space-y-2'>
+                             <Label htmlFor="new-status-name">Status Name</Label>
+                             <Input id="new-status-name" value={newStatusName} onChange={(e) => setNewStatusName(e.target.value)} placeholder="e.g. In Review"/>
+                           </div>
+                           <div className='space-y-2'>
+                             <Label htmlFor="new-status-color">Status Color</Label>
+                             <div className='flex items-center gap-2'>
+                                <Input id="new-status-color" type="color" value={newStatusColor} onChange={(e) => setNewStatusColor(e.target.value)} className="w-16 h-10 p-1"/>
+                                <span className='text-sm text-muted-foreground'>Choose a color for this status.</span>
+                             </div>
+                           </div>
                         </div>
                         <DialogFooter>
                             <Button variant="ghost" onClick={() => setNewStatusDialogOpen(false)}>Cancel</Button>
@@ -208,7 +219,7 @@ export default function WorkflowSettingsPage() {
                             className="flex items-center justify-between rounded-md bg-secondary/50 p-3"
                         >
                             <div className='flex items-center gap-3'>
-                                <span className={`h-3 w-3 rounded-full ${status.color}`}></span>
+                                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></span>
                                 <span className="font-medium">{status.name}</span>
                             </div>
                             <div className='flex items-center gap-2'>
@@ -232,11 +243,17 @@ export default function WorkflowSettingsPage() {
       <Dialog open={!!editStatus} onOpenChange={(isOpen) => !isOpen && setEditStatus(null)}>
           <DialogContent>
               <DialogHeader>
-                  <DialogTitle>Edit Status Name</DialogTitle>
+                  <DialogTitle>Edit Status</DialogTitle>
               </DialogHeader>
-              <div className="space-y-2">
+              <div className="space-y-4">
+                <div className='space-y-2'>
                   <Label htmlFor="edit-status-name">Status Name</Label>
                   <Input id="edit-status-name" value={editStatus?.name || ''} onChange={(e) => setEditStatus(s => s ? {...s, name: e.target.value} : null)} />
+                </div>
+                <div className='space-y-2'>
+                  <Label htmlFor="edit-status-color">Status Color</Label>
+                  <Input id="edit-status-color" type="color" value={editStatus?.color || ''} onChange={(e) => setEditStatus(s => s ? {...s, color: e.target.value} : null)} className="w-16 h-10 p-1"/>
+                </div>
               </div>
               <DialogFooter>
                   <Button variant="ghost" onClick={() => setEditStatus(null)}>Cancel</Button>
@@ -265,5 +282,3 @@ export default function WorkflowSettingsPage() {
     </div>
   );
 }
-
-    

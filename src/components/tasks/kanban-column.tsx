@@ -40,7 +40,7 @@ export function KanbanColumn({
     >
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <div className={`h-3 w-3 rounded-full ${status.color}`}></div>
+          <div className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></div>
           <h2 className="font-headline font-semibold">{status.name}</h2>
           <span className="ml-2 rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
             {tasks.length}
