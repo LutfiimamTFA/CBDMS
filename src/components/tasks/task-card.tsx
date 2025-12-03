@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Progress } from '../ui/progress';
 import { useI18n } from '@/context/i18n-provider';
 import Link from 'next/link';
+import { Badge } from '../ui/badge';
 
 interface TaskCardProps {
   task: Task;
@@ -39,7 +40,7 @@ export function TaskCard({ task }: TaskCardProps) {
           <Card
               className={`cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full`}
           >
-              <CardContent className="p-4">
+              <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between">
                     <h3 className="font-headline text-base font-semibold leading-tight pr-2">{task.title}</h3>
                     <TooltipProvider>
@@ -53,19 +54,9 @@ export function TaskCard({ task }: TaskCardProps) {
                         </Tooltip>
                     </TooltipProvider>
                 </div>
-
-                {task.tags && task.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1">
-                    {task.tags.map((tag) => (
-                      <div key={tag.label} className={`px-2 py-0.5 text-xs font-medium rounded-full ${tag.color}`}>
-                        {tag.label}
-                      </div>
-                    ))}
-                  </div>
-                )}
               
               {(task.timeTracked !== undefined && task.timeEstimate !== undefined) && (
-                  <div className="mt-3 space-y-1">
+                  <div className="space-y-1">
                       <div className="flex justify-between text-xs text-muted-foreground">
                           <span>Time Tracking</span>
                           <span>{formatHours(task.timeTracked)} / {task.timeEstimate}h</span>
@@ -74,7 +65,7 @@ export function TaskCard({ task }: TaskCardProps) {
                   </div>
               )}
 
-              <div className="mt-4 flex items-center justify-between">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <div className="flex items-center -space-x-2">
                   <TooltipProvider>
                       {task.assignees?.map((assignee) => (
@@ -92,7 +83,7 @@ export function TaskCard({ task }: TaskCardProps) {
                       ))}
                   </TooltipProvider>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-3">
                       {completionStatus && (
                           <TooltipProvider>
                               <Tooltip>
@@ -114,16 +105,11 @@ export function TaskCard({ task }: TaskCardProps) {
                               <ListTodo className="h-3.5 w-3.5" /> {task.subtasks.filter(st => st.completed).length}/{task.subtasks.length}
                           </span>
                       )}
-                      {task.dependencies && task.dependencies.length > 0 && (
-                          <span className="flex items-center gap-1">
-                              <LinkIcon className="h-3.5 w-3.5" /> {task.dependencies.length}
-                          </span>
-                      )}
                       {task.dueDate && (
-                          <span className="flex items-center gap-1">
+                          <Badge variant="outline" className="flex items-center gap-1">
                               <Calendar className="h-3.5 w-3.5" />
                               {format(parseISO(task.dueDate), 'MMM d')}
-                          </span>
+                          </Badge>
                       )}
                   </div>
               </div>
