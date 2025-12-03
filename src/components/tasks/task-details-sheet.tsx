@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -803,13 +802,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Status</FormLabel>
                               <div className="col-span-2">
-                                  { !canEdit || currentUser?.role === 'Employee' ? (
+                                  { currentUser?.role === 'Employee' ? (
                                     <div className="flex items-center gap-2 text-sm font-medium">
                                        <span className={`h-2 w-2 rounded-full ${form.getValues('status') === 'To Do' ? 'bg-yellow-500' : form.getValues('status') === 'Doing' ? 'bg-blue-500' : 'bg-green-500'}`}></span>
                                        {form.getValues('status')}
                                     </div>
                                   ) : (
-                                  <Select onValueChange={field.onChange} value={field.value}>
+                                  <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
                                       {allStatuses?.map(s => (
@@ -1029,5 +1028,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    
