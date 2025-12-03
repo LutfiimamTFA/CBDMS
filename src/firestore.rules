@@ -87,8 +87,8 @@ service cloud.firestore {
       allow update: if isSuperAdmin() || 
                        (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
                        (isRole('Employee') && isAssignee(taskId) &&
-                        // Employee can change status only if it's a valid transition (not from Done)
-                        (!('status' in request.resource.data) || (resource.data.status != 'Done'))
+                        // Employee can only change status if they have permission AND it's a valid transition.
+                        hasPermission('Employee', 'canChangeTaskStatus') && resource.data.status != 'Done'
                        );
       
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks'));

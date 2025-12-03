@@ -310,7 +310,7 @@ export function TaskDetailsSheet({
                 taskId: initialTask.id,
                 taskTitle: initialTask.title,
                 isRead: false,
-                createdAt: new Date().toISOString(),
+                createdAt: serverTimestamp(),
                 createdBy: {
                     id: currentUser.id,
                     name: currentUser.name,
@@ -564,14 +564,14 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   }
   
   const handleMarkComplete = async () => {
-    if (!firestore || !currentUser || !initialTask.createdBy) return;
-
+    if (!firestore || !currentUser) return;
+  
     const taskRef = doc(firestore, 'tasks', initialTask.id);
     const completionDate = new Date();
     const isLate = initialTask.dueDate
       ? isAfter(completionDate, parseISO(initialTask.dueDate))
       : false;
-
+  
     const newActivity: Activity = {
       id: `act-${Date.now()}`,
       user: {
@@ -580,9 +580,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         avatarUrl: currentUser.avatarUrl || '',
       },
       action: `completed the task ${isLate ? '(Late)' : '(On Time)'}`,
-      timestamp: completionDate.toISOString(),
+      timestamp: new Date().toISOString(),
     };
-
+  
     try {
       const batch = writeBatch(firestore);
       batch.update(taskRef, {
@@ -591,9 +591,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         lastActivity: newActivity,
         activities: [...(initialTask.activities || []), newActivity],
       });
-
+  
       // Only send a notification if the person completing the task is not the creator
-      if (currentUser.id !== initialTask.createdBy.id) {
+      if (initialTask.createdBy && currentUser.id !== initialTask.createdBy.id) {
         const managerNotifRef = doc(
           collection(firestore, `users/${initialTask.createdBy.id}/notifications`)
         );
@@ -601,7 +601,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const notifTitle = isLate
           ? `Task Completed (Late)`
           : `Task Completed (On Time)`;
-
+  
         const managerNotification: Omit<Notification, 'id'> = {
           userId: initialTask.createdBy.id,
           title: notifTitle,
@@ -618,7 +618,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         };
         batch.set(managerNotifRef, managerNotification);
       }
-
+  
       await batch.commit();
       toast({
         title: 'Task Completed!',
@@ -826,14 +826,14 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               {currentUser?.role === 'Employee' ? (
-                                     <Badge variant="outline">
+                               {currentUser?.role === 'Employee' && !canEdit ? (
+                                     <Badge variant="outline" className="font-normal">
                                         <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
                                         {form.getValues('status')}
                                     </Badge>
                                 ) : (
                                 <FormField control={form.control} name="status" render={({ field }) => (
-                                  <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit}>
+                                  <Select onValueChange={field.onChange} value={field.value}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
                                       {allStatuses?.map(s => (
