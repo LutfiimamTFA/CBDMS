@@ -4,7 +4,6 @@
 import { TaskCard } from './task-card';
 import type { Task, User, WorkflowStatus } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useI18n } from '@/context/i18n-provider';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import {
   Tooltip,
@@ -13,8 +12,6 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import { useMemo } from 'react';
-import { Droppable } from 'react-beautiful-dnd';
-import { useUserProfile } from '@/firebase';
 
 interface KanbanColumnProps {
   status: WorkflowStatus;
@@ -25,16 +22,6 @@ export function KanbanColumn({
   status,
   tasks,
 }: KanbanColumnProps) {
-  const { profile, isLoading: isProfileLoading } = useUserProfile();
-
-  // Defensive logic to ensure isDropDisabled is ALWAYS a boolean.
-  // 1. Disable if profile is loading.
-  // 2. Disable if profile doesn't exist.
-  // 3. Disable if user is a Client.
-  // Otherwise, enable.
-  const isDropDisabled = isProfileLoading || !profile || profile.role === 'Client';
-
-
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
     tasks.forEach((task) => {
@@ -98,22 +85,15 @@ export function KanbanColumn({
           )}
         </div>
       </div>
-      <Droppable droppableId={status.name} isDropDisabled={isDropDisabled}>
-        {(provided, snapshot) => (
-          <ScrollArea 
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={`flex-1 transition-colors ${snapshot.isDraggingOver ? 'bg-primary/10' : ''}`}
-          >
-            <div className="flex flex-col gap-3 p-4">
-              {tasks.map((task, index) => (
-                <TaskCard key={task.id} task={task} index={index} />
-              ))}
-              {provided.placeholder}
-            </div>
-          </ScrollArea>
-        )}
-      </Droppable>
+      <ScrollArea 
+        className={`flex-1`}
+      >
+        <div className="flex flex-col gap-3 p-4">
+          {tasks.map((task, index) => (
+            <TaskCard key={task.id} task={task} />
+          ))}
+        </div>
+      </ScrollArea>
     </div>
   );
 }
