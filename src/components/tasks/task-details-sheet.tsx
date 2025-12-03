@@ -564,24 +564,30 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   }
   
   const handleMarkComplete = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !firestore) return;
     setIsCompleting(true);
 
+    const taskRef = doc(firestore, "tasks", initialTask.id);
+    const newActivity: Activity = {
+        id: `act-${Date.now()}`,
+        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        action: 'completed the task',
+        timestamp: new Date().toISOString(),
+    };
+
     try {
-        const response = await fetch('/api/complete-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: initialTask.id, userId: currentUser.id }),
+        const batch = writeBatch(firestore);
+        batch.update(taskRef, {
+            status: 'Done',
+            actualCompletionDate: new Date().toISOString(),
+            lastActivity: newActivity,
+            activities: [...(initialTask.activities || []), newActivity]
         });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to complete task.');
-        }
-
+        
+        await batch.commit();
         toast({
             title: 'Task Completed!',
-            description: 'Status updated and relevant parties notified.',
+            description: 'Status has been updated to "Done".',
         });
     } catch (error: any) {
         console.error('Failed to complete task:', error);
@@ -791,7 +797,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               { !canEdit && !isAssignee ? (
+                               { !canEdit ? (
                                      <Badge variant="outline" className="font-normal">
                                         <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
                                         {form.getValues('status')}

@@ -21,12 +21,10 @@ service cloud.firestore {
         return getUserData(request.auth.uid);
     }
 
-    // Function to get the permissions document
     function getPermissions() {
       return get(/databases/$(database)/documents/permissions/roles).data;
     }
     
-    // Function to check a specific permission for a given role
     function hasPermission(role, permission) {
       return getPermissions()[role][permission] == true;
     }
@@ -43,13 +41,10 @@ service cloud.firestore {
         return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds;
     }
     
-    // Rules for 'permissions' collection
     match /permissions/{docId} {
-      // Only Super Admins can read or write the permission settings.
       allow read, write: if isSuperAdmin();
     }
 
-    // Rules for 'users' collection
     match /users/{userId} {
       allow read: if isSuperAdmin() || 
                      (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
@@ -59,18 +54,15 @@ service cloud.firestore {
                        (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId) && hasPermission('Manager', 'canManageUsers')) ||
                        request.auth.uid == userId;
 
-      // Create and delete must be handled by secure server functions.
       allow create: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canManageUsers'));
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteUsers'));
       
-      // Notification subcollection rules
       match /notifications/{notificationId} {
         allow read, update, delete: if isSignedIn() && request.auth.uid == userId;
         allow create: if isSignedIn();
       }
     }
 
-    // Rules for 'tasks' collection
     match /tasks/{taskId} {
       allow read: if isSuperAdmin() ||
                      (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
@@ -81,26 +73,19 @@ service cloud.firestore {
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
 
-      // An Employee can only update a task if they are assigned and the task is NOT already 'Done'.
-      // This prevents editing completed tasks but allows moving from 'To Do' -> 'Doing'
-      // Marking a task as 'Done' is handled by a secure server function, so we don't need a specific rule for that transition here.
-      // Managers and Super Admins have broader update permissions.
-      allow update: if (
-                      isSuperAdmin() || 
-                      (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
-                      (isRole('Employee') && isAssignee(taskId) && resource.data.status != 'Done')
-                    );
+      allow update: if (isSuperAdmin() || (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId))) ||
+                      // Employee-specific rule for completing a task
+                      (isRole('Employee') && isAssignee(taskId) && resource.data.status != 'Done' && request.resource.data.status == 'Done');
+
       
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks'));
 
-      // Rules for timeTracking subcollection
       match /timeTracking/{timeTrackingId} {
           allow read, create, update, delete: if isSuperAdmin() || 
                                (isRole('Manager') && isSameCompanyAsRequestingUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId)) ||
                                (isRole('Employee') && isAssignee(taskId) && hasPermission('Employee', 'canTrackTime'));
       }
       
-      // Rules for activities subcollection
       match /activities/{activityId} {
         allow read: if isSignedIn() && (
             isSuperAdmin() ||
@@ -116,30 +101,25 @@ service cloud.firestore {
       }
     }
     
-    // Rules for 'brands' collection
     match /brands/{brandId} {
         allow read: if isSignedIn();
         allow write: if isSuperAdmin() || isRole('Manager');
     }
 
-    // Rules for 'statuses' collection
     match /statuses/{statusId} {
         allow read: if isSignedIn();
         allow write: if isSuperAdmin();
     }
     
-    // Rules for 'recurringTaskTemplates' collection
     match /recurringTaskTemplates/{templateId} {
         allow read, write: if isSuperAdmin() || (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId));
     }
     
-    // Rules for 'dailyReports' collection
     match /dailyReports/{reportId} {
         allow read: if isSuperAdmin() || (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId));
         allow write: if isRole('Employee') && getRequestingUserData().companyId == resource.data.companyId;
     }
     
-    // Rules for 'navigationItems' collection
     match /navigationItems/{navItemId} {
         allow read: if isSignedIn();
         allow write: if isSuperAdmin();
