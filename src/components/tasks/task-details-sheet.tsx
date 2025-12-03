@@ -184,12 +184,69 @@ export function TaskDetailsSheet({
     }
   }, [initialTask, form, open]);
 
+  const createActivity = (user: User, action: string): Activity => {
+    return {
+      id: `act-${Date.now()}`,
+      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+      action: action,
+      timestamp: new Date().toISOString(),
+    };
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!firestore || !currentUser) return;
+    const oldStatus = form.getValues('status');
+    if (oldStatus === newStatus) return;
+
+    form.setValue('status', newStatus);
+
+    const taskRef = doc(firestore, 'tasks', initialTask.id);
+    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    
+    try {
+        await updateDoc(taskRef, {
+            status: newStatus,
+            activities: [...(initialTask.activities || []), newActivity],
+            lastActivity: newActivity,
+            updatedAt: serverTimestamp(),
+        });
+        toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
+    } catch (error) {
+        console.error('Failed to update status:', error);
+        form.setValue('status', oldStatus); // Revert on error
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task status.' });
+    }
+  };
+
+
   const handlePriorityChange = async (newPriority: Priority) => {
     const currentPriority = form.getValues('priority');
+    if (currentPriority === newPriority) return;
+
     const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
 
+    const applyPriorityChange = async (priority: Priority) => {
+        if (!firestore || !currentUser) return;
+        form.setValue('priority', priority);
+        const taskRef = doc(firestore, 'tasks', initialTask.id);
+        const newActivity = createActivity(currentUser, `set priority to ${priority}`);
+        try {
+            await updateDoc(taskRef, {
+                priority: priority,
+                activities: [...(initialTask.activities || []), newActivity],
+                lastActivity: newActivity,
+                updatedAt: serverTimestamp(),
+            });
+            toast({ title: 'Priority Updated', description: `Task priority set to ${priority}.` });
+        } catch (error) {
+            console.error('Failed to update priority:', error);
+            form.setValue('priority', currentPriority); // Revert on error
+            toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task priority.' });
+        }
+    };
+
     if (priorityValues[newPriority] <= priorityValues[currentPriority]) {
-        form.setValue('priority', newPriority);
+        await applyPriorityChange(newPriority);
         return;
     }
 
@@ -203,15 +260,15 @@ export function TaskDetailsSheet({
         });
 
         if (result.isApproved) {
-            form.setValue('priority', newPriority);
+            await applyPriorityChange(newPriority);
             toast({ title: 'AI Agrees!', description: result.reason });
         } else {
             setAiValidation({
                 isOpen: true,
                 isChecking: false,
                 reason: result.reason,
-                onConfirm: () => {
-                    form.setValue('priority', newPriority); 
+                onConfirm: async () => {
+                    await applyPriorityChange(newPriority); 
                     setAiValidation({ ...aiValidation, isOpen: false });
                 }
             });
@@ -219,7 +276,7 @@ export function TaskDetailsSheet({
     } catch (e) {
         console.error(e);
         toast({ variant: 'destructive', title: 'AI Validation Failed', description: 'Could not validate priority change. Applying directly.' });
-        form.setValue('priority', newPriority);
+        await applyPriorityChange(newPriority);
     } finally {
         if (aiValidation.isChecking) {
              setAiValidation(prev => ({ ...prev, isChecking: false }));
@@ -406,10 +463,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
         const changes: string[] = [];
         if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
-        if (oldTask.status !== newData.status) changes.push(`changed status from "${oldTask.status}" to "${newData.status}"`);
-        if (oldTask.priority !== newData.priority) changes.push(`set priority to ${newData.priority}`);
-        if ((oldTask.description || '') !== (newData.description || '')) changes.push('updated the description');
-        if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : '') !== (newData.dueDate || '')) changes.push('updated the due date');
+        if (oldTask.description !== (newData.description || '')) changes.push('updated the description');
+        if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : undefined) !== (newData.dueDate || undefined)) changes.push('updated the due date');
         
         return changes.length > 0 ? changes.join(', ') : null;
     };
@@ -418,16 +473,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     
     let activityData: Partial<Task> = {};
     if (actionDescription) {
-        const newActivity: Activity = {
-            id: `act-${Date.now()}`,
-            user: {
-                id: currentUser.id,
-                name: currentUser.name,
-                avatarUrl: currentUser.avatarUrl || '',
-            },
-            action: actionDescription,
-            timestamp: new Date().toISOString(),
-        };
+        const newActivity: Activity = createActivity(currentUser, actionDescription);
         activityData = {
             activities: [...(activities || []), newActivity],
             lastActivity: newActivity,
@@ -435,7 +481,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
     
     const updatedTaskData: Partial<Task> = {
-        ...data,
+        title: data.title,
+        description: data.description,
+        dueDate: data.dueDate,
+        brandId: data.brandId,
         assignees: currentAssignees,
         assigneeIds: currentAssignees.map((a) => a.id),
         tags: currentTags,
@@ -524,12 +573,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!firestore || !currentUser) return;
     
     const taskRef = doc(firestore, "tasks", initialTask.id);
-    const newActivity: Activity = {
-        id: `act-${Date.now()}`,
-        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        action: 'started a work session',
-        timestamp: new Date().toISOString(),
-    };
+    const newActivity: Activity = createActivity(currentUser, 'started a work session');
     
     try {
         await updateDoc(taskRef, {
@@ -556,12 +600,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const sessionDurationInSeconds = (now - startTime) / 1000;
     const newTimeTrackedInHours = (initialTask.timeTracked || 0) + (sessionDurationInSeconds / 3600);
     
-    const newActivity: Activity = {
-        id: `act-${Date.now()}`,
-        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        action: `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`,
-        timestamp: new Date().toISOString(),
-    };
+    const newActivity: Activity = createActivity(currentUser, `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`);
     
     try {
         await updateDoc(taskRef, {
@@ -591,12 +630,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setIsSaving(true);
 
     const taskRef = doc(firestore, "tasks", initialTask.id);
-    const newActivity: Activity = {
-        id: `act-${Date.now()}`,
-        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        action: 'completed the task',
-        timestamp: new Date().toISOString(),
-    };
+    const newActivity: Activity = createActivity(currentUser, 'completed the task');
 
     try {
         await updateDoc(taskRef, {
@@ -627,12 +661,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setIsSaving(true);
     
     const taskRef = doc(firestore, "tasks", initialTask.id);
-    const newActivity: Activity = {
-        id: `act-${Date.now()}`,
-        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        action: 'reopened the task',
-        timestamp: new Date().toISOString(),
-    };
+    const newActivity: Activity = createActivity(currentUser, 'reopened the task');
 
     try {
         await updateDoc(taskRef, {
@@ -895,13 +924,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
                                <FormField control={form.control} name="status" render={({ field }) => (
-                                <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit && !isAssignee}>
+                                <Select onValueChange={handleStatusChange} value={field.value}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
                                     {allStatuses?.map(s => (
                                         <SelectItem key={s.id} value={s.name}>
                                             <div className="flex items-center gap-2">
-                                                <span className={`h-2 w-2 rounded-full ${s.color}`}></span>
+                                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }}></span>
                                                 {s.name}
                                             </div>
                                         </SelectItem>
@@ -915,20 +944,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Priority</FormLabel>
                               <div className="col-span-2 flex items-center gap-2">
-                                  { !canEdit ? (
-                                    <div className="flex items-center gap-2 text-sm font-medium">
-                                      {priorityValue && React.createElement(priorityInfo[priorityValue].icon, { className: `h-4 w-4 ${priorityInfo[priorityValue].color}` })}
-                                      {priorityValue}
-                                    </div>
-                                  ) : (
-                                  <>
-                                    <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
-                                        <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                        <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
-                                    </Select>
-                                    {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
-                                  </>
-                                  )}
+                                  <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
+                                      <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                      <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
+                                  </Select>
+                                  {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
                               </div>
                            </FormItem>
                        )}/>
