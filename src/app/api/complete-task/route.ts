@@ -54,10 +54,14 @@ export async function POST(request: Request) {
 
     const batch = firestore.batch();
     const completionDate = new Date();
+    
+    // CRITICAL FIX: Only check for lateness if dueDate exists.
     const isLate = taskData.dueDate
       ? completionDate > new Date(taskData.dueDate)
       : false;
 
+    const completionActionText = isLate ? `completed the task (Late)` : `completed the task (On Time)`;
+    
     const newActivity: Activity = {
       id: `act-${Date.now()}`,
       user: {
@@ -65,7 +69,7 @@ export async function POST(request: Request) {
         name: currentUser.name,
         avatarUrl: currentUser.avatarUrl || '',
       },
-      action: `completed the task ${isLate ? '(Late)' : '(On Time)'}`,
+      action: completionActionText,
       timestamp: Timestamp.fromDate(completionDate),
     };
 

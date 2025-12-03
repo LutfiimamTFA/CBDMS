@@ -81,10 +81,10 @@ service cloud.firestore {
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
 
-      // Employees can ONLY update a task if its current state is NOT 'Done'.
-      // This allows them to change status from 'To Do' -> 'Doing' or make other edits,
-      // but locks the task once it's completed. Completion itself is now handled by a server function.
-      // Managers and Admins have full update rights within their company.
+      // An Employee can only update a task if they are assigned and the task is NOT already 'Done'.
+      // This prevents editing completed tasks but allows moving from 'To Do' -> 'Doing'
+      // Marking a task as 'Done' is handled by a secure server function, so we don't need a specific rule for that transition here.
+      // Managers and Super Admins have broader update permissions.
       allow update: if (
                       isSuperAdmin() || 
                       (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||

@@ -563,7 +563,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   }
   
- const handleMarkComplete = async () => {
+  const handleMarkComplete = async () => {
     if (!currentUser) return;
     setIsCompleting(true);
 
@@ -635,7 +635,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         {isAssignee && initialTask.status === 'To Do' && (
                             <Button className="w-full h-12 text-lg" onClick={handleStartWork}><PlayCircle className="mr-2"/> Start Work</Button>
                         )}
-                        {isAssignee && initialTask.status !== 'To Do' && initialTask.status !== 'Done' && (
+                        {isAssignee && initialTask.status === 'Doing' && (
                             <Button className="w-full h-12 text-lg" onClick={handleMarkComplete} disabled={isCompleting}>
                                 {isCompleting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                 Mark as Complete
@@ -798,7 +798,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                     </Badge>
                                 ) : (
                                 <FormField control={form.control} name="status" render={({ field }) => (
-                                  <Select onValueChange={field.onChange} value={field.value}>
+                                  <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
                                       {allStatuses?.map(s => (
