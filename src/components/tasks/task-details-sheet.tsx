@@ -563,7 +563,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   }
   
-  const handleMarkComplete = async () => {
+ const handleMarkComplete = async () => {
     if (!firestore || !currentUser) return;
 
     const taskRef = doc(firestore, 'tasks', initialTask.id);
@@ -585,7 +585,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
     try {
       const batch = writeBatch(firestore);
-
       const updateData: any = {
         status: 'Done',
         actualCompletionDate: completionDate.toISOString(),
@@ -593,10 +592,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         activities: [...(initialTask.activities || []), newActivity],
         updatedAt: serverTimestamp(),
       };
-
       batch.update(taskRef, updateData);
 
-      if (initialTask.createdBy && currentUser.id !== initialTask.createdBy.id) {
+      // Notify creator only if they are not the one completing the task
+      if (initialTask.createdBy?.id && currentUser.id !== initialTask.createdBy.id) {
         const managerNotifRef = doc(
           collection(firestore, `users/${initialTask.createdBy.id}/notifications`)
         );
@@ -632,7 +631,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       toast({
         variant: 'destructive',
         title: 'Update Failed',
-        description: `Could not complete the task. Error: ${error}`,
+        description: 'Could not complete the task. Please check your permissions and try again.',
       });
     }
   };
@@ -830,7 +829,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               { !canEdit ? (
+                               { !canEdit && currentUser?.role === 'Employee' ? (
                                      <Badge variant="outline" className="font-normal">
                                         <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
                                         {form.getValues('status')}
@@ -1003,10 +1002,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               </form>
           </Form>
           <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
-              {canEdit ? (
+              {canEdit && (
                 <Button type="submit" form="task-details-form">Save Changes</Button>
-              ) : null
-            }
+              )}
           </SheetFooter>
         </SheetContent>
       </Sheet>
@@ -1072,5 +1070,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    
