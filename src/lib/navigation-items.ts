@@ -13,7 +13,7 @@ export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_list',
     label: 'List',
-    path: '/tasks/list',
+    path: '/tasks',
     icon: 'ClipboardList',
     order: 2,
     roles: ['Super Admin', 'Manager', 'Employee'],

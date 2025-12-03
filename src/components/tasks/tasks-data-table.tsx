@@ -904,5 +904,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-    
