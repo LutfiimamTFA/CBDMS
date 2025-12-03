@@ -13,6 +13,12 @@ export type User = {
   companyId: string;
 };
 
+export type Company = {
+    id: string;
+    name: string;
+    logoUrl?: string;
+};
+
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 
 // This is now a dynamic string, not a fixed literal type
@@ -206,3 +212,5 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+    
