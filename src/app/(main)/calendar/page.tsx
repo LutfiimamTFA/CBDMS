@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { Task, Brand } from '@/lib/types';
+import type { Task, Brand, WorkflowStatus } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import {
   eachDayOfInterval,
@@ -66,6 +66,12 @@ export default function CalendarPage() {
     [firestore]
   );
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+  
+  const statusesQuery = useMemo(
+    () => (firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null),
+    [firestore]
+  );
+  const { data: allStatuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
 
   // --- Calendar Grid Logic ---
   const firstDayOfMonth = startOfMonth(currentDate);
@@ -130,7 +136,7 @@ export default function CalendarPage() {
   }, [tasks, daysInGrid]);
 
 
-  const isLoading = isTasksLoading || areBrandsLoading;
+  const isLoading = isTasksLoading || areBrandsLoading || areStatusesLoading;
   
   if (isLoading) {
     return (
@@ -271,5 +277,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
-    
