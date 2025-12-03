@@ -87,7 +87,7 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(sub(currentDate, { months: 1 }));
 
   // --- Task Processing for Calendar View ---
- const tasksWithPositions = useMemo(() => {
+  const tasksWithPositions = useMemo(() => {
     if (!tasks || daysInGrid.length === 0) return [];
     
     const sortedTasks = [...tasks].sort((a,b) => {
@@ -135,19 +135,25 @@ export default function CalendarPage() {
 
         const startCol = startDayIndex % 7;
         const duration = differenceInDays(actualEnd, actualStart) + 1;
+        const startRow = Math.floor(startDayIndex / 7) + 2; // +2 for header row and 1-based indexing
 
         return {
             ...task,
             lane: lane,
             startDayIndex: startDayIndex,
             gridProps: {
-                gridRowStart: Math.floor(startDayIndex / 7) + 2, // +2 because grid rows start at 1 and we have a header row
+                gridRowStart: startRow,
                 gridColumnStart: startCol + 1,
                 gridColumnEnd: `span ${duration}`,
             },
+            style: {
+                gridRow: `${startRow}`,
+                gridColumn: `${startCol + 1} / span ${duration}`,
+                top: `${lane * 1.75 + 2.5}rem`,
+            },
             color: getBrandColor(task.brandId),
         };
-    }).filter(t => t.gridProps);
+    }).filter(t => t.style);
   }, [tasks, daysInGrid, startDate, endDate]);
 
 
@@ -190,7 +196,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar Grid */}
-        <div className="grid grid-cols-7 grid-rows-[auto] gap-px border-t border-l rounded-lg overflow-hidden bg-border">
+        <div className="relative grid grid-cols-7 grid-rows-[auto] gap-px rounded-lg border-t border-l overflow-hidden bg-border">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                 <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground bg-secondary/50">
                     {day}
@@ -216,67 +222,67 @@ export default function CalendarPage() {
             
             {/* Render Task Bars */}
             {tasksWithPositions.map(task => {
-                if (!task.gridProps) return null;
+                if (!task.style) return null;
                 const PriorityIcon = priorityInfo[task.priority].icon;
 
                 return (
-                    <Popover key={task.id} trigger="hover">
-                    <PopoverTrigger asChild>
-                      <div
-                        style={{
-                          gridRowStart: task.gridProps.gridRowStart,
-                          gridColumnStart: task.gridProps.gridColumnStart,
-                          gridColumnEnd: task.gridProps.gridColumnEnd,
-                          top: `${task.lane! * 1.75 + 2.5}rem`,
-                        }}
-                         className={cn(
-                          "absolute h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity z-10",
-                          task.color
-                        )}
-                      >
-                        <span className="truncate">{task.title}</span>
-                        <div className='flex items-center gap-1.5'>
-                        {task.assignees && task.assignees.length > 0 && (
-                          <Avatar className="h-5 w-5 border border-white/50">
-                            <AvatarImage src={task.assignees[0].avatarUrl} />
-                            <AvatarFallback>{task.assignees[0].name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                        )}
-                        </div>
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                        <div className="space-y-3">
-                        <div className='flex justify-between items-start'>
-                            <h4 className="font-bold">{task.title}</h4>
-                            <Badge variant="secondary" className={cn(task.color, "text-white")}>
-                            {brands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
-                            </Badge>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <div className='flex items-center gap-2'>
-                            <PriorityIcon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
-                            <span>{task.priority}</span>
+                    <div
+                      key={task.id}
+                      style={task.style}
+                      className="absolute z-10 p-px"
+                    >
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <div
+                            className={cn(
+                              "h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full",
+                              task.color
+                            )}
+                          >
+                            <span className="truncate">{task.title}</span>
+                            <div className='flex items-center gap-1.5'>
+                            {task.assignees && task.assignees.length > 0 && (
+                              <Avatar className="h-5 w-5 border border-white/50">
+                                <AvatarImage src={task.assignees[0].avatarUrl} />
+                                <AvatarFallback>{task.assignees[0].name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                            )}
                             </div>
-                            <div className='flex items-center gap-2'>
-                            <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
-                            <span>{task.status}</span>
+                          </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                            <div className="space-y-3">
+                            <div className='flex justify-between items-start'>
+                                <h4 className="font-bold">{task.title}</h4>
+                                <Badge variant="secondary" className={cn(task.color, "text-white")}>
+                                {brands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
+                                </Badge>
                             </div>
-                        </div>
-                        <div className='flex items-center gap-2'>
-                            {task.assignees?.map(assignee => (
-                                <div key={assignee.id} className='flex items-center gap-2'>
-                                <Avatar className="h-7 w-7">
-                                    <AvatarImage src={assignee.avatarUrl} />
-                                    <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm font-medium">{assignee.name}</span>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className='flex items-center gap-2'>
+                                <PriorityIcon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
+                                <span>{task.priority}</span>
                                 </div>
-                            ))}
-                        </div>
-                        </div>
-                    </PopoverContent>
-                    </Popover>
+                                <div className='flex items-center gap-2'>
+                                <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
+                                <span>{task.status}</span>
+                                </div>
+                            </div>
+                            <div className='flex items-center gap-2'>
+                                {task.assignees?.map(assignee => (
+                                    <div key={assignee.id} className='flex items-center gap-2'>
+                                    <Avatar className="h-7 w-7">
+                                        <AvatarImage src={assignee.avatarUrl} />
+                                        <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-sm font-medium">{assignee.name}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
                 )
             })}
         </div>
