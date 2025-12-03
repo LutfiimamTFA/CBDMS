@@ -423,72 +423,72 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if (!firestore || !currentUser) return;
-  
+
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-  
+
     const currentActivities = [...(initialTask.activities || [])];
     let newActivity: Activity | null = null;
-  
+
     const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
-      const changes: string[] = [];
-      if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
-      if (oldTask.status !== newData.status) changes.push(`changed status from "${oldTask.status}" to "${newData.status}"`);
-      if (oldTask.priority !== newData.priority) changes.push(`set priority to ${newData.priority}`);
-      if ((oldTask.description || '') !== (newData.description || '')) changes.push('updated the description');
-      if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : '') !== (newData.dueDate || '')) changes.push('updated the due date');
-      
-      return changes.length > 0 ? changes.join(', ') : null;
+        const changes: string[] = [];
+        if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
+        if (oldTask.status !== newData.status) changes.push(`changed status from "${oldTask.status}" to "${newData.status}"`);
+        if (oldTask.priority !== newData.priority) changes.push(`set priority to ${newData.priority}`);
+        if ((oldTask.description || '') !== (newData.description || '')) changes.push('updated the description');
+        if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : '') !== (newData.dueDate || '')) changes.push('updated the due date');
+        
+        return changes.length > 0 ? changes.join(', ') : null;
     };
-  
+
     const actionDescription = getChangedFields(initialTask, data);
-  
+
     if (actionDescription) {
-      newActivity = {
-        id: `act-${Date.now()}`,
-        user: {
-          id: currentUser.id,
-          name: currentUser.name,
-          avatarUrl: currentUser.avatarUrl || '',
-        },
-        action: actionDescription,
-        timestamp: new Date().toISOString(),
-      };
-      currentActivities.push(newActivity);
+        newActivity = {
+            id: `act-${Date.now()}`,
+            user: {
+                id: currentUser.id,
+                name: currentUser.name,
+                avatarUrl: currentUser.avatarUrl || '',
+            },
+            action: actionDescription,
+            timestamp: new Date().toISOString(),
+        };
+        currentActivities.push(newActivity);
     }
-  
+
     const updatedTaskData = {
-      ...data,
-      assignees: currentAssignees,
-      assigneeIds: currentAssignees.map((a) => a.id),
-      tags: currentTags,
-      subtasks: subtasks,
-      comments: comments,
-      timeTracked: timeTracked,
-      timeLogs: timeLogs,
-      attachments: attachments,
-      activities: currentActivities,
-      lastActivity: newActivity || initialTask.lastActivity, // Update lastActivity or keep the old one
-      updatedAt: serverTimestamp(),
+        ...data,
+        assignees: currentAssignees,
+        assigneeIds: currentAssignees.map((a) => a.id),
+        tags: currentTags,
+        subtasks: subtasks,
+        comments: comments,
+        timeTracked: timeTracked,
+        timeLogs: timeLogs,
+        attachments: attachments,
+        activities: currentActivities,
+        lastActivity: newActivity || initialTask.lastActivity || null,
+        updatedAt: serverTimestamp(),
     };
-  
+
     batch.update(taskDocRef, updatedTaskData);
-  
+
     try {
-      await batch.commit();
-      toast({
-        title: 'Task Updated',
-        description: `"${data.title}" has been saved.`,
-      });
+        await batch.commit();
+        toast({
+            title: 'Task Updated',
+            description: `"${data.title}" has been saved.`,
+        });
     } catch (error) {
-      console.error('Failed to update task:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: 'Could not save task changes.',
-      });
+        console.error('Failed to update task:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Update Failed',
+            description: 'Could not save task changes.',
+        });
     }
-  };
+};
   
   const timeEstimateValue = form.watch('timeEstimate') ?? initialTask.timeEstimate ?? 0;
   
@@ -1045,5 +1045,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    

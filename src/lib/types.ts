@@ -134,7 +134,7 @@ export type Task = {
   comments?: Comment[];
   attachments?: Attachment[];
   activities?: Activity[];
-  lastActivity?: Activity;
+  lastActivity?: Activity | null;
   createdAt: any;
   createdBy: {
     id: string;
@@ -205,5 +205,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
-    
