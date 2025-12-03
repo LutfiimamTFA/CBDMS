@@ -71,7 +71,7 @@ export async function POST(request: Request) {
 
     const updatedActivities = [...(taskData.activities || []), newActivity];
 
-    const updateData = {
+    const updateData: any = {
       status: 'Done',
       actualCompletionDate: completionDate.toISOString(),
       lastActivity: newActivity,
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
     
     batch.update(taskRef, updateData);
 
-    // Notify creator only if they are not the one completing the task
+    // CRITICAL FIX: Notify creator only if they exist and are not the one completing the task.
     if (taskData.createdBy?.id && currentUser.id !== taskData.createdBy.id) {
       const managerNotifRef = firestore.collection('users').doc(taskData.createdBy.id).collection('notifications').doc();
       const notifMessage = `${currentUser.name} has completed the task: "${taskData.title}".`;
