@@ -123,6 +123,7 @@ export type Task = {
   dueDate?: string;
   actualStartDate?: string;
   actualCompletionDate?: string;
+  currentSessionStartTime?: string; // New field for session tracking
   timeEstimate?: number; // in hours
   timeTracked?: number; // in hours
   timeLogs?: TimeLog[];

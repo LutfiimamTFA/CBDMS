@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -46,7 +47,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, doc, writeBatch, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -95,14 +96,11 @@ export function TaskDetailsSheet({
   const { toast } = useToast();
   const router = useRouter();
   const [isUploading, setIsUploading] = React.useState(false);
-  const [isCompleting, setIsCompleting] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
-
+  const [isSaving, setIsSaving] = useState(false);
 
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
-  const [timerStartTime, setTimerStartTime] = useState<Date | null>(null);
-
+  
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
@@ -110,8 +108,6 @@ export function TaskDetailsSheet({
   
   const [currentAssignees, setCurrentAssignees] = useState<User[]>([]);
   const [currentTags, setCurrentTags] = useState<Tag[]>([]);
-  const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
-  const [timeTracked, setTimeTracked] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
 
@@ -166,12 +162,20 @@ export function TaskDetailsSheet({
         setComments(initialTask.comments || []);
         setCurrentAssignees(initialTask.assignees || []);
         setCurrentTags(initialTask.tags || []);
-        setTimeLogs(initialTask.timeLogs || []);
-        setTimeTracked(initialTask.timeTracked || 0);
         setAttachments(initialTask.attachments || []);
         setActivities(initialTask.activities || []);
         setNewComment('');
         setCommentAttachment(null);
+
+        if (initialTask.currentSessionStartTime) {
+            const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
+            const now = Date.now();
+            setElapsedTime(Math.floor((now - startTime) / 1000));
+            setIsRunning(true);
+        } else {
+            setElapsedTime(0);
+            setIsRunning(false);
+        }
     }
   }, [initialTask, form, open]);
 
@@ -231,34 +235,6 @@ export function TaskDetailsSheet({
     };
   }, [isRunning]);
   
-  const handleStartStop = useCallback(() => {
-    if (isRunning) {
-      setIsRunning(false);
-    } else {
-      setIsRunning(true);
-      if (!timerStartTime) {
-        setTimerStartTime(new Date());
-      }
-    }
-  }, [isRunning, timerStartTime]);
-
-  const handleLogTime = () => {
-    if (elapsedTime === 0 && !isRunning) return;
-    const endTime = new Date();
-    const newLog: TimeLog = {
-      id: `log-${Date.now()}`,
-      startTime: timerStartTime?.toISOString() || new Date().toISOString(),
-      endTime: endTime.toISOString(),
-      duration: elapsedTime,
-    };
-    const newTimeTracked = timeTracked + (elapsedTime / 3600);
-    setTimeTracked(parseFloat(newTimeTracked.toFixed(2)));
-    setTimeLogs(prev => [...prev, newLog]);
-    
-    setIsRunning(false);
-    setElapsedTime(0);
-    setTimerStartTime(null);
-  };
   
   const handlePostComment = async () => {
     if ((!newComment.trim() && !commentAttachment) || !currentUser || !firestore || !storage) return;
@@ -299,28 +275,9 @@ export function TaskDetailsSheet({
         setNewComment('');
         setCommentAttachment(null);
 
-        // --- Creator Notification on New Comment ---
-        const taskCreatorId = initialTask.createdBy.id;
-        if (taskCreatorId !== currentUser.id) {
-            const batch = writeBatch(firestore);
-            const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
-            const notification: Omit<Notification, 'id'> = {
-                userId: taskCreatorId,
-                title: `New comment on: ${initialTask.title}`,
-                message: `${currentUser.name} left a comment.`,
-                taskId: initialTask.id,
-                taskTitle: initialTask.title,
-                isRead: false,
-                createdAt: serverTimestamp(),
-                createdBy: {
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    avatarUrl: currentUser.avatarUrl || '',
-                },
-            };
-            batch.set(notifRef, notification);
-            await batch.commit();
-        }
+        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+        await updateDoc(taskDocRef, { comments: [...comments, comment] });
+
     } catch (error) {
         console.error("Failed to post comment or upload attachment:", error);
         toast({
@@ -341,9 +298,21 @@ export function TaskDetailsSheet({
   };
 
 
-  const handleToggleSubtask = (subtaskId: string) => {
+  const handleToggleSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
     const newSubtasks = subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
     setSubtasks(newSubtasks);
+    
+    // Immediately save to Firestore
+    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+    try {
+        await updateDoc(taskDocRef, { subtasks: newSubtasks });
+    } catch (error) {
+        console.error("Failed to update subtask:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not save subtask status.' });
+        // Revert UI on failure
+        setSubtasks(subtasks);
+    }
   };
 
   const handleAddSubtask = () => {
@@ -425,7 +394,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if (!firestore || !currentUser) return;
-
+    setIsSaving(true);
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
 
@@ -466,8 +435,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         tags: currentTags,
         subtasks: subtasks,
         comments: comments,
-        timeTracked: timeTracked,
-        timeLogs: timeLogs,
         attachments: attachments,
         activities: newActivity ? currentActivities : initialTask.activities,
         lastActivity: newActivity || initialTask.lastActivity || null,
@@ -489,11 +456,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             title: 'Update Failed',
             description: 'Could not save task changes.',
         });
+    } finally {
+        setIsSaving(false);
     }
 };
   
   const timeEstimateValue = form.watch('timeEstimate') ?? initialTask.timeEstimate ?? 0;
   
+  const timeTracked = useMemo(() => initialTask.timeTracked || 0, [initialTask.timeTracked]);
+
   const timeTrackingProgress = timeEstimateValue > 0
     ? (timeTracked / timeEstimateValue) * 100
     : 0;
@@ -537,40 +508,76 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
 
 
-  const handleStartWork = async () => {
+  const handleStartSession = async () => {
     if (!firestore || !currentUser) return;
-    setIsStarting(true);
-
+    
     const taskRef = doc(firestore, "tasks", initialTask.id);
     const newActivity: Activity = {
         id: `act-${Date.now()}`,
         user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        action: 'started working on the task',
+        action: 'started a work session',
         timestamp: new Date().toISOString(),
     };
     
     try {
-        const batch = writeBatch(firestore);
-        batch.update(taskRef, {
+        await updateDoc(taskRef, {
             status: 'Doing',
             actualStartDate: initialTask.actualStartDate || new Date().toISOString(),
+            currentSessionStartTime: new Date().toISOString(),
             lastActivity: newActivity,
             activities: [...(initialTask.activities || []), newActivity]
         });
-        await batch.commit();
-        toast({ title: 'Task Started', description: 'Status has been updated to "Doing".' });
-        handleStartStop(); // Start the stopwatch
+        setIsRunning(true);
+        toast({ title: 'Session Started', description: 'Your work session is now being tracked.' });
     } catch (error) {
-        console.error("Failed to start task:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not start the task.' });
-    } finally {
-        setIsStarting(false);
+        console.error("Failed to start session:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not start the session.' });
     }
   }
   
+  const handlePauseSession = async () => {
+    if (!firestore || !currentUser || !initialTask.currentSessionStartTime) return;
+    
+    const taskRef = doc(firestore, "tasks", initialTask.id);
+    
+    const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
+    const now = Date.now();
+    const sessionDurationInSeconds = (now - startTime) / 1000;
+    const newTimeTrackedInHours = (initialTask.timeTracked || 0) + (sessionDurationInSeconds / 3600);
+    
+    const newActivity: Activity = {
+        id: `act-${Date.now()}`,
+        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        action: `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`,
+        timestamp: new Date().toISOString(),
+    };
+    
+    try {
+        await updateDoc(taskRef, {
+            timeTracked: newTimeTrackedInHours,
+            currentSessionStartTime: deleteField(),
+            lastActivity: newActivity,
+            activities: [...(initialTask.activities || []), newActivity]
+        });
+        setIsRunning(false);
+        setElapsedTime(0);
+        toast({ title: 'Session Paused', description: 'Your work has been logged.' });
+    } catch (error) {
+        console.error("Failed to pause session:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
+    }
+  }
+
+  const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
+  
   const handleMarkComplete = async () => {
     if (!currentUser || !firestore) return;
-    setIsCompleting(true);
+    
+    if (isRunning) {
+        await handlePauseSession();
+    }
+
+    setIsSaving(true);
 
     const taskRef = doc(firestore, "tasks", initialTask.id);
     const newActivity: Activity = {
@@ -581,18 +588,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     };
 
     try {
-        handleLogTime(); // Log any tracked time before completing
-        const batch = writeBatch(firestore);
-        batch.update(taskRef, {
+        await updateDoc(taskRef, {
             status: 'Done',
             actualCompletionDate: new Date().toISOString(),
             lastActivity: newActivity,
             activities: [...(initialTask.activities || []), newActivity],
-            timeLogs: timeLogs,
-            timeTracked: timeTracked
         });
         
-        await batch.commit();
         toast({
             title: 'Task Completed!',
             description: 'Status has been updated to "Done".',
@@ -605,7 +607,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             description: error.message || 'Could not complete the task. Please try again.',
         });
     } finally {
-        setIsCompleting(false);
+        setIsSaving(false);
     }
   };
 
@@ -646,19 +648,34 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {isAssignee && initialTask.status === 'To Do' && (
-                           <Button className="w-full h-12 text-lg" onClick={handleStartWork} disabled={isStarting}>
-                                {isStarting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                <PlayCircle className="mr-2"/> Start Work
+                        {isAssignee && initialTask.status === 'Doing' && !isRunning && (
+                           <Button className="w-full h-12 text-lg" onClick={handleStartSession}>
+                                <PlayCircle className="mr-2"/> Resume Session
                             </Button>
                         )}
-                        {isAssignee && initialTask.status === 'Doing' && (
-                           <Button className="w-full h-12 text-lg" onClick={handleMarkComplete} disabled={isCompleting}>
-                                {isCompleting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                Mark as Complete
+                        {isAssignee && initialTask.status === 'Doing' && isRunning && (
+                           <Button variant="destructive" className="w-full h-12 text-lg" onClick={handlePauseSession}>
+                                <PauseCircle className="mr-2"/> Pause Session
                             </Button>
                         )}
                         
+                        {isAssignee && initialTask.status !== 'Doing' && initialTask.status !== 'Done' && (
+                           <Button className="w-full h-12 text-lg" onClick={handleStartSession}>
+                                <PlayCircle className="mr-2"/> Start Work
+                            </Button>
+                        )}
+
+                        {isAssignee && initialTask.status === 'Doing' && (
+                            <div className="space-y-2">
+                                <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
+                                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                    Mark as Complete
+                                </Button>
+                                {!allSubtasksCompleted && (
+                                    <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk menandai tugas ini selesai.</p>
+                                )}
+                            </div>
+                        )}
 
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEdit} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
@@ -942,7 +959,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     </div>
 
                     <div className='space-y-4 p-4 rounded-lg border'>
-                      <h3 className='font-semibold text-sm'>Time Management</h3>
+                      <div className="flex justify-between items-center">
+                        <h3 className='font-semibold text-sm'>Time Management</h3>
+                        {isRunning && <div className="text-sm font-mono text-primary animate-pulse">Session active</div>}
+                      </div>
                       <Separator/>
                        <FormField control={form.control} name="timeEstimate" render={({ field }) => (
                          <FormItem className="grid grid-cols-3 items-center gap-2">
@@ -959,7 +979,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                        
                        <div className="space-y-2">
                           <div className="grid grid-cols-3 items-center gap-2">
-                              <span className="text-sm text-muted-foreground">Tracked</span>
+                              <span className="text-sm text-muted-foreground">Time Tracked</span>
                               <span className="col-span-2 text-sm font-medium">{timeTracked.toFixed(2)}h</span>
                           </div>
                           <Progress value={timeTrackingProgress} />
@@ -967,12 +987,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
                         <div className="space-y-2">
                             <div className='flex items-center justify-between'>
-                                <h4 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Stopwatch</h4>
-                                <div className='font-mono text-lg font-bold'>{formatStopwatch(elapsedTime)}</div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button variant={isRunning ? "destructive" : "outline"} type="button" onClick={handleStartStop}>{isRunning ? <PauseCircle className="mr-2" /> : <PlayCircle className="mr-2" />}{isRunning ? 'Pause' : 'Start'}</Button>
-                              <Button variant="outline" type="button" onClick={handleLogTime} disabled={elapsedTime === 0 && !isRunning}><LogIn className="mr-2" />Log Time</Button>
+                                <h4 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Session Duration</h4>
+                                <div className='font-mono text-xl font-semibold text-primary'>{formatStopwatch(elapsedTime)}</div>
                             </div>
                         </div>
                     </div>
@@ -983,7 +999,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           </Form>
           <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
               {canEdit && (
-                <Button type="submit" form="task-details-form">Save Changes</Button>
+                <Button type="submit" form="task-details-form" disabled={isSaving}>
+                  {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
+                  Save Changes
+                </Button>
               )}
           </SheetFooter>
         </SheetContent>
