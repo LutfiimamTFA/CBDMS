@@ -42,21 +42,6 @@ service cloud.firestore {
     function isAssignee(taskId) {
         return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds;
     }
-    
-    function employeeCanUpdateTask() {
-      // An employee can update a task IF:
-      // 1. They are an assignee of the task.
-      // 2. The task is NOT already 'Done'.
-      // 3. They are only changing the fields they are allowed to change.
-      let allowedFields = ['status', 'actualCompletionDate', 'lastActivity', 'activities', 'timeTracked', 'timeLogs', 'subtasks', 'comments', 'attachments', 'updatedAt'];
-      let incomingKeys = request.resource.data.keys();
-      let unchangedKeys = resource.data.keys().diff(incomingKeys);
-      let changedKeys = incomingKeys.diff(unchangedKeys);
-      
-      return isAssignee(request.path.split('/')[2]) &&
-             resource.data.status != 'Done' &&
-             changedKeys.hasOnly(allowedFields);
-    }
 
     // Rules for 'permissions' collection
     match /permissions/{docId} {
@@ -96,9 +81,11 @@ service cloud.firestore {
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
 
-      allow update: if isSuperAdmin() || 
-                       (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
-                       employeeCanUpdateTask();
+      allow update: if (
+                      isSuperAdmin() || 
+                      (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
+                      (isRole('Employee') && isAssignee(taskId) && resource.data.status != 'Done')
+                    );
       
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks'));
 
