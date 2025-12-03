@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -31,8 +30,8 @@ import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activit
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, ChevronDown, FileText } from 'lucide-react';
+import { format, parseISO, formatDistanceToNow, isAfter } from 'date-fns';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, ChevronDown, FileText, AlertCircle } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
@@ -359,8 +358,30 @@ export function TasksDataTable() {
         const task = row.original;
         const hasDescription = task.description && task.description.trim() !== '';
 
+        const completionStatus = React.useMemo(() => {
+            if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
+            const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
+            return isLate ? 'Late' : 'On Time';
+        }, [task.status, task.actualCompletionDate, task.dueDate]);
+
         return (
           <div className="flex items-center gap-2 max-w-xs">
+             {completionStatus && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger>
+                            {completionStatus === 'On Time' ? (
+                                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                            ) : (
+                                <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                            )}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p>Completed {completionStatus}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
             <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
             {hasDescription && (
                 <TooltipProvider>
@@ -883,3 +904,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
