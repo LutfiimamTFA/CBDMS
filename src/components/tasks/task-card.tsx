@@ -4,8 +4,8 @@ import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle } from 'lucide-react';
+import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '../ui/progress';
 import { useI18n } from '@/context/i18n-provider';
@@ -27,6 +27,13 @@ export function TaskCard({ task, index }: TaskCardProps) {
     : 0;
   
   const priorityTranslationKey = `priority.${task.priority.toLowerCase()}` as any;
+  
+  const completionStatus = useMemo(() => {
+    if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
+    const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
+    return isLate ? 'Late' : 'On Time';
+  }, [task.status, task.actualCompletionDate, task.dueDate]);
+
 
   return (
     <Draggable draggableId={task.id} index={index}>
@@ -95,6 +102,22 @@ export function TaskCard({ task, index }: TaskCardProps) {
                     </TooltipProvider>
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        {completionStatus && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger>
+                                        {completionStatus === 'On Time' ? (
+                                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                                        ) : (
+                                            <AlertCircle className="h-4 w-4 text-destructive" />
+                                        )}
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Completed {completionStatus}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
                         {task.subtasks && task.subtasks.length > 0 && (
                             <span className="flex items-center gap-1">
                                 <ListTodo className="h-3.5 w-3.5" /> {task.subtasks.length}
