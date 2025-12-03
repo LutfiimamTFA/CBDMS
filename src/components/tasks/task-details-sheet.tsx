@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -96,6 +95,7 @@ export function TaskDetailsSheet({
   const { toast } = useToast();
   const router = useRouter();
   const [isUploading, setIsUploading] = React.useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
 
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -564,75 +564,34 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   }
   
  const handleMarkComplete = async () => {
-    if (!firestore || !currentUser) return;
-
-    const taskRef = doc(firestore, 'tasks', initialTask.id);
-    const completionDate = new Date();
-    const isLate = initialTask.dueDate
-      ? isAfter(completionDate, parseISO(initialTask.dueDate))
-      : false;
-
-    const newActivity: Activity = {
-      id: `act-${Date.now()}`,
-      user: {
-        id: currentUser.id,
-        name: currentUser.name,
-        avatarUrl: currentUser.avatarUrl || '',
-      },
-      action: `completed the task ${isLate ? '(Late)' : '(On Time)'}`,
-      timestamp: new Date().toISOString(),
-    };
+    if (!currentUser) return;
+    setIsCompleting(true);
 
     try {
-      const batch = writeBatch(firestore);
-      const updateData: any = {
-        status: 'Done',
-        actualCompletionDate: completionDate.toISOString(),
-        lastActivity: newActivity,
-        activities: [...(initialTask.activities || []), newActivity],
-        updatedAt: serverTimestamp(),
-      };
-      batch.update(taskRef, updateData);
+        const response = await fetch('/api/complete-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId: initialTask.id, userId: currentUser.id }),
+        });
 
-      // Notify creator only if they are not the one completing the task
-      if (initialTask.createdBy?.id && currentUser.id !== initialTask.createdBy.id) {
-        const managerNotifRef = doc(
-          collection(firestore, `users/${initialTask.createdBy.id}/notifications`)
-        );
-        const notifMessage = `${currentUser.name} has completed the task: "${initialTask.title}".`;
-        const notifTitle = isLate
-          ? `Task Completed (Late)`
-          : `Task Completed (On Time)`;
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to complete task.');
+        }
 
-        const managerNotification: Omit<Notification, 'id'> = {
-          userId: initialTask.createdBy.id,
-          title: notifTitle,
-          message: notifMessage,
-          taskId: initialTask.id,
-          taskTitle: initialTask.title,
-          isRead: false,
-          createdAt: serverTimestamp(),
-          createdBy: {
-            id: currentUser.id,
-            name: currentUser.name,
-            avatarUrl: currentUser.avatarUrl || '',
-          },
-        };
-        batch.set(managerNotifRef, managerNotification);
-      }
-
-      await batch.commit();
-      toast({
-        title: 'Task Completed!',
-        description: 'Status updated and relevant parties notified.',
-      });
-    } catch (error) {
-      console.error('Failed to complete task:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: 'Could not complete the task. Please check your permissions and try again.',
-      });
+        toast({
+            title: 'Task Completed!',
+            description: 'Status updated and relevant parties notified.',
+        });
+    } catch (error: any) {
+        console.error('Failed to complete task:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Update Failed',
+            description: error.message || 'Could not complete the task. Please try again.',
+        });
+    } finally {
+        setIsCompleting(false);
     }
   };
 
@@ -677,7 +636,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <Button className="w-full h-12 text-lg" onClick={handleStartWork}><PlayCircle className="mr-2"/> Start Work</Button>
                         )}
                         {isAssignee && initialTask.status !== 'To Do' && initialTask.status !== 'Done' && (
-                            <Button className="w-full h-12 text-lg" onClick={handleMarkComplete}><CheckCircle className="mr-2"/> Mark as Complete</Button>
+                            <Button className="w-full h-12 text-lg" onClick={handleMarkComplete} disabled={isCompleting}>
+                                {isCompleting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                Mark as Complete
+                            </Button>
                         )}
 
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEdit} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
@@ -829,7 +791,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               { !canEdit && currentUser?.role === 'Employee' ? (
+                               { !canEdit && !isAssignee ? (
                                      <Badge variant="outline" className="font-normal">
                                         <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
                                         {form.getValues('status')}
