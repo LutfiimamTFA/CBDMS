@@ -45,6 +45,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Label } from '@/components/ui/label';
+import Link from 'next/link';
 
 const brandColors = [
   'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-lime-500', 
@@ -133,10 +134,24 @@ export default function CalendarPage() {
     setSelectedPriorities([]);
   };
 
-  const employeeOptions = useMemo(() => (allUsers || []).filter(u => u.role === 'Employee' || u.role === 'Manager').map(u => ({ value: u.id, label: u.name })), [allUsers]);
-  const brandOptions = useMemo(() => (allBrands || []).map(b => ({ value: b.id, label: b.name })), [allBrands]);
-  const statusOptions = useMemo(() => (allStatuses || []).map(s => ({ value: s.name, label: s.name })), [allStatuses]);
-  const priorityOptions = useMemo(() => Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label })), []);
+  const employeeOptions = useMemo(() => {
+    if (!allUsers) return [];
+    return allUsers.filter(u => u.role === 'Employee' || u.role === 'Manager').map(u => ({ value: u.id, label: u.name }));
+  }, [allUsers]);
+
+  const brandOptions = useMemo(() => {
+    if (!allBrands) return [];
+    return allBrands.map(b => ({ value: b.id, label: b.name }));
+  }, [allBrands]);
+  
+  const statusOptions = useMemo(() => {
+    if (!allStatuses) return [];
+    return allStatuses.map(s => ({ value: s.name, label: s.name }));
+  }, [allStatuses]);
+
+  const priorityOptions = useMemo(() => {
+    return Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
+  }, []);
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -234,12 +249,12 @@ export default function CalendarPage() {
                       {tasksOnThisDay.map(task => (
                         <Popover key={task.id}>
                           <PopoverTrigger asChild>
-                              <div className={cn(
+                              <Link href={`/tasks/${task.id}`} className={cn(
                                   'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full',
                                   getBrandColor(task.brandId)
                               )}>
                                   <span className="truncate">{task.title}</span>
-                              </div>
+                              </Link>
                           </PopoverTrigger>
                           <PopoverContent className="w-80">
                               <div className="space-y-3">
