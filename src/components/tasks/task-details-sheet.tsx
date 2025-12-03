@@ -76,6 +76,12 @@ const formatStopwatch = (time: number) => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
+const formatHours = (hours: number = 0) => {
+    const h = Math.floor(hours);
+    const m = Math.floor((hours - h) * 60);
+    return `${h}h ${m}m`;
+};
+
 type AIValidationState = {
   isOpen: boolean;
   isChecking: boolean;
@@ -665,16 +671,16 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             </Button>
                         )}
 
-                        {isAssignee && initialTask.status === 'Doing' && (
-                            <div className="space-y-2">
-                                <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
-                                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                    Mark as Complete
-                                </Button>
-                                {!allSubtasksCompleted && (
-                                    <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk menandai tugas ini selesai.</p>
-                                )}
-                            </div>
+                        {(isAssignee || canEdit) && initialTask.status !== 'Done' && (
+                          <div className="space-y-2">
+                            <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
+                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                Mark as Complete
+                            </Button>
+                            {!allSubtasksCompleted && (
+                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk menandai tugas ini selesai.</p>
+                            )}
+                          </div>
                         )}
 
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEdit} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
@@ -961,7 +967,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     <div className='space-y-4 p-4 rounded-lg border'>
                       <div className="flex justify-between items-center">
                         <h3 className='font-semibold text-sm'>Time Management</h3>
-                        {isRunning && <div className="text-sm font-mono text-primary animate-pulse">Session active</div>}
                       </div>
                       <Separator/>
                        <FormField control={form.control} name="timeEstimate" render={({ field }) => (
@@ -979,18 +984,20 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                        
                        <div className="space-y-2">
                           <div className="grid grid-cols-3 items-center gap-2">
-                              <span className="text-sm text-muted-foreground">Time Tracked</span>
-                              <span className="col-span-2 text-sm font-medium">{timeTracked.toFixed(2)}h</span>
+                              <span className="text-sm text-muted-foreground">Total Logged</span>
+                              <span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span>
                           </div>
                           <Progress value={timeTrackingProgress} />
                        </div>
 
-                        <div className="space-y-2">
-                            <div className='flex items-center justify-between'>
-                                <h4 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Session Duration</h4>
-                                <div className='font-mono text-xl font-semibold text-primary'>{formatStopwatch(elapsedTime)}</div>
-                            </div>
-                        </div>
+                       {isRunning && (
+                         <div className="space-y-2">
+                             <div className="flex items-center justify-between text-sm">
+                                 <span className="text-muted-foreground">Current Session</span>
+                                 <div className="font-mono text-primary">{formatStopwatch(elapsedTime)}</div>
+                             </div>
+                         </div>
+                       )}
                     </div>
 
                   </div>
