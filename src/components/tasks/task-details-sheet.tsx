@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -404,8 +404,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
 
-    let newActivity: Activity | null = null;
-
     const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
         const changes: string[] = [];
         if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
@@ -419,10 +417,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
     const actionDescription = getChangedFields(initialTask, data);
     
-    const activityData: { activities?: Activity[]; lastActivity?: Activity | null } = {};
-
+    let activityData: Partial<Task> = {};
     if (actionDescription) {
-        newActivity = {
+        const newActivity: Activity = {
             id: `act-${Date.now()}`,
             user: {
                 id: currentUser.id,
@@ -432,10 +429,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             action: actionDescription,
             timestamp: new Date().toISOString(),
         };
-        activityData.activities = [...(initialTask.activities || []), newActivity];
-        activityData.lastActivity = newActivity;
+        activityData = {
+            activities: [...(initialTask.activities || []), newActivity],
+            lastActivity: newActivity,
+        };
     }
-
+    
     const updatedTaskData: Partial<Task> = {
         ...data,
         assignees: currentAssignees,
@@ -448,11 +447,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         updatedAt: serverTimestamp() as any,
     };
     
-    // Clean up undefined values to prevent Firestore errors
     Object.keys(updatedTaskData).forEach(key => {
       const typedKey = key as keyof typeof updatedTaskData;
       if (updatedTaskData[typedKey] === undefined) {
-        delete updatedTaskData[typedKey];
+        delete (updatedTaskData as any)[typedKey];
       }
     });
 
@@ -626,6 +624,42 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
 
+  const handleReopenTask = async () => {
+    if (!currentUser || !firestore) return;
+    setIsSaving(true);
+    
+    const taskRef = doc(firestore, "tasks", initialTask.id);
+    const newActivity: Activity = {
+        id: `act-${Date.now()}`,
+        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        action: 'reopened the task',
+        timestamp: new Date().toISOString(),
+    };
+
+    try {
+        await updateDoc(taskRef, {
+            status: 'Doing',
+            actualCompletionDate: deleteField(),
+            lastActivity: newActivity,
+            activities: [...(initialTask.activities || []), newActivity],
+        });
+        
+        toast({
+            title: 'Task Reopened',
+            description: 'You can continue working on this task.',
+        });
+    } catch (error: any) {
+        console.error('Failed to reopen task:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Update Failed',
+            description: error.message || 'Could not reopen the task.',
+        });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
 
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
@@ -663,7 +697,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {isAssignee && initialTask.status !== 'Done' && (
+                        {isAssignee && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
@@ -672,14 +706,16 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                           Total Logged: <span className="font-medium text-foreground">{formatHours(timeTracked)}</span>
                                       </p>
                                   </div>
-                                  {isRunning ? (
-                                      <Button variant="destructive" onClick={handlePauseSession}>
-                                          <PauseCircle className="mr-2"/> Stop Session
-                                      </Button>
-                                  ) : (
-                                      <Button onClick={handleStartSession}>
-                                          <PlayCircle className="mr-2"/> Start Session
-                                      </Button>
+                                  {initialTask.status !== 'Done' && (
+                                    isRunning ? (
+                                        <Button variant="destructive" onClick={handlePauseSession}>
+                                            <PauseCircle className="mr-2"/> Stop Session
+                                        </Button>
+                                    ) : (
+                                        <Button onClick={handleStartSession}>
+                                            <PlayCircle className="mr-2"/> Start Session
+                                        </Button>
+                                    )
                                   )}
                               </div>
                               {isRunning && (
@@ -812,6 +848,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             )}
                           </div>
                     )}
+                    {isAssignee && initialTask.status === 'Done' && (
+                         <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                             <RefreshCcw className="mr-2 h-4 w-4" />
+                            Reopen Task
+                        </Button>
+                    )}
                     <div className='space-y-4 p-4 rounded-lg border'>
                       <h3 className='font-semibold text-sm'>Task Details</h3>
                       <Separator/>
@@ -853,7 +896,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               { canEdit ? (
+                               {canEdit ? (
                                     <FormField control={form.control} name="status" render={({ field }) => (
                                     <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
@@ -1089,5 +1132,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    
