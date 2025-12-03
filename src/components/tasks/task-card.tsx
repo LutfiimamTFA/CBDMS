@@ -121,7 +121,7 @@ export function TaskCard({ task, index }: TaskCardProps) {
                         )}
                         {task.subtasks && task.subtasks.length > 0 && (
                             <span className="flex items-center gap-1">
-                                <ListTodo className="h-3.5 w-3.5" /> {task.subtasks.length}
+                                <ListTodo className="h-3.5 w-3.5" /> {task.subtasks.filter(st => st.completed).length}/{task.subtasks.length}
                             </span>
                         )}
                         {task.dependencies && task.dependencies.length > 0 && (
