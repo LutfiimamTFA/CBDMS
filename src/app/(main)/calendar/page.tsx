@@ -45,7 +45,6 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Label } from '@/components/ui/label';
-import Link from 'next/link';
 
 const brandColors = [
   'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-lime-500', 
@@ -251,12 +250,12 @@ export default function CalendarPage() {
                         return (
                         <Popover key={task.id}>
                           <PopoverTrigger asChild>
-                              <Link href={`/tasks/${task.id}`} className={cn(
+                              <div className={cn(
                                   'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full',
                                   getBrandColor(task.brandId)
                               )}>
                                   <span className="truncate">{task.title}</span>
-                              </Link>
+                              </div>
                           </PopoverTrigger>
                           <PopoverContent className="w-80">
                               <div className="space-y-3">
@@ -308,4 +307,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
