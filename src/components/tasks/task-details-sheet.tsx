@@ -52,6 +52,7 @@ import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Badge } from '../ui/badge';
 
 
 const taskDetailsSchema = z.object({
@@ -466,7 +467,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         timeTracked: timeTracked,
         timeLogs: timeLogs,
         attachments: attachments,
-        activities: currentActivities,
+        activities: newActivity ? currentActivities : initialTask.activities,
         lastActivity: newActivity || initialTask.lastActivity || null,
         updatedAt: serverTimestamp(),
     };
@@ -529,7 +530,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const brandId = form.watch('brandId');
   const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
 
-  const canEdit = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || (currentUser.role === 'Employee' && initialTask.assigneeIds.includes(currentUser.id)));
+  const canEdit = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager');
   
   const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
 
@@ -615,6 +616,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   }
 
+  const completionStatus = useMemo(() => {
+    if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
+    const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
+    return isLate ? 'Late' : 'On Time';
+  }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
+
 
   return (
     <>
@@ -697,7 +704,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                     {subtasks.map((subtask) => (
                                         <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
-                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canEdit} />
+                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canEdit && !isAssignee} />
                                             <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
                                             {canEdit && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}
                                         </div>
@@ -798,16 +805,16 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               </div>
                             </FormItem>
                           )}/>
-                       <FormField control={form.control} name="status" render={({ field }) => (
-                           <FormItem className="grid grid-cols-3 items-center gap-2">
-                              <FormLabel className="text-muted-foreground">Status</FormLabel>
-                              <div className="col-span-2">
-                                  { currentUser?.role === 'Employee' ? (
-                                    <div className="flex items-center gap-2 text-sm font-medium">
-                                       <span className={`h-2 w-2 rounded-full ${form.getValues('status') === 'To Do' ? 'bg-yellow-500' : form.getValues('status') === 'Doing' ? 'bg-blue-500' : 'bg-green-500'}`}></span>
-                                       {form.getValues('status')}
-                                    </div>
-                                  ) : (
+                        <FormItem className="grid grid-cols-3 items-center gap-2">
+                            <FormLabel className="text-muted-foreground">Status</FormLabel>
+                            <div className="col-span-2">
+                                {!canEdit && currentUser?.role === 'Employee' ? (
+                                     <Badge variant="outline">
+                                        <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
+                                        {form.getValues('status')}
+                                    </Badge>
+                                ) : (
+                                <FormField control={form.control} name="status" render={({ field }) => (
                                   <Select onValueChange={field.onChange} value={field.value} disabled={!canEdit}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
@@ -821,10 +828,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                       ))}
                                     </SelectContent>
                                   </Select>
-                                  )}
-                              </div>
-                           </FormItem>
-                       )}/>
+                                )}/>
+                                )}
+                            </div>
+                        </FormItem>
                        <FormField control={form.control} name="priority" render={({ field }) => (
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Priority</FormLabel>
@@ -846,7 +853,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               </div>
                            </FormItem>
                        )}/>
-                       <FormField control={form.control} name="dueDate" render={({ field }) => (
+                        <FormField control={form.control} name="dueDate" render={({ field }) => (
                             <FormItem className="grid grid-cols-3 items-center gap-2">
                                <FormLabel className="text-muted-foreground">Due Date</FormLabel>
                                <div className="col-span-2">
@@ -860,6 +867,21 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                </div>
                             </FormItem>
                         )}/>
+                        {initialTask.actualCompletionDate && (
+                             <div className="grid grid-cols-3 items-center gap-2">
+                               <FormLabel className="text-muted-foreground">Completed</FormLabel>
+                               <div className="col-span-2 flex items-center gap-2">
+                                 <span className="text-sm font-medium">
+                                    {format(parseISO(initialTask.actualCompletionDate), 'MMM d, yyyy')}
+                                 </span>
+                                 {completionStatus && (
+                                    <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800' : ''}>
+                                        {completionStatus}
+                                    </Badge>
+                                 )}
+                               </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className='space-y-4 p-4 rounded-lg border'>

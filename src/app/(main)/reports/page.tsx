@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
-import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList } from 'lucide-react';
+import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
@@ -113,6 +113,18 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     return allUsers?.filter(u => u.id === selectedUserId) || [];
   }, [allUsers, selectedUserId]);
 
+  const onTimeCompletionRate = useMemo(() => {
+    const completed = filteredTasks.filter(t => t.status === 'Done' && t.actualCompletionDate && t.dueDate);
+    if (completed.length === 0) return { rate: 0, onTime: 0, total: 0 };
+    
+    const onTime = completed.filter(t => !isAfter(parseISO(t.actualCompletionDate!), parseISO(t.dueDate!))).length;
+    return {
+      rate: Math.round((onTime / completed.length) * 100),
+      onTime,
+      total: completed.length
+    };
+  }, [filteredTasks]);
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -171,12 +183,14 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Karyawan</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">On-Time Rate</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalUsers}</div>
-            <p className="text-xs text-muted-foreground">karyawan terfilter</p>
+            <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
+            <p className="text-xs text-muted-foreground">
+              {onTimeCompletionRate.onTime} of {onTimeCompletionRate.total} tasks completed on time
+            </p>
           </CardContent>
         </Card>
         <Card>
