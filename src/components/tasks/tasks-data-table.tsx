@@ -67,9 +67,9 @@ type AIValidationState = {
 };
 
 // Custom sorting function for priorities
-const prioritySortingFn = (rowA: any, rowB: any, columnId: string) => {
+const prioritySortingFn = (row: any, rowB: any, columnId: string) => {
     const priorityOrder: Record<Priority, number> = { 'Urgent': 3, 'High': 2, 'Medium': 1, 'Low': 0 };
-    const priorityA = priorityOrder[rowA.getValue(columnId) as Priority];
+    const priorityA = priorityOrder[row.getValue(columnId) as Priority];
     const priorityB = priorityOrder[rowB.getValue(columnId) as Priority];
     if (priorityA > priorityB) return 1;
     if (priorityA < priorityB) return -1;
@@ -400,10 +400,11 @@ export function TasksDataTable() {
         const statusOption = statusOptions.find(s => s.value === currentStatus);
         const Icon = statusOption?.icon || Circle;
 
-        if (profile?.role === 'Super Admin' || profile?.role === 'Manager') {
-            return (
-                <Badge variant="outline" className='font-normal'>
-                    <Icon className="h-4 w-4 mr-2 text-muted-foreground" />
+        if (profile?.role === 'Employee') {
+             const statusDetails = statuses?.find(s => s.name === currentStatus);
+             return (
+                <Badge variant="outline" className="font-normal">
+                    <span className={`h-2 w-2 rounded-full mr-2 ${statusDetails?.color || 'bg-gray-500'}`}></span>
                     <span>{currentStatus}</span>
                 </Badge>
             )
