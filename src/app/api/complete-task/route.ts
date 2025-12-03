@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -68,11 +69,13 @@ export async function POST(request: Request) {
       timestamp: Timestamp.fromDate(completionDate),
     };
 
-    const updateData: Partial<Task> = {
+    const updatedActivities = [...(taskData.activities || []), newActivity];
+
+    const updateData = {
       status: 'Done',
       actualCompletionDate: completionDate.toISOString(),
       lastActivity: newActivity,
-      activities: [...(taskData.activities || []), newActivity],
+      activities: updatedActivities,
     };
     
     batch.update(taskRef, updateData);
