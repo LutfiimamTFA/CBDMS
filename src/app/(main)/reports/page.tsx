@@ -104,7 +104,9 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
-            <p className="text-xs text-muted-foreground">{onTimeCompletionRate.onTime} of {onTimeCompletionRate.total} tasks</p>
+            <p className="text-xs text-muted-foreground">
+                {onTimeCompletionRate.onTime} tugas tepat waktu dari {onTimeCompletionRate.total}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -253,7 +255,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           <CardContent>
             <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
             <p className="text-xs text-muted-foreground">
-              {onTimeCompletionRate.onTime} of {onTimeCompletionRate.total} tasks completed on time
+              {onTimeCompletionRate.onTime} tugas tepat waktu dari {onTimeCompletionRate.total}
             </p>
           </CardContent>
         </Card>
@@ -377,3 +379,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
