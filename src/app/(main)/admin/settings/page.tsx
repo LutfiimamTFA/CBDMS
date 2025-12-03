@@ -154,12 +154,12 @@ export default function AppSettingsPage() {
                                             <div className="h-[30px] w-[120px] rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">No Logo</div>
                                         )}
                                         <FormControl>
-                                            <>
+                                            <div>
                                                 <input type="file" className="hidden" ref={fileInputRef} onChange={onFileChange} accept="image/png, image/jpeg, image/svg+xml" />
                                                 <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
                                                     Change Logo
                                                 </Button>
-                                            </>
+                                            </div>
                                         </FormControl>
                                     </div>
                                     <p className="text-xs text-muted-foreground pt-1">Recommended size: 200x50px, PNG or SVG format.</p>
