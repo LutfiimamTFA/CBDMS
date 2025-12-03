@@ -21,6 +21,7 @@ import {
   differenceInDays,
   max,
   min,
+  isWithinInterval,
 } from 'date-fns';
 import {
   ChevronLeft,
@@ -28,6 +29,7 @@ import {
   Filter,
   Loader2,
   X,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -129,21 +131,20 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentDate(sub(currentDate, { months: 1 }));
 
   // --- Task Processing for Calendar View ---
-  const tasksWithPositions = useMemo(() => {
-    if (!filteredTasks || daysInGrid.length === 0) return [];
+  const { tasksWithPositions, weekLanes } = useMemo(() => {
+    if (!filteredTasks || daysInGrid.length === 0) return { tasksWithPositions: [], weekLanes: {} };
 
-    const weekLanes: Record<string, any[][]> = {};
-    const gridStartTime = startOfWeek(startOfMonth(currentDate)).getTime();
-
-    return filteredTasks
+    const localWeekLanes: Record<string, any[][]> = {};
+    const gridStart = daysInGrid[0];
+    const gridEnd = daysInGrid[daysInGrid.length - 1];
+    
+    const positioned = filteredTasks
       .map(task => {
         if (!task.startDate || !task.dueDate) return null;
 
         const taskStart = parseISO(task.startDate);
         const taskEnd = parseISO(task.dueDate);
-        const gridStart = daysInGrid[0];
-        const gridEnd = daysInGrid[daysInGrid.length - 1];
-
+        
         if (taskEnd < gridStart || taskStart > gridEnd) return null;
 
         const effectiveStart = max([taskStart, gridStart]);
@@ -158,23 +159,23 @@ export default function CalendarPage() {
         const weekOfTaskStart = startOfWeek(effectiveStart);
         const weekKey = format(weekOfTaskStart, 'yyyy-MM-dd');
         
-        if (!weekLanes[weekKey]) {
-            weekLanes[weekKey] = [];
+        if (!localWeekLanes[weekKey]) {
+            localWeekLanes[weekKey] = [];
         }
 
         while (true) {
-            if (!weekLanes[weekKey][lane]) {
-                weekLanes[weekKey][lane] = [];
+            if (!localWeekLanes[weekKey][lane]) {
+                localWeekLanes[weekKey][lane] = [];
             }
 
-            const isOccupied = weekLanes[weekKey][lane].some(occupied => 
+            const isOccupied = localWeekLanes[weekKey][lane].some(occupied => 
                 (effectiveStart >= occupied.start && effectiveStart <= occupied.end) ||
                 (effectiveEnd >= occupied.start && effectiveEnd <= occupied.end) ||
                 (effectiveStart <= occupied.start && effectiveEnd >= occupied.end)
             );
 
             if (!isOccupied) {
-                weekLanes[weekKey][lane].push({ start: effectiveStart, end: effectiveEnd });
+                localWeekLanes[weekKey][lane].push({ start: effectiveStart, end: effectiveEnd });
                 break;
             }
             lane++;
@@ -190,8 +191,32 @@ export default function CalendarPage() {
         };
       })
       .filter(Boolean);
-  }, [filteredTasks, daysInGrid, currentDate]);
+      
+      return { tasksWithPositions: positioned, weekLanes: localWeekLanes };
+  }, [filteredTasks, daysInGrid]);
 
+  const completionMarkers = useMemo(() => {
+    if (!tasksWithPositions || daysInGrid.length === 0) return [];
+    
+    const gridStart = daysInGrid[0];
+    const gridEnd = daysInGrid[daysInGrid.length - 1];
+
+    return tasksWithPositions.map(task => {
+      if (!task.actualCompletionDate) return null;
+      
+      const completionDate = parseISO(task.actualCompletionDate);
+      if (!isWithinInterval(completionDate, { start: gridStart, end: gridEnd })) return null;
+      
+      const completionDayIndex = differenceInDays(completionDate, gridStart);
+      
+      return {
+        ...task,
+        startCol: (completionDayIndex % 7) + 1,
+        row: Math.floor(completionDayIndex / 7) + 2,
+      };
+    }).filter(Boolean);
+
+  }, [tasksWithPositions, daysInGrid]);
 
 
   const filterCount = [selectedBrands, selectedUsers, selectedStatuses, selectedPriorities].reduce((acc, filter) => acc + filter.length, 0);
@@ -312,11 +337,7 @@ export default function CalendarPage() {
               };
 
               return (
-                <div
-                    key={`${task.id}-${task.row}`}
-                    style={style}
-                    className="absolute z-10 px-px py-0.5"
-                >
+                <div key={`${task.id}-${task.row}`} style={style} className="absolute z-10 px-px py-0.5">
                     <Popover>
                         <PopoverTrigger asChild>
                             <div className={cn(
@@ -367,8 +388,23 @@ export default function CalendarPage() {
                 </div>
               );
             })}
+
+            {completionMarkers.map((marker) => {
+                 if (!marker) return null;
+                 const style = {
+                    gridRow: `${marker.row} / span 1`,
+                    gridColumn: `${marker.startCol} / span 1`,
+                    top: `${marker.lane * 1.75 + 2.5 + 0.125}rem`, // Position it over the bar
+                 };
+                 return (
+                    <div key={`${marker.id}-completion`} style={style} className="absolute z-20 flex justify-end pr-1">
+                        <CheckCircle2 className="h-5 w-5 text-green-500 bg-white rounded-full border-2 border-white"/>
+                    </div>
+                 )
+            })}
         </div>
       </main>
     </div>
   );
 }
+
