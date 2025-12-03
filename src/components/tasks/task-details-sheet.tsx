@@ -559,6 +559,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         });
         await batch.commit();
         toast({ title: 'Task Started', description: 'Status has been updated to "Doing".' });
+        handleStartStop(); // Start the stopwatch
     } catch (error) {
         console.error("Failed to start task:", error);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not start the task.' });
@@ -580,12 +581,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     };
 
     try {
+        handleLogTime(); // Log any tracked time before completing
         const batch = writeBatch(firestore);
         batch.update(taskRef, {
             status: 'Done',
             actualCompletionDate: new Date().toISOString(),
             lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity]
+            activities: [...(initialTask.activities || []), newActivity],
+            timeLogs: timeLogs,
+            timeTracked: timeTracked
         });
         
         await batch.commit();
@@ -643,17 +647,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     <div className="p-6 space-y-6">
                         
                         {isAssignee && initialTask.status === 'To Do' && (
-                            <Button className="w-full h-12 text-lg" onClick={handleStartWork} disabled={isStarting}>
+                           <Button className="w-full h-12 text-lg" onClick={handleStartWork} disabled={isStarting}>
                                 {isStarting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                 <PlayCircle className="mr-2"/> Start Work
                             </Button>
                         )}
                         {isAssignee && initialTask.status === 'Doing' && (
-                            <Button className="w-full h-12 text-lg" onClick={handleMarkComplete} disabled={isCompleting}>
+                           <Button className="w-full h-12 text-lg" onClick={handleMarkComplete} disabled={isCompleting}>
                                 {isCompleting && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                 Mark as Complete
                             </Button>
                         )}
+                        
 
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEdit} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
