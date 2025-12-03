@@ -4,7 +4,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { Task, Brand, WorkflowStatus, User, Priority } from '@/lib/types';
+import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import {
   eachDayOfInterval,
@@ -131,66 +131,67 @@ export default function CalendarPage() {
   // --- Task Processing for Calendar View ---
   const tasksWithPositions = useMemo(() => {
     if (!filteredTasks || daysInGrid.length === 0) return [];
-    
-    const sortedTasks = [...filteredTasks].sort((a,b) => {
-        const startA = a.startDate ? parseISO(a.startDate).getTime() : 0;
-        const startB = b.startDate ? parseISO(b.startDate).getTime() : 0;
-        return startA - startB;
-    });
 
     const weekLanes: Record<string, any[][]> = {};
+    const gridStartTime = startOfWeek(startOfMonth(currentDate)).getTime();
 
-    return sortedTasks.map((task) => {
+    return filteredTasks
+      .map(task => {
         if (!task.startDate || !task.dueDate) return null;
 
         const taskStart = parseISO(task.startDate);
         const taskEnd = parseISO(task.dueDate);
-
         const gridStart = daysInGrid[0];
         const gridEnd = daysInGrid[daysInGrid.length - 1];
 
         if (taskEnd < gridStart || taskStart > gridEnd) return null;
 
-        const actualStart = max([taskStart, gridStart]);
-        const actualEnd = min([taskEnd, gridEnd]);
+        const effectiveStart = max([taskStart, gridStart]);
+        const effectiveEnd = min([taskEnd, gridEnd]);
         
-        const startIndex = Math.max(0, differenceInDays(actualStart, gridStart));
+        const startDayIndex = differenceInDays(effectiveStart, gridStart);
+        const duration = differenceInDays(effectiveEnd, effectiveStart) + 1;
 
-        const weekKey = format(startOfWeek(actualStart), 'yyyy-MM-dd');
+        if (startDayIndex < 0 || (startDayIndex + duration) > daysInGrid.length) return null;
+
+        let lane = 0;
+        const weekOfTaskStart = startOfWeek(effectiveStart);
+        const weekKey = format(weekOfTaskStart, 'yyyy-MM-dd');
+        
         if (!weekLanes[weekKey]) {
             weekLanes[weekKey] = [];
         }
 
-        let lane = 0;
         while (true) {
             if (!weekLanes[weekKey][lane]) {
                 weekLanes[weekKey][lane] = [];
             }
-            
-            const isOccupied = weekLanes[weekKey][lane].some(occupiedTask => 
-                (actualStart >= occupiedTask.start && actualStart <= occupiedTask.end) ||
-                (actualEnd >= occupiedTask.start && actualEnd <= occupiedTask.end)
+
+            const isOccupied = weekLanes[weekKey][lane].some(occupied => 
+                (effectiveStart >= occupied.start && effectiveStart <= occupied.end) ||
+                (effectiveEnd >= occupied.start && effectiveEnd <= occupied.end) ||
+                (effectiveStart <= occupied.start && effectiveEnd >= occupied.end)
             );
 
             if (!isOccupied) {
-                weekLanes[weekKey][lane].push({ start: actualStart, end: actualEnd });
+                weekLanes[weekKey][lane].push({ start: effectiveStart, end: effectiveEnd });
                 break;
             }
             lane++;
         }
-
-        const duration = differenceInDays(actualEnd, actualStart) + 1;
         
         return {
-            ...task,
-            gridRowStart: Math.floor(startIndex / 7) + 1,
-            gridColStart: (startIndex % 7) + 1,
-            span: duration,
-            lane,
-            color: getBrandColor(task.brandId),
+          ...task,
+          startCol: (startDayIndex % 7) + 1,
+          row: Math.floor(startDayIndex / 7) + 2, // +2 because of header row
+          span: duration,
+          lane,
+          color: getBrandColor(task.brandId),
         };
-    }).filter(Boolean);
-  }, [filteredTasks, daysInGrid]);
+      })
+      .filter(Boolean);
+  }, [filteredTasks, daysInGrid, currentDate]);
+
 
 
   const filterCount = [selectedBrands, selectedUsers, selectedStatuses, selectedPriorities].reduce((acc, filter) => acc + filter.length, 0);
@@ -275,7 +276,7 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar Grid */}
-        <div className="relative grid grid-cols-7 border-t border-l bg-border">
+        <div className="grid grid-cols-7 grid-rows-[auto] border-t border-l bg-border relative">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                 <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground bg-secondary/50 border-r border-b">
                     {day}
@@ -289,6 +290,7 @@ export default function CalendarPage() {
                         "relative min-h-40 bg-background p-2 border-r border-b",
                         !isSameMonth(day, currentDate) && "bg-muted/30"
                     )}
+                    style={{ gridRow: `${Math.floor(differenceInDays(day, daysInGrid[0]) / 7) + 2}` }}
                 >
                     <span className={cn(
                       "font-semibold",
@@ -304,66 +306,64 @@ export default function CalendarPage() {
               const PriorityIcon = priorityInfo[task.priority].icon;
 
               const style = {
-                gridRow: `${task.gridRowStart} / span 1`,
-                gridColumn: `${task.gridColStart} / span ${task.span}`,
+                gridRow: `${task.row} / span 1`,
+                gridColumn: `${task.startCol} / span ${task.span}`,
                 top: `${task.lane * 1.75 + 2.5}rem`,
               };
 
               return (
                 <div
-                  key={`${task.id}-${task.gridRowStart}`}
-                  style={style}
-                  className="absolute z-10 px-px py-0.5"
+                    key={`${task.id}-${task.row}`}
+                    style={style}
+                    className="absolute z-10 px-px py-0.5"
                 >
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <div
-                        className={cn(
-                          'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full',
-                          task.color
-                        )}
-                      >
-                        <span className="truncate">{task.title}</span>
-                        {task.assignees && task.assignees.length > 0 && (
-                          <Avatar className="h-5 w-5 border border-white/50">
-                            <AvatarImage src={task.assignees[0].avatarUrl} />
-                            <AvatarFallback>{task.assignees[0].name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                        )}
-                      </div>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80">
-                      <div className="space-y-3">
-                        <div className='flex justify-between items-start'>
-                          <h4 className="font-bold">{task.title}</h4>
-                          <Badge variant="secondary" className={cn(task.color, 'text-white')}>
-                            {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <div className='flex items-center gap-2'>
-                            <PriorityIcon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
-                            <span>{task.priority}</span>
-                          </div>
-                          <div className='flex items-center gap-2'>
-                            <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
-                            <span>{task.status}</span>
-                          </div>
-                        </div>
-                        <div className='flex items-center gap-2'>
-                          {task.assignees?.map(assignee => (
-                            <div key={assignee.id} className='flex items-center gap-2'>
-                              <Avatar className="h-7 w-7">
-                                <AvatarImage src={assignee.avatarUrl} />
-                                <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm font-medium">{assignee.name}</span>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <div className={cn(
+                                'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full',
+                                task.color
+                            )}>
+                                <span className="truncate">{task.title}</span>
+                                {task.assignees && task.assignees.length > 0 && (
+                                    <Avatar className="h-5 w-5 border border-white/50">
+                                        <AvatarImage src={task.assignees[0].avatarUrl} />
+                                        <AvatarFallback>{task.assignees[0].name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                )}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-80">
+                            <div className="space-y-3">
+                                <div className='flex justify-between items-start'>
+                                <h4 className="font-bold">{task.title}</h4>
+                                <Badge variant="secondary" className={cn(task.color, 'text-white')}>
+                                    {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
+                                </Badge>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <div className='flex items-center gap-2'>
+                                    <PriorityIcon className={`h-4 w-4 ${priorityInfo[task.priority].color}`} />
+                                    <span>{task.priority}</span>
+                                </div>
+                                <div className='flex items-center gap-2'>
+                                    <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
+                                    <span>{task.status}</span>
+                                </div>
+                                </div>
+                                <div className='flex items-center gap-2'>
+                                  {(task.assignees || []).map(assignee => (
+                                    <div key={assignee.id} className='flex items-center gap-2'>
+                                    <Avatar className="h-7 w-7">
+                                        <AvatarImage src={assignee.avatarUrl} />
+                                        <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="text-sm font-medium">{assignee.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
                 </div>
               );
             })}
@@ -372,4 +372,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
