@@ -121,6 +121,8 @@ export type Task = {
   assigneeIds: string[];
   startDate?: string;
   dueDate?: string;
+  actualStartDate?: string;
+  actualCompletionDate?: string;
   timeEstimate?: number; // in hours
   timeTracked?: number; // in hours
   timeLogs?: TimeLog[];
@@ -203,3 +205,5 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+    

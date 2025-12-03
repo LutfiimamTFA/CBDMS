@@ -32,12 +32,12 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2 } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { Progress } from '../ui/progress';
-import { format, formatDistanceToNow, parseISO } from 'date-fns';
+import { format, formatDistanceToNow, parseISO, isAfter } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
@@ -530,7 +530,92 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const brandId = form.watch('brandId');
   const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
 
-  const canEdit = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || currentUser.role === 'Employee');
+  const canEdit = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || (currentUser.role === 'Employee' && initialTask.assigneeIds.includes(currentUser.id)));
+  
+  const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
+
+
+  const handleStartWork = async () => {
+    if (!firestore || !currentUser) return;
+
+    const taskRef = doc(firestore, "tasks", initialTask.id);
+    const newActivity: Activity = {
+        id: `act-${Date.now()}`,
+        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        action: 'started working on the task',
+        timestamp: new Date().toISOString(),
+    };
+    
+    try {
+        const batch = writeBatch(firestore);
+        batch.update(taskRef, {
+            status: 'Doing',
+            actualStartDate: new Date().toISOString(),
+            lastActivity: newActivity,
+            activities: [...(initialTask.activities || []), newActivity]
+        });
+        await batch.commit();
+        toast({ title: 'Task Started', description: 'Status has been updated to "Doing".' });
+    } catch (error) {
+        console.error("Failed to start task:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not start the task.' });
+    }
+  }
+  
+  const handleMarkComplete = async () => {
+    if (!firestore || !currentUser || !initialTask.createdBy) return;
+    
+    const taskRef = doc(firestore, "tasks", initialTask.id);
+    const completionDate = new Date();
+    const isLate = initialTask.dueDate ? isAfter(completionDate, parseISO(initialTask.dueDate)) : false;
+
+    const newActivity: Activity = {
+        id: `act-${Date.now()}`,
+        user: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        action: `completed the task ${isLate ? '(Late)' : '(On Time)'}`,
+        timestamp: completionDate.toISOString(),
+    };
+
+    const managerNotifRef = doc(collection(firestore, `users/${initialTask.createdBy.id}/notifications`));
+    const notifMessage = `${currentUser.name} has completed the task: "${initialTask.title}".`;
+    const notifTitle = isLate ? `Task Completed (Late)` : `Task Completed (On Time)`;
+
+    const managerNotification: Omit<Notification, 'id'> = {
+        userId: initialTask.createdBy.id,
+        title: notifTitle,
+        message: notifMessage,
+        taskId: initialTask.id,
+        taskTitle: initialTask.title,
+        isRead: false,
+        createdAt: serverTimestamp(),
+        createdBy: {
+            id: currentUser.id,
+            name: currentUser.name,
+            avatarUrl: currentUser.avatarUrl || '',
+        },
+    };
+
+    try {
+        const batch = writeBatch(firestore);
+        batch.update(taskRef, {
+            status: 'Done',
+            actualCompletionDate: completionDate.toISOString(),
+            lastActivity: newActivity,
+            activities: [...(initialTask.activities || []), newActivity]
+        });
+        batch.set(managerNotifRef, managerNotification);
+        
+        await batch.commit();
+        toast({
+            title: 'Task Completed!',
+            description: `A notification has been sent to the manager.`,
+        });
+    } catch (error) {
+         console.error("Failed to complete task:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not complete the task.' });
+    }
+  }
+
 
   const availableStatuses = useMemo(() => {
     if (!currentUser || !allStatuses) return [];
@@ -576,6 +661,14 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Main Content */}
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
+                        
+                        {isAssignee && initialTask.status === 'To Do' && (
+                            <Button className="w-full h-12 text-lg" onClick={handleStartWork}><PlayCircle className="mr-2"/> Start Work</Button>
+                        )}
+                        {isAssignee && initialTask.status !== 'To Do' && initialTask.status !== 'Done' && (
+                            <Button className="w-full h-12 text-lg" onClick={handleMarkComplete}><CheckCircle className="mr-2"/> Mark as Complete</Button>
+                        )}
+
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEdit} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
                         <div className="space-y-2">
@@ -952,3 +1045,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
