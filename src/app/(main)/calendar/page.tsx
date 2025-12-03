@@ -1,9 +1,9 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
-import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { useCollection, useFirestore } from '@/firebase';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import {
@@ -63,7 +63,6 @@ const getBrandColor = (brandId: string) => {
 
 export default function CalendarPage() {
   const firestore = useFirestore();
-  const { profile } = useUserProfile();
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // --- Filter States ---
