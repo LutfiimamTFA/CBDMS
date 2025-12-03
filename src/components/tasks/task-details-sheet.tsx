@@ -826,7 +826,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               {currentUser?.role === 'Employee' && !canEdit ? (
+                               { !canEdit ? (
                                      <Badge variant="outline" className="font-normal">
                                         <span className={`h-2 w-2 rounded-full mr-2 ${allStatuses?.find(s => s.name === form.getValues('status'))?.color || 'bg-gray-500'}`}></span>
                                         {form.getValues('status')}

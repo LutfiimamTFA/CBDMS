@@ -42,6 +42,21 @@ service cloud.firestore {
     function isAssignee(taskId) {
         return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds;
     }
+    
+    function employeeCanUpdateTask() {
+      // An employee can update a task IF:
+      // 1. They are an assignee of the task.
+      // 2. The task is NOT already 'Done'.
+      // 3. They are only changing the fields they are allowed to change.
+      let allowedFields = ['status', 'actualCompletionDate', 'lastActivity', 'activities', 'timeTracked', 'timeLogs', 'subtasks', 'comments', 'attachments', 'updatedAt'];
+      let incomingKeys = request.resource.data.keys();
+      let unchangedKeys = resource.data.keys().diff(incomingKeys);
+      let changedKeys = incomingKeys.diff(unchangedKeys);
+      
+      return isAssignee(request.path.split('/')[2]) &&
+             resource.data.status != 'Done' &&
+             changedKeys.hasOnly(allowedFields);
+    }
 
     // Rules for 'permissions' collection
     match /permissions/{docId} {
@@ -60,15 +75,12 @@ service cloud.firestore {
                        request.auth.uid == userId;
 
       // Create and delete must be handled by secure server functions.
-      // We check for dynamic permissions as an extra layer, though it will always be false.
       allow create: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canManageUsers'));
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteUsers'));
       
       // Notification subcollection rules
       match /notifications/{notificationId} {
-        // A user can read/update/delete their own notifications.
         allow read, update, delete: if isSignedIn() && request.auth.uid == userId;
-        // Any signed-in user can create a notification for another user (for @mentions).
         allow create: if isSignedIn();
       }
     }
@@ -86,10 +98,7 @@ service cloud.firestore {
 
       allow update: if isSuperAdmin() || 
                        (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
-                       (isRole('Employee') && isAssignee(taskId) &&
-                        // Employee can only change status if they have permission AND it's a valid transition.
-                        hasPermission('Employee', 'canChangeTaskStatus') && resource.data.status != 'Done'
-                       );
+                       employeeCanUpdateTask();
       
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks'));
 
@@ -102,34 +111,47 @@ service cloud.firestore {
       
       // Rules for activities subcollection
       match /activities/{activityId} {
-        // Any user who can read the task can also read its activities.
         allow read: if isSignedIn() && (
             isSuperAdmin() ||
             (isRole('Manager') && isSameCompanyAsRequestingUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId)) ||
             (isAssignee(taskId))
         );
-        // Only users who can update the task can create activity logs.
         allow create: if isSignedIn() && (
              isSuperAdmin() || 
              (isRole('Manager') && isSameCompanyAsRequestingUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.companyId)) ||
              (isRole('Employee') && isAssignee(taskId))
         );
-        // Activities are immutable.
         allow update, delete: if false;
       }
     }
     
-    // Rules for 'navigationItems' collection
-    match /navigationItems/{navItemId} {
-        // Allow read for any signed-in user, visibility is handled client-side.
+    // Rules for 'brands' collection
+    match /brands/{brandId} {
         allow read: if isSignedIn();
-        // Only Super Admins can create, update, or delete navigation items.
+        allow write: if isSuperAdmin() || isRole('Manager');
+    }
+
+    // Rules for 'statuses' collection
+    match /statuses/{statusId} {
+        allow read: if isSignedIn();
         allow write: if isSuperAdmin();
     }
     
-    // Deny all other access by default.
-    match /{document=**} {
-      allow read, write: if false;
+    // Rules for 'recurringTaskTemplates' collection
+    match /recurringTaskTemplates/{templateId} {
+        allow read, write: if isSuperAdmin() || (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId));
+    }
+    
+    // Rules for 'dailyReports' collection
+    match /dailyReports/{reportId} {
+        allow read: if isSuperAdmin() || (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId));
+        allow write: if isRole('Employee') && getRequestingUserData().companyId == resource.data.companyId;
+    }
+    
+    // Rules for 'navigationItems' collection
+    match /navigationItems/{navItemId} {
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin();
     }
   }
 }
