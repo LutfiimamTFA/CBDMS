@@ -404,7 +404,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const batch = writeBatch(firestore);
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
 
-    const currentActivities = [...(initialTask.activities || [])];
     let newActivity: Activity | null = null;
 
     const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
@@ -419,6 +418,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     };
 
     const actionDescription = getChangedFields(initialTask, data);
+    
+    let activityData: { activities?: Activity[]; lastActivity?: Activity | null } = {};
 
     if (actionDescription) {
         newActivity = {
@@ -431,7 +432,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             action: actionDescription,
             timestamp: new Date().toISOString(),
         };
-        currentActivities.push(newActivity);
+        activityData.activities = [...(initialTask.activities || []), newActivity];
+        activityData.lastActivity = newActivity;
     }
 
     const updatedTaskData = {
@@ -442,12 +444,20 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         subtasks: subtasks,
         comments: comments,
         attachments: attachments,
-        activities: newActivity ? currentActivities : initialTask.activities,
-        lastActivity: newActivity || initialTask.lastActivity || null,
+        ...activityData,
         updatedAt: serverTimestamp(),
     };
 
     batch.update(taskDocRef, updatedTaskData);
+
+        // Only update the 'activities' field if there's a new activity to add
+        if (newActivity) {
+            batch.update(taskDocRef, {
+                activities: [...(initialTask.activities || []), newActivity],
+                lastActivity: newActivity,
+            });
+        }
+    
 
     try {
         await batch.commit();
@@ -465,7 +475,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     } finally {
         setIsSaving(false);
     }
-};
+  };
   
   const timeEstimateValue = form.watch('timeEstimate') ?? initialTask.timeEstimate ?? 0;
   
@@ -1080,3 +1090,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
