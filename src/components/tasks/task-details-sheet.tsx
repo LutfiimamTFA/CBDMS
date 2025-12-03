@@ -617,22 +617,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   }
 
 
-  const availableStatuses = useMemo(() => {
-    if (!currentUser || !allStatuses) return [];
-    if (currentUser.role === 'Super Admin' || currentUser.role === 'Manager') {
-      return allStatuses; // Full access
-    }
-    if (currentUser.role === 'Employee') {
-      const currentStatusName = form.getValues('status');
-      const currentStatus = allStatuses.find(s => s.name === currentStatusName);
-      if (!currentStatus) return [allStatuses[0]].filter(Boolean); // Fallback to first status if not found
-      // Allow moving to any status with a higher or equal order
-      return allStatuses.filter(s => s.order >= currentStatus.order);
-    }
-    return []; // Clients can't change status
-  }, [currentUser, allStatuses, form.getValues('status')]);
-
-
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -819,7 +803,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Status</FormLabel>
                               <div className="col-span-2">
-                                  { !canEdit || currentUser?.role === 'Client' ? (
+                                  { !canEdit || currentUser?.role === 'Employee' ? (
                                     <div className="flex items-center gap-2 text-sm font-medium">
                                        <span className={`h-2 w-2 rounded-full ${form.getValues('status') === 'To Do' ? 'bg-yellow-500' : form.getValues('status') === 'Doing' ? 'bg-blue-500' : 'bg-green-500'}`}></span>
                                        {form.getValues('status')}
@@ -828,7 +812,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                   <Select onValueChange={field.onChange} value={field.value}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
-                                      {availableStatuses.map(s => (
+                                      {allStatuses?.map(s => (
                                         <SelectItem key={s.id} value={s.name}>
                                             <div className="flex items-center gap-2">
                                                 <span className={`h-2 w-2 rounded-full ${s.color}`}></span>
@@ -1045,3 +1029,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
