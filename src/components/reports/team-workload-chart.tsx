@@ -27,7 +27,7 @@ export function TeamWorkloadChart({
   const workloadData = useMemo(() => {
     if (!users || !tasks) return [];
     return users
-      .filter((user) => user.role === 'Employee' || user.role === 'Manager')
+      .filter((user) => user.role === 'Employee')
       .map((user) => {
         const activeTasks = tasks.filter(
           (task) =>
