@@ -5,15 +5,16 @@ import { useMemo, useState } from 'react';
 import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
-import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp } from 'lucide-react';
+import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp, Timer } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { TaskStatusChart } from '@/components/reports/task-status-chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { subDays, isAfter, parseISO } from 'date-fns';
+import { subDays, isAfter, parseISO, intervalToDuration } from 'date-fns';
 import { Label } from '@/components/ui/label';
+import { formatDuration } from '@/lib/utils';
 
 
 // --- Komponen untuk Laporan Karyawan ---
@@ -26,9 +27,38 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
     );
   }
 
-  const completedTasks = (tasks || []).filter((t) => t.status === 'Done').length;
+  const completedTasks = (tasks || []).filter((t) => t.status === 'Done');
   const inProgressTasks = (tasks || []).filter((t) => t.status === 'Doing').length;
   const totalHoursTracked = (tasks || []).reduce((acc, t) => acc + (t.timeTracked || 0), 0);
+
+  const onTimeCompletionRate = useMemo(() => {
+    const relevantTasks = completedTasks.filter(t => t.actualCompletionDate && t.dueDate);
+    if (relevantTasks.length === 0) return { rate: 0, onTime: 0, total: 0 };
+    
+    const onTime = relevantTasks.filter(t => !isAfter(parseISO(t.actualCompletionDate!), parseISO(t.dueDate!))).length;
+    return {
+      rate: Math.round((onTime / relevantTasks.length) * 100),
+      onTime,
+      total: relevantTasks.length
+    };
+  }, [completedTasks]);
+  
+  const averageCompletionTime = useMemo(() => {
+    const relevantTasks = completedTasks.filter(t => t.actualCompletionDate && t.actualStartDate);
+    if (relevantTasks.length === 0) return "N/A";
+    
+    const totalDuration = relevantTasks.reduce((acc, task) => {
+        const start = parseISO(task.actualStartDate!);
+        const end = parseISO(task.actualCompletionDate!);
+        return acc + (end.getTime() - start.getTime());
+    }, 0);
+    
+    const avgDurationMs = totalDuration / relevantTasks.length;
+    const duration = intervalToDuration({ start: 0, end: avgDurationMs });
+    return formatDuration(duration);
+
+  }, [completedTasks]);
+
 
   return (
     <>
@@ -36,25 +66,25 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
           <h2 className="text-2xl font-bold">Laporan Kinerja Anda</h2>
           <p className="text-muted-foreground">Ringkasan aktivitas dan kontribusi Anda.</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{completedTasks}</div>
+            <div className="text-2xl font-bold">{completedTasks.length}</div>
             <p className="text-xs text-muted-foreground">dari total tugas Anda</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sedang Dikerjakan</CardTitle>
+            <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
             <CircleDashed className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">tugas aktif saat ini</p>
+            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
           </CardContent>
         </Card>
         <Card>
@@ -65,6 +95,26 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
           <CardContent>
             <div className="text-2xl font-bold">{totalHoursTracked.toFixed(2)}h</div>
             <p className="text-xs text-muted-foreground">tercatat di semua tugas</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">On-Time Rate</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
+            <p className="text-xs text-muted-foreground">{onTimeCompletionRate.onTime} of {onTimeCompletionRate.total} tasks</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg. Completion Time</CardTitle>
+            <Timer className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{averageCompletionTime}</div>
+            <p className="text-xs text-muted-foreground">per tugas selesai</p>
           </CardContent>
         </Card>
       </div>
@@ -125,6 +175,22 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     };
   }, [filteredTasks]);
 
+  const averageCompletionTime = useMemo(() => {
+    const completed = filteredTasks.filter(t => t.status === 'Done' && t.actualCompletionDate && t.actualStartDate);
+    if (completed.length === 0) return "N/A";
+    
+    const totalDuration = completed.reduce((acc, task) => {
+        const start = parseISO(task.actualStartDate!);
+        const end = parseISO(task.actualCompletionDate!);
+        return acc + (end.getTime() - start.getTime());
+    }, 0);
+    
+    const avgDurationMs = totalDuration / completed.length;
+    const duration = intervalToDuration({ start: 0, end: avgDurationMs });
+    return formatDuration(duration);
+
+  }, [filteredTasks]);
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -133,7 +199,6 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     );
   }
 
-  const totalUsers = (selectedUserId === 'all' ? allUsers?.filter(u => u.role === 'Employee').length : 1) || 0;
   const totalTasks = filteredTasks.length || 0;
   const completedTasks = filteredTasks?.filter((t) => t.status === 'Done').length || 0;
   const inProgressTasks = filteredTasks?.filter((t) => t.status === 'Doing').length || 0;
@@ -179,8 +244,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
         </div>
       </div>
 
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">On-Time Rate</CardTitle>
@@ -195,12 +259,24 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg. Completion</CardTitle>
+            <Timer className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{averageCompletionTime}</div>
+            <p className="text-xs text-muted-foreground">
+              from start to done
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Tugas</CardTitle>
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground">di seluruh proyek (terfilter)</p>
+            <p className="text-xs text-muted-foreground">(terfilter)</p>
           </CardContent>
         </Card>
         <Card>
@@ -210,7 +286,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completedTasks}</div>
-            <p className="text-xs text-muted-foreground">dari {totalTasks} tugas (terfilter)</p>
+            <p className="text-xs text-muted-foreground">dari {totalTasks} tugas</p>
           </CardContent>
         </Card>
         <Card>
@@ -220,7 +296,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">sedang dikerjakan (terfilter)</p>
+            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
           </CardContent>
         </Card>
       </div>

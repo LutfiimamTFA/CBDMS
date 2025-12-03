@@ -11,6 +11,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import type { Priority, PriorityInfo, Status, StatusInfo } from '@/lib/types';
+import type { Duration } from 'date-fns';
 
 
 export function cn(...inputs: ClassValue[]) {
@@ -56,3 +57,20 @@ export const formatHours = (hours: number = 0) => {
     const m = Math.floor((hours - h) * 60);
     return `${h}h ${m}m`;
 };
+
+export function formatDuration(duration: Duration) {
+  const parts: string[] = [];
+  if (duration.days && duration.days > 0) {
+    parts.push(`${duration.days}d`);
+  }
+  if (duration.hours && duration.hours > 0) {
+    parts.push(`${duration.hours}h`);
+  }
+  if (duration.minutes && duration.minutes > 0) {
+    parts.push(`${duration.minutes}m`);
+  }
+  
+  if (parts.length === 0) return '0m';
+
+  return parts.slice(0, 2).join(' '); // Show at most 2 units (e.g., "1d 4h" instead of "1d 4h 30m")
+}
