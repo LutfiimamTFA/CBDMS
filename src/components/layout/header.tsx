@@ -1,3 +1,4 @@
+
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -33,5 +34,3 @@ export function Header({ title, actions }: HeaderProps) {
     </header>
   );
 }
-
-    
