@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -22,7 +21,7 @@ import {
   differenceInCalendarDays,
   getDay,
   max,
-  min
+  min,
 } from 'date-fns';
 import {
   ChevronLeft,
@@ -52,6 +51,8 @@ import { MultiSelect } from '@/components/ui/multi-select';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+
 
 const brandColors = [
   'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-lime-500', 
@@ -77,9 +78,12 @@ type RenderSegment = {
   isEnd: boolean;
 };
 
+type ViewMode = 'month' | 'week';
+
 export default function CalendarPage() {
   const firestore = useFirestore();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
 
   // --- Filter States ---
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -117,14 +121,14 @@ export default function CalendarPage() {
 
 
   // --- Calendar Grid Logic ---
-  const firstDayOfMonth = startOfMonth(currentDate);
-  const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
-  const calendarEnd = endOfWeek(endOfMonth(firstDayOfMonth), { weekStartsOn: 0 });
-  
-  const weeksInGrid = useMemo(() => {
-    const weeks = [];
-    let currentWeekStart = calendarStart;
-    while(currentWeekStart < calendarEnd) {
+  const calendarGrid = useMemo(() => {
+    if (viewMode === 'month') {
+      const firstDayOfMonth = startOfMonth(currentDate);
+      const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
+      const calendarEnd = endOfWeek(endOfMonth(firstDayOfMonth), { weekStartsOn: 0 });
+      const weeks = [];
+      let currentWeekStart = calendarStart;
+      while(currentWeekStart <= calendarEnd) {
         const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 0 });
         weeks.push({
             start: currentWeekStart,
@@ -132,9 +136,22 @@ export default function CalendarPage() {
             days: eachDayOfInterval({start: currentWeekStart, end: weekEnd})
         });
         currentWeekStart = add(currentWeekStart, { weeks: 1 });
+      }
+      return { start: calendarStart, end: calendarEnd, weeks };
+    } else { // week view
+      const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
+      const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
+      return {
+        start: weekStart,
+        end: weekEnd,
+        weeks: [{
+            start: weekStart,
+            end: weekEnd,
+            days: eachDayOfInterval({ start: weekStart, end: weekEnd })
+        }]
+      };
     }
-    return weeks;
-  }, [calendarStart, calendarEnd]);
+  }, [currentDate, viewMode]);
   
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => ({
@@ -150,8 +167,8 @@ export default function CalendarPage() {
     setCurrentDate(new Date(parseInt(year, 10), currentDate.getMonth()));
   };
   
-  const nextMonth = () => setCurrentDate(add(currentDate, { months: 1 }));
-  const prevMonth = () => setCurrentDate(sub(currentDate, { months: 1 }));
+  const next = () => setCurrentDate(add(currentDate, viewMode === 'month' ? { months: 1 } : { weeks: 1 }));
+  const prev = () => setCurrentDate(sub(currentDate, viewMode === 'month' ? { months: 1 } : { weeks: 1 }));
 
   const filterCount = [selectedBrands, selectedUsers, selectedStatuses, selectedPriorities].reduce((acc, filter) => acc + filter.length, 0);
 
@@ -181,60 +198,74 @@ export default function CalendarPage() {
     return Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
   }, []);
 
- const weeklyRenderSegments = useMemo(() => {
+  const weeklyRenderSegments = useMemo(() => {
     if (!filteredTasks) return [];
 
-    return weeksInGrid.map(week => {
-        const segments: RenderSegment[] = [];
-        const levelOccupancy: { endCol: number; level: number }[] = [];
+    return calendarGrid.weeks.map(week => {
+      const weekTasks = filteredTasks
+        .map(task => {
+          let taskStart = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
+          let taskEnd = task.dueDate ? parseISO(task.dueDate) : taskStart;
+          
+          if (!taskStart) return null;
+          if (taskEnd && taskEnd < taskStart) taskEnd = taskStart;
 
-        const weekTasks = filteredTasks.map(task => {
-                let taskStart = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
-                let taskEnd = task.dueDate ? parseISO(task.dueDate) : taskStart;
-                
-                if (!taskStart) return null;
-                if (taskEnd && taskEnd < taskStart) taskEnd = taskStart;
+          return { ...task, start: taskStart, end: taskEnd as Date };
+        })
+        .filter((t): t is Task & { start: Date; end: Date } => t !== null && isWithinInterval(t.start, { start: sub(week.start, { days: 7 }), end: add(week.end, { days: 7 }) }) || isWithinInterval(t.end, { start: sub(week.start, { days: 7 }), end: add(week.end, { days: 7 }) }));
+        
+      const segments: RenderSegment[] = [];
+      const levelOccupancy: { endCol: number, level: number }[][] = Array(7).fill(0).map(() => []);
 
-                return { ...task, start: taskStart, end: taskEnd as Date };
-            })
-            .filter((t): t is Task & { start: Date; end: Date } => t !== null && isWithinInterval(t.start, {start: sub(week.start, {days: 7}), end: add(week.end, {days: 7})}))
-            .sort((a, b) => {
-                const aDuration = differenceInCalendarDays(a.end, a.start);
-                const bDuration = differenceInCalendarDays(b.end, b.start);
-                if (aDuration !== bDuration) return bDuration - aDuration;
-                return a.start.getTime() - b.start.getTime();
-            });
+      weekTasks
+        .sort((a,b) => {
+            const aDuration = differenceInCalendarDays(a.end, a.start);
+            const bDuration = differenceInCalendarDays(b.end, b.start);
+            if(aDuration !== bDuration) return bDuration - aDuration;
+            return a.start.getTime() - b.start.getTime();
+        })
+        .forEach(task => {
+          const effectiveStart = max([task.start, week.start]);
+          const effectiveEnd = min([task.end, week.end]);
 
-        weekTasks.forEach(task => {
-            const effectiveStart = max([task.start, week.start]);
-            const effectiveEnd = min([task.end, week.end]);
+          if (effectiveStart > effectiveEnd) return;
+          
+          const startCol = getDay(effectiveStart);
+          const endCol = getDay(effectiveEnd);
+          const span = endCol - startCol + 1;
 
-            if (effectiveStart > effectiveEnd) return;
-
-            const startCol = getDay(effectiveStart);
-            const endCol = getDay(effectiveEnd);
-            const span = endCol - startCol + 1;
-
-            if (span <= 0) return;
-
-            let level = 0;
-            while(levelOccupancy.some(occupant => occupant.level === level && startCol <= occupant.endCol)) {
-                level++;
+          if (span <= 0) return;
+          
+          let level = 0;
+          while (true) {
+            let isOccupied = false;
+            for (let i = startCol; i <= endCol; i++) {
+              if (levelOccupancy[i].some(occupant => occupant.level === level)) {
+                isOccupied = true;
+                break;
+              }
             }
-            levelOccupancy.push({ endCol, level });
+            if (!isOccupied) break;
+            level++;
+          }
+          
+          for (let i = startCol; i <= endCol; i++) {
+            levelOccupancy[i].push({ level, endCol });
+          }
 
-            segments.push({
-                task,
-                startCol,
-                span,
-                level,
-                isStart: isSameDay(task.start, effectiveStart),
-                isEnd: isSameDay(task.end, effectiveEnd),
-            });
+          segments.push({
+            task,
+            startCol,
+            span,
+            level,
+            isStart: isSameDay(task.start, effectiveStart),
+            isEnd: isSameDay(task.end, effectiveEnd),
+          });
         });
-        return segments;
+
+      return { segments, maxLevel: Math.max(...levelOccupancy.flat().map(o => o.level), 0) };
     });
-}, [filteredTasks, weeksInGrid]);
+  }, [filteredTasks, calendarGrid.weeks]);
 
 
   return (
@@ -244,26 +275,39 @@ export default function CalendarPage() {
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
           <div className="flex items-center gap-2">
-            <Select value={String(currentDate.getFullYear())} onValueChange={handleYearChange}>
-              <SelectTrigger className="w-28 font-bold text-lg"><SelectValue/></SelectTrigger>
-              <SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-            </Select>
-            <Select value={String(currentDate.getMonth())} onValueChange={handleMonthChange}>
-              <SelectTrigger className="w-36 font-bold text-lg"><SelectValue/></SelectTrigger>
-              <SelectContent>{months.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
-            </Select>
+            {viewMode === 'month' && (
+              <>
+                <Select value={String(currentDate.getFullYear())} onValueChange={handleYearChange}>
+                  <SelectTrigger className="w-28 font-bold text-lg"><SelectValue/></SelectTrigger>
+                  <SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={String(currentDate.getMonth())} onValueChange={handleMonthChange}>
+                  <SelectTrigger className="w-36 font-bold text-lg"><SelectValue/></SelectTrigger>
+                  <SelectContent>{months.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </>
+            )}
+             {viewMode === 'week' && (
+              <h2 className="text-xl font-bold">
+                {format(calendarGrid.start, 'MMM d')} - {format(calendarGrid.end, 'MMM d, yyyy')}
+              </h2>
+            )}
 
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={prevMonth}>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={prev}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <Button variant="outline" size="sm" className="h-9" onClick={() => setCurrentDate(new Date())}>
                 Today
               </Button>
-              <Button variant="outline" size="icon" className="h-9 w-9" onClick={nextMonth}>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={next}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+            <ToggleGroup type="single" value={viewMode} onValueChange={(value) => value && setViewMode(value as ViewMode)} className='hidden md:flex'>
+              <ToggleGroupItem value="month">Month</ToggleGroupItem>
+              <ToggleGroupItem value="week">Week</ToggleGroupItem>
+            </ToggleGroup>
           </div>
            <div className='flex items-center gap-2'>
             <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen}>
@@ -308,22 +352,16 @@ export default function CalendarPage() {
         <div className="grid grid-cols-7 border-t border-l border-border">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                 <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground bg-secondary/50 border-r border-b">
-                    {day}
+                    <span className="hidden md:inline">{day}</span>
+                    <span className="md:hidden">{day.charAt(0)}</span>
                 </div>
             ))}
         </div>
-        <div className="grid grid-cols-1 auto-rows-[10rem] border-l border-border">
-            {weeksInGrid.map((week, weekIndex) => (
-                <div key={weekIndex} className="grid grid-cols-7 relative border-b">
-                    {week.days.map((day) => (
-                        <div key={day.toString()} className={cn("p-2 border-r", !isSameMonth(day, currentDate) && "bg-muted/30")}>
-                            <span className={cn( "font-semibold", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
-                                {format(day, 'd')}
-                            </span>
-                        </div>
-                    ))}
-                    <div className="absolute top-8 left-0 right-0 h-[calc(10rem-2rem)]">
-                        {(weeklyRenderSegments[weekIndex] || []).map(segment => {
+        <div className="grid grid-cols-1 border-l border-border">
+            {calendarGrid.weeks.map((week, weekIndex) => (
+                <div key={weekIndex} className="grid grid-cols-7 relative border-b" style={{ minHeight: `${(weeklyRenderSegments[weekIndex]?.maxLevel + 1) * 1.75 + 2}rem`}}>
+                    <div className="absolute inset-0 grid grid-cols-7">
+                        {weeklyRenderSegments[weekIndex]?.segments.map(segment => {
                             const { task, startCol, span, level, isStart, isEnd } = segment;
                             const priority = task.priority ? priorityInfo[task.priority] : null;
                             const PriorityIcon = priority?.icon;
@@ -337,15 +375,15 @@ export default function CalendarPage() {
                                                 <TooltipTrigger asChild>
                                                 <div
                                                     className={cn(
-                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-all',
+                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-all z-10',
                                                         taskColor,
                                                         isStart ? 'rounded-l-md' : '',
                                                         isEnd ? 'rounded-r-md' : '',
                                                     )}
                                                     style={{
-                                                        top: `${level * 1.75}rem`,
-                                                        left: `calc(${(startCol / 7) * 100}% + 2px)`,
-                                                        width: `calc(${(span / 7) * 100}% - 4px)`,
+                                                        top: `${level * 1.75 + 0.5}rem`,
+                                                        gridColumnStart: startCol + 1,
+                                                        gridColumnEnd: startCol + 1 + span,
                                                     }}
                                                 >
                                                     <div className="flex items-center gap-1.5 truncate">
@@ -407,6 +445,13 @@ export default function CalendarPage() {
                             );
                         })}
                     </div>
+                    {week.days.map((day) => (
+                        <div key={day.toString()} className={cn("p-2 border-r", viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30")}>
+                            <span className={cn( "font-semibold", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
+                                {format(day, 'd')}
+                            </span>
+                        </div>
+                    ))}
                 </div>
             ))}
         </div>
@@ -414,3 +459,5 @@ export default function CalendarPage() {
     </div>
   );
 }
+
+    
