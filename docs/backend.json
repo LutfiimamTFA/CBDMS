@@ -383,6 +383,24 @@
         "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "user", "action", "timestamp"]
+    },
+    "SocialMediaPost": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SocialMediaPost",
+      "type": "object",
+      "description": "Represents a social media post to be scheduled and published.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the social media post." },
+        "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"], "description": "The target social media platform." },
+        "caption": { "type": "string", "description": "The text content or caption for the post." },
+        "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video to be posted." },
+        "status": { "type": "string", "enum": ["Draft", "Scheduled", "Needs Approval", "Posted", "Error"], "description": "The current status of the post." },
+        "scheduledAt": { "type": "string", "format": "date-time", "description": "The specific date and time the post is scheduled to be published." },
+        "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
+        "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
+        "companyId": { "type": "string", "description": "The ID of the company this post belongs to." }
+      },
+      "required": ["id", "platform", "caption", "mediaUrl", "status", "scheduledAt", "createdBy", "companyId"]
     }
   },
   "auth": {
@@ -527,10 +545,19 @@
         "definition": {
           "description": "An API endpoint that, when called, runs the scheduler to generate recurring tasks."
         }
+      },
+      {
+        "path": "/socialMediaPosts/{postId}",
+        "definition": {
+          "entityName": "SocialMediaPost",
+          "schema": { "$ref": "#/backend/entities/SocialMediaPost" },
+          "description": "Stores scheduled social media posts.",
+          "params": [
+            { "name": "postId", "description": "The unique identifier for the social media post." }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks. Finally, a new API route `/api/run-scheduler` is added to handle the server-side logic for task generation."
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks. Finally, a new API route `/api/run-scheduler` is added to handle the server-side logic for task generation. A new 'SocialMediaPost' entity and `/socialMediaPosts` collection have been added to support the new social media scheduling module."
   }
 }
-
-    

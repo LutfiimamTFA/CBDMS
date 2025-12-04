@@ -43,11 +43,19 @@ export const defaultNavItems: NavigationItem[] = [
     roles: ['Super Admin', 'Manager', 'Employee'],
   },
   {
+    id: 'nav_social_media',
+    label: 'Social Media',
+    path: '/social-media',
+    icon: 'Share2',
+    order: 6,
+    roles: ['Super Admin', 'Manager'],
+  },
+  {
     id: 'nav_performance_analysis',
     label: 'Performance Analysis',
     path: '/reports',
     icon: 'FileText',
-    order: 6,
+    order: 7,
     roles: ['Super Admin', 'Manager', 'Employee'],
   },
   {
