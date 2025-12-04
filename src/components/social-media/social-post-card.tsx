@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Instagram } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { SocialPostDialog } from './social-post-dialog';
+import { CreatePostDialog } from './create-post-dialog';
 import { useState } from 'react';
 
 interface SocialPostCardProps {
@@ -31,34 +31,42 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
 
   return (
     <>
-      <Card 
-        onClick={() => setIsDialogOpen(true)}
-        className="overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-200 cursor-pointer group"
-      >
-        <CardContent className="p-0">
-          <div className="relative aspect-square w-full">
-              <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
-              <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300"></div>
-              <div className="absolute top-2 right-2 flex items-center gap-2">
-                  {PlatformIcon && (
-                      <Badge variant="secondary" className="bg-background/70 backdrop-blur-sm">
-                          <PlatformIcon className="h-4 w-4" />
-                      </Badge>
-                  )}
-              </div>
-          </div>
-        </CardContent>
-        <CardFooter className="p-2 flex justify-between items-center bg-background/80">
-          <Badge variant="outline" className={cn('flex items-center gap-2', statusColors[post.status])}>
-              <div className="h-2 w-2 rounded-full bg-current"></div>
-              <span className="text-xs font-medium">{post.status}</span>
-          </Badge>
-          <span className="text-xs font-semibold text-muted-foreground">
-              {format(parseISO(post.scheduledAt), 'p')}
-          </span>
-        </CardFooter>
-      </Card>
-      <SocialPostDialog post={post} open={isDialogOpen} onOpenChange={setIsDialogOpen} />
+      <div onClick={() => setIsDialogOpen(true)}>
+        <Card 
+          className="overflow-hidden shadow-md hover:shadow-xl transition-shadow duration-200 cursor-pointer group"
+        >
+          <CardContent className="p-0">
+            <div className="relative aspect-square w-full">
+                <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300"></div>
+                <div className="absolute top-2 right-2 flex items-center gap-2">
+                    {PlatformIcon && (
+                        <Badge variant="secondary" className="bg-background/70 backdrop-blur-sm">
+                            <PlatformIcon className="h-4 w-4" />
+                        </Badge>
+                    )}
+                </div>
+            </div>
+          </CardContent>
+          <CardFooter className="p-2 flex justify-between items-center bg-background/80">
+            <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs', statusColors[post.status])}>
+                <div className="h-2 w-2 rounded-full bg-current"></div>
+                <span className="font-medium">{post.status}</span>
+            </Badge>
+            <span className="text-xs font-semibold text-muted-foreground">
+                {format(parseISO(post.scheduledAt), 'p')}
+            </span>
+          </CardFooter>
+        </Card>
+      </div>
+      {isDialogOpen && (
+        <CreatePostDialog 
+            open={isDialogOpen} 
+            onOpenChange={setIsDialogOpen}
+            mode="edit"
+            post={post}
+        />
+      )}
     </>
   );
 }
