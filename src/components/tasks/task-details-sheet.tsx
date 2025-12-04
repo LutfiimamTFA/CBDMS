@@ -628,18 +628,40 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
 
     setIsSaving(true);
-
-    const taskRef = doc(firestore, "tasks", initialTask.id);
+    
+    const batch = writeBatch(firestore);
+    const taskRef = doc(firestore, 'tasks', initialTask.id);
     const newActivity: Activity = createActivity(currentUser, 'completed the task');
 
+    batch.update(taskRef, {
+        status: 'Done',
+        actualCompletionDate: new Date().toISOString(),
+        lastActivity: newActivity,
+        activities: [...(activities || []), newActivity],
+    });
+
+    // Notify creator if they are not the one completing it
+    if (initialTask.createdBy.id !== currentUser.id) {
+        const notificationRef = doc(collection(firestore, `users/${initialTask.createdBy.id}/notifications`));
+        const notification: Omit<Notification, 'id'> = {
+            userId: initialTask.createdBy.id,
+            title: 'Task Completed',
+            message: `${currentUser.name} has completed the task: "${initialTask.title}"`,
+            taskId: initialTask.id,
+            taskTitle: initialTask.title,
+            isRead: false,
+            createdAt: serverTimestamp(),
+            createdBy: {
+                id: currentUser.id,
+                name: currentUser.name,
+                avatarUrl: currentUser.avatarUrl || '',
+            },
+        };
+        batch.set(notificationRef, notification);
+    }
+    
     try {
-        await updateDoc(taskRef, {
-            status: 'Done',
-            actualCompletionDate: new Date().toISOString(),
-            lastActivity: newActivity,
-            activities: [...(activities || []), newActivity],
-        });
-        
+        await batch.commit();
         toast({
             title: 'Task Completed!',
             description: 'Status has been updated to "Done".',
