@@ -185,7 +185,7 @@ export default function CalendarPage() {
 
   const employeeOptions = useMemo(() => {
     if (!allUsers) return [];
-    return allUsers.filter(u => u.role === 'Employee' || u.role === 'Manager').map(u => ({ value: u.id, label: u.name }));
+    return allUsers.filter(u => u.role === 'Employee').map(u => ({ value: u.id, label: u.name }));
   }, [allUsers]);
 
   const brandOptions = useMemo(() => {
