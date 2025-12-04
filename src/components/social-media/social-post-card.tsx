@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { Instagram } from 'lucide-react';
 import { format } from 'date-fns';
 import { parseISO } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface SocialPostCardProps {
   post: SocialMediaPost;
@@ -17,8 +18,8 @@ const platformIcons: Record<string, React.ElementType> = {
 
 const statusColors: Record<string, string> = {
     Draft: 'bg-gray-500',
-    Scheduled: 'bg-blue-500',
     'Needs Approval': 'bg-yellow-500',
+    Scheduled: 'bg-blue-500',
     Posted: 'bg-green-500',
     Error: 'bg-red-500',
 };
