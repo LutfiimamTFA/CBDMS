@@ -15,10 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { subDays, isAfter, parseISO, intervalToDuration } from 'date-fns';
 import { Label } from '@/components/ui/label';
 import { formatDuration } from '@/lib/utils';
+import { useI18n } from '@/context/i18n-provider';
 
 
 // --- Komponen untuk Laporan Karyawan ---
 function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading: boolean }) {
+  const { t } = useI18n();
+
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -63,68 +66,68 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
   return (
     <>
       <div className="mb-4">
-          <h2 className="text-2xl font-bold">Laporan Kinerja Anda</h2>
-          <p className="text-muted-foreground">Ringkasan aktivitas dan kontribusi Anda.</p>
+          <h2 className="text-2xl font-bold">{t('reports.employee.title')}</h2>
+          <p className="text-muted-foreground">{t('reports.employee.description')}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.completedTasks')}</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completedTasks.length}</div>
-            <p className="text-xs text-muted-foreground">dari total tugas Anda</p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.completedTasks.sub')}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.activeTasks')}</CardTitle>
             <CircleDashed className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.activeTasks.sub')}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Jam Kerja</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.totalHours')}</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalHoursTracked.toFixed(2)}h</div>
-            <p className="text-xs text-muted-foreground">tercatat di semua tugas</p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.totalHours.sub')}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">On-Time Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.onTimeRate')}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
             <p className="text-xs text-muted-foreground">
-                {onTimeCompletionRate.onTime} tugas tepat waktu dari {onTimeCompletionRate.total}
+                {onTimeCompletionRate.onTime} {t('reports.metric.onTimeRate.sub.onTime')} {onTimeCompletionRate.total}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Completion Time</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.avgCompletion')}</CardTitle>
             <Timer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{averageCompletionTime}</div>
-            <p className="text-xs text-muted-foreground">per tugas selesai</p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.avgCompletion.sub')}</p>
           </CardContent>
         </Card>
       </div>
       <div className="mt-6">
         <Card>
           <CardHeader>
-            <CardTitle>Jam Kerja Berdasarkan Prioritas</CardTitle>
-            <CardDescription>Rincian jam kerja Anda pada berbagai tingkat prioritas tugas.</CardDescription>
+            <CardTitle>{t('reports.chart.hoursByPriority.title')}</CardTitle>
+            <CardDescription>{t('reports.chart.hoursByPriority.description.employee')}</CardDescription>
           </CardHeader>
           <CardContent>
             <HoursByPriorityChart tasks={tasks || []} />
@@ -137,7 +140,7 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
 
 // --- Komponen untuk Dasbor Admin/Manager ---
 function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
-  
+  const { t } = useI18n();
   const [selectedUserId, setSelectedUserId] = useState('all');
   const [selectedPeriod, setSelectedPeriod] = useState('all');
 
@@ -145,17 +148,13 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     if (!allTasks) return [];
 
     let periodDate: Date | null = null;
-    switch (selectedPeriod) {
-        case '7': periodDate = subDays(new Date(), 7); break;
-        case '30': periodDate = subDays(new Date(), 30); break;
-        case '180': periodDate = subDays(new Date(), 180); break;
-        case '365': periodDate = subDays(new Date(), 365); break;
-        default: periodDate = null;
+    if (selectedPeriod !== 'all') {
+      periodDate = subDays(new Date(), parseInt(selectedPeriod, 10));
     }
 
     return allTasks.filter(task => {
       const isUserMatch = selectedUserId === 'all' || task.assigneeIds.includes(selectedUserId);
-      const isPeriodMatch = !periodDate || (task.createdAt && isAfter(task.createdAt.toDate(), periodDate));
+      const isPeriodMatch = !periodDate || (task.createdAt?.toDate && isAfter(task.createdAt.toDate(), periodDate));
       return isUserMatch && isPeriodMatch;
     });
   }, [allTasks, selectedUserId, selectedPeriod]);
@@ -164,6 +163,8 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
     if (selectedUserId === 'all') return allUsers;
     return allUsers?.filter(u => u.id === selectedUserId) || [];
   }, [allUsers, selectedUserId]);
+
+  const totalHoursTracked = filteredTasks.reduce((acc, t) => acc + (t.timeTracked || 0), 0);
 
   const onTimeCompletionRate = useMemo(() => {
     const completed = filteredTasks.filter(t => t.status === 'Done' && t.actualCompletionDate && t.dueDate);
@@ -208,20 +209,20 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
   return (
     <>
       <div className="mb-6">
-          <h2 className="text-2xl font-bold tracking-tight">Pusat Analisis Kinerja</h2>
-          <p className="text-muted-foreground">Analisis data operasional untuk pengambilan keputusan strategis.</p>
+          <h2 className="text-2xl font-bold tracking-tight">{t('reports.admin.title')}</h2>
+          <p className="text-muted-foreground">{t('reports.admin.description')}</p>
       </div>
 
        <div className="mb-6 p-4 border rounded-lg bg-card">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <Label htmlFor="user-filter">Filter by Employee</Label>
+                <Label htmlFor="user-filter">{t('reports.filter.employee')}</Label>
                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                     <SelectTrigger id="user-filter">
-                        <SelectValue placeholder="Select an employee" />
+                        <SelectValue placeholder={t('reports.filter.employee.placeholder')} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All Employees</SelectItem>
+                        <SelectItem value="all">{t('reports.filter.employee.all')}</SelectItem>
                         {allUsers?.filter(user => user.role === 'Employee').map(user => (
                             <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                         ))}
@@ -229,87 +230,95 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
                 </Select>
             </div>
             <div>
-                 <Label htmlFor="period-filter">Filter by Period</Label>
+                 <Label htmlFor="period-filter">{t('reports.filter.period')}</Label>
                  <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
                     <SelectTrigger id="period-filter">
-                        <SelectValue placeholder="Select a period" />
+                        <SelectValue placeholder={t('reports.filter.period.placeholder')} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">All Time</SelectItem>
-                        <SelectItem value="7">Last 7 Days</SelectItem>
-                        <SelectItem value="30">Last 30 Days</SelectItem>
-                        <SelectItem value="180">Last 6 Months</SelectItem>
-                        <SelectItem value="365">Last 1 Year</SelectItem>
+                        <SelectItem value="all">{t('reports.filter.period.all')}</SelectItem>
+                        <SelectItem value="7">{t('reports.filter.period.7')}</SelectItem>
+                        <SelectItem value="30">{t('reports.filter.period.30')}</SelectItem>
+                        <SelectItem value="180">{t('reports.filter.period.180')}</SelectItem>
+                        <SelectItem value="365">{t('reports.filter.period.365')}</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">On-Time Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.onTimeRate')}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
             <p className="text-xs text-muted-foreground">
-              {onTimeCompletionRate.onTime} tugas tepat waktu dari {onTimeCompletionRate.total}
+              {onTimeCompletionRate.onTime} {t('reports.metric.onTimeRate.sub.onTime')} {onTimeCompletionRate.total}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Completion</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.avgCompletion')}</CardTitle>
             <Timer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{averageCompletionTime}</div>
-            <p className="text-xs text-muted-foreground">
-              from start to done
-            </p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.avgCompletion.sub')}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Tugas</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.totalTasks')}</CardTitle>
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground">(terfilter)</p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.totalTasks.sub')}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tugas Selesai</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.completedTasks')}</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{completedTasks}</div>
-            <p className="text-xs text-muted-foreground">dari {totalTasks} tugas</p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.fromTotal', { total: totalTasks })}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tugas Aktif</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.activeTasks')}</CardTitle>
             <CircleDashed className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">sedang dikerjakan</p>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.activeTasks.sub')}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('reports.metric.totalHours')}</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalHoursTracked.toFixed(2)}h</div>
+            <p className="text-xs text-muted-foreground">{t('reports.metric.totalHours.sub.admin')}</p>
           </CardContent>
         </Card>
       </div>
       <div className="mt-6">
-        <h3 className="text-xl font-bold tracking-tight">Analisis Tim & Proyek</h3>
-        <p className="text-muted-foreground">Visualisasi data untuk wawasan performa tim dan status proyek.</p>
+        <h3 className="text-xl font-bold tracking-tight">{t('reports.admin.section.team.title')}</h3>
+        <p className="text-muted-foreground">{t('reports.admin.section.team.description')}</p>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Beban Kerja Tim</CardTitle>
-              <CardDescription>Jumlah tugas aktif yang ditugaskan kepada setiap anggota tim.</CardDescription>
+              <CardTitle>{t('reports.chart.teamWorkload.title')}</CardTitle>
+              <CardDescription>{t('reports.chart.teamWorkload.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <TeamWorkloadChart tasks={filteredTasks || []} users={filteredUsers || []} />
@@ -317,11 +326,20 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Distribusi Status Tugas</CardTitle>
-              <CardDescription>Proporsi tugas dalam setiap kategori status.</CardDescription>
+              <CardTitle>{t('reports.chart.taskStatus.title')}</CardTitle>
+              <CardDescription>{t('reports.chart.taskStatus.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <TaskStatusChart tasks={filteredTasks || []} />
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-3">
+             <CardHeader>
+                <CardTitle>{t('reports.chart.hoursByPriority.title')}</CardTitle>
+                <CardDescription>{t('reports.chart.hoursByPriority.description.admin')}</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <HoursByPriorityChart tasks={filteredTasks || []} />
             </CardContent>
           </Card>
         </div>
@@ -379,3 +397,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    
