@@ -67,7 +67,7 @@ export type WorkflowStatus = {
   id: string;
   name: string;
   order: number;
-  color: string; // e.g., 'bg-blue-500'
+  color: string; // e.g., '#3b82f6'
   companyId: string;
 };
 

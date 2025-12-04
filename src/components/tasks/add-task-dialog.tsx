@@ -277,11 +277,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
     selectedUsers.forEach(assignee => {
         if (assignee.id === currentUserProfile.id) return; 
-        const notificationRef = doc(collection(firestore, `users/${'assignee.id'}/notifications`));
+        const notificationRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
         const notification: Omit<Notification, 'id'> = {
             userId: assignee.id,
             title: 'New Task Assigned',
-            message: `${currentUserProfile.name} assigned you a new task.`,
+            message: `${currentUserProfile.name} assigned you a new task: "${data.title}"`,
             taskId: newTaskRef.id,
             taskTitle: data.title,
             isRead: false,
@@ -803,7 +803,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                 {areStatusesLoading ? (
                                     <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
                                 ) : (
-                                    statuses?.map((s) => (<SelectItem key={s.id} value={s.name}><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${s.color}`}></span>{s.name}</div></SelectItem>))
+                                    statuses?.map((s) => (<SelectItem key={s.id} value={s.name}><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }}></span>{s.name}</div></SelectItem>))
                                 )}
                               </SelectContent>
                               </Select><FormMessage />

@@ -1,10 +1,9 @@
+
 'use client';
 import {
   Auth,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   signOut,
-  UserCredential,
 } from 'firebase/auth';
 
 /**
@@ -28,9 +27,12 @@ export function initiateEmailSignIn(
 }
 
 /** Initiate sign-out (non-blocking). */
-export function initiateSignOut(authInstance: Auth): void {
-  signOut(authInstance).catch((error) => {
+export function initiateSignOut(authInstance: Auth): Promise<void> {
+  return signOut(authInstance).catch((error) => {
     // This is generally a safe operation, but we log errors just in case.
     console.error('Sign-out Error:', error);
+    // Even if sign-out fails on the server, we might want to ensure the client state is cleared.
+    // For now, we just log the error and let the promise reject.
+    return Promise.reject(error);
   });
 }

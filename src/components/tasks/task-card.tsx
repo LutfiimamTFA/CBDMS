@@ -1,3 +1,4 @@
+
 'use client';
 import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
@@ -11,16 +12,14 @@ import { Progress } from '../ui/progress';
 import { useI18n } from '@/context/i18n-provider';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
-import { useRouter } from 'next/navigation';
 
 interface TaskCardProps {
   task: Task;
   draggable?: boolean;
-  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
-export function TaskCard({ task, draggable = false, onDragStart }: TaskCardProps) {
-  const router = useRouter();
+export function TaskCard({ task, draggable = false }: TaskCardProps) {
+
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
   const { t } = useI18n();
@@ -37,17 +36,8 @@ export function TaskCard({ task, draggable = false, onDragStart }: TaskCardProps
     return isLate ? 'Late' : 'On Time';
   }, [task.status, task.actualCompletionDate, task.dueDate]);
 
-  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // Navigate to task details page
-    router.push(`/tasks/${task.id}`);
-  };
-
-
   return (
     <Card
-      draggable={draggable}
-      onDragStart={onDragStart}
-      onClick={handleCardClick}
       className={cn(
         "transition-shadow duration-200 hover:shadow-lg w-full",
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"

@@ -27,9 +27,8 @@ export default function ForceAcknowledgeTasksPage() {
   const [isAcknowledging, setIsAcknowledging] = useState(false);
   const { toast } = useToast();
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayTimestamp = Timestamp.fromDate(today);
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
 
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
@@ -37,9 +36,10 @@ export default function ForceAcknowledgeTasksPage() {
       collection(firestore, 'tasks'),
       where('assigneeIds', 'array-contains', profile.id),
       where('isMandatory', '==', true),
-      where('createdAt', '>=', todayTimestamp)
+      // IMPORTANT FIX: Use ISO string for server-side `createdAt` which is also a string
+      where('createdAt', '>=', todayStart.toISOString())
     );
-  }, [firestore, profile, todayTimestamp]);
+  }, [firestore, profile, todayStart]);
 
   const { data: newTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
@@ -48,25 +48,38 @@ export default function ForceAcknowledgeTasksPage() {
     setIsAcknowledging(true);
     
     try {
-      await fetch('/api/acknowledge-tasks', {
+      const response = await fetch('/api/acknowledge-tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ uid: profile.id }),
       });
-      // The backend will try to revoke the token.
-      // Regardless of the API response, we will force a client-side sign-out
-      // to ensure the user is logged out and redirected correctly.
-    } catch (error) {
-      // We can log the API error, but we still proceed with the sign-out.
-      console.error("API call to acknowledge-tasks failed, proceeding with client-side sign-out:", error);
-    } finally {
-      // This block ensures the user is ALWAYS signed out and redirected.
+
+      if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Server failed to acknowledge tasks.');
+      }
+      
+      // If API call is successful, proceed to sign out.
+      // The `onAuthStateChanged` listener will handle redirecting to login.
       await initiateSignOut(auth);
       toast({
           title: "Acknowledgment Successful",
           description: "Please log in again to continue.",
       });
-      router.push('/login');
+
+    } catch (error: any) {
+      console.error("API call to acknowledge-tasks failed:", error);
+      toast({
+          variant: "destructive",
+          title: "Acknowledgment Failed",
+          description: error.message || "Could not complete acknowledgment. Please try again.",
+      });
+      // Even if it fails, try to log out to reset state
+      await initiateSignOut(auth);
+    } finally {
+        setIsAcknowledging(false);
+        // Force a redirect to login as a final fallback.
+        router.push('/login');
     }
   };
   

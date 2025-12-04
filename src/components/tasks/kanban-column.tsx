@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -12,6 +13,7 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 interface KanbanColumnProps {
   status: WorkflowStatus;
@@ -29,6 +31,7 @@ export function KanbanColumn({
   canDrag,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const router = useRouter();
 
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
@@ -120,12 +123,17 @@ export function KanbanColumn({
       >
         <div className="flex flex-col gap-3 p-4">
           {tasks.map((task, index) => (
-            <TaskCard 
-                key={task.id} 
-                task={task} 
-                draggable={canDrag}
-                onDragStart={(e) => onDragStart(e, task.id)}
-            />
+            <div 
+              key={task.id} 
+              draggable={canDrag}
+              onDragStart={(e) => onDragStart(e, task.id)}
+              onClick={() => router.push(`/tasks/${task.id}`)}
+            >
+              <TaskCard 
+                  task={task} 
+                  draggable={canDrag}
+              />
+            </div>
           ))}
         </div>
       </ScrollArea>

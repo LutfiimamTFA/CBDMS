@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './kanban-column';
-import type { Task, WorkflowStatus } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -57,9 +58,19 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
       );
 
       const taskRef = doc(firestore, 'tasks', taskId);
+      
+      const newActivity: Activity = {
+        id: `act-${Date.now()}`,
+        user: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
+        action: `moved task from "${task.status}" to "${newStatus}"`,
+        timestamp: new Date().toISOString(),
+      };
+      
       try {
         await updateDoc(taskRef, { 
             status: newStatus,
+            activities: [...(task.activities || []), newActivity],
+            lastActivity: newActivity,
             updatedAt: serverTimestamp(),
         });
         toast({
