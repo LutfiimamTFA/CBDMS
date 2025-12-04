@@ -509,5 +509,3 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     </>
   );
 }
-
-    

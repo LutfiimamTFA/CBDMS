@@ -56,7 +56,6 @@ import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase
 import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
-import { TaskDetailsSheet } from './task-details-sheet';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -425,7 +424,7 @@ export function TasksDataTable() {
              const statusDetails = statuses?.find(s => s.name === currentStatus);
              return (
                 <Badge variant="outline" className="font-normal">
-                    <span className={`h-2 w-2 rounded-full mr-2 ${statusDetails?.color || 'bg-gray-500'}`}></span>
+                    <span className={`h-2 w-2 rounded-full mr-2`} style={{backgroundColor: statusDetails?.color || 'bg-gray-500'}}></span>
                     <span>{currentStatus}</span>
                 </Badge>
             )
@@ -597,9 +596,7 @@ export function TasksDataTable() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <Link href={`/tasks/${task.id}`}>
-                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem>
-              </Link>
+              <Link href={`/tasks/${task.id}`}><DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem></Link>
               <DropdownMenuItem onClick={() => setHistoryTask(task)}>
                   <History className="mr-2 h-4 w-4" />
                   View History
