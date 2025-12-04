@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore } from '@/firebase';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
@@ -18,6 +18,8 @@ import {
   sub,
   isSameDay,
   parseISO,
+  isWithinInterval,
+  differenceInDays,
 } from 'date-fns';
 import {
   ChevronLeft,
@@ -45,6 +47,8 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Label } from '@/components/ui/label';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import Link from 'next/link';
 
 const brandColors = [
   'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-lime-500', 
@@ -60,6 +64,14 @@ const getBrandColor = (brandId: string) => {
   return brandColors[index];
 };
 
+
+type TaskWithUiProps = Task & {
+  ui: {
+    startColumn: number;
+    span: number;
+    level: number;
+  }
+};
 
 export default function CalendarPage() {
   const firestore = useFirestore();
@@ -103,10 +115,10 @@ export default function CalendarPage() {
   // --- Calendar Grid Logic ---
   const firstDayOfMonth = startOfMonth(currentDate);
   const lastDayOfMonth = endOfMonth(currentDate);
-  const startDate = startOfWeek(firstDayOfMonth);
-  const endDate = endOfWeek(lastDayOfMonth);
-  const daysInGrid = eachDayOfInterval({ start: startDate, end: endDate });
-
+  const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
+  const calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0 });
+  const daysInGrid = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+  
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => ({
     value: i,
@@ -151,6 +163,142 @@ export default function CalendarPage() {
   const priorityOptions = useMemo(() => {
     return Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
   }, []);
+
+  const getDayIndex = useCallback((day: Date) => {
+    return daysInGrid.findIndex(gridDay => isSameDay(gridDay, day));
+  }, [daysInGrid]);
+
+  const tasksWithUiProps = useMemo(() => {
+    const tasksWithProps: TaskWithUiProps[] = [];
+    const weekLevels: number[][] = Array(6).fill(0).map(() => []);
+
+    const sortedTasks = filteredTasks.sort((a,b) => {
+      const aStart = a.startDate ? parseISO(a.startDate).getTime() : 0;
+      const bStart = b.startDate ? parseISO(b.startDate).getTime() : 0;
+      return aStart - bStart;
+    });
+
+    sortedTasks.forEach(task => {
+        let start = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
+        let end = task.dueDate ? parseISO(task.dueDate) : start;
+
+        if (!start || !end) return;
+
+        if (end < start) end = start;
+
+        // Clamp dates to the visible grid
+        const effectiveStart = start < calendarStart ? calendarStart : start;
+        const effectiveEnd = end > calendarEnd ? calendarEnd : end;
+
+        const startDayIndex = getDayIndex(effectiveStart);
+        const endDayIndex = getDayIndex(effectiveEnd);
+
+        if (startDayIndex === -1 && endDayIndex === -1) return;
+
+        const startColumn = (startDayIndex % 7) + 1;
+        const span = differenceInDays(effectiveEnd, effectiveStart) + 1;
+        
+        const weekIndex = Math.floor(startDayIndex / 7);
+
+        let level = 0;
+        if (weekLevels[weekIndex]) {
+            while (weekLevels[weekIndex].slice(startColumn - 1, startColumn - 1 + span).some(l => l > level)) {
+                level++;
+            }
+        } else {
+             weekLevels[weekIndex] = [];
+        }
+
+        for (let i = 0; i < span; i++) {
+            if (weekLevels[weekIndex]) {
+               weekLevels[weekIndex][startColumn - 1 + i] = level + 1;
+            }
+        }
+        
+        tasksWithProps.push({ ...task, ui: { startColumn, span, level } });
+    });
+    return tasksWithProps;
+  }, [filteredTasks, getDayIndex, calendarStart, calendarEnd]);
+
+
+  const renderTaskBar = (task: TaskWithUiProps) => {
+    const priority = priorityInfo[task.priority];
+    const PriorityIcon = priority?.icon;
+    const taskColor = getBrandColor(task.brandId);
+
+    return (
+      <Popover key={task.id}>
+        <TooltipProvider>
+        <Tooltip>
+          <PopoverTrigger asChild>
+            <TooltipTrigger asChild>
+              <div 
+                className={cn(
+                  'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full truncate absolute',
+                  taskColor
+                )}
+                style={{
+                  gridColumn: `${task.ui.startColumn} / span ${task.ui.span}`,
+                  top: `${2.5 + task.ui.level * 1.75}rem`,
+                  left: 0,
+                  right: 0,
+                }}
+              >
+                  <div className="flex items-center gap-1.5 truncate">
+                      {PriorityIcon && <PriorityIcon className="h-3.5 w-3.5 shrink-0" />}
+                      <span className="truncate">{task.title}</span>
+                  </div>
+              </div>
+            </TooltipTrigger>
+          </PopoverTrigger>
+          <TooltipContent><p>{task.title}</p></TooltipContent>
+        </Tooltip>
+        </TooltipProvider>
+        <PopoverContent className="w-80">
+            <div className="space-y-3">
+              <Link href={`/tasks/${task.id}`} className="hover:underline">
+                <h4 className="font-bold">{task.title}</h4>
+              </Link>
+                <div className='flex justify-between items-start'>
+                <Badge variant="secondary" className={cn(taskColor, 'text-white')}>
+                    {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
+                </Badge>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  <p>Start: {task.startDate ? format(parseISO(task.startDate), 'MMM d, yyyy') : 'N/A'}</p>
+                  <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'N/A'}</p>
+                </div>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className='flex items-center gap-2'>
+                      {priority &&
+                          <>
+                              <priority.icon className={`h-4 w-4 ${priority.color}`} />
+                              <span>{task.priority}</span>
+                          </>
+                      }
+                  </div>
+                  <div className='flex items-center gap-2'>
+                      <span className={cn("h-2 w-2 rounded-full")} style={{ backgroundColor: allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400' }}></span>
+                      <span>{task.status}</span>
+                  </div>
+                </div>
+                <div className='flex items-center gap-2'>
+                  {(task.assignees || []).map(assignee => (
+                    <div key={assignee.id} className='flex items-center gap-2'>
+                    <Avatar className="h-7 w-7">
+                        <AvatarImage src={assignee.avatarUrl} />
+                        <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium">{assignee.name}</span>
+                    </div>
+                  ))}
+                </div>
+            </div>
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -228,8 +376,9 @@ export default function CalendarPage() {
             ))}
             
             {daysInGrid.map((day) => {
-              const tasksOnThisDay = filteredTasks.filter(task => task.startDate && isSameDay(parseISO(task.startDate), day));
-              
+              const weekIndex = Math.floor(getDayIndex(day) / 7);
+              const tasksInThisWeek = tasksWithUiProps.filter(t => Math.floor(getDayIndex(t.startDate ? parseISO(t.startDate) : parseISO(t.dueDate!)) / 7) === weekIndex);
+
               return (
                 <div 
                     key={day.toString()}
@@ -244,61 +393,12 @@ export default function CalendarPage() {
                     )}>
                       {format(day, 'd')}
                     </span>
-                    <div className="mt-1 space-y-1">
-                      {tasksOnThisDay.map(task => {
-                        const priority = priorityInfo[task.priority];
-                        return (
-                        <Popover key={task.id}>
-                          <PopoverTrigger asChild>
-                              <div className={cn(
-                                  'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full',
-                                  getBrandColor(task.brandId)
-                              )}>
-                                  <span className="truncate">{task.title}</span>
-                              </div>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80">
-                              <div className="space-y-3">
-                                  <div className='flex justify-between items-start'>
-                                  <h4 className="font-bold">{task.title}</h4>
-                                  <Badge variant="secondary" className={cn(getBrandColor(task.brandId), 'text-white')}>
-                                      {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
-                                  </Badge>
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    <p>Start: {task.startDate ? format(parseISO(task.startDate), 'MMM d, yyyy') : 'N/A'}</p>
-                                    <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'N/A'}</p>
-                                  </div>
-                                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                    <div className='flex items-center gap-2'>
-                                        {priority &&
-                                            <>
-                                                <priority.icon className={`h-4 w-4 ${priority.color}`} />
-                                                <span>{task.priority}</span>
-                                            </>
-                                        }
-                                    </div>
-                                    <div className='flex items-center gap-2'>
-                                        <span className={cn("h-2 w-2 rounded-full", allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400')}></span>
-                                        <span>{task.status}</span>
-                                    </div>
-                                  </div>
-                                  <div className='flex items-center gap-2'>
-                                    {(task.assignees || []).map(assignee => (
-                                      <div key={assignee.id} className='flex items-center gap-2'>
-                                      <Avatar className="h-7 w-7">
-                                          <AvatarImage src={assignee.avatarUrl} />
-                                          <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                                      </Avatar>
-                                      <span className="text-sm font-medium">{assignee.name}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                              </div>
-                          </PopoverContent>
-                      </Popover>
-                      )})}
-                    </div>
+                    
+                    {isSameDay(day, startOfWeek(day, { weekStartsOn: 0 })) && (
+                      <div className="absolute top-0 left-0 right-0 grid grid-cols-7 gap-px">
+                        {tasksInThisWeek.map(renderTaskBar)}
+                      </div>
+                    )}
                 </div>
               )
             })}
@@ -307,3 +407,4 @@ export default function CalendarPage() {
     </div>
   );
 }
+
