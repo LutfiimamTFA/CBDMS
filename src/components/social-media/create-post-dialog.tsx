@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -44,14 +45,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
-import type { SocialMediaPost } from '@/lib/types';
+import type { SocialMediaPost, Notification } from '@/lib/types';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
@@ -85,7 +86,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
 
   const firestore = useFirestore();
   const storage = useStorage();
-  const { profile } = useUserProfile();
+  const { profile, user } = useUserProfile();
   const { toast } = useToast();
 
   const form = useForm<PostFormValues>({
@@ -128,13 +129,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   };
 
   const handleSubmit = async (data: PostFormValues) => {
-    if (!firestore || !storage || !profile) return;
+    if (!firestore || !storage || !profile || !user) return;
     setIsSaving(true);
     
     try {
         let mediaUrl = post?.mediaUrl || '';
         
-        // 1. Upload Media if a new one is provided
         const file = data.media?.[0];
         if (file) {
             const storageRef = ref(storage, `social-media/${profile.companyId}/${Date.now()}-${file.name}`);
@@ -142,7 +142,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             mediaUrl = await getDownloadURL(storageRef);
         }
 
-        // 2. Combine Date and Time
         const [hour, minute] = data.scheduledAtTime.split(':').map(Number);
         const scheduledAt = new Date(data.scheduledAtDate);
         scheduledAt.setHours(hour, minute);
@@ -153,22 +152,50 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             mediaUrl: mediaUrl,
             scheduledAt: scheduledAt.toISOString(),
             companyId: profile.companyId,
-        }
+        };
+        
+        const batch = writeBatch(firestore);
 
         if (mode === 'create') {
-            await addDoc(collection(firestore, 'socialMediaPosts'), {
+            const postRef = doc(collection(firestore, 'socialMediaPosts'));
+            batch.set(postRef, {
                 ...postData,
                 status: 'Needs Approval',
                 createdBy: profile.id,
                 createdAt: serverTimestamp(),
             });
+
+            // Notify managers/admins
+            const usersSnapshot = await collection(firestore, 'users').get();
+            usersSnapshot.forEach(userDoc => {
+                const userData = userDoc.data();
+                if ((userData.role === 'Manager' || userData.role === 'Super Admin') && userData.companyId === profile.companyId) {
+                    const notifRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
+                    const newNotification: Omit<Notification, 'id'> = {
+                        userId: userDoc.id,
+                        title: 'Content for Approval',
+                        message: `${profile.name} submitted a new social media post for approval.`,
+                        taskId: postRef.id,
+                        taskTitle: postData.caption.substring(0, 50),
+                        isRead: false,
+                        createdAt: serverTimestamp(),
+                        createdBy: {
+                            id: user.uid,
+                            name: profile.name,
+                            avatarUrl: profile.avatarUrl || '',
+                        },
+                    };
+                    batch.set(notifRef, newNotification);
+                }
+            });
+
             toast({
                 title: 'Post Submitted!',
                 description: `Your post for ${data.platform} has been submitted for approval.`,
             });
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
-            await updateDoc(postRef, {
+            batch.update(postRef, {
                 ...postData,
                 updatedAt: serverTimestamp(),
             });
@@ -177,7 +204,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 description: `Your changes to the post have been saved.`,
             });
         }
-        
+
+        await batch.commit();
         setOpen(false);
 
     } catch (error: any) {
@@ -193,18 +221,45 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   };
   
   const handleUpdateStatus = async (newStatus: SocialMediaPost['status']) => {
-    if (!firestore || !post) return;
+    if (!firestore || !post || !profile || !user) return;
     setIsSaving(true);
 
     const postRef = doc(firestore, 'socialMediaPosts', post.id);
+    const batch = writeBatch(firestore);
 
-    try {
-      await updateDoc(postRef, {
+    batch.update(postRef, {
         status: newStatus,
         updatedAt: serverTimestamp(),
-      });
+    });
+
+    // Notify creator
+    if (post.createdBy !== profile.id) {
+        const notifRef = doc(collection(firestore, `users/${post.createdBy}/notifications`));
+        const message = newStatus === 'Scheduled'
+            ? `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`
+            : `Your post "${post.caption.substring(0, 30)}..." was returned to drafts.`;
+
+        const newNotification: Omit<Notification, 'id'> = {
+            userId: post.createdBy,
+            title: newStatus === 'Scheduled' ? 'Post Approved' : 'Post Needs Revision',
+            message: message,
+            taskId: post.id,
+            taskTitle: post.caption.substring(0, 50),
+            isRead: false,
+            createdAt: serverTimestamp(),
+            createdBy: {
+                id: user.uid,
+                name: profile.name,
+                avatarUrl: profile.avatarUrl || '',
+            },
+        };
+        batch.set(notifRef, newNotification);
+    }
+
+    try {
+      await batch.commit();
       toast({
-        title: `Post ${newStatus}`,
+        title: `Post ${newStatus === 'Scheduled' ? 'Approved' : 'Rejected'}`,
         description: `The post has been marked as ${newStatus}.`,
       });
       setOpen(false);
@@ -249,7 +304,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const isApproverView = mode === 'edit' && isManager && post?.status === 'Needs Approval';
   
   const isEditable = mode === 'create' || 
-    (mode === 'edit' && post?.status !== 'Posted' && (isManager || (isCreator && post.status !== 'Scheduled')));
+    (mode === 'edit' && post?.status !== 'Posted' && (isManager || (isCreator && (post.status === 'Draft' || post.status === 'Needs Approval'))));
   
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && (post.status === 'Draft' || post.status === 'Needs Approval')));
 
@@ -454,3 +509,5 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     </>
   );
 }
+
+    

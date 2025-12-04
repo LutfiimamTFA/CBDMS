@@ -163,7 +163,14 @@ export default function RecurringTasksPage() {
         defaultAssigneeIds: template.defaultAssigneeIds,
       });
     } else {
-      form.reset();
+      form.reset({
+        title: '',
+        description: '',
+        frequency: 'daily',
+        defaultBrandId: '',
+        defaultPriority: 'Medium',
+        defaultAssigneeIds: [],
+      });
     }
     setDialogOpen(true);
   };
@@ -516,3 +523,5 @@ export default function RecurringTasksPage() {
     </div>
   );
 }
+
+    

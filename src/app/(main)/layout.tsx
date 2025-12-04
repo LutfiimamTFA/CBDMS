@@ -27,6 +27,11 @@ import {
   Icon as LucideIcon,
   Settings as SettingsIcon,
   FolderKanban,
+  Calendar,
+  AreaChart,
+  Home,
+  FileText,
+  Share2,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -68,30 +73,43 @@ export default function MainLayout({
   const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
   const filteredNavItems = useMemo(() => {
-    if (!profile || !navItems) return { mainItems: [], tasksGroup: [], adminItems: [], settingsItems: [] };
+    if (!profile || !navItems) return { mainItems: [], tasksGroup: [], contentGroup: [], analysisGroup: [], adminItems: [], settingsItems: [] };
     
     const mainItems: NavigationItem[] = [];
     const tasksGroup: NavigationItem[] = [];
+    const contentGroup: NavigationItem[] = [];
+    const analysisGroup: NavigationItem[] = [];
     const adminItems: NavigationItem[] = [];
     const settingsItems: NavigationItem[] = [];
+
+    const groupMapping: Record<string, NavigationItem[]> = {
+        tasks: tasksGroup,
+        dashboard: tasksGroup,
+        'daily-report': tasksGroup,
+        calendar: contentGroup,
+        'social-media': contentGroup,
+        reports: analysisGroup,
+        admin: adminItems,
+    };
 
     for (const item of navItems) {
       if (!item.roles.includes(profile.role)) continue;
       
-      const group = item.path.split('/')[1];
+      const mainPath = item.path.split('/')[1];
 
-      if (group === 'tasks') {
-        tasksGroup.push(item);
-      } else if (group === 'admin' && !item.path.startsWith('/admin/settings')) {
-        adminItems.push(item);
-      } else if (item.path.startsWith('/admin/settings')) {
-        settingsItems.push(item);
+      if(item.path.startsWith('/admin/settings')) {
+          settingsItems.push(item);
+          continue;
+      }
+
+      if(groupMapping[mainPath]) {
+          groupMapping[mainPath].push(item);
       } else {
-        mainItems.push(item);
+          mainItems.push(item);
       }
     }
     
-    return { mainItems, tasksGroup, adminItems, settingsItems };
+    return { mainItems, tasksGroup, contentGroup, analysisGroup, adminItems, settingsItems };
   }, [profile, navItems]);
 
 
@@ -102,7 +120,7 @@ export default function MainLayout({
   }, [user, isUserLoading, router]);
   
   useEffect(() => {
-    if(pathname.startsWith('/tasks')){
+    if(pathname.startsWith('/tasks') || pathname === '/dashboard' || pathname === '/daily-report'){
       setIsTasksOpen(true);
     }
   }, [pathname]);
@@ -123,8 +141,64 @@ export default function MainLayout({
   
   const hasMainItems = filteredNavItems.mainItems.length > 0;
   const hasTasksGroup = filteredNavItems.tasksGroup.length > 0;
+  const hasContentGroup = filteredNavItems.contentGroup.length > 0;
+  const hasAnalysisGroup = filteredNavItems.analysisGroup.length > 0;
   const hasAdminItems = filteredNavItems.adminItems.length > 0;
   const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
+  
+  const renderGroup = (
+    title: string,
+    icon: React.ElementType,
+    items: NavigationItem[],
+    isOpen: boolean,
+    setIsOpen: (open: boolean) => void
+  ) => {
+    if (items.length === 0) return null;
+    const IconComponent = icon;
+    
+    // Check if any item in the group is currently active
+    const isGroupActive = items.some(item => pathname.startsWith(item.path));
+
+    return (
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <SidebarMenuItem>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton
+              isActive={isGroupActive}
+              className="w-full justify-between"
+              tooltip={title}
+            >
+              <div className="flex items-center gap-2">
+                <IconComponent />
+                <span>{title}</span>
+              </div>
+              <ChevronDown
+                className={cn(
+                  'h-4 w-4 transition-transform',
+                  isOpen && 'rotate-180'
+                )}
+              />
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+        </SidebarMenuItem>
+        <CollapsibleContent className="pl-6">
+          <SidebarMenu>
+            {items.sort((a, b) => a.order - b.order).map((item) => (
+              <SidebarMenuItem key={item.id}>
+                <Link href={item.path}>
+                  <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
+                    <Icon name={item.icon}/>
+                    <span>{item.label}</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </CollapsibleContent>
+      </Collapsible>
+    );
+  };
+
 
   return (
     <SidebarProvider>
@@ -134,60 +208,10 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {/* Main Navigation Items */}
-            {hasMainItems && filteredNavItems.mainItems.map((item) => (
-               <SidebarMenuItem key={item.id}>
-                <Link href={item.path}>
-                  <SidebarMenuButton
-                    isActive={pathname === item.path}
-                    tooltip={item.label}
-                  >
-                    <Icon name={item.icon} />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            ))}
-
-            {/* Tasks Group */}
-            {hasTasksGroup && (
-              <Collapsible open={isTasksOpen} onOpenChange={setIsTasksOpen}>
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      isActive={pathname.startsWith('/tasks')}
-                      className="w-full justify-between"
-                      tooltip='Tasks'
-                    >
-                      <div className="flex items-center gap-2">
-                        <FolderKanban />
-                        <span>Tasks</span>
-                      </div>
-                      <ChevronDown
-                        className={cn(
-                          'h-4 w-4 transition-transform',
-                          isTasksOpen && 'rotate-180'
-                        )}
-                      />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                </SidebarMenuItem>
-                <CollapsibleContent className="pl-6">
-                  <SidebarMenu>
-                    {filteredNavItems.tasksGroup.sort((a, b) => a.order - b.order).map((item) => (
-                       <SidebarMenuItem key={item.id}>
-                          <Link href={item.path}>
-                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
-                              <Icon name={item.icon}/>
-                              <span>{item.label}</span>
-                            </SidebarMenuButton>
-                          </Link>
-                        </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
+            
+            {renderGroup("Tasks", FolderKanban, filteredNavItems.tasksGroup, isTasksOpen, setIsTasksOpen)}
+            {renderGroup("Content", Calendar, filteredNavItems.contentGroup, pathname.startsWith('/calendar') || pathname.startsWith('/social-media'), (open) => {})}
+            {renderGroup("Analysis", AreaChart, filteredNavItems.analysisGroup, pathname.startsWith('/reports'), (open) => {})}
             
             {/* Admin Section */}
             {hasAdminItems && (
@@ -290,3 +314,5 @@ export default function MainLayout({
     </SidebarProvider>
   );
 }
+
+    

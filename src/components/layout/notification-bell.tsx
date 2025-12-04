@@ -72,13 +72,14 @@ export function NotificationBell() {
     };
 
     notifications.forEach((notif) => {
+      // Ensure createdAt exists and has toDate method before proceeding
       if (notif.createdAt?.toDate) {
         const notifDate = notif.createdAt.toDate();
         if (isToday(notifDate)) {
           groups.today.push(notif);
         } else if (isYesterday(notifDate)) {
           groups.yesterday.push(notif);
-        } else if (isThisWeek(notifDate, { weekStartsOn: 1 })) {
+        } else if (isThisWeek(notifDate, { weekStartsOn: 1 })) { // Assuming week starts on Monday
           groups.thisWeek.push(notif);
         } else {
           groups.older.push(notif);
@@ -202,3 +203,5 @@ export function NotificationBell() {
     </DropdownMenu>
   );
 }
+
+    
