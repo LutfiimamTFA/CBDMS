@@ -100,12 +100,12 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         const scheduledAt = new Date(data.scheduledAtDate);
         scheduledAt.setHours(hour, minute);
 
-        // 3. Create Firestore Document
+        // 3. Create Firestore Document with "Needs Approval" status
         await addDoc(collection(firestore, 'socialMediaPosts'), {
             platform: data.platform,
             caption: data.caption,
             mediaUrl: mediaUrl,
-            status: 'Scheduled',
+            status: 'Needs Approval',
             scheduledAt: scheduledAt.toISOString(),
             createdBy: profile.id,
             companyId: profile.companyId,
@@ -113,8 +113,8 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         });
         
         toast({
-            title: 'Post Scheduled!',
-            description: `Your post for ${data.platform} has been scheduled for ${format(scheduledAt, 'PPP p')}.`,
+            title: 'Post Submitted!',
+            description: `Your post for ${data.platform} has been submitted for approval.`,
         });
 
         // 4. Reset form and close dialog
@@ -123,11 +123,11 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         setOpen(false);
 
     } catch (error: any) {
-        console.error("Failed to schedule post:", error);
+        console.error("Failed to submit post:", error);
         toast({
             variant: 'destructive',
-            title: 'Scheduling Failed',
-            description: error.message || 'Could not schedule the post. Please try again.',
+            title: 'Submission Failed',
+            description: error.message || 'Could not submit the post. Please try again.',
         });
     } finally {
         setIsSaving(false);
@@ -141,7 +141,7 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         <DialogHeader className="p-6 pb-4">
           <DialogTitle>Create Social Media Post</DialogTitle>
           <DialogDescription>
-            Plan and schedule your next social media post.
+            Prepare your content and submit it for approval.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className='-mt-4'>
@@ -216,7 +216,7 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                             name="scheduledAtDate"
                             render={({ field }) => (
                             <FormItem className="flex flex-col">
-                                <FormLabel>Schedule Date</FormLabel>
+                                <FormLabel>Requested Schedule Date</FormLabel>
                                 <Popover>
                                 <PopoverTrigger asChild>
                                     <FormControl>
@@ -248,7 +248,7 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                             name="scheduledAtTime"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Schedule Time</FormLabel>
+                                    <FormLabel>Requested Time</FormLabel>
                                     <FormControl>
                                         <Input
                                             type="time"
@@ -269,7 +269,7 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
           <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
           <Button type="submit" form="create-post-form" disabled={isSaving}>
             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-            Schedule Post
+            Submit for Approval
           </Button>
         </DialogFooter>
       </DialogContent>
