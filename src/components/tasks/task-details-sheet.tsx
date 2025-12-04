@@ -622,61 +622,63 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
   const handleMarkComplete = async () => {
     if (!currentUser || !firestore) return;
-    
+
     if (isRunning) {
-        await handlePauseSession();
+      await handlePauseSession();
     }
 
     setIsSaving(true);
-    
+
     const batch = writeBatch(firestore);
     const taskRef = doc(firestore, 'tasks', initialTask.id);
     const newActivity: Activity = createActivity(currentUser, 'completed the task');
 
     batch.update(taskRef, {
-        status: 'Done',
-        actualCompletionDate: new Date().toISOString(),
-        lastActivity: newActivity,
-        activities: [...(activities || []), newActivity],
+      status: 'Done',
+      actualCompletionDate: new Date().toISOString(),
+      lastActivity: newActivity,
+      activities: [...(activities || []), newActivity],
     });
 
     // Notify creator if they are not the one completing it
     if (initialTask.createdBy.id !== currentUser.id) {
-        const notificationRef = doc(collection(firestore, `users/${initialTask.createdBy.id}/notifications`));
-        const notification: Omit<Notification, 'id'> = {
-            userId: initialTask.createdBy.id,
-            title: 'Task Completed',
-            message: `${currentUser.name} has completed the task: "${initialTask.title}"`,
-            taskId: initialTask.id,
-            taskTitle: initialTask.title,
-            isRead: false,
-            createdAt: serverTimestamp(),
-            createdBy: {
-                id: currentUser.id,
-                name: currentUser.name,
-                avatarUrl: currentUser.avatarUrl || '',
-            },
-        };
-        batch.set(notificationRef, notification);
+      const notificationRef = doc(collection(firestore, `users/${initialTask.createdBy.id}/notifications`));
+      const notification: Omit<Notification, 'id'> = {
+        id: notificationRef.id,
+        userId: initialTask.createdBy.id,
+        title: 'Task Completed',
+        message: `${currentUser.name} has completed the task: "${initialTask.title}"`,
+        taskId: initialTask.id,
+        taskTitle: initialTask.title,
+        isRead: false,
+        createdAt: serverTimestamp(),
+        createdBy: {
+          id: currentUser.id,
+          name: currentUser.name,
+          avatarUrl: currentUser.avatarUrl || '',
+        },
+      };
+      batch.set(notificationRef, notification);
     }
-    
+
     try {
-        await batch.commit();
-        toast({
-            title: 'Task Completed!',
-            description: 'Status has been updated to "Done".',
-        });
+      await batch.commit();
+      toast({
+        title: 'Task Completed!',
+        description: 'Status has been updated to "Done".',
+      });
     } catch (error: any) {
-        console.error('Failed to complete task:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Update Failed',
-            description: error.message || 'Could not complete the task. Please try again.',
-        });
+      console.error('Failed to complete task:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Update Failed',
+        description: error.message || 'Could not complete the task.',
+      });
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
     }
   };
+
 
   const handleReopenTask = async () => {
     if (!currentUser || !firestore) return;
