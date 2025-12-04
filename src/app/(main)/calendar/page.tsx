@@ -459,11 +459,11 @@ export default function CalendarPage() {
                                                     draggable={isDraggable}
                                                     onDragStart={(e) => handleDragStart(e, task)}
                                                     className={cn(
-                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium transition-all z-10',
+                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium transition-all z-10 cursor-pointer',
                                                         taskColor,
                                                         isStart ? 'rounded-l-md' : '',
                                                         isEnd ? 'rounded-r-md' : '',
-                                                        isDraggable ? 'cursor-grab active:cursor-grabbing hover:opacity-80' : 'cursor-not-allowed',
+                                                        isDraggable ? 'cursor-grab active:cursor-grabbing hover:opacity-80' : 'hover:opacity-80',
                                                         task.status === 'Done' && 'opacity-60'
                                                     )}
                                                     style={{
