@@ -130,8 +130,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             mediaUrl = await getDownloadURL(storageRef);
         }
 
-        if (!mediaUrl) {
-            throw new Error("Media is required to create or update a post.");
+        if (!mediaUrl && mode === 'create') {
+            throw new Error("Media is required to create a post.");
         }
 
         // 2. Combine Date and Time
