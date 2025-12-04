@@ -33,21 +33,21 @@ export default function SocialMediaPage() {
     const lastDayOfMonth = endOfMonth(currentDate);
 
     const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
-    const calendarEnd = endOfWeek(add(lastDayOfMonth, { days: 6 - getDay(lastDayOfMonth) + (getDay(firstDayOfMonth) > 4 && new Date(lastDayOfMonth).getDate() > 30 ? 0 : 0) }), { weekStartsOn: 0});
+    const calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0});
 
     const totalDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+    
+    // Ensure we have 6 weeks for a consistent layout
+    if (totalDays.length / 7 < 6) {
+        const lastDay = totalDays[totalDays.length - 1];
+        const additionalDays = eachDayOfInterval({start: add(lastDay, {days: 1}), end: add(lastDay, {days: 7})});
+        totalDays.push(...additionalDays.slice(0, 42 - totalDays.length));
+    }
+
 
     const weeks: Date[][] = [];
     for (let i = 0; i < totalDays.length; i += 7) {
       weeks.push(totalDays.slice(i, i + 7));
-    }
-    
-    // Ensure 6 weeks are always rendered
-    while (weeks.length < 6) {
-        const lastDayOfLastWeek = weeks[weeks.length - 1][6];
-        const nextWeekStart = add(lastDayOfLastWeek, { days: 1 });
-        const nextWeekEnd = endOfWeek(nextWeekStart);
-        weeks.push(eachDayOfInterval({start: nextWeekStart, end: nextWeekEnd}));
     }
 
     return { weeks };
@@ -80,7 +80,7 @@ export default function SocialMediaPage() {
           </Button>
         }
       />
-      <main className="flex flex-col flex-1 overflow-hidden p-4 md:p-6">
+      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-2">
                 <Select value={String(currentDate.getFullYear())} onValueChange={handleYearChange}>
@@ -106,20 +106,24 @@ export default function SocialMediaPage() {
             </div>
         </div>
 
-        <div className="grid grid-cols-7 border-t border-l rounded-t-lg">
-            {daysOfWeek.map(day => (
-                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground bg-secondary/50 border-r">
-                    {day}
-                </div>
-            ))}
-        </div>
-         <div className="grid grid-cols-1 grid-rows-6 border-l border-r border-b rounded-b-lg flex-1">
-          {calendarGrid.weeks.map((week, weekIdx) => (
-            <div key={weekIdx} className="grid grid-cols-7 h-full">
-              {week.map((day) => (
+        <div className="flex flex-col flex-1 border rounded-lg">
+            <div className="grid grid-cols-7">
+                {daysOfWeek.map(day => (
+                    <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-r last:border-r-0">
+                        {day}
+                    </div>
+                ))}
+            </div>
+            <div className="grid grid-cols-7 grid-rows-6 flex-1">
+              {calendarGrid.weeks.flat().map((day, index) => (
                 <div 
                     key={day.toString()} 
-                    className={cn("p-2 border-t border-r relative", !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50")}
+                    className={cn(
+                        "p-2 border-r border-b relative",
+                        !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50",
+                        (index + 1) % 7 === 0 && "border-r-0", // Remove right border for last cell in a row
+                        index >= 35 && "border-b-0" // Remove bottom border for last row
+                    )}
                 >
                     <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-sm", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
                         {format(day, 'd')}
@@ -128,7 +132,6 @@ export default function SocialMediaPage() {
                 </div>
               ))}
             </div>
-          ))}
         </div>
       </main>
     </div>
