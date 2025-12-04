@@ -637,7 +637,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             status: 'Done',
             actualCompletionDate: new Date().toISOString(),
             lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity],
+            activities: [...(activities || []), newActivity],
         });
         
         toast({

@@ -1,4 +1,3 @@
-
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -155,7 +154,7 @@ export type SocialMediaPost = {
   id: string;
   platform: string;
   caption: string;
-  mediaUrl: string; // Now optional
+  mediaUrl?: string; // Now optional
   status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
   scheduledAt: string;
   postedAt?: string;
