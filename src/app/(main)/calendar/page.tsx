@@ -276,6 +276,11 @@ export default function CalendarPage() {
 
   // --- Drag and Drop Handlers ---
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: Task) => {
+    // Prevent dragging if the task is done
+    if (task.status === 'Done') {
+        e.preventDefault();
+        return;
+    }
     e.dataTransfer.setData("application/json", JSON.stringify({
       taskId: task.id,
       originalStartDate: task.startDate || task.dueDate,
@@ -442,6 +447,7 @@ export default function CalendarPage() {
                             const priority = task.priority ? priorityInfo[task.priority] : null;
                             const PriorityIcon = priority?.icon;
                             const taskColor = getBrandColor(task.brandId);
+                            const isDraggable = task.status !== 'Done';
 
                             return (
                                 <Popover key={`${task.id}-${week.start.toString()}`}>
@@ -450,13 +456,15 @@ export default function CalendarPage() {
                                             <PopoverTrigger asChild>
                                                 <TooltipTrigger asChild>
                                                 <div
-                                                    draggable
+                                                    draggable={isDraggable}
                                                     onDragStart={(e) => handleDragStart(e, task)}
                                                     className={cn(
-                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium cursor-grab active:cursor-grabbing hover:opacity-80 transition-all z-10',
+                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium transition-all z-10',
                                                         taskColor,
                                                         isStart ? 'rounded-l-md' : '',
                                                         isEnd ? 'rounded-r-md' : '',
+                                                        isDraggable ? 'cursor-grab active:cursor-grabbing hover:opacity-80' : 'cursor-not-allowed',
+                                                        task.status === 'Done' && 'opacity-60'
                                                     )}
                                                     style={{
                                                         top: `${level * 1.75 + 2.5}rem`,
