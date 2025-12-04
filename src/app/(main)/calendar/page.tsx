@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore } from '@/firebase';
-import type { Task, Brand, WorkflowStatus, User, Priority } from '@/lib/types';
+import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import {
   eachDayOfInterval,
@@ -364,7 +364,7 @@ export default function CalendarPage() {
         </div>
         <div className="grid grid-cols-1 border-l border-border">
             {calendarGrid.weeks.map((week, weekIndex) => (
-                <div key={weekIndex} className="grid grid-cols-7 relative border-b" style={{ minHeight: `${(weeklyRenderSegments[weekIndex]?.maxLevel + 1) * 1.75 + 2}rem`}}>
+                <div key={weekIndex} className="grid grid-cols-7 relative border-b" style={{ minHeight: `${(weeklyRenderSegments[weekIndex]?.maxLevel + 1) * 1.75 + 4}rem`}}>
                     <div className="absolute inset-0 grid grid-cols-7">
                         {weeklyRenderSegments[weekIndex]?.segments.map(segment => {
                             const { task, startCol, span, level, isStart, isEnd } = segment;
@@ -386,9 +386,9 @@ export default function CalendarPage() {
                                                         isEnd ? 'rounded-r-md' : '',
                                                     )}
                                                     style={{
-                                                        top: `${level * 1.75 + 0.5}rem`,
+                                                        top: `${level * 1.75 + 2.5}rem`,
                                                         left: `${(startCol / 7) * 100}%`,
-                                                        width: `${(span / 7) * 100}%`,
+                                                        width: `calc(${(span / 7) * 100}% - 4px)`,
                                                     }}
                                                 >
                                                     <div className="flex items-center gap-1.5 truncate">
@@ -453,7 +453,7 @@ export default function CalendarPage() {
                         })}
                     </div>
                     {week.days.map((day) => (
-                        <div key={day.toString()} className={cn("p-2 border-r", viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30")}>
+                        <div key={day.toString()} className={cn("p-2 border-r relative", viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30")}>
                             <span className={cn( "font-semibold", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
                                 {format(day, 'd')}
                             </span>
@@ -466,4 +466,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
