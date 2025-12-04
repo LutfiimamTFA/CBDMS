@@ -3,9 +3,9 @@
 
 import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
-import { useCollection, useFirestore } from '@/firebase';
-import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import type { Task, Brand, WorkflowStatus, User, Activity } from '@/lib/types';
+import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -53,6 +53,7 @@ import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useToast } from '@/hooks/use-toast';
 
 
 const brandColors = [
@@ -83,6 +84,8 @@ type ViewMode = 'month' | 'week';
 
 export default function CalendarPage() {
   const firestore = useFirestore();
+  const { profile: currentUser } = useUserProfile();
+  const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
 
@@ -205,13 +208,12 @@ export default function CalendarPage() {
     return calendarGrid.weeks.map(week => {
       const weekTasks = filteredTasks
         .map(task => {
-          let taskStart = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
-          let taskEnd = task.dueDate ? parseISO(task.dueDate) : taskStart;
+          const taskStart = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
+          const taskEnd = task.dueDate ? parseISO(task.dueDate) : taskStart;
           
           if (!taskStart || !taskEnd) return null;
-          if (taskEnd < taskStart) taskEnd = taskStart;
-
-          return { ...task, start: taskStart, end: taskEnd as Date };
+          
+          return { ...task, start: taskStart, end: taskEnd < taskStart ? taskStart : taskEnd };
         })
         .filter((t): t is Task & { start: Date; end: Date } => {
           if (!t) return false;
@@ -271,6 +273,75 @@ export default function CalendarPage() {
       return { segments, maxLevel: Math.max(...levelOccupancy.flat().map(o => o.level), 0) };
     });
   }, [filteredTasks, calendarGrid.weeks]);
+
+  // --- Drag and Drop Handlers ---
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: Task) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({
+      taskId: task.id,
+      originalStartDate: task.startDate || task.dueDate,
+    }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+  
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+  
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    if (!firestore || !currentUser) return;
+
+    const droppedData = JSON.parse(e.dataTransfer.getData("application/json"));
+    const { taskId, originalStartDate } = droppedData;
+    const targetDateStr = e.currentTarget.dataset.date;
+    
+    if (!taskId || !targetDateStr) return;
+
+    const task = allTasks?.find(t => t.id === taskId);
+    if (!task) return;
+
+    const originalStart = parseISO(originalStartDate);
+    const originalEnd = task.dueDate ? parseISO(task.dueDate) : originalStart;
+    const durationDays = differenceInCalendarDays(originalEnd, originalStart);
+
+    const newStartDate = new Date(targetDateStr);
+    const newDueDate = add(newStartDate, { days: durationDays });
+
+    const taskRef = doc(firestore, 'tasks', taskId);
+
+    const createActivity = (user: User, action: string): Activity => {
+        return {
+          id: `act-${Date.now()}`,
+          user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+          action: action,
+          timestamp: new Date().toISOString(),
+        };
+      };
+      
+    const newActivity = createActivity(currentUser, `rescheduled task from ${format(originalStart, 'MMM d')} to ${format(newStartDate, 'MMM d')}`);
+
+    try {
+      await updateDoc(taskRef, {
+        startDate: newStartDate.toISOString(),
+        dueDate: newDueDate.toISOString(),
+        updatedAt: serverTimestamp(),
+        activities: [...(task.activities || []), newActivity],
+        lastActivity: newActivity,
+      });
+      toast({
+        title: "Task Rescheduled",
+        description: `"${task.title}" has been moved.`
+      });
+    } catch (error) {
+      console.error("Failed to update task date:", error);
+      toast({
+        variant: "destructive",
+        title: "Update Failed",
+        description: "Could not reschedule the task. Please try again."
+      });
+    }
+  };
 
 
   return (
@@ -379,8 +450,10 @@ export default function CalendarPage() {
                                             <PopoverTrigger asChild>
                                                 <TooltipTrigger asChild>
                                                 <div
+                                                    draggable
+                                                    onDragStart={(e) => handleDragStart(e, task)}
                                                     className={cn(
-                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-all z-10',
+                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium cursor-grab active:cursor-grabbing hover:opacity-80 transition-all z-10',
                                                         taskColor,
                                                         isStart ? 'rounded-l-md' : '',
                                                         isEnd ? 'rounded-r-md' : '',
@@ -453,8 +526,14 @@ export default function CalendarPage() {
                         })}
                     </div>
                     {week.days.map((day) => (
-                        <div key={day.toString()} className={cn("p-2 border-r relative", viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30")}>
-                            <span className={cn( "font-semibold", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
+                        <div 
+                            key={day.toString()} 
+                            className={cn("p-2 border-r relative pt-8", viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30")}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                            data-date={day.toISOString()}
+                        >
+                            <span className={cn( "absolute top-1.5 left-1.5 font-semibold text-sm", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
                                 {format(day, 'd')}
                             </span>
                         </div>
