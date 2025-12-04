@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -16,42 +15,74 @@ import {
   add,
   sub,
   isSameDay,
-  getDay,
+  isWithinInterval,
 } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import type { SocialMediaPost } from '@/lib/types';
+import { SocialPostCard } from '@/components/social-media/social-post-card';
+import { parseISO } from 'date-fns';
 
 
 export default function SocialMediaPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const firestore = useFirestore();
+  const { profile } = useUserProfile();
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // --- Data Fetching ---
+  const postsQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    return query(
+        collection(firestore, 'socialMediaPosts'),
+        where('companyId', '==', profile.companyId)
+    );
+  }, [firestore, profile]);
+  const { data: posts, isLoading: postsLoading } = useCollection<SocialMediaPost>(postsQuery);
+
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = startOfMonth(currentDate);
     const lastDayOfMonth = endOfMonth(currentDate);
 
     const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
-    const calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0});
+    let calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0});
 
-    const totalDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+    const totalDaysInView = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
     
-    // Ensure we have 6 weeks for a consistent layout
-    if (totalDays.length / 7 < 6) {
-        const lastDay = totalDays[totalDays.length - 1];
-        const additionalDays = eachDayOfInterval({start: add(lastDay, {days: 1}), end: add(lastDay, {days: 7})});
-        totalDays.push(...additionalDays.slice(0, 42 - totalDays.length));
+    // Ensure we always have 6 weeks for a consistent layout
+    if (totalDaysInView.length / 7 < 6) {
+        calendarEnd = add(calendarEnd, { weeks: 6 - (totalDaysInView.length / 7) });
     }
 
+    const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-    const weeks: Date[][] = [];
-    for (let i = 0; i < totalDays.length; i += 7) {
-      weeks.push(totalDays.slice(i, i + 7));
-    }
-
-    return { weeks };
+    return { start: calendarStart, end: calendarEnd, days };
   }, [currentDate]);
+
+  const postsByDay = useMemo(() => {
+    const map = new Map<string, SocialMediaPost[]>();
+    if (!posts) return map;
+
+    posts.forEach(post => {
+      if (post.scheduledAt) {
+        const postDate = parseISO(post.scheduledAt);
+         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+          const dayKey = format(postDate, 'yyyy-MM-dd');
+          if (!map.has(dayKey)) {
+            map.set(dayKey, []);
+          }
+          map.get(dayKey)?.push(post);
+        }
+      }
+    });
+    return map;
+  }, [posts, calendarGrid.start, calendarGrid.end]);
   
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => ({
@@ -75,9 +106,11 @@ export default function SocialMediaPage() {
       <Header
         title="Social Media Center"
         actions={
-          <Button size="sm">
-            <Plus className="mr-2" /> Create Post
-          </Button>
+          <CreatePostDialog>
+            <Button size="sm">
+              <Plus className="mr-2" /> Create Post
+            </Button>
+          </CreatePostDialog>
         }
       />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
@@ -114,24 +147,38 @@ export default function SocialMediaPage() {
                     </div>
                 ))}
             </div>
+            {postsLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : (
             <div className="grid grid-cols-7 grid-rows-6 flex-1">
-              {calendarGrid.weeks.flat().map((day, index) => (
-                <div 
-                    key={day.toString()} 
-                    className={cn(
-                        "p-2 border-r border-b relative",
-                        !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50",
-                        (index + 1) % 7 === 0 && "border-r-0", // Remove right border for last cell in a row
-                        index >= 35 && "border-b-0" // Remove bottom border for last row
-                    )}
-                >
-                    <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-sm", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
-                        {format(day, 'd')}
-                    </span>
-                    {/* Posts will be rendered here */}
-                </div>
-              ))}
+              {calendarGrid.days.map((day, index) => {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const postsForDay = postsByDay.get(dayKey) || [];
+                return (
+                  <div 
+                      key={day.toString()} 
+                      className={cn(
+                          "p-2 border-r border-b relative flex flex-col gap-2",
+                          !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50",
+                          (index + 1) % 7 === 0 && "border-r-0", // Remove right border for last cell in a row
+                          index >= 35 && "border-b-0" // Remove bottom border for last row
+                      )}
+                  >
+                      <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-sm", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
+                          {format(day, 'd')}
+                      </span>
+                      <div className="flex flex-col gap-1.5 mt-6">
+                        {postsForDay.map(post => (
+                          <SocialPostCard key={post.id} post={post} />
+                        ))}
+                      </div>
+                  </div>
+                )
+              })}
             </div>
+            )}
         </div>
       </main>
     </div>
