@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore } from '@/firebase';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
@@ -19,8 +19,10 @@ import {
   isSameDay,
   parseISO,
   isWithinInterval,
-  differenceInDays,
+  differenceInCalendarDays,
   getDay,
+  max,
+  min
 } from 'date-fns';
 import {
   ChevronLeft,
@@ -68,7 +70,7 @@ const getBrandColor = (brandId: string) => {
 
 type RenderSegment = {
   task: Task;
-  startCol: number; // 0-6
+  startCol: number;
   span: number;
   level: number;
   isStart: boolean;
@@ -116,19 +118,23 @@ export default function CalendarPage() {
 
   // --- Calendar Grid Logic ---
   const firstDayOfMonth = startOfMonth(currentDate);
-  const lastDayOfMonth = endOfMonth(currentDate);
   const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
-  const calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0 });
-  const weeksInGrid = [];
-  let currentWeekStart = calendarStart;
-  while(currentWeekStart <= calendarEnd) {
-      weeksInGrid.push({
-          start: currentWeekStart,
-          end: endOfWeek(currentWeekStart, { weekStartsOn: 0 }),
-          days: eachDayOfInterval({start: currentWeekStart, end: endOfWeek(currentWeekStart, {weekStartsOn: 0})})
-      });
-      currentWeekStart = add(currentWeekStart, { weeks: 1 });
-  }
+  const calendarEnd = endOfWeek(endOfMonth(firstDayOfMonth), { weekStartsOn: 0 });
+  
+  const weeksInGrid = useMemo(() => {
+    const weeks = [];
+    let currentWeekStart = calendarStart;
+    while(currentWeekStart < calendarEnd) {
+        const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 0 });
+        weeks.push({
+            start: currentWeekStart,
+            end: weekEnd,
+            days: eachDayOfInterval({start: currentWeekStart, end: weekEnd})
+        });
+        currentWeekStart = add(currentWeekStart, { weeks: 1 });
+    }
+    return weeks;
+  }, [calendarStart, calendarEnd]);
   
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => ({
@@ -175,44 +181,41 @@ export default function CalendarPage() {
     return Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
   }, []);
 
-  const weeklyRenderSegments = useMemo(() => {
+ const weeklyRenderSegments = useMemo(() => {
     if (!filteredTasks) return [];
-
-    const sortedTasks = filteredTasks
-      .map(task => {
-        let start = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
-        let end = task.dueDate ? parseISO(task.dueDate) : start;
-
-        if (!start || !end) return null;
-        if (end < start) end = start;
-
-        return { ...task, start, end };
-      })
-      .filter((t): t is (Task & { start: Date; end: Date }) => t !== null)
-      .sort((a, b) => {
-        const aDuration = differenceInDays(a.end, a.start);
-        const bDuration = differenceInDays(b.end, b.start);
-        if (aDuration !== bDuration) return bDuration - aDuration;
-        return a.start.getTime() - b.start.getTime();
-      });
 
     return weeksInGrid.map(week => {
         const segments: RenderSegment[] = [];
         const levelOccupancy: { endCol: number; level: number }[] = [];
 
-        sortedTasks.forEach(task => {
-            const taskInterval = { start: task.start, end: task.end };
-            const weekInterval = { start: week.start, end: week.end };
-            if (!isWithinInterval(task.start, weekInterval) && !isWithinInterval(week.start, taskInterval)) {
-                return;
-            }
+        const weekTasks = filteredTasks.map(task => {
+                let taskStart = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
+                let taskEnd = task.dueDate ? parseISO(task.dueDate) : taskStart;
+                
+                if (!taskStart) return null;
+                if (taskEnd && taskEnd < taskStart) taskEnd = taskStart;
 
-            const effectiveStart = task.start < week.start ? week.start : task.start;
-            const effectiveEnd = task.end > week.end ? week.end : task.end;
+                return { ...task, start: taskStart, end: taskEnd as Date };
+            })
+            .filter((t): t is Task & { start: Date; end: Date } => t !== null && isWithinInterval(t.start, {start: sub(week.start, {days: 7}), end: add(week.end, {days: 7})}))
+            .sort((a, b) => {
+                const aDuration = differenceInCalendarDays(a.end, a.start);
+                const bDuration = differenceInCalendarDays(b.end, b.start);
+                if (aDuration !== bDuration) return bDuration - aDuration;
+                return a.start.getTime() - b.start.getTime();
+            });
+
+        weekTasks.forEach(task => {
+            const effectiveStart = max([task.start, week.start]);
+            const effectiveEnd = min([task.end, week.end]);
+
+            if (effectiveStart > effectiveEnd) return;
 
             const startCol = getDay(effectiveStart);
             const endCol = getDay(effectiveEnd);
             const span = endCol - startCol + 1;
+
+            if (span <= 0) return;
 
             let level = 0;
             while(levelOccupancy.some(occupant => occupant.level === level && startCol <= occupant.endCol)) {
@@ -234,9 +237,8 @@ export default function CalendarPage() {
 }, [filteredTasks, weeksInGrid]);
 
 
-
   return (
-    <div className="flex min-h-screen flex-col bg-background">
+    <div className="flex h-svh flex-col bg-background">
       <Header title="Team Calendar" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         {/* Calendar Header */}
@@ -320,15 +322,15 @@ export default function CalendarPage() {
                             </span>
                         </div>
                     ))}
-                    <div className="absolute top-8 left-0 w-full h-[calc(10rem-2rem)]">
+                    <div className="absolute top-8 left-0 right-0 h-[calc(10rem-2rem)]">
                         {(weeklyRenderSegments[weekIndex] || []).map(segment => {
                             const { task, startCol, span, level, isStart, isEnd } = segment;
-                            const priority = priorityInfo[task.priority];
+                            const priority = task.priority ? priorityInfo[task.priority] : null;
                             const PriorityIcon = priority?.icon;
                             const taskColor = getBrandColor(task.brandId);
 
                             return (
-                                <Popover key={`${task.id}-${weekIndex}`}>
+                                <Popover key={`${task.id}-${week.start.toString()}`}>
                                     <TooltipProvider>
                                         <Tooltip>
                                             <PopoverTrigger asChild>
@@ -385,7 +387,7 @@ export default function CalendarPage() {
                                                 </div>
                                             </div>
                                             <div className='flex items-center gap-2'>
-                                                {task.assignees.map(assignee => (
+                                                {task.assignees?.map(assignee => (
                                                 <TooltipProvider key={assignee.id}>
                                                     <Tooltip>
                                                     <TooltipTrigger>
