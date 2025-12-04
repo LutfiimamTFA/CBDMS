@@ -270,7 +270,7 @@ export default function CalendarPage() {
           });
         });
 
-      return { segments, maxLevel: Math.max(...levelOccupancy.flat().map(o => o.level), 0) };
+      return { segments, maxLevel: Math.max(...levelOccupancy.flat().map(o => o.level), -1) };
     });
   }, [filteredTasks, calendarGrid.weeks]);
 
@@ -441,7 +441,7 @@ export default function CalendarPage() {
         <div className="grid grid-cols-1 border-l border-border">
             {calendarGrid.weeks.map((week, weekIndex) => (
                 <div key={weekIndex} className="grid grid-cols-7 relative border-b" style={{ minHeight: `${(weeklyRenderSegments[weekIndex]?.maxLevel + 1) * 1.75 + 4}rem`}}>
-                    <div className="absolute inset-0 grid grid-cols-7">
+                     <div className="absolute top-8 left-0 right-0 bottom-0 grid grid-cols-7">
                         {weeklyRenderSegments[weekIndex]?.segments.map(segment => {
                             const { task, startCol, span, level, isStart, isEnd } = segment;
                             const priority = task.priority ? priorityInfo[task.priority] : null;
@@ -459,17 +459,20 @@ export default function CalendarPage() {
                                                     draggable={isDraggable}
                                                     onDragStart={(e) => handleDragStart(e, task)}
                                                     className={cn(
-                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium transition-all z-10 cursor-pointer',
+                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium transition-all z-10',
                                                         taskColor,
                                                         isStart ? 'rounded-l-md' : '',
                                                         isEnd ? 'rounded-r-md' : '',
-                                                        isDraggable ? 'cursor-grab active:cursor-grabbing hover:opacity-80' : 'hover:opacity-80',
+                                                        isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
+                                                        'hover:opacity-80',
                                                         task.status === 'Done' && 'opacity-60'
                                                     )}
                                                     style={{
-                                                        top: `${level * 1.75 + 2.5}rem`,
+                                                        top: `${level * 1.75}rem`,
                                                         left: `${(startCol / 7) * 100}%`,
                                                         width: `calc(${(span / 7) * 100}% - 4px)`,
+                                                        marginLeft: '2px',
+                                                        marginRight: '2px',
                                                     }}
                                                 >
                                                     <div className="flex items-center gap-1.5 truncate">
