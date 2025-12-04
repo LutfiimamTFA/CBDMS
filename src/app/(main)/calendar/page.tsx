@@ -169,56 +169,67 @@ export default function CalendarPage() {
   }, [daysInGrid]);
 
   const tasksWithUiProps = useMemo(() => {
-    const tasksWithProps: TaskWithUiProps[] = [];
-    const weekLevels: number[][] = Array(6).fill(0).map(() => []);
-
-    const sortedTasks = filteredTasks.sort((a,b) => {
-      const aStart = a.startDate ? parseISO(a.startDate).getTime() : 0;
-      const bStart = b.startDate ? parseISO(b.startDate).getTime() : 0;
-      return aStart - bStart;
-    });
-
-    sortedTasks.forEach(task => {
+      const taskLevels: { [weekIndex: number]: { level: number; startDay: number; endDay: number }[][] } = {};
+  
+      const sortedTasks = filteredTasks.sort((a,b) => {
+        const aStart = a.startDate ? parseISO(a.startDate).getTime() : a.dueDate ? parseISO(a.dueDate).getTime() : Infinity;
+        const bStart = b.startDate ? parseISO(b.startDate).getTime() : b.dueDate ? parseISO(b.dueDate).getTime() : Infinity;
+        const aDuration = a.dueDate ? differenceInDays(parseISO(a.dueDate), aStart ? parseISO(a.startDate!) : parseISO(a.dueDate)) : 0;
+        const bDuration = b.dueDate ? differenceInDays(parseISO(b.dueDate), bStart ? parseISO(b.startDate!) : parseISO(b.dueDate)) : 0;
+        
+        if (aDuration !== bDuration) return bDuration - aDuration; // Longer tasks first
+        return aStart - bStart; // Then earlier tasks
+      });
+  
+      return sortedTasks.map(task => {
         let start = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
         let end = task.dueDate ? parseISO(task.dueDate) : start;
-
-        if (!start || !end) return;
-
+  
+        if (!start || !end) return null;
         if (end < start) end = start;
+  
+        const weekIndex = Math.floor(getDayIndex(start) / 7);
+        const startDayIndex = getDayIndex(start);
+        const endDayIndex = getDayIndex(end);
+        
+        if(startDayIndex === -1 && endDayIndex === -1 && !isWithinInterval(new Date(), {start, end})) return null;
 
-        // Clamp dates to the visible grid
         const effectiveStart = start < calendarStart ? calendarStart : start;
         const effectiveEnd = end > calendarEnd ? calendarEnd : end;
 
-        const startDayIndex = getDayIndex(effectiveStart);
-        const endDayIndex = getDayIndex(effectiveEnd);
-
-        if (startDayIndex === -1 && endDayIndex === -1) return;
-
-        const startColumn = (startDayIndex % 7) + 1;
-        const span = differenceInDays(effectiveEnd, effectiveStart) + 1;
+        const startCol = getDayIndex(effectiveStart);
+        const endCol = getDayIndex(effectiveEnd);
         
-        const weekIndex = Math.floor(startDayIndex / 7);
+        const span = endCol - startCol + 1;
 
+        if (weekIndex < 0) return null;
+  
+        if (!taskLevels[weekIndex]) {
+          taskLevels[weekIndex] = [];
+        }
+  
         let level = 0;
-        if (weekLevels[weekIndex]) {
-            while (weekLevels[weekIndex].slice(startColumn - 1, startColumn - 1 + span).some(l => l > level)) {
-                level++;
-            }
-        } else {
-             weekLevels[weekIndex] = [];
+        while (
+          taskLevels[weekIndex][level] &&
+          taskLevels[weekIndex][level].some(
+            (placedTask) =>
+              (startDayIndex >= placedTask.startDay && startDayIndex <= placedTask.endDay) ||
+              (endDayIndex >= placedTask.startDay && endDayIndex <= placedTask.endDay) ||
+              (startDayIndex < placedTask.startDay && endDayIndex > placedTask.endDay)
+          )
+        ) {
+          level++;
         }
-
-        for (let i = 0; i < span; i++) {
-            if (weekLevels[weekIndex]) {
-               weekLevels[weekIndex][startColumn - 1 + i] = level + 1;
-            }
+  
+        if (!taskLevels[weekIndex][level]) {
+          taskLevels[weekIndex][level] = [];
         }
-        
-        tasksWithProps.push({ ...task, ui: { startColumn, span, level } });
-    });
-    return tasksWithProps;
-  }, [filteredTasks, getDayIndex, calendarStart, calendarEnd]);
+  
+        taskLevels[weekIndex][level].push({ level, startDay: startDayIndex, endDay: endDayIndex });
+  
+        return { ...task, ui: { startColumn: (startCol % 7) + 1, span, level } };
+      }).filter((t): t is TaskWithUiProps => t !== null);
+    }, [filteredTasks, getDayIndex, calendarStart, calendarEnd]);
 
 
   const renderTaskBar = (task: TaskWithUiProps) => {
@@ -234,14 +245,14 @@ export default function CalendarPage() {
             <TooltipTrigger asChild>
               <div 
                 className={cn(
-                  'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity w-full truncate absolute',
+                  'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity absolute',
                   taskColor
                 )}
                 style={{
                   gridColumn: `${task.ui.startColumn} / span ${task.ui.span}`,
                   top: `${2.5 + task.ui.level * 1.75}rem`,
-                  left: 0,
-                  right: 0,
+                  width: `calc(${task.ui.span * 100}% - 0.5rem)`,
+                  left: `calc(${(task.ui.startColumn - 1) * 100}% + 0.25rem)`,
                 }}
               >
                   <div className="flex items-center gap-1.5 truncate">
@@ -375,10 +386,10 @@ export default function CalendarPage() {
                 </div>
             ))}
             
-            {daysInGrid.map((day) => {
-              const weekIndex = Math.floor(getDayIndex(day) / 7);
-              const tasksInThisWeek = tasksWithUiProps.filter(t => Math.floor(getDayIndex(t.startDate ? parseISO(t.startDate) : parseISO(t.dueDate!)) / 7) === weekIndex);
-
+            {daysInGrid.map((day, index) => {
+              const dayOfWeek = index % 7;
+              const tasksStartingOnThisDay = tasksWithUiProps.filter(t => getDayIndex(t.startDate ? parseISO(t.startDate) : parseISO(t.dueDate!)) === index);
+              
               return (
                 <div 
                     key={day.toString()}
@@ -394,11 +405,16 @@ export default function CalendarPage() {
                       {format(day, 'd')}
                     </span>
                     
-                    {isSameDay(day, startOfWeek(day, { weekStartsOn: 0 })) && (
-                      <div className="absolute top-0 left-0 right-0 grid grid-cols-7 gap-px">
-                        {tasksInThisWeek.map(renderTaskBar)}
-                      </div>
-                    )}
+                    <div className="absolute top-0 left-0 right-0 grid grid-cols-7 gap-px">
+                       {dayOfWeek === 0 && tasksWithUiProps
+                         .filter(t => {
+                           const start = t.startDate ? parseISO(t.startDate) : parseISO(t.dueDate!);
+                           return isWithinInterval(start, { start: day, end: add(day, {days: 6}) });
+                         })
+                         .map(renderTaskBar)}
+                    </div>
+                    {dayOfWeek !== 0 && tasksStartingOnThisDay.map(renderTaskBar)}
+
                 </div>
               )
             })}
@@ -407,4 +423,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
