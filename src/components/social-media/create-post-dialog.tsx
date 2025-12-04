@@ -9,6 +9,16 @@ import {
   DialogFooter,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -34,11 +44,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2 } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost } from '@/lib/types';
@@ -68,7 +78,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const setOpen = setControlledOpen ?? setInternalOpen;
   
   const [isSaving, setIsSaving] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(post?.mediaUrl || null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const firestore = useFirestore();
@@ -207,18 +219,43 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   };
   
+  const handleDeletePost = async () => {
+    if (!firestore || !post) return;
+    setIsDeleting(true);
+
+    const postRef = doc(firestore, 'socialMediaPosts', post.id);
+    try {
+      await deleteDoc(postRef);
+      toast({
+        title: 'Post Deleted',
+        description: 'The social media post has been permanently removed.',
+      });
+      setDeleteConfirmOpen(false);
+      setOpen(false);
+    } catch (error: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Deletion Failed',
+            description: error.message || 'Could not delete the post.',
+        });
+    } finally {
+        setIsDeleting(false);
+    }
+  };
+
   const isManager = profile?.role === 'Manager' || profile?.role === 'Super Admin';
   const isCreator = profile?.id === post?.createdBy;
 
   const isApproverView = mode === 'edit' && isManager && post?.status === 'Needs Approval';
   
-  // An employee can edit if they created the post AND it's not yet scheduled/posted.
-  // A manager can edit anytime it's not posted.
   const isEditable = mode === 'create' || 
-    (mode === 'edit' && post?.status !== 'Posted' && (isManager || isCreator));
+    (mode === 'edit' && post?.status !== 'Posted' && (isManager || (isCreator && post.status !== 'Scheduled')));
+  
+  const canDelete = mode === 'edit' && post && (isManager || (isCreator && (post.status === 'Draft' || post.status === 'Needs Approval')));
 
 
   return (
+    <>
     <Dialog open={open} onOpenChange={setOpen}>
       {mode === 'create' && <DialogTrigger asChild>{children}</DialogTrigger>}
       <DialogContent className="sm:max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
@@ -237,7 +274,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         name="media"
                         render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Media (Optional)</FormLabel>
+                            <FormLabel>Media</FormLabel>
                             <FormControl>
                                 <div 
                                     className={cn(
@@ -354,13 +391,22 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 </Form>
             </div>
         </ScrollArea>
-        <DialogFooter className="p-6 pt-4 border-t flex-wrap justify-between gap-2">
-          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+        <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
+            <div>
+              {canDelete && (
+                <Button variant="destructive" onClick={() => setDeleteConfirmOpen(true)} disabled={isSaving || isDeleting}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              )}
+            </div>
           
           <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+
             {isApproverView && (
                 <>
-                <Button variant="destructive" onClick={() => handleUpdateStatus('Draft')} disabled={isSaving}>
+                <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleUpdateStatus('Draft')} disabled={isSaving}>
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
                     Reject
                 </Button>
@@ -378,7 +424,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 </Button>
             )}
 
-            {mode === 'edit' && isEditable && !isApproverView && (
+            {isEditable && !isApproverView && (
                 <Button type="submit" form="create-post-form" disabled={isSaving}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                     Save Changes
@@ -388,5 +434,23 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the social media post.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeletePost} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                  {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Yes, delete post
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }
