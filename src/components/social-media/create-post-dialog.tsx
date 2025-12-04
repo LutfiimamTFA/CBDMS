@@ -89,7 +89,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             scheduledAtDate: scheduledDate,
             scheduledAtTime: format(scheduledDate, 'HH:mm'),
         });
-        setImagePreview(post.mediaUrl);
+        setImagePreview(post.mediaUrl || null);
     } else {
         form.reset({
             platform: 'Instagram',
@@ -207,9 +207,15 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   };
   
-  const canApprove = profile?.role === 'Manager' || profile?.role === 'Super Admin';
-  const isApproverView = mode === 'edit' && canApprove && post?.status === 'Needs Approval';
-  const isEditable = mode === 'create' || (mode === 'edit' && post?.status !== 'Posted');
+  const isManager = profile?.role === 'Manager' || profile?.role === 'Super Admin';
+  const isCreator = profile?.id === post?.createdBy;
+
+  const isApproverView = mode === 'edit' && isManager && post?.status === 'Needs Approval';
+  
+  // An employee can edit if they created the post AND it's not yet scheduled/posted.
+  // A manager can edit anytime it's not posted.
+  const isEditable = mode === 'create' || 
+    (mode === 'edit' && post?.status !== 'Posted' && (isManager || isCreator));
 
 
   return (
@@ -234,7 +240,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             <FormLabel>Media (Optional)</FormLabel>
                             <FormControl>
                                 <div 
-                                    className="w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50"
+                                    className={cn(
+                                      "w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center",
+                                      isEditable && "cursor-pointer hover:bg-muted/50"
+                                    )}
                                     onClick={() => isEditable && fileInputRef.current?.click()}
                                 >
                                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
