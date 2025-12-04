@@ -1,9 +1,10 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore } from '@/firebase';
-import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
+import type { Task, Brand, WorkflowStatus, User, Priority } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import {
   eachDayOfInterval,
@@ -207,12 +208,16 @@ export default function CalendarPage() {
           let taskStart = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
           let taskEnd = task.dueDate ? parseISO(task.dueDate) : taskStart;
           
-          if (!taskStart) return null;
-          if (taskEnd && taskEnd < taskStart) taskEnd = taskStart;
+          if (!taskStart || !taskEnd) return null;
+          if (taskEnd < taskStart) taskEnd = taskStart;
 
           return { ...task, start: taskStart, end: taskEnd as Date };
         })
-        .filter((t): t is Task & { start: Date; end: Date } => t !== null && isWithinInterval(t.start, { start: sub(week.start, { days: 7 }), end: add(week.end, { days: 7 }) }) || isWithinInterval(t.end, { start: sub(week.start, { days: 7 }), end: add(week.end, { days: 7 }) }));
+        .filter((t): t is Task & { start: Date; end: Date } => {
+          if (!t) return false;
+          const weekInterval = { start: week.start, end: week.end };
+          return isWithinInterval(t.start, weekInterval) || isWithinInterval(t.end, weekInterval) || (t.start < week.start && t.end > week.end);
+        });
         
       const segments: RenderSegment[] = [];
       const levelOccupancy: { endCol: number, level: number }[][] = Array(7).fill(0).map(() => []);
@@ -382,12 +387,14 @@ export default function CalendarPage() {
                                                     )}
                                                     style={{
                                                         top: `${level * 1.75 + 0.5}rem`,
-                                                        gridColumnStart: startCol + 1,
-                                                        gridColumnEnd: startCol + 1 + span,
+                                                        left: `${(startCol / 7) * 100}%`,
+                                                        width: `${(span / 7) * 100}%`,
                                                     }}
                                                 >
                                                     <div className="flex items-center gap-1.5 truncate">
-                                                        {PriorityIcon && <PriorityIcon className="h-3.5 w-3.5 shrink-0" />}
+                                                        {PriorityIcon && (
+                                                            <PriorityIcon className="h-3.5 w-3.5 shrink-0" />
+                                                        )}
                                                         <span className="truncate">{task.title}</span>
                                                     </div>
                                                 </div>
@@ -460,4 +467,3 @@ export default function CalendarPage() {
   );
 }
 
-    
