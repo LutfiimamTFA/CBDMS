@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -6,8 +5,10 @@ import { KanbanColumn } from './kanban-column';
 import type { Task, WorkflowStatus } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { usePermissions } from '@/context/permissions-provider';
 
 interface KanbanBoardProps {
   tasks: Task[];
@@ -17,6 +18,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
   const { profile } = useUserProfile();
+  const { toast } = useToast();
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -32,6 +34,52 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
   const { data: statuses, isLoading: areStatusesLoading } =
     useCollection<WorkflowStatus>(statusesQuery);
+    
+  const canDrag = useMemo(() => {
+    if (!profile) return false;
+    return profile.role === 'Super Admin' || profile.role === 'Manager';
+  }, [profile]);
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
+    if (!canDrag) return;
+    e.dataTransfer.setData('taskId', taskId);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
+    if (!canDrag || !firestore || !profile) return;
+    const taskId = e.dataTransfer.getData('taskId');
+    const task = tasks.find(t => t.id === taskId);
+
+    if (task && task.status !== newStatus) {
+      // Optimistic UI update
+      setTasks(currentTasks => 
+        currentTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t)
+      );
+
+      const taskRef = doc(firestore, 'tasks', taskId);
+      try {
+        await updateDoc(taskRef, { 
+            status: newStatus,
+            updatedAt: serverTimestamp(),
+        });
+        toast({
+            title: "Task Updated",
+            description: `Task moved to "${newStatus}".`
+        });
+      } catch (error) {
+        console.error("Failed to update task status:", error);
+        // Revert UI on failure
+        setTasks(currentTasks => 
+            currentTasks.map(t => t.id === taskId ? { ...t, status: task.status } : t)
+        );
+        toast({
+            variant: "destructive",
+            title: "Update Failed",
+            description: "Could not move the task. Please try again."
+        });
+      }
+    }
+  };
 
   if (areStatusesLoading) {
     return (
@@ -49,6 +97,9 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
             key={status.id}
             status={status}
             tasks={tasks.filter((task) => task.status === status.name)}
+            onDrop={handleDrop}
+            onDragStart={handleDragStart}
+            canDrag={canDrag}
           />
         ))}
       </div>

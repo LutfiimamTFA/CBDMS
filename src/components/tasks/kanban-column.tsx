@@ -1,6 +1,6 @@
-
 'use client';
 
+import React, { useState, useMemo } from 'react';
 import { TaskCard } from './task-card';
 import type { Task, User, WorkflowStatus } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,17 +11,25 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../ui/tooltip';
-import { useMemo } from 'react';
+import { cn } from '@/lib/utils';
 
 interface KanbanColumnProps {
   status: WorkflowStatus;
   tasks: Task[];
+  onDrop: (e: React.DragEvent<HTMLDivElement>, status: string) => void;
+  onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
+  canDrag: boolean;
 }
 
 export function KanbanColumn({
   status,
   tasks,
+  onDrop,
+  onDragStart,
+  canDrag,
 }: KanbanColumnProps) {
+  const [isDragOver, setIsDragOver] = useState(false);
+
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
     tasks.forEach((task) => {
@@ -34,9 +42,31 @@ export function KanbanColumn({
     return Array.from(assignees.values());
   }, [tasks]);
 
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!canDrag) return;
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    if (!canDrag) return;
+    setIsDragOver(false);
+    onDrop(e, status.name);
+  };
+
   return (
     <div
-      className="flex h-full w-80 shrink-0 flex-col rounded-lg bg-secondary/50"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn(
+        "flex h-full w-80 shrink-0 flex-col rounded-lg bg-secondary/50 transition-colors",
+        isDragOver && canDrag && "bg-primary/10"
+      )}
     >
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
@@ -90,7 +120,12 @@ export function KanbanColumn({
       >
         <div className="flex flex-col gap-3 p-4">
           {tasks.map((task, index) => (
-            <TaskCard key={task.id} task={task} />
+            <TaskCard 
+                key={task.id} 
+                task={task} 
+                draggable={canDrag}
+                onDragStart={(e) => onDragStart(e, task.id)}
+            />
           ))}
         </div>
       </ScrollArea>

@@ -1,10 +1,9 @@
-
 'use client';
 import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { priorityInfo, formatHours } from '@/lib/utils';
+import { priorityInfo, formatHours, cn } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -15,9 +14,11 @@ import { Badge } from '../ui/badge';
 
 interface TaskCardProps {
   task: Task;
+  draggable?: boolean;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
 }
 
-export function TaskCard({ task }: TaskCardProps) {
+export function TaskCard({ task, draggable = false, onDragStart }: TaskCardProps) {
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
   const { t } = useI18n();
@@ -36,9 +37,14 @@ export function TaskCard({ task }: TaskCardProps) {
 
 
   return (
-      <Link href={`/tasks/${task.id}`} className="block">
+      <Link href={`/tasks/${task.id}`} className="block" draggable={false} onDragStart={(e) => e.preventDefault()}>
           <Card
-              className={`cursor-pointer transition-shadow duration-200 hover:shadow-lg w-full`}
+              draggable={draggable}
+              onDragStart={onDragStart}
+              className={cn(
+                "transition-shadow duration-200 hover:shadow-lg w-full",
+                draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+              )}
           >
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-start justify-between">
@@ -118,4 +124,3 @@ export function TaskCard({ task }: TaskCardProps) {
       </Link>
   );
 }
-
