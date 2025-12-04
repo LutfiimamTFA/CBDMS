@@ -71,17 +71,6 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
       scheduledAtTime: format(new Date(), 'HH:mm'),
     },
   });
-
-  const timeOptions = useMemo(() => {
-    const options = [];
-    for (let hour = 0; hour < 24; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-        options.push(time);
-      }
-    }
-    return options;
-  }, []);
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -259,20 +248,15 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                             name="scheduledAtTime"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Schedule Time</FormLabel>
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <FormLabel>Schedule Time</FormLabel>
                                     <FormControl>
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
+                                        <Input
+                                            type="time"
+                                            className="w-full"
+                                            {...field}
+                                        />
                                     </FormControl>
-                                    <SelectContent className="max-h-60">
-                                        {timeOptions.map(time => (
-                                            <SelectItem key={time} value={time}>{time}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <FormMessage />
+                                    <FormMessage />
                                 </FormItem>
                             )}
                         />
