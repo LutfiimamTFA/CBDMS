@@ -26,6 +26,7 @@ import { collection, query, where } from 'firebase/firestore';
 import type { SocialMediaPost } from '@/lib/types';
 import { SocialPostCard } from '@/components/social-media/social-post-card';
 import { parseISO } from 'date-fns';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 export default function SocialMediaPage() {
@@ -169,11 +170,13 @@ export default function SocialMediaPage() {
                       <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-sm", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
                           {format(day, 'd')}
                       </span>
-                      <div className="flex flex-col gap-1.5 mt-6">
-                        {postsForDay.map(post => (
-                          <SocialPostCard key={post.id} post={post} />
-                        ))}
-                      </div>
+                      <ScrollArea className="flex-1 mt-8">
+                        <div className="flex flex-col gap-1.5 pr-2">
+                          {postsForDay.map(post => (
+                            <SocialPostCard key={post.id} post={post} />
+                          ))}
+                        </div>
+                      </ScrollArea>
                   </div>
                 )
               })}
