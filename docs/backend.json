@@ -394,13 +394,13 @@
         "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"], "description": "The target social media platform." },
         "caption": { "type": "string", "description": "The text content or caption for the post." },
         "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video to be posted." },
-        "status": { "type": "string", "enum": ["Draft", "Scheduled", "Needs Approval", "Posted", "Error"], "description": "The current status of the post." },
+        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "The current status of the post." },
         "scheduledAt": { "type": "string", "format": "date-time", "description": "The specific date and time the post is scheduled to be published." },
         "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
         "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
         "companyId": { "type": "string", "description": "The ID of the company this post belongs to." }
       },
-      "required": ["id", "platform", "caption", "mediaUrl", "status", "scheduledAt", "createdBy", "companyId"]
+      "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
     }
   },
   "auth": {

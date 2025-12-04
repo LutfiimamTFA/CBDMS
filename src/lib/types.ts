@@ -151,6 +151,19 @@ export type Task = {
   companyId: string;
 };
 
+export type SocialMediaPost = {
+  id: string;
+  platform: string;
+  caption: string;
+  mediaUrl: string; // Now optional
+  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
+  scheduledAt: string;
+  postedAt?: string;
+  createdBy: string;
+  companyId: string;
+};
+
+
 export type PriorityInfo = {
   label: Priority;
   value: Priority;

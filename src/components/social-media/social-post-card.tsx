@@ -3,7 +3,7 @@ import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { Instagram } from 'lucide-react';
+import { Instagram, FileText } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CreatePostDialog } from './create-post-dialog';
@@ -37,7 +37,15 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
         >
           <CardContent className="p-0">
             <div className="relative aspect-square w-full">
-                <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                {post.mediaUrl ? (
+                    <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-full bg-secondary text-muted-foreground p-2">
+                        <FileText className="h-6 w-6 mb-1" />
+                        <p className="text-xs text-center line-clamp-3">{post.caption}</p>
+                    </div>
+                )}
+
                 <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300"></div>
                 <div className="absolute top-2 right-2 flex items-center gap-2">
                     {PlatformIcon && (

@@ -38,7 +38,7 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc } from 'firebase/fi
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost } from '@/lib/types';
@@ -128,10 +128,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             const storageRef = ref(storage, `social-media/${profile.companyId}/${Date.now()}-${file.name}`);
             await uploadBytes(storageRef, file);
             mediaUrl = await getDownloadURL(storageRef);
-        }
-
-        if (!mediaUrl && mode === 'create') {
-            throw new Error("Media is required to create a post.");
         }
 
         // 2. Combine Date and Time
@@ -235,7 +231,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         name="media"
                         render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Media</FormLabel>
+                            <FormLabel>Media (Optional)</FormLabel>
                             <FormControl>
                                 <div 
                                     className="w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50"
