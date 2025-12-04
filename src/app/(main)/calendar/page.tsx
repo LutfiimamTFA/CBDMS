@@ -183,7 +183,7 @@ export default function CalendarPage() {
 
     return sortedTasks.map(task => {
       const start = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
-      const end = task.dueDate ? parseISO(task.dueDate) : start;
+      let end = task.dueDate ? parseISO(task.dueDate) : start;
 
       if (!start || !end) return null;
       if (end < start) end = start;
@@ -411,4 +411,3 @@ export default function CalendarPage() {
     </div>
   );
 }
-
