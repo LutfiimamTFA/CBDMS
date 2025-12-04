@@ -169,146 +169,64 @@ export default function CalendarPage() {
   }, [daysInGrid]);
 
   const tasksWithUiProps = useMemo(() => {
-      const taskLevels: { [weekIndex: number]: { level: number; startDay: number; endDay: number }[][] } = {};
-  
-      const sortedTasks = filteredTasks.sort((a,b) => {
-        const aStart = a.startDate ? parseISO(a.startDate).getTime() : a.dueDate ? parseISO(a.dueDate).getTime() : Infinity;
-        const bStart = b.startDate ? parseISO(b.startDate).getTime() : b.dueDate ? parseISO(b.dueDate).getTime() : Infinity;
-        const aDuration = a.dueDate ? differenceInDays(parseISO(a.dueDate), aStart ? parseISO(a.startDate!) : parseISO(a.dueDate)) : 0;
-        const bDuration = b.dueDate ? differenceInDays(parseISO(b.dueDate), bStart ? parseISO(b.startDate!) : parseISO(b.dueDate)) : 0;
-        
-        if (aDuration !== bDuration) return bDuration - aDuration; // Longer tasks first
-        return aStart - bStart; // Then earlier tasks
-      });
-  
-      return sortedTasks.map(task => {
-        let start = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
-        let end = task.dueDate ? parseISO(task.dueDate) : start;
-  
-        if (!start || !end) return null;
-        if (end < start) end = start;
-  
-        const weekIndex = Math.floor(getDayIndex(start) / 7);
-        const startDayIndex = getDayIndex(start);
-        const endDayIndex = getDayIndex(end);
-        
-        if(startDayIndex === -1 && endDayIndex === -1 && !isWithinInterval(new Date(), {start, end})) return null;
+    const taskLevels: { [dayIndex: number]: number } = {};
 
-        const effectiveStart = start < calendarStart ? calendarStart : start;
-        const effectiveEnd = end > calendarEnd ? calendarEnd : end;
+    const sortedTasks = filteredTasks.sort((a,b) => {
+      const aStart = a.startDate ? parseISO(a.startDate) : (a.dueDate ? parseISO(a.dueDate) : new Date(8640000000000000));
+      const bStart = b.startDate ? parseISO(b.startDate) : (b.dueDate ? parseISO(b.dueDate) : new Date(8640000000000000));
+      const aDuration = a.dueDate ? differenceInDays(parseISO(a.dueDate), aStart) : 0;
+      const bDuration = b.dueDate ? differenceInDays(parseISO(b.dueDate), bStart) : 0;
+      
+      if (aDuration !== bDuration) return bDuration - aDuration;
+      return aStart.getTime() - bStart.getTime();
+    });
 
-        const startCol = getDayIndex(effectiveStart);
-        const endCol = getDayIndex(effectiveEnd);
-        
-        const span = endCol - startCol + 1;
+    return sortedTasks.map(task => {
+      const start = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
+      const end = task.dueDate ? parseISO(task.dueDate) : start;
 
-        if (weekIndex < 0) return null;
-  
-        if (!taskLevels[weekIndex]) {
-          taskLevels[weekIndex] = [];
+      if (!start || !end) return null;
+      if (end < start) end = start;
+      
+      const effectiveStart = start < calendarStart ? calendarStart : start;
+      const effectiveEnd = end > calendarEnd ? calendarEnd : end;
+      
+      const startDayIndex = getDayIndex(effectiveStart);
+      const endDayIndex = getDayIndex(effectiveEnd);
+
+      if (startDayIndex === -1) return null;
+
+      let level = 0;
+      // Simple leveling: find the first available "row" for the task's start date
+      while (true) {
+        let occupied = false;
+        for (let i = startDayIndex; i <= endDayIndex; i++) {
+          if (taskLevels[i] === level) {
+            occupied = true;
+            break;
+          }
         }
-  
-        let level = 0;
-        while (
-          taskLevels[weekIndex][level] &&
-          taskLevels[weekIndex][level].some(
-            (placedTask) =>
-              (startDayIndex >= placedTask.startDay && startDayIndex <= placedTask.endDay) ||
-              (endDayIndex >= placedTask.startDay && endDayIndex <= placedTask.endDay) ||
-              (startDayIndex < placedTask.startDay && endDayIndex > placedTask.endDay)
-          )
-        ) {
-          level++;
+        if (!occupied) {
+          break;
         }
-  
-        if (!taskLevels[weekIndex][level]) {
-          taskLevels[weekIndex][level] = [];
-        }
-  
-        taskLevels[weekIndex][level].push({ level, startDay: startDayIndex, endDay: endDayIndex });
-  
-        return { ...task, ui: { startColumn: (startCol % 7) + 1, span, level } };
-      }).filter((t): t is TaskWithUiProps => t !== null);
-    }, [filteredTasks, getDayIndex, calendarStart, calendarEnd]);
-
-
-  const renderTaskBar = (task: TaskWithUiProps) => {
-    const priority = priorityInfo[task.priority];
-    const PriorityIcon = priority?.icon;
-    const taskColor = getBrandColor(task.brandId);
-
-    return (
-      <Popover key={task.id}>
-        <TooltipProvider>
-        <Tooltip>
-          <PopoverTrigger asChild>
-            <TooltipTrigger asChild>
-              <div 
-                className={cn(
-                  'h-6 rounded-md px-2 flex items-center justify-between text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity absolute',
-                  taskColor
-                )}
-                style={{
-                  gridColumn: `${task.ui.startColumn} / span ${task.ui.span}`,
-                  top: `${2.5 + task.ui.level * 1.75}rem`,
-                  width: `calc(${task.ui.span * 100}% - 0.5rem)`,
-                  left: `calc(${(task.ui.startColumn - 1) * 100}% + 0.25rem)`,
-                }}
-              >
-                  <div className="flex items-center gap-1.5 truncate">
-                      {PriorityIcon && <PriorityIcon className="h-3.5 w-3.5 shrink-0" />}
-                      <span className="truncate">{task.title}</span>
-                  </div>
-              </div>
-            </TooltipTrigger>
-          </PopoverTrigger>
-          <TooltipContent><p>{task.title}</p></TooltipContent>
-        </Tooltip>
-        </TooltipProvider>
-        <PopoverContent className="w-80">
-            <div className="space-y-3">
-              <Link href={`/tasks/${task.id}`} className="hover:underline">
-                <h4 className="font-bold">{task.title}</h4>
-              </Link>
-                <div className='flex justify-between items-start'>
-                <Badge variant="secondary" className={cn(taskColor, 'text-white')}>
-                    {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
-                </Badge>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  <p>Start: {task.startDate ? format(parseISO(task.startDate), 'MMM d, yyyy') : 'N/A'}</p>
-                  <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'N/A'}</p>
-                </div>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <div className='flex items-center gap-2'>
-                      {priority &&
-                          <>
-                              <priority.icon className={`h-4 w-4 ${priority.color}`} />
-                              <span>{task.priority}</span>
-                          </>
-                      }
-                  </div>
-                  <div className='flex items-center gap-2'>
-                      <span className={cn("h-2 w-2 rounded-full")} style={{ backgroundColor: allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400' }}></span>
-                      <span>{task.status}</span>
-                  </div>
-                </div>
-                <div className='flex items-center gap-2'>
-                  {(task.assignees || []).map(assignee => (
-                    <div key={assignee.id} className='flex items-center gap-2'>
-                    <Avatar className="h-7 w-7">
-                        <AvatarImage src={assignee.avatarUrl} />
-                        <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-medium">{assignee.name}</span>
-                    </div>
-                  ))}
-                </div>
-            </div>
-        </PopoverContent>
-      </Popover>
-    )
-  }
+        level++;
+      }
+      
+      // Mark the levels as occupied for the duration of this task
+      for (let i = startDayIndex; i <= endDayIndex; i++) {
+        taskLevels[i] = level;
+      }
+      
+      return { 
+        ...task, 
+        ui: { 
+          startColumn: (startDayIndex % 7) + 1, 
+          span: endDayIndex - startDayIndex + 1, 
+          level: level 
+        } 
+      };
+    }).filter((t): t is TaskWithUiProps => t !== null);
+  }, [filteredTasks, getDayIndex, calendarStart, calendarEnd]);
 
 
   return (
@@ -388,7 +306,7 @@ export default function CalendarPage() {
             
             {daysInGrid.map((day, index) => {
               const dayOfWeek = index % 7;
-              const tasksStartingOnThisDay = tasksWithUiProps.filter(t => getDayIndex(t.startDate ? parseISO(t.startDate) : parseISO(t.dueDate!)) === index);
+              const tasksForThisDay = tasksWithUiProps.filter(t => getDayIndex(t.startDate ? parseISO(t.startDate) : parseISO(t.dueDate!)) === index);
               
               return (
                 <div 
@@ -405,16 +323,86 @@ export default function CalendarPage() {
                       {format(day, 'd')}
                     </span>
                     
-                    <div className="absolute top-0 left-0 right-0 grid grid-cols-7 gap-px">
-                       {dayOfWeek === 0 && tasksWithUiProps
-                         .filter(t => {
-                           const start = t.startDate ? parseISO(t.startDate) : parseISO(t.dueDate!);
-                           return isWithinInterval(start, { start: day, end: add(day, {days: 6}) });
-                         })
-                         .map(renderTaskBar)}
-                    </div>
-                    {dayOfWeek !== 0 && tasksStartingOnThisDay.map(renderTaskBar)}
+                    <div className="absolute top-10 left-0 right-0 px-1 space-y-1">
+                      {tasksForThisDay.map(task => {
+                        const priority = priorityInfo[task.priority];
+                        const PriorityIcon = priority?.icon;
+                        const taskColor = getBrandColor(task.brandId);
 
+                        return (
+                          <Popover key={task.id}>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <PopoverTrigger asChild>
+                                  <TooltipTrigger asChild>
+                                    <div
+                                      className={cn(
+                                        'h-6 rounded-md px-2 flex items-center text-white text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity',
+                                        taskColor
+                                      )}
+                                      style={{
+                                        gridColumn: `${task.ui.startColumn} / span ${task.ui.span}`,
+                                        width: `calc(${task.ui.span * 100}% - 4px)`,
+                                        position: 'absolute',
+                                        left: `calc(${(task.ui.startColumn -1) * 100}%)`,
+                                        top: `${task.ui.level * 1.75}rem`,
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-1.5 truncate">
+                                        {PriorityIcon && <PriorityIcon className="h-3.5 w-3.5 shrink-0" />}
+                                        <span className="truncate">{task.title}</span>
+                                      </div>
+                                    </div>
+                                  </TooltipTrigger>
+                                </PopoverTrigger>
+                                <TooltipContent><p>{task.title}</p></TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <PopoverContent className="w-80">
+                              <div className="space-y-3">
+                                <Link href={`/tasks/${task.id}`} className="hover:underline">
+                                  <h4 className="font-bold">{task.title}</h4>
+                                </Link>
+                                <div className='flex justify-between items-start'>
+                                  <Badge variant="secondary" className={cn(taskColor, 'text-white')}>
+                                    {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
+                                  </Badge>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  <p>Start: {task.startDate ? format(parseISO(task.startDate), 'MMM d, yyyy') : 'N/A'}</p>
+                                  <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'N/A'}</p>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                  <div className='flex items-center gap-2'>
+                                    {priority && (
+                                      <>
+                                        <priority.icon className={`h-4 w-4 ${priority.color}`} />
+                                        <span>{task.priority}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div className='flex items-center gap-2'>
+                                    <span className={cn("h-2 w-2 rounded-full")} style={{ backgroundColor: allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400' }}></span>
+                                    <span>{task.status}</span>
+                                  </div>
+                                </div>
+                                <div className='flex items-center gap-2'>
+                                  {(task.assignees || []).map(assignee => (
+                                    <div key={assignee.id} className='flex items-center gap-2'>
+                                      <Avatar className="h-7 w-7">
+                                        <AvatarImage src={assignee.avatarUrl} />
+                                        <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                                      </Avatar>
+                                      <span className="text-sm font-medium">{assignee.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )
+                      })}
+                    </div>
                 </div>
               )
             })}
@@ -423,3 +411,4 @@ export default function CalendarPage() {
     </div>
   );
 }
+
