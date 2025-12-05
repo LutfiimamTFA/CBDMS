@@ -11,6 +11,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
   SidebarFooter,
   SidebarInset,
 } from '@/components/ui/sidebar';
@@ -25,7 +26,6 @@ import {
   ChevronDown,
   User,
   Icon as LucideIcon,
-  Settings as SettingsIcon,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -36,14 +36,16 @@ import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 
-const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
+const Icon = ({
+  name,
+  ...props
+}: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
   if (!LucideIconComponent) {
     return <lucideIcons.HelpCircle {...props} />; // Fallback Icon
   }
   return <LucideIconComponent {...props} />;
 };
-
 
 export default function MainLayout({
   children,
@@ -55,23 +57,17 @@ export default function MainLayout({
   const router = useRouter();
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
-  
-  const navItemsCollectionRef = useMemo(() => 
-    firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
-  [firestore]);
 
-  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
+  const navItemsCollectionRef = useMemo(
+    () =>
+      firestore
+        ? query(collection(firestore, 'navigationItems'), orderBy('order'))
+        : null,
+    [firestore]
+  );
 
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
-    const sections: Record<string, boolean> = {};
-    if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings')) {
-      sections.admin = true;
-    }
-    if (pathname.startsWith('/admin/settings')) {
-      sections.settings = true;
-    }
-    return sections;
-  });
+  const { data: navItemsFromDB, isLoading: isNavItemsLoading } =
+    useCollection<NavigationItem>(navItemsCollectionRef);
 
   const { navItems, itemMap, childMap } = useMemo(() => {
     if (!navItemsFromDB) return { navItems: [], itemMap: new Map(), childMap: new Map() };
@@ -80,21 +76,32 @@ export default function MainLayout({
     const childMap = new Map<string, NavigationItem[]>();
 
     items.forEach(item => {
-      if (item.parentId) {
-        if (!childMap.has(item.parentId)) {
-          childMap.set(item.parentId, []);
+      const parentId = item.path.startsWith('/admin/settings') ? 'nav_settings' : item.path.startsWith('/admin') ? 'nav_admin' : null;
+      if (parentId) {
+        if (!childMap.has(parentId)) {
+          childMap.set(parentId, []);
         }
-        childMap.get(item.parentId)!.push(item);
+        childMap.get(parentId)!.push(item);
       }
     });
-
-    return { navItems: items, itemMap, childMap };
+    
+    // Add top-level items that are folders
+    if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
+    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin'], parentId: null });
+    
+    return { navItems: Array.from(itemMap.values()), itemMap, childMap };
   }, [navItemsFromDB, t]);
 
-  const filteredNavItems = useMemo(() => {
-    if (!profile || navItems.length === 0) return [];
-    return navItems.filter(item => item.roles.includes(profile.role));
-  }, [profile, navItems]);
+
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    const sections: Record<string, boolean> = {};
+    if (pathname.startsWith('/admin/settings')) {
+      sections.nav_settings = true;
+    } else if (pathname.startsWith('/admin')) {
+      sections.nav_admin = true;
+    }
+    return sections;
+  });
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -102,47 +109,72 @@ export default function MainLayout({
     }
   }, [user, isUserLoading, router]);
 
-  const renderNavItems = useCallback((items: NavigationItem[], parentId: string | null = null) => {
-    return items
-      .filter(item => item.parentId === parentId)
-      .sort((a, b) => a.order - b.order)
-      .map(item => {
-        const children = childMap.get(item.id) || [];
-        const isActive = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path));
+  const filteredNavItems = useMemo(() => {
+    if (!profile || navItems.length === 0) return [];
+    return navItems.filter(item => item.roles.includes(profile.role));
+  }, [profile, navItems]);
 
-        if (children.length > 0) {
+
+  const renderNavItems = useCallback(
+    (items: NavigationItem[], parentId: string | null = null) => {
+      return items
+        .filter((item) => {
+           const itemParentId = item.path.startsWith('/admin/settings') ? 'nav_settings' : item.path.startsWith('/admin') ? 'nav_admin' : null;
+           return (parentId === null && itemParentId === null && !childMap.has(item.id)) || itemParentId === parentId;
+        })
+        .sort((a, b) => a.order - b.order)
+        .map((item) => {
+          const children = childMap.get(item.id) || [];
+          const isActive = pathname === item.path || (item.path !== '/' && item.path.length > 1 && pathname.startsWith(item.path));
+
+          if (children.length > 0) {
+            return (
+              <SidebarMenuItem key={item.id}>
+                <Collapsible
+                  open={openSections[item.id] || false}
+                  onOpenChange={(isOpen) =>
+                    setOpenSections((prev) => ({ ...prev, [item.id]: isOpen }))
+                  }
+                >
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={isActive}
+                      tooltip={item.label}
+                    >
+                      <Icon name={item.icon} />
+                      <span>{item.label}</span>
+                      <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-1">
+                    <SidebarMenuSub>
+                      {renderNavItems(filteredNavItems, item.id)}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
+            );
+          }
+
           return (
             <SidebarMenuItem key={item.id}>
-              <Collapsible open={openSections[item.id] || false} onOpenChange={(isOpen) => setOpenSections(prev => ({...prev, [item.id]: isOpen}))}>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton isActive={isActive} tooltip={item.label}>
-                    <Icon name={item.icon} />
-                    <span>{item.label}</span>
-                    <ChevronDown className='ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180' />
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-1">
-                  <SidebarMenuSub>
-                    {renderNavItems(filteredNavItems, item.id)}
-                  </SidebarMenuSub>
-                </CollapsibleContent>
-              </Collapsible>
+              <Link href={item.path} passHref>
+                <SidebarMenuButton
+                  isActive={isActive}
+                  tooltip={item.label}
+                  variant={parentId ? 'ghost' : 'default'}
+                  size={parentId ? 'sm' : 'default'}
+                >
+                  <Icon name={item.icon} />
+                  <span>{item.label}</span>
+                </SidebarMenuButton>
+              </Link>
             </SidebarMenuItem>
           );
-        }
-
-        return (
-          <SidebarMenuItem key={item.id}>
-            <Link href={item.path} passHref>
-                <SidebarMenuButton isActive={isActive} tooltip={item.label} variant={parentId ? "ghost" : "default"} size={parentId ? "sm" : "default"}>
-                    <Icon name={item.icon}/>
-                    <span>{item.label}</span>
-                </SidebarMenuButton>
-            </Link>
-          </SidebarMenuItem>
-        );
-      });
-  }, [filteredNavItems, childMap, pathname, openSections, t]);
+        });
+    },
+    [filteredNavItems, childMap, pathname, openSections, t]
+  );
 
   const isLoading = isUserLoading || isNavItemsLoading;
 
@@ -157,7 +189,7 @@ export default function MainLayout({
   if (!user || !profile) {
     return null;
   }
-  
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -165,9 +197,7 @@ export default function MainLayout({
           <Logo />
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>
-            {renderNavItems(filteredNavItems)}
-          </SidebarMenu>
+          <SidebarMenu>{renderNavItems(filteredNavItems)}</SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
