@@ -99,6 +99,15 @@ export default function MainLayout({
   const hasAdminItems = filteredNavItems.adminItems.length > 0;
   const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
 
+  const translatedNavItems = useMemo(() => {
+    const translate = (items: NavigationItem[]) => items.map(item => ({...item, label: t(item.label as any) || item.label}));
+    return {
+      mainItems: translate(filteredNavItems.mainItems),
+      adminItems: translate(filteredNavItems.adminItems),
+      settingsItems: translate(filteredNavItems.settingsItems),
+    }
+  }, [filteredNavItems, t]);
+
   return (
     <SidebarProvider>
       <Sidebar>
@@ -107,7 +116,7 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {filteredNavItems.mainItems.map((item) => (
+            {translatedNavItems.mainItems.map((item) => (
               <SidebarMenuItem key={item.id}>
                 <Link href={item.path}>
                   <SidebarMenuButton isActive={pathname.startsWith(item.path)} tooltip={item.label}>
@@ -142,7 +151,7 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                    {filteredNavItems.adminItems.map((item) => (
+                    {translatedNavItems.adminItems.map((item) => (
                        <SidebarMenuItem key={item.id}>
                           <Link href={item.path}>
                             <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
@@ -164,11 +173,11 @@ export default function MainLayout({
                     <SidebarMenuButton
                       isActive={pathname.startsWith('/admin/settings')}
                       className="w-full justify-between"
-                      tooltip='Settings'
+                      tooltip={t('nav.settings')}
                     >
                       <div className="flex items-center gap-2">
                         <SettingsIcon />
-                        <span>Settings</span>
+                        <span>{t('nav.settings')}</span>
                       </div>
                       <ChevronDown
                         className={cn(
@@ -181,7 +190,7 @@ export default function MainLayout({
                 </SidebarMenuItem>
                 <CollapsibleContent className="pl-6">
                   <SidebarMenu>
-                      {filteredNavItems.settingsItems.map((item) => (
+                      {translatedNavItems.settingsItems.map((item) => (
                          <SidebarMenuItem key={item.id}>
                           <Link href={item.path}>
                             <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === item.path} className="w-full justify-start">

@@ -4,7 +4,7 @@ import type { NavigationItem } from './types';
 export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_task_board',
-    label: 'Task Board',
+    label: 'nav.board',
     path: '/dashboard',
     icon: 'KanbanSquare',
     order: 1,
@@ -12,7 +12,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_list',
-    label: 'List',
+    label: 'nav.list',
     path: '/tasks',
     icon: 'ClipboardList',
     order: 2,
@@ -52,7 +52,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_performance_analysis',
-    label: 'Performance Analysis',
+    label: 'nav.reports',
     path: '/reports',
     icon: 'FileText',
     order: 7,

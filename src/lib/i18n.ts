@@ -115,6 +115,8 @@ export const ui = {
     'addtask.form.timeestimate': 'Time Estimate (hours)',
     'addtask.form.timeestimate.placeholder': 'e.g. 8',
     'addtask.form.create': 'Create Task',
+    'dashboard.welcome': 'Welcome, {name}!',
+    'dashboard.role': 'You are logged in as {role}. Happy working and have a productive day!',
   },
   id: {
     'nav.dashboard': 'Dasbor',
@@ -224,7 +226,7 @@ export const ui = {
     'addtask.form.timeestimate': 'Estimasi Waktu (jam)',
     'addtask.form.timeestimate.placeholder': 'contoh: 8',
     'addtask.form.create': 'Buat Tugas',
+    'dashboard.welcome': 'Selamat Datang, {name}!',
+    'dashboard.role': 'Anda masuk sebagai {role}. Selamat bekerja dan semoga harimu produktif!',
   },
 } as const;
-
-    

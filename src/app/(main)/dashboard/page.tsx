@@ -9,10 +9,12 @@ import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { useI18n } from '@/context/i18n-provider';
 
 export default function DashboardPage() {
   const { profile, isLoading: isProfileLoading } = useUserProfile();
   const firestore = useFirestore();
+  const { t } = useI18n();
 
   // Query is now optimized to filter tasks on the server-side based on role.
   const tasksQuery = useMemo(() => {
@@ -37,7 +39,7 @@ export default function DashboardPage() {
   return (
     <div className="flex h-svh flex-col bg-background">
       <Header
-        title="Task Board"
+        title={t('nav.board')}
         actions={
           <div className="flex items-center gap-2">
             {profile?.role !== 'Super Admin' && <SmartSuggestions />}
@@ -52,9 +54,9 @@ export default function DashboardPage() {
         ) : (
           <div className="flex h-full flex-col">
             <div className="mb-6">
-              <h2 className="text-2xl font-bold tracking-tight">Selamat Datang, {profile?.name}!</h2>
+              <h2 className="text-2xl font-bold tracking-tight">{t('dashboard.welcome').replace('{name}', profile?.name || '')}</h2>
               <p className="text-muted-foreground">
-                Anda masuk sebagai {profile?.role}. Selamat bekerja dan semoga harimu produktif!
+                {t('dashboard.role').replace('{role}', profile?.role || '')}
               </p>
             </div>
             <div className="flex-1 overflow-hidden">
