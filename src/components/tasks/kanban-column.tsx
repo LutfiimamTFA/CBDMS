@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -67,7 +68,7 @@ export function KanbanColumn({
       onDrop={handleDrop}
       className={cn(
         "flex h-full w-80 shrink-0 flex-col rounded-lg bg-secondary/50 transition-colors",
-        isDragOver && canDrag && "bg-primary/10"
+        isDragOver && canDrag && "border-2 border-dashed border-primary bg-primary/10"
       )}
     >
       <div className="flex items-center justify-between p-4 border-b">
@@ -127,6 +128,7 @@ export function KanbanColumn({
               draggable={canDrag}
               onDragStart={(e) => onDragStart(e, task.id)}
               onClick={() => router.push(`/tasks/${task.id}`)}
+              className="transition-opacity"
             >
               <TaskCard 
                   task={task} 
@@ -134,6 +136,9 @@ export function KanbanColumn({
               />
             </div>
           ))}
+           {isDragOver && (
+            <div className="w-full h-24 rounded-lg bg-primary/20 border-2 border-dashed border-primary animate-pulse mt-3" />
+          )}
         </div>
       </ScrollArea>
     </div>
