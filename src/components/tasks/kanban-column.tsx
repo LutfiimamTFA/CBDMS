@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { TaskCard } from './task-card';
 import type { Task, User, WorkflowStatus } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,18 +19,42 @@ interface KanbanColumnProps {
   tasks: Task[];
   onDrop: (e: React.DragEvent<HTMLDivElement>, status: string) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
+  onDragEnd: () => void;
   canDrag: boolean;
+  draggingTaskId: string | null;
 }
+
+const getDragAfterElement = (container: HTMLElement, y: number): HTMLElement | null => {
+    const draggableElements = Array.from(container.querySelectorAll('[draggable="true"]:not([data-dragging="true"])')) as HTMLElement[];
+
+    return draggableElements.reduce(
+        (closest, child) => {
+            const box = child.getBoundingClientRect();
+            const offset = y - box.top - box.height / 2;
+            if (offset < 0 && offset > closest.offset) {
+                return { offset: offset, element: child };
+            } else {
+                return closest;
+            }
+        },
+        { offset: Number.NEGATIVE_INFINITY, element: null as HTMLElement | null }
+    ).element;
+};
+
 
 export function KanbanColumn({
   status,
   tasks,
   onDrop,
   onDragStart,
+  onDragEnd,
   canDrag,
+  draggingTaskId,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
+  const columnRef = useRef<HTMLDivElement>(null);
+  const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null);
 
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
@@ -49,15 +72,27 @@ export function KanbanColumn({
     if (!canDrag) return;
     e.preventDefault();
     setIsDragOver(true);
+
+    if (columnRef.current) {
+        const afterElement = getDragAfterElement(columnRef.current, e.clientY);
+        if (afterElement) {
+             const index = Array.from(columnRef.current.querySelectorAll('[draggable="true"]')).indexOf(afterElement);
+             setDropIndicatorIndex(index);
+        } else {
+            setDropIndicatorIndex(tasks.length);
+        }
+    }
   };
 
   const handleDragLeave = () => {
     setIsDragOver(false);
+    setDropIndicatorIndex(null);
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     if (!canDrag) return;
     setIsDragOver(false);
+    setDropIndicatorIndex(null);
     onDrop(e, status.name);
   };
 
@@ -121,23 +156,32 @@ export function KanbanColumn({
       <ScrollArea 
         className={`flex-1`}
       >
-        <div className="flex flex-col gap-3 p-4">
-          {tasks.map((task, index) => (
-            <div 
-              key={task.id} 
-              draggable={canDrag}
-              onDragStart={(e) => onDragStart(e, task.id)}
-              onClick={() => router.push(`/tasks/${task.id}`)}
-              className="transition-opacity"
-            >
-              <TaskCard 
-                  task={task} 
-                  draggable={canDrag}
-              />
-            </div>
-          ))}
-           {isDragOver && (
-            <div className="w-full h-24 rounded-lg bg-primary/20 border-2 border-dashed border-primary animate-pulse mt-3" />
+        <div ref={columnRef} className="flex flex-col gap-3 p-4">
+          {tasks.map((task, index) => {
+            const isDragging = draggingTaskId === task.id;
+            return (
+                <React.Fragment key={task.id}>
+                    {dropIndicatorIndex === index && (
+                        <div className="h-24 rounded-lg bg-primary/20 border-2 border-dashed border-primary transition-all duration-200" />
+                    )}
+                    <div 
+                      draggable={canDrag}
+                      onDragStart={(e) => onDragStart(e, task.id)}
+                      onDragEnd={onDragEnd}
+                      onClick={() => router.push(`/tasks/${task.id}`)}
+                      className={cn("transition-opacity", isDragging && "opacity-30")}
+                      data-dragging={isDragging}
+                    >
+                      <TaskCard 
+                          task={task} 
+                          draggable={canDrag}
+                      />
+                    </div>
+                </React.Fragment>
+            );
+          })}
+          {dropIndicatorIndex === tasks.length && (
+               <div className="h-24 rounded-lg bg-primary/20 border-2 border-dashed border-primary transition-all duration-200" />
           )}
         </div>
       </ScrollArea>

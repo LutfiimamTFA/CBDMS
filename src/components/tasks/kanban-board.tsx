@@ -19,6 +19,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const { toast } = useToast();
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -43,7 +44,12 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
     e.dataTransfer.setData('taskId', taskId);
+    setDraggingTaskId(taskId);
   };
+  
+  const handleDragEnd = () => {
+    setDraggingTaskId(null);
+  }
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag || !firestore || !profile) return;
@@ -58,12 +64,16 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
       const taskRef = doc(firestore, 'tasks', taskId);
       
-      const newActivity: Activity = {
-        id: `act-${Date.now()}`,
-        user: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
-        action: `moved task from "${task.status}" to "${newStatus}"`,
-        timestamp: new Date().toISOString(),
+      const createActivity = (user: User, action: string): Activity => {
+        return {
+          id: `act-${Date.now()}`,
+          user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+          action: action,
+          timestamp: new Date().toISOString(),
+        };
       };
+      
+      const newActivity = createActivity(profile, `moved task from "${task.status}" to "${newStatus}"`);
       
       const updates: Partial<Task> = {
         status: newStatus,
@@ -72,7 +82,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
         updatedAt: serverTimestamp() as any,
       };
 
-      if (task.status === 'To Do' && newStatus !== 'To Do') {
+      if (task.status === 'To Do' && newStatus !== 'To Do' && !task.actualStartDate) {
         updates.actualStartDate = new Date().toISOString();
       }
       
@@ -119,7 +129,9 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
             tasks={tasks.filter((task) => task.status === status.name)}
             onDrop={handleDrop}
             onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
             canDrag={canDrag}
+            draggingTaskId={draggingTaskId}
           />
         ))}
       </div>
