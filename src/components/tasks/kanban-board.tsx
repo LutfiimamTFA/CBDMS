@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -62,7 +61,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
       const newActivity: Activity = {
         id: `act-${Date.now()}`,
         user: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
-        action: `pindah tugas dari "${task.status}" menjadi "${newStatus}"`,
+        action: `moved task from "${task.status}" to "${newStatus}"`,
         timestamp: new Date().toISOString(),
       };
       
@@ -84,8 +83,8 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
       try {
         await updateDoc(taskRef, updates);
         toast({
-            title: "Tugas Diperbarui",
-            description: `Tugas dipindahkan ke "${newStatus}".`
+            title: "Task Updated",
+            description: `Task moved to "${newStatus}".`
         });
       } catch (error) {
         console.error("Failed to update task status:", error);
@@ -95,8 +94,8 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
         );
         toast({
             variant: "destructive",
-            title: "Pembaruan Gagal",
-            description: "Tidak dapat memindahkan tugas. Silakan coba lagi."
+            title: "Update Failed",
+            description: "Could not move the task. Please try again."
         });
       }
     }

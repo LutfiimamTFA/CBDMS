@@ -1,4 +1,3 @@
-
 'use client';
 import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
@@ -45,9 +44,9 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
     >
       <CardContent className="p-4 space-y-3">
         <div className="flex items-start justify-between">
-          <Link href={`/tasks/${task.id}`} onClick={(e) => e.stopPropagation()} className="font-medium cursor-pointer hover:underline pr-2">
+          <div className="font-medium cursor-pointer pr-2">
             <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
-          </Link>
+          </div>
           <TooltipProvider>
               <Tooltip>
                   <TooltipTrigger asChild>
