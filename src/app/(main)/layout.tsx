@@ -75,6 +75,14 @@ export default function MainLayout({
     };
   }, [profile, navItems]);
 
+  const translatedNavItems = useMemo(() => {
+    const translate = (items: NavigationItem[]) => items.map(item => ({...item, label: t(item.label as any) || item.label}));
+    return {
+      mainItems: translate(filteredNavItems.mainItems),
+      adminItems: translate(filteredNavItems.adminItems),
+      settingsItems: translate(filteredNavItems.settingsItems),
+    }
+  }, [filteredNavItems, t]);
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -83,6 +91,8 @@ export default function MainLayout({
   }, [user, isUserLoading, router]);
 
   const isLoading = isUserLoading || isNavItemsLoading;
+  const hasAdminItems = filteredNavItems.adminItems.length > 0;
+  const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
 
   if (isLoading) {
     return (
@@ -96,18 +106,6 @@ export default function MainLayout({
     return null;
   }
   
-  const hasAdminItems = filteredNavItems.adminItems.length > 0;
-  const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
-
-  const translatedNavItems = useMemo(() => {
-    const translate = (items: NavigationItem[]) => items.map(item => ({...item, label: t(item.label as any) || item.label}));
-    return {
-      mainItems: translate(filteredNavItems.mainItems),
-      adminItems: translate(filteredNavItems.adminItems),
-      settingsItems: translate(filteredNavItems.settingsItems),
-    }
-  }, [filteredNavItems, t]);
-
   return (
     <SidebarProvider>
       <Sidebar>
