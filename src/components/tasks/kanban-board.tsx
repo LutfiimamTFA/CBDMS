@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './kanban-column';
-import type { Task, WorkflowStatus, Activity } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -62,20 +62,30 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
       const newActivity: Activity = {
         id: `act-${Date.now()}`,
         user: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
-        action: `moved task from "${task.status}" to "${newStatus}"`,
+        action: `pindah tugas dari "${task.status}" menjadi "${newStatus}"`,
         timestamp: new Date().toISOString(),
       };
       
+      const updates: Partial<Task> = {
+        status: newStatus,
+        activities: [...(task.activities || []), newActivity],
+        lastActivity: newActivity,
+        updatedAt: serverTimestamp() as any,
+      };
+
+      if (task.status === 'To Do' && newStatus !== 'To Do') {
+        updates.actualStartDate = new Date().toISOString();
+      }
+      
+      if (newStatus === 'Done') {
+        updates.actualCompletionDate = new Date().toISOString();
+      }
+
       try {
-        await updateDoc(taskRef, { 
-            status: newStatus,
-            activities: [...(task.activities || []), newActivity],
-            lastActivity: newActivity,
-            updatedAt: serverTimestamp(),
-        });
+        await updateDoc(taskRef, updates);
         toast({
-            title: "Task Updated",
-            description: `Task moved to "${newStatus}".`
+            title: "Tugas Diperbarui",
+            description: `Tugas dipindahkan ke "${newStatus}".`
         });
       } catch (error) {
         console.error("Failed to update task status:", error);
@@ -85,8 +95,8 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
         );
         toast({
             variant: "destructive",
-            title: "Update Failed",
-            description: "Could not move the task. Please try again."
+            title: "Pembaruan Gagal",
+            description: "Tidak dapat memindahkan tugas. Silakan coba lagi."
         });
       }
     }
