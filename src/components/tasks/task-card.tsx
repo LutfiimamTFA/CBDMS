@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { priorityInfo, formatHours, cn, getBrandColor } from '@/lib/utils';
+import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,6 +36,9 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   }, [task.status, task.actualCompletionDate, task.dueDate]);
 
   const brandColor = getBrandColor(task.brandId);
+
+  const assignees = task.assignees || [];
+  const firstAssignee = assignees[0];
 
   return (
     <Card
@@ -73,34 +76,28 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       )}
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <div className="flex items-center -space-x-2">
-            <TooltipProvider>
-              {task.assignees?.slice(0, 2).map((assignee) => (
-                <Tooltip key={assignee.id}>
-                  <TooltipTrigger asChild>
+          <div className="flex items-center gap-2">
+            {firstAssignee && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger className="flex items-center gap-2">
                     <Avatar className="h-7 w-7 border-2 border-background">
-                      <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
-                      <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                      <AvatarImage src={firstAssignee.avatarUrl} alt={firstAssignee.name} />
+                      <AvatarFallback>{firstAssignee.name.charAt(0)}</AvatarFallback>
                     </Avatar>
+                    {assignees.length === 1 && (
+                      <span className="font-medium text-foreground truncate">{firstAssignee.name.split(' ')[0]}</span>
+                    )}
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{assignee.name}</p>
+                    {assignees.map(a => <p key={a.id}>{a.name}</p>)}
                   </TooltipContent>
                 </Tooltip>
-              ))}
-              {task.assignees && task.assignees.length > 2 && (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Avatar className="h-7 w-7 border-2 border-background">
-                            <AvatarFallback>+{task.assignees.length - 2}</AvatarFallback>
-                        </Avatar>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {task.assignees.slice(2).map(a => <p key={a.id}>{a.name}</p>)}
-                    </TooltipContent>
-                </Tooltip>
-              )}
-            </TooltipProvider>
+              </TooltipProvider>
+            )}
+            {assignees.length > 1 && (
+                <Badge variant="secondary" className="font-normal">+{assignees.length - 1}</Badge>
+            )}
           </div>
           <div className="flex items-center gap-3">
               {completionStatus && (
@@ -136,3 +133,9 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
     </Card>
   );
 }
+
+function formatHours(hours: number = 0) {
+    const h = Math.floor(hours);
+    const m = Math.floor((hours - h) * 60);
+    return `${h}h ${m}m`;
+};
