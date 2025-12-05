@@ -42,14 +42,14 @@ export function TaskStatusChart({ tasks }: { tasks: Task[] }) {
   
   if (totalTasks === 0) {
       return (
-          <div className="h-[250px] w-full flex items-center justify-center text-muted-foreground">
+          <div className="h-full w-full flex items-center justify-center text-muted-foreground">
               No tasks found in the selected period.
           </div>
       )
   }
 
   return (
-    <div className="h-[250px] w-full relative">
+    <div className="h-full w-full relative">
       <ChartContainer
         config={chartConfig}
         className="mx-auto aspect-square h-full"

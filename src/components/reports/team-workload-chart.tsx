@@ -43,14 +43,13 @@ export function TeamWorkloadChart({
 
   if (!workloadData.length) {
     return (
-      <div className="h-[250px] w-full flex items-center justify-center text-muted-foreground">
+      <div className="h-full w-full flex items-center justify-center text-muted-foreground">
           No active tasks assigned to team members in the selected period.
       </div>
     );
   }
 
   return (
-    <div className="h-[250px] w-full">
       <ChartContainer config={chartConfig} className="h-full w-full">
         <BarChart
           accessibilityLayer
@@ -77,6 +76,5 @@ export function TeamWorkloadChart({
           <Bar dataKey="tasks" fill="var(--color-tasks)" radius={4} />
         </BarChart>
       </ChartContainer>
-    </div>
   );
 }

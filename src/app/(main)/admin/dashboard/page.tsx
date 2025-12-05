@@ -136,7 +136,7 @@ export default function AdminDashboardPage() {
                               Number of active tasks assigned to each team member.
                           </CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className='h-[250px]'>
                           <TeamWorkloadChart tasks={tasks || []} users={users || []} />
                       </CardContent>
                   </Card>
@@ -147,7 +147,7 @@ export default function AdminDashboardPage() {
                               Proportion of tasks in each status category.
                           </CardDescription>
                       </CardHeader>
-                      <CardContent>
+                      <CardContent className='h-[250px]'>
                           <TaskStatusChart tasks={tasks || []} />
                       </CardContent>
                   </Card>

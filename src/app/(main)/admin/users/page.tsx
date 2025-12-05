@@ -415,9 +415,9 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead className="hidden lg:table-cell">Created At</TableHead>
                 {canManageUsers && <TableHead><span className="sr-only">Actions</span></TableHead>}
               </TableRow>
             </TableHeader>
@@ -451,12 +451,18 @@ export default function UsersPage() {
                         </TableRow>
                       )}
                       <TableRow data-state={isCurrentUser ? 'selected' : ''}>
-                        <TableCell className="font-medium">{user.name}{isCurrentUser && " (You)"}</TableCell>
-                        <TableCell>{user.email}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className='flex items-center gap-2'>
+                            <span>{user.name}</span>
+                            {isCurrentUser && <Badge variant='outline'>(You)</Badge>}
+                          </div>
+                          <div className='text-muted-foreground text-sm md:hidden'>{user.email}</div>
+                        </TableCell>
+                        <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                         <TableCell>
                             <Badge className={roleColors[user.role]}>{user.role}</Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="hidden lg:table-cell">
                           {user.createdAt ? format(parseISO(user.createdAt), 'PPpp') : 'N/A'}
                         </TableCell>
                         {canManageUsers && (

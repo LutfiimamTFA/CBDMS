@@ -36,7 +36,6 @@ export function HoursByPriorityChart({ tasks }: { tasks: Task[] }) {
   }
 
   return (
-    <div className="h-[250px] w-full">
       <ChartContainer config={chartConfig} className="h-full w-full">
         <BarChart accessibilityLayer data={data}>
           <CartesianGrid vertical={false} />
@@ -61,6 +60,5 @@ export function HoursByPriorityChart({ tasks }: { tasks: Task[] }) {
           </Bar>
         </BarChart>
       </ChartContainer>
-    </div>
   );
 }
