@@ -1,3 +1,4 @@
+
 'use client';
 import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
@@ -71,21 +72,33 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center -space-x-2">
-          <TooltipProvider>
-              {task.assignees?.map((assignee) => (
-              <Tooltip key={assignee.id}>
+            <TooltipProvider>
+              {task.assignees?.slice(0, 2).map((assignee) => (
+                <Tooltip key={assignee.id}>
                   <TooltipTrigger asChild>
-                  <Avatar className="h-7 w-7 border-2 border-background">
+                    <Avatar className="h-7 w-7 border-2 border-background">
                       <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
                       <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
+                    </Avatar>
                   </TooltipTrigger>
                   <TooltipContent>
-                  <p>{assignee.name}</p>
+                    <p>{assignee.name}</p>
                   </TooltipContent>
-              </Tooltip>
+                </Tooltip>
               ))}
-          </TooltipProvider>
+              {task.assignees && task.assignees.length > 2 && (
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Avatar className="h-7 w-7 border-2 border-background">
+                            <AvatarFallback>+{task.assignees.length - 2}</AvatarFallback>
+                        </Avatar>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        {task.assignees.slice(2).map(a => <p key={a.id}>{a.name}</p>)}
+                    </TooltipContent>
+                </Tooltip>
+              )}
+            </TooltipProvider>
           </div>
           <div className="flex items-center gap-3">
               {completionStatus && (
