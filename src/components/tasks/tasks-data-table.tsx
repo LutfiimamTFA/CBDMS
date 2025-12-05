@@ -556,7 +556,7 @@ export function TasksDataTable() {
         const activity = row.original.lastActivity;
         if (!activity || !activity.timestamp) return <span className="text-muted-foreground">-</span>;
         
-        const time = format(new Date(activity.timestamp), "PPpp");
+        const time = format(new Date(activity.timestamp), "PP, HH:mm");
         const actionText = `${activity.user.name} ${activity.action}`
 
         return (
@@ -886,7 +886,7 @@ export function TasksDataTable() {
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp ? format(new Date(activity.timestamp), 'PPpp') : 'just now'}
+                          {activity.timestamp ? format(new Date(activity.timestamp), 'PP, HH:mm') : 'just now'}
                         </p>
                       </div>
                     </div>

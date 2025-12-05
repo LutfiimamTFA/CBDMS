@@ -147,7 +147,7 @@ export function NotificationBell() {
               <p className="text-sm leading-tight">{notif.message}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {notif.createdAt?.toDate &&
-                  format(notif.createdAt.toDate(), 'PPpp')}
+                  format(notif.createdAt.toDate(), 'PP, HH:mm')}
               </p>
             </div>
           </DropdownMenuItem>
