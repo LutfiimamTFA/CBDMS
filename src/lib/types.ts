@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -178,7 +179,6 @@ export type StatusInfo = {
 
 export type PermissionSettings = {
   Manager: {
-    // Action Permissions
     canManageUsers: boolean;
     canDeleteUsers: boolean;
     canCreateTasks: boolean;
@@ -186,14 +186,12 @@ export type PermissionSettings = {
     canViewReports: boolean;
   };
   Employee: {
-    // Action Permissions
     canCreateTasks: boolean;
     canChangeTaskStatus: boolean;
     canTrackTime: boolean;
     canCreateDailyReports: boolean;
   };
   Client: {
-    // Action Permissions
     canViewAssignedTasks: boolean;
     canCommentOnTasks: boolean;
     canApproveContent: true,
@@ -207,6 +205,7 @@ export type NavigationItem = {
   icon: string;
   order: number;
   roles: ('Super Admin' | 'Manager' | 'Employee' | 'Client')[];
+  parentId: string | null;
 }
 
 export type Notification = {

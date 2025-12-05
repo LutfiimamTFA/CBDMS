@@ -31,7 +31,7 @@ import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
@@ -55,34 +55,46 @@ export default function MainLayout({
   const router = useRouter();
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
-
-  const [isAdminOpen, setIsAdminOpen] = useState(pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings'));
-  const [isSettingsOpen, setIsSettingsOpen] = useState(pathname.startsWith('/admin/settings'));
   
   const navItemsCollectionRef = useMemo(() => 
     firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
   [firestore]);
 
-  const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
+  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
+
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
+    const sections: Record<string, boolean> = {};
+    if (pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings')) {
+      sections.admin = true;
+    }
+    if (pathname.startsWith('/admin/settings')) {
+      sections.settings = true;
+    }
+    return sections;
+  });
+
+  const { navItems, itemMap, childMap } = useMemo(() => {
+    if (!navItemsFromDB) return { navItems: [], itemMap: new Map(), childMap: new Map() };
+    const items = navItemsFromDB.map(item => ({...item, label: t(item.label as any) || item.label}));
+    const itemMap = new Map(items.map(item => [item.id, item]));
+    const childMap = new Map<string, NavigationItem[]>();
+
+    items.forEach(item => {
+      if (item.parentId) {
+        if (!childMap.has(item.parentId)) {
+          childMap.set(item.parentId, []);
+        }
+        childMap.get(item.parentId)!.push(item);
+      }
+    });
+
+    return { navItems: items, itemMap, childMap };
+  }, [navItemsFromDB, t]);
 
   const filteredNavItems = useMemo(() => {
-    if (!profile || !navItems) return { mainItems: [], adminItems: [], settingsItems: [] };
-    
-    return {
-      mainItems: navItems.filter(item => !item.path.startsWith('/admin') && item.roles.includes(profile.role)),
-      adminItems: navItems.filter(item => item.path.startsWith('/admin') && !item.path.startsWith('/admin/settings') && item.roles.includes(profile.role)),
-      settingsItems: navItems.filter(item => item.path.startsWith('/admin/settings') && item.roles.includes(profile.role)),
-    };
+    if (!profile || navItems.length === 0) return [];
+    return navItems.filter(item => item.roles.includes(profile.role));
   }, [profile, navItems]);
-
-  const translatedNavItems = useMemo(() => {
-    const translate = (items: NavigationItem[]) => items.map(item => ({...item, label: t(item.label as any) || item.label}));
-    return {
-      mainItems: translate(filteredNavItems.mainItems),
-      adminItems: translate(filteredNavItems.adminItems),
-      settingsItems: translate(filteredNavItems.settingsItems),
-    }
-  }, [filteredNavItems, t]);
 
   useEffect(() => {
     if (!isUserLoading && !user) {
@@ -90,9 +102,49 @@ export default function MainLayout({
     }
   }, [user, isUserLoading, router]);
 
+  const renderNavItems = useCallback((items: NavigationItem[], parentId: string | null = null) => {
+    return items
+      .filter(item => item.parentId === parentId)
+      .sort((a, b) => a.order - b.order)
+      .map(item => {
+        const children = childMap.get(item.id) || [];
+        const isActive = pathname === item.path || (item.path !== '/' && pathname.startsWith(item.path));
+
+        if (children.length > 0) {
+          return (
+            <SidebarMenuItem key={item.id}>
+              <Collapsible open={openSections[item.id] || false} onOpenChange={(isOpen) => setOpenSections(prev => ({...prev, [item.id]: isOpen}))}>
+                <CollapsibleTrigger asChild>
+                  <SidebarMenuButton isActive={isActive} tooltip={item.label}>
+                    <Icon name={item.icon} />
+                    <span>{item.label}</span>
+                    <ChevronDown className='ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180' />
+                  </SidebarMenuButton>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-1">
+                  <SidebarMenuSub>
+                    {renderNavItems(filteredNavItems, item.id)}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              </Collapsible>
+            </SidebarMenuItem>
+          );
+        }
+
+        return (
+          <SidebarMenuItem key={item.id}>
+            <Link href={item.path} passHref>
+                <SidebarMenuButton isActive={isActive} tooltip={item.label} variant={parentId ? "ghost" : "default"} size={parentId ? "sm" : "default"}>
+                    <Icon name={item.icon}/>
+                    <span>{item.label}</span>
+                </SidebarMenuButton>
+            </Link>
+          </SidebarMenuItem>
+        );
+      });
+  }, [filteredNavItems, childMap, pathname, openSections, t]);
+
   const isLoading = isUserLoading || isNavItemsLoading;
-  const hasAdminItems = filteredNavItems.adminItems.length > 0;
-  const hasSettingsItems = filteredNavItems.settingsItems.length > 0;
 
   if (isLoading) {
     return (
@@ -114,94 +166,7 @@ export default function MainLayout({
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {translatedNavItems.mainItems.map((item) => (
-              <SidebarMenuItem key={item.id}>
-                <Link href={item.path}>
-                  <SidebarMenuButton isActive={pathname.startsWith(item.path)} tooltip={item.label}>
-                    <Icon name={item.icon}/>
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </Link>
-              </SidebarMenuItem>
-            ))}
-
-            {hasAdminItems && (
-              <Collapsible open={isAdminOpen} onOpenChange={setIsAdminOpen}>
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      isActive={pathname.startsWith('/admin') && !pathname.startsWith('/admin/settings')}
-                      className="w-full justify-between"
-                      tooltip='Admin'
-                    >
-                      <div className="flex items-center gap-2">
-                        <Shield />
-                        <span>Admin</span>
-                      </div>
-                      <ChevronDown
-                        className={cn(
-                          'h-4 w-4 transition-transform',
-                          isAdminOpen && 'rotate-180'
-                        )}
-                      />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                </SidebarMenuItem>
-                <CollapsibleContent className="pl-6">
-                  <SidebarMenu>
-                    {translatedNavItems.adminItems.map((item) => (
-                       <SidebarMenuItem key={item.id}>
-                          <Link href={item.path}>
-                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname.startsWith(item.path)} className="w-full justify-start">
-                              <Icon name={item.icon}/>
-                              <span>{item.label}</span>
-                            </SidebarMenuButton>
-                          </Link>
-                        </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
-            
-            {hasSettingsItems && (
-              <Collapsible open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      isActive={pathname.startsWith('/admin/settings')}
-                      className="w-full justify-between"
-                      tooltip={t('nav.settings')}
-                    >
-                      <div className="flex items-center gap-2">
-                        <SettingsIcon />
-                        <span>{t('nav.settings')}</span>
-                      </div>
-                      <ChevronDown
-                        className={cn(
-                          'h-4 w-4 transition-transform',
-                          isSettingsOpen && 'rotate-180'
-                        )}
-                      />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                </SidebarMenuItem>
-                <CollapsibleContent className="pl-6">
-                  <SidebarMenu>
-                      {translatedNavItems.settingsItems.map((item) => (
-                         <SidebarMenuItem key={item.id}>
-                          <Link href={item.path}>
-                            <SidebarMenuButton variant="ghost" size="sm" isActive={pathname === item.path} className="w-full justify-start">
-                                <Icon name={item.icon} />
-                                <span>{item.label}</span>
-                            </SidebarMenuButton>
-                          </Link>
-                        </SidebarMenuItem>
-                      ))}
-                  </SidebarMenu>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
+            {renderNavItems(filteredNavItems)}
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter>
@@ -210,10 +175,10 @@ export default function MainLayout({
               <Link href="/settings">
                 <SidebarMenuButton
                   isActive={pathname === '/settings'}
-                  tooltip={'Profile'}
+                  tooltip={t('nav.profile')}
                 >
                   <User />
-                  <span>{'Profile'}</span>
+                  <span>{t('nav.profile')}</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
