@@ -229,7 +229,7 @@ export function TaskDetailsSheet({
         if (!firestore || !currentUser) return;
         form.setValue('priority', priority);
         const taskRef = doc(firestore, 'tasks', initialTask.id);
-        const newActivity = createActivity(currentUser, `set priority to ${priority}`);
+        const newActivity = createActivity(currentUser, `set priority from "${currentPriority}" to "${priority}"`);
         try {
             await updateDoc(taskRef, {
                 priority: priority,
@@ -462,9 +462,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
     const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
         const changes: string[] = [];
+        const oldDueDate = oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'MMM d, yyyy') : 'no due date';
+        const newDueDate = newData.dueDate ? format(parseISO(newData.dueDate), 'MMM d, yyyy') : 'no due date';
+
         if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
         if (oldTask.description !== (newData.description || '')) changes.push('updated the description');
-        if ((oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'yyyy-MM-dd') : undefined) !== (newData.dueDate || undefined)) changes.push('updated the due date');
+        if (oldDueDate !== newDueDate) changes.push(`changed the due date from ${oldDueDate} to ${newDueDate}`);
         
         return changes.length > 0 ? changes.join(', ') : null;
     };

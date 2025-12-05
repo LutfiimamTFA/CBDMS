@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -315,7 +314,7 @@ export default function CalendarPage() {
 
     const taskRef = doc(firestore, 'tasks', taskId);
 
-    const createActivity = (user: User, action: string): Activity => {
+      const createActivity = (user: User, action: string): Activity => {
         return {
           id: `act-${Date.now()}`,
           user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
@@ -324,7 +323,9 @@ export default function CalendarPage() {
         };
       };
       
-    const newActivity = createActivity(currentUser, `rescheduled task from ${format(originalStart, 'MMM d')} to ${format(newStartDate, 'MMM d')}`);
+      const oldDateFormatted = format(originalStart, 'MMM d');
+      const newDateFormatted = format(newStartDate, 'MMM d');
+      const newActivity = createActivity(currentUser, `rescheduled task from ${oldDateFormatted} to ${newDateFormatted}`);
 
     try {
       await updateDoc(taskRef, {

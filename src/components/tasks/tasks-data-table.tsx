@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -292,7 +291,7 @@ export function TasksDataTable() {
 
     const applyPriorityChange = (id: string, priority: Priority) => {
         const taskRef = doc(firestore, 'tasks', id);
-        const newActivity = createActivity(profile, `set priority to ${priority}`);
+        const newActivity = createActivity(profile, `set priority from "${currentPriority}" to "${priority}"`);
         const updatedActivities = [...(task.activities || []), newActivity];
         
         updateDocumentNonBlocking(taskRef, {
