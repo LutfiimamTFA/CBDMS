@@ -1,4 +1,3 @@
-
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import {
@@ -74,3 +73,18 @@ export function formatDuration(duration: Duration) {
 
   return parts.slice(0, 2).join(' '); // Show at most 2 units (e.g., "1d 4h" instead of "1d 4h 30m")
 }
+
+const brandColors = [
+  'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-lime-500', 
+  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'
+];
+
+export const getBrandColor = (brandId: string) => {
+  if (!brandId) return 'bg-gray-500';
+  let hash = 0;
+  for (let i = 0; i < brandId.length; i++) {
+    hash = brandId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash % brandColors.length);
+  return brandColors[index];
+};

@@ -1,10 +1,9 @@
-
 'use client';
 import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { priorityInfo, formatHours, cn } from '@/lib/utils';
+import { priorityInfo, formatHours, cn, getBrandColor } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -36,14 +35,17 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
     return isLate ? 'Late' : 'On Time';
   }, [task.status, task.actualCompletionDate, task.dueDate]);
 
+  const brandColor = getBrandColor(task.brandId);
+
   return (
     <Card
       className={cn(
-        "transition-shadow duration-200 hover:shadow-lg w-full",
+        "transition-shadow duration-200 hover:shadow-lg w-full relative",
         draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       )}
     >
-      <CardContent className="p-4 space-y-3">
+      <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg", brandColor)}></div>
+      <CardContent className="p-4 pl-6 space-y-3">
         <div className="flex items-start justify-between">
           <div className="font-medium cursor-pointer pr-2">
             <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
