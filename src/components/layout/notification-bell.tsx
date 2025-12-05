@@ -22,7 +22,7 @@ import {
   writeBatch,
   doc,
 } from 'firebase/firestore';
-import { formatDistanceToNow, isToday, isYesterday, isThisWeek } from 'date-fns';
+import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useRouter } from 'next/navigation';
 import { Badge } from '../ui/badge';
@@ -147,9 +147,7 @@ export function NotificationBell() {
               <p className="text-sm leading-tight">{notif.message}</p>
               <p className="text-xs text-muted-foreground mt-1">
                 {notif.createdAt?.toDate &&
-                  formatDistanceToNow(notif.createdAt.toDate(), {
-                    addSuffix: true,
-                  })}
+                  format(notif.createdAt.toDate(), 'PPpp')}
               </p>
             </div>
           </DropdownMenuItem>

@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -1153,7 +1154,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp ? formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true }) : 'just now'}
+                          {activity.timestamp ? format(new Date(activity.timestamp), 'PPpp') : 'just now'}
                         </p>
                       </div>
                     </div>
