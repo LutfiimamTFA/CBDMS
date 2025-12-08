@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useFirebase, useAuth } from '@/firebase';
 import { getIdTokenResult } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
@@ -11,8 +10,14 @@ export default function RootPage() {
   const { user, isUserLoading } = useFirebase();
   const auth = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
+    // If the path is for a shared link, do nothing and let the dedicated page handle it.
+    if (pathname.startsWith('/share/')) {
+      return;
+    }
+
     // Wait until the initial user loading state is resolved.
     if (isUserLoading) {
       return;
@@ -49,7 +54,7 @@ export default function RootPage() {
       // Fallback for edge cases where user object exists but currentUser doesn't.
       router.replace('/login');
     }
-  }, [user, isUserLoading, auth, router]);
+  }, [user, isUserLoading, auth, router, pathname]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
