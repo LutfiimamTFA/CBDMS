@@ -68,6 +68,15 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: null,
   },
   {
+    id: 'nav_guide',
+    label: 'nav.guide',
+    path: '/guide',
+    icon: 'BookOpen',
+    order: 7,
+    roles: ['Super Admin', 'Manager', 'Employee', 'Client'],
+    parentId: null,
+  },
+  {
     id: 'nav_admin',
     label: 'nav.admin',
     path: '', // This is a folder

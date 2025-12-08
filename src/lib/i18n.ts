@@ -13,6 +13,7 @@ export const ui = {
     'nav.dashboard': 'Dashboard',
     'nav.tasks': 'Tasks',
     'nav.reports': 'Reports',
+    'nav.guide': 'Guide',
     'nav.settings': 'Settings',
     'nav.board': 'Board',
     'nav.list': 'List',
@@ -139,6 +140,7 @@ export const ui = {
     'nav.dashboard': 'Dasbor',
     'nav.tasks': 'Tugas',
     'nav.reports': 'Laporan',
+    'nav.guide': 'Panduan',
     'nav.settings': 'Pengaturan',
     'nav.board': 'Papan',
     'nav.list': 'Daftar',
@@ -261,6 +263,7 @@ export const ui = {
     'dashboard.role': 'Anda masuk sebagai {role}. Selamat bekerja dan semoga harimu produktif!',
   },
 } as const;
+
 
 
 
