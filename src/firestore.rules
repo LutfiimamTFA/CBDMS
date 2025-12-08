@@ -139,5 +139,11 @@ service cloud.firestore {
                                  (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
                                  (isRole('Employee') && request.auth.uid == resource.data.createdBy && resource.data.status == 'Draft');
     }
+
+    match /sharedLinks/{linkId} {
+      allow get: if true;
+      allow list: if false;
+      allow write: if isSignedIn();
+    }
   }
 }
