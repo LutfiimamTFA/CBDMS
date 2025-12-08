@@ -45,11 +45,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, deleteDoc, getDocs } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2 } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification } from '@/lib/types';
@@ -128,7 +128,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   };
 
-  const handleSubmit = async (data: PostFormValues) => {
+  const handleSubmit = async (data: PostFormValues, status: SocialMediaPost['status']) => {
     if (!firestore || !storage || !profile || !user) return;
     setIsSaving(true);
     
@@ -152,57 +152,54 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             mediaUrl: mediaUrl,
             scheduledAt: scheduledAt.toISOString(),
             companyId: profile.companyId,
+            status: status,
         };
         
         const batch = writeBatch(firestore);
+        
+        const isNewPost = mode === 'create';
 
-        if (mode === 'create') {
+        if (isNewPost) {
             const postRef = doc(collection(firestore, 'socialMediaPosts'));
             batch.set(postRef, {
                 ...postData,
-                status: 'Needs Approval',
                 createdBy: profile.id,
                 createdAt: serverTimestamp(),
             });
 
-            // Notify managers/admins
-            const usersSnapshot = await getDocs(collection(firestore, 'users'));
-            usersSnapshot.forEach(userDoc => {
-                const userData = userDoc.data();
-                if ((userData.role === 'Manager' || userData.role === 'Super Admin') && userData.companyId === profile.companyId) {
-                    const notifRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
-                    const newNotification: Omit<Notification, 'id'> = {
-                        userId: userDoc.id,
-                        title: 'Content for Approval',
-                        message: `${profile.name} submitted a new social media post for approval.`,
-                        taskId: postRef.id,
-                        taskTitle: postData.caption.substring(0, 50),
-                        isRead: false,
-                        createdAt: serverTimestamp(),
-                        createdBy: {
-                            id: user.uid,
-                            name: profile.name,
-                            avatarUrl: profile.avatarUrl || '',
-                        },
-                    };
-                    batch.set(notifRef, newNotification);
-                }
-            });
-
-            toast({
-                title: 'Post Submitted!',
-                description: `Your post for ${data.platform} has been submitted for approval.`,
-            });
+            // Notify managers/admins if submitting for approval
+            if (status === 'Needs Approval') {
+                const usersSnapshot = await getDocs(collection(firestore, 'users'));
+                usersSnapshot.forEach(userDoc => {
+                    const userData = userDoc.data();
+                    if ((userData.role === 'Manager' || userData.role === 'Super Admin') && userData.companyId === profile.companyId) {
+                        const notifRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
+                        const newNotification: Omit<Notification, 'id'> = {
+                            userId: userDoc.id,
+                            title: 'Content for Approval',
+                            message: `${profile.name} submitted a new social media post for approval.`,
+                            taskId: postRef.id,
+                            taskTitle: postData.caption.substring(0, 50),
+                            isRead: false,
+                            createdAt: serverTimestamp(),
+                            createdBy: {
+                                id: user.uid,
+                                name: profile.name,
+                                avatarUrl: profile.avatarUrl || '',
+                            },
+                        };
+                        batch.set(notifRef, newNotification);
+                    }
+                });
+            }
+            toast({ title: `Post ${status === 'Draft' ? 'Draft Saved' : 'Submitted'}!`, description: `Your post for ${data.platform} has been saved.` });
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
             batch.update(postRef, {
                 ...postData,
                 updatedAt: serverTimestamp(),
             });
-             toast({
-                title: 'Post Updated!',
-                description: `Your changes to the post have been saved.`,
-            });
+             toast({ title: 'Post Updated!', description: `Your changes to the post have been saved.` });
         }
 
         await batch.commit();
@@ -212,8 +209,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         console.error("Failed to submit post:", error);
         toast({
             variant: 'destructive',
-            title: 'Submission Failed',
-            description: error.message || 'Could not submit the post. Please try again.',
+            title: 'Operation Failed',
+            description: error.message || 'Could not save the post. Please try again.',
         });
     } finally {
         setIsSaving(false);
@@ -308,6 +305,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && (post.status === 'Draft' || post.status === 'Needs Approval')));
 
+  const onFormSubmit = (status: SocialMediaPost['status']) => {
+    form.handleSubmit((data) => handleSubmit(data, status))();
+  };
+
 
   return (
     <>
@@ -323,7 +324,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         <ScrollArea className='-mt-4'>
             <div className="px-6 py-4">
                 <Form {...form}>
-                <form id="create-post-form" onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+                <form id="create-post-form" className="space-y-6">
                     <FormField
                         control={form.control}
                         name="media"
@@ -459,32 +460,46 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
 
-            {isApproverView && (
+            {isApproverView ? (
                 <>
-                <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleUpdateStatus('Draft')} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
-                    Reject
-                </Button>
-                <Button variant="default" className='bg-green-600 hover:bg-green-700' onClick={() => handleUpdateStatus('Scheduled')} disabled={isSaving}>
-                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle className="mr-2 h-4 w-4" />}
-                    Approve & Schedule
-                </Button>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleUpdateStatus('Draft')} disabled={isSaving}>
+                      {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
+                      Reject
+                  </Button>
+                  <Button variant="default" className='bg-green-600 hover:bg-green-700' onClick={() => handleUpdateStatus('Scheduled')} disabled={isSaving}>
+                      {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle className="mr-2 h-4 w-4" />}
+                      Approve & Schedule
+                  </Button>
                 </>
-            )}
+            ) : isEditable ? (
+              <>
+                  {mode === 'create' || (mode === 'edit' && post?.status === 'Draft') ? (
+                      <>
+                          {isManager ? (
+                              <Button variant="secondary" onClick={() => onFormSubmit('Scheduled')} disabled={isSaving}>
+                                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                  Schedule Directly
+                              </Button>
+                          ) : (
+                              <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                  Save as Draft
+                              </Button>
+                          )}
 
-            {mode === 'create' && (
-                 <Button type="submit" form="create-post-form" disabled={isSaving}>
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Submit for Approval
-                </Button>
-            )}
-
-            {isEditable && !isApproverView && (
-                <Button type="submit" form="create-post-form" disabled={isSaving}>
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Save Changes
-                </Button>
-            )}
+                          <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                              {isManager ? 'Submit for Review' : 'Submit for Approval'}
+                          </Button>
+                      </>
+                  ) : (
+                      <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
+                          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          Save Changes
+                      </Button>
+                  )}
+              </>
+            ) : null}
           </div>
         </DialogFooter>
       </DialogContent>
@@ -509,3 +524,4 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     </>
   );
 }
+
