@@ -48,7 +48,7 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save, Edit } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User } from '@/lib/types';
@@ -319,20 +319,21 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   };
 
-  const isManager = profile?.role === 'Manager' || profile?.role === 'Super Admin';
-  const isCreator = profile?.id === post?.createdBy;
-
-  const isApproverView = mode === 'edit' && isManager && post?.status === 'Needs Approval';
-  
-  const isEditable = mode === 'create' || 
-    (mode === 'edit' && post?.status !== 'Posted' && (isManager || (isCreator && (post.status === 'Draft' || post.status === 'Needs Approval'))));
-  
-  const canDelete = mode === 'edit' && post && (isManager || (isCreator && (post.status === 'Draft' || post.status === 'Needs Approval')));
-
   const onFormSubmit = (status: SocialMediaPost['status']) => {
     form.handleSubmit((data) => handleSubmit(data, status))();
   };
 
+  const isManager = profile?.role === 'Manager' || profile?.role === 'Super Admin';
+  const isCreator = profile?.id === post?.createdBy;
+
+  // --- Logic for what to show ---
+  const isApproverView = mode === 'edit' && isManager && post?.status === 'Needs Approval';
+  const isCreatorEditView = mode === 'edit' && isCreator && post?.status === 'Draft';
+  
+  // Fields are editable if creating new, or if you are a manager, or if you are the creator editing a draft.
+  const isEditable = mode === 'create' || isManager || isCreatorEditView;
+  
+  const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
 
   return (
     <>
@@ -483,8 +484,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-
-            {isApproverView ? (
+             {isApproverView ? (
                 <>
                   <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRejectionDialogOpen(true)} disabled={isSaving}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
@@ -495,23 +495,36 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                       Approve & Schedule
                   </Button>
                 </>
-            ) : isEditable && mode === 'edit' ? (
-                 <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Changes
-                </Button>
-            ) : isEditable && mode === 'create' ? (
-                <>
-                  <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save as Draft
-                  </Button>
-                  <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Submit for Approval
-                  </Button>
-                </>
-            ) : null}
+            ) : mode === 'create' ? (
+                // --- CREATE MODE ---
+                isManager ? (
+                    <>
+                        <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
+                        </Button>
+                        <Button type="button" onClick={() => onFormSubmit('Scheduled')} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Schedule Directly
+                        </Button>
+                    </>
+                ) : ( // Employee creating
+                    <>
+                        <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
+                        </Button>
+                        <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit for Approval
+                        </Button>
+                    </>
+                )
+            ) : (
+                 // --- EDIT MODE ---
+                isEditable && (
+                    <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Changes
+                    </Button>
+                )
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
