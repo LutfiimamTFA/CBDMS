@@ -215,25 +215,27 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }, [statuses, form]);
 
   useEffect(() => {
-    if (currentUserProfile && user && open) {
-      if (currentUserProfile.role === 'Employee') {
-        const selfUser = {
-          id: user.uid,
-          name: currentUserProfile.name,
-          email: currentUserProfile.email,
-          avatarUrl: currentUserProfile.avatarUrl || '',
-          role: currentUserProfile.role,
-          companyId: currentUserProfile.companyId,
-          createdAt: currentUserProfile.createdAt,
-        };
-        setSelectedUsers([selfUser]);
-        form.setValue('assigneeIds', [selfUser.id]);
-      } else {
-        setSelectedUsers([]);
-        form.setValue('assigneeIds', []);
-      }
+    if (open && currentUserProfile && user) {
+        if (currentUserProfile.role === 'Employee') {
+            // If user is an employee, auto-assign to themself
+            const selfUser = {
+                id: user.uid,
+                name: currentUserProfile.name,
+                email: currentUserProfile.email,
+                avatarUrl: currentUserProfile.avatarUrl || '',
+                role: currentUserProfile.role,
+                companyId: currentUserProfile.companyId,
+                createdAt: currentUserProfile.createdAt,
+            };
+            setSelectedUsers([selfUser]);
+            form.setValue('assigneeIds', [selfUser.id]);
+        } else {
+            // If user is Manager or Super Admin, clear assignees
+            setSelectedUsers([]);
+            form.setValue('assigneeIds', []);
+        }
     }
-  }, [currentUserProfile, user, form, open]);
+  }, [open, currentUserProfile, user, form]);
 
 
   const onSubmit = async (data: TaskFormValues) => {
@@ -581,8 +583,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     const mentionMatch = text.match(/@(\w*)$/);
     if (mentionMatch) {
       setIsMentioning(true);
-      const searchTerm = mentionMatch[1].toLowerCase();
-      setMentionSuggestions((users || []).filter(u => u.name.toLowerCase().includes(searchTerm)));
+      setMentionSuggestions((users || []).filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
     } else {
       setIsMentioning(false);
     }
