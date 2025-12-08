@@ -835,7 +835,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                         </div>
                                     ))}
                                 </div>
-                                {canEdit && <div className="flex items-center gap-2">
+                                {(canEdit || isAssignee) && <div className="flex items-center gap-2">
                                     <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}/>
                                     <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
                                 </div>}
@@ -968,18 +968,30 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 )}/>
                             </div>
                         </FormItem>
-                       <FormField control={form.control} name="priority" render={({ field }) => (
+                       <FormField control={form.control} name="priority" render={({ field }) => {
+                          const priority = priorityInfo[field.value];
+                          return (
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Priority</FormLabel>
                               <div className="col-span-2 flex items-center gap-2">
-                                  <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
-                                      <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                      <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
-                                  </Select>
-                                  {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+                                  { !canEdit ? (
+                                    <div className="flex items-center gap-2 text-sm font-medium">
+                                      <priority.icon className={`h-4 w-4 ${priority.color}`} />
+                                      {priority.label}
+                                    </div>
+                                  ) : (
+                                  <>
+                                    <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
+                                        <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                        <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
+                                    </Select>
+                                    {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+                                  </>
+                                  )}
                               </div>
                            </FormItem>
-                       )}/>
+                          )
+                       }}/>
                         <FormField control={form.control} name="dueDate" render={({ field }) => (
                             <FormItem className="grid grid-cols-3 items-center gap-2">
                                <FormLabel className="text-muted-foreground">Due Date</FormLabel>
