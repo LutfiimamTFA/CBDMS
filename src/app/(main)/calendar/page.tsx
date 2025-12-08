@@ -190,7 +190,7 @@ export default function CalendarPage() {
   return (
     <div className="flex h-svh flex-col bg-background">
       <Header title="Team Calendar" />
-      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
+      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
           <div className="flex items-center gap-2">
@@ -286,7 +286,7 @@ export default function CalendarPage() {
                     <div 
                         key={day.toString()} 
                         className={cn(
-                            "relative min-h-[6rem] p-2 border-r border-b flex flex-col", 
+                            "relative min-h-[8rem] p-2 border-r border-b flex flex-col", 
                             viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30"
                         )}
                     >
@@ -297,7 +297,7 @@ export default function CalendarPage() {
                              )}>
                             {format(day, 'd')}
                         </span>
-                        <div className="mt-2 flex-1 space-y-1 overflow-hidden">
+                        <div className="mt-2 flex-1 space-y-1 overflow-auto">
                           {dayTasks.map(task => {
                             const brandColor = getBrandColor(task.brandId);
                             const priority = priorityInfo[task.priority];
