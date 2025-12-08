@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -14,13 +13,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -28,12 +20,16 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import type { SharedLink } from '@/lib/types';
-import { Share2, Link, Copy, Settings, CalendarIcon, KeyRound, Loader2, X } from 'lucide-react';
+import { Share2, Link, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Eye, MessageSquare, Edit } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { query, where } from 'firebase/firestore';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Separator } from './ui/separator';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+
 
 export function ShareDialog() {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,7 +40,8 @@ export function ShareDialog() {
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
   const [useExpiration, setUseExpiration] = useState(false);
-  const [expiresAt, setExpiresAt] = useState<Date | undefined>();
+  const [expiresAtDate, setExpiresAtDate] = useState<Date | undefined>();
+  const [expiresAtTime, setExpiresAtTime] = useState<string>('00:00');
 
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
@@ -52,12 +49,11 @@ export function ShareDialog() {
   const { toast } = useToast();
 
   const targetId = useMemo(() => {
-    // This is a simplified logic. In a real app, you might have more complex routing.
     if (pathname.includes('/tasks/')) {
         return pathname.split('/tasks/')[1];
     }
     if (pathname.includes('/dashboard')) return 'dashboard';
-    return 'dashboard'; // Default to sharing the dashboard
+    return 'dashboard';
   }, [pathname]);
 
   const targetType = useMemo(() => {
@@ -90,20 +86,34 @@ export function ShareDialog() {
         setAccessLevel(activeLink.accessLevel);
         setPassword(activeLink.password ? '********' : '');
         setUsePassword(!!activeLink.password);
-        setExpiresAt(activeLink.expiresAt ? new Date(activeLink.expiresAt) : undefined);
-        setUseExpiration(!!activeLink.expiresAt);
+        
+        if (activeLink.expiresAt) {
+            const expirationDate = new Date(activeLink.expiresAt);
+            setExpiresAtDate(expirationDate);
+            setExpiresAtTime(format(expirationDate, 'HH:mm'));
+            setUseExpiration(true);
+        } else {
+            setUseExpiration(false);
+        }
+
     } else {
         setCreatedLink(null);
     }
   }, [activeLink]);
 
 
+  const getCombinedExpiration = () => {
+    if (!useExpiration || !expiresAtDate) return undefined;
+    const [hours, minutes] = expiresAtTime.split(':').map(Number);
+    const combinedDate = new Date(expiresAtDate);
+    combinedDate.setHours(hours, minutes);
+    return combinedDate.toISOString();
+  }
+
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
     setIsLoading(true);
     
-    // For now, we won't handle password hashing on the client.
-    // In a real app, this should be done on a server/cloud function.
     if (usePassword && !password) {
         toast({ variant: 'destructive', title: 'Password required' });
         setIsLoading(false);
@@ -117,8 +127,8 @@ export function ShareDialog() {
       createdBy: profile.id,
       createdAt: serverTimestamp(),
       companyId: profile.companyId,
-      ...(usePassword && { password: password }), // WARNING: Storing plain text password
-      ...(useExpiration && expiresAt && { expiresAt: expiresAt.toISOString() }),
+      ...(usePassword && { password: password }),
+      expiresAt: getCombinedExpiration(),
     };
 
     try {
@@ -140,12 +150,15 @@ export function ShareDialog() {
     const linkRef = doc(firestore, 'sharedLinks', createdLink.id);
     const updates: Partial<SharedLink> = {
         accessLevel,
-        expiresAt: useExpiration && expiresAt ? expiresAt.toISOString() : undefined,
-        password: usePassword ? password : undefined,
+        expiresAt: getCombinedExpiration(),
+        password: usePassword ? (password === '********' ? createdLink.password : password) : undefined,
     };
 
-    // Remove undefined fields
-    Object.keys(updates).forEach(key => updates[key as keyof typeof updates] === undefined && delete updates[key as keyof typeof updates]);
+    Object.keys(updates).forEach(key => (updates[key as keyof typeof updates] === undefined) && delete updates[key as keyof typeof updates]);
+    
+    // Explicitly remove fields if they are turned off
+    if (!usePassword) updates.password = undefined;
+    if (!useExpiration) updates.expiresAt = undefined;
 
     try {
       await updateDoc(linkRef, updates);
@@ -190,7 +203,7 @@ export function ShareDialog() {
           Share
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Share Dashboard</DialogTitle>
           <DialogDescription>
@@ -199,75 +212,103 @@ export function ShareDialog() {
         </DialogHeader>
 
         {isLoadingAnything ? (
-            <div className="flex justify-center items-center h-24">
+            <div className="flex justify-center items-center h-48">
                 <Loader2 className="animate-spin h-8 w-8" />
             </div>
         ) : createdLink ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="space-y-2">
                 <Label htmlFor="share-link">Shareable Link</Label>
                 <div className="flex items-center gap-2">
                     <Input id="share-link" value={shareUrl} readOnly />
-                    <Button size="icon" onClick={copyToClipboard}><Copy className="h-4 w-4" /></Button>
+                    <Button size="icon" variant="secondary" onClick={copyToClipboard}><Copy className="h-4 w-4" /></Button>
                 </div>
             </div>
             
-            <div className="space-y-2">
-                <Label className="flex items-center gap-2"><Settings className="h-4 w-4"/> Access Settings</Label>
-                <Select value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select access level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="view">Can view</SelectItem>
-                        <SelectItem value="comment">Can comment</SelectItem>
-                        <SelectItem value="edit">Can edit</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
+            <Card>
+                <CardHeader className='p-4'>
+                    <CardTitle className="text-base flex items-center gap-2"><Settings className="h-4 w-4"/> Access Settings</CardTitle>
+                </CardHeader>
+                <CardContent className='p-4 pt-0 space-y-6'>
+                    <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)} className="gap-4">
+                        <Label className="flex items-start gap-4 rounded-md border p-3 cursor-pointer hover:bg-accent has-[:checked]:bg-accent has-[:checked]:border-primary">
+                            <RadioGroupItem value="view" id="view" />
+                            <div className='-mt-1'>
+                                <div className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4'/> Can view</div>
+                                <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view the content, but cannot comment or edit.</p>
+                            </div>
+                        </Label>
+                        <Label className="flex items-start gap-4 rounded-md border p-3 cursor-pointer hover:bg-accent has-[:checked]:bg-accent has-[:checked]:border-primary">
+                            <RadioGroupItem value="comment" id="comment" disabled/>
+                            <div className='-mt-1'>
+                                <div className="font-semibold flex items-center gap-2 text-muted-foreground"><MessageSquare className='h-4 w-4'/> Can comment (Coming soon)</div>
+                                <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view and add comments.</p>
+                            </div>
+                        </Label>
+                         <Label className="flex items-start gap-4 rounded-md border p-3 cursor-pointer hover:bg-accent has-[:checked]:bg-accent has-[:checked]:border-primary">
+                            <RadioGroupItem value="edit" id="edit" disabled/>
+                            <div className='-mt-1'>
+                                <div className="font-semibold flex items-center gap-2 text-muted-foreground"><Edit className='h-4 w-4'/> Can edit (Coming soon)</div>
+                                <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view, comment, and edit the content.</p>
+                            </div>
+                        </Label>
+                    </RadioGroup>
 
-            <div className="space-y-3">
-                 <div className="flex items-center space-x-2">
-                    <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword}/>
-                    <Label htmlFor="use-password" className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Add Password</Label>
-                </div>
-                {usePassword && (
-                    <Input placeholder="Enter a password" value={password === '********' ? '' : password} onChange={e => setPassword(e.target.value)} />
-                )}
-            </div>
+                    <Separator/>
 
-            <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                    <Switch id="use-expiration" checked={useExpiration} onCheckedChange={setUseExpiration}/>
-                    <Label htmlFor="use-expiration" className="flex items-center gap-2"><CalendarIcon className="h-4 w-4"/> Set Expiration Date</Label>
-                </div>
-                {useExpiration && (
-                     <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={"outline"}
-                            className={cn("w-full justify-start text-left font-normal", !expiresAt && "text-muted-foreground")}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {expiresAt ? format(expiresAt, "PPP") : <span>Pick a date</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar
-                            mode="single"
-                            selected={expiresAt}
-                            onSelect={setExpiresAt}
-                            disabled={(date) => date < new Date()}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                    </Popover>
-                )}
-            </div>
+                    <div className="space-y-4">
+                        <div className="flex items-center space-x-2">
+                           <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword}/>
+                           <Label htmlFor="use-password" className="font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4"/> Require Password</Label>
+                        </div>
+                        {usePassword && (
+                            <Input placeholder="Enter a password" value={password === '********' ? '' : password} onChange={e => setPassword(e.target.value)} type='password'/>
+                        )}
+                    </div>
+                    
+                    <Separator/>
+                    
+                    <div className="space-y-4">
+                        <div className="flex items-center space-x-2">
+                           <Switch id="use-expiration" checked={useExpiration} onCheckedChange={setUseExpiration}/>
+                           <Label htmlFor="use-expiration" className="font-semibold flex items-center gap-2"><CalendarIcon className="h-4 w-4"/> Set Expiration</Label>
+                        </div>
+                        {useExpiration && (
+                           <div className="grid grid-cols-2 gap-2">
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn("justify-start text-left font-normal", !expiresAtDate && "text-muted-foreground")}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {expiresAtDate ? format(expiresAtDate, "PPP") : <span>Pick a date</span>}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={expiresAtDate}
+                                    onSelect={setExpiresAtDate}
+                                    disabled={(date) => date < new Date()}
+                                    initialFocus
+                                />
+                                </PopoverContent>
+                            </Popover>
+                            <Input
+                                type="time"
+                                value={expiresAtTime}
+                                onChange={e => setExpiresAtTime(e.target.value)}
+                            />
+                           </div>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
 
-            <DialogFooter className='pt-4'>
+            <DialogFooter className='pt-4 flex justify-between w-full'>
                 <Button variant="destructive" onClick={handleDisableLink} disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Disable Link
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className='mr-2' />} Disable Link
                 </Button>
                 <Button onClick={handleUpdateLink} disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Update Link
@@ -276,7 +317,7 @@ export function ShareDialog() {
 
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center text-center p-4 space-y-4">
+          <div className="flex flex-col items-center justify-center text-center p-4 space-y-4 h-48">
             <div className="p-3 bg-secondary rounded-full">
                 <Link className="h-8 w-8 text-muted-foreground" />
             </div>
