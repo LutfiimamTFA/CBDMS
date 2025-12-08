@@ -130,5 +130,14 @@ service cloud.firestore {
         allow read: if isSignedIn();
         allow write: if isSuperAdmin();
     }
+
+    match /socialMediaPosts/{postId} {
+        allow read: if isSuperAdmin() || 
+                     (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId));
+        allow create: if isSignedIn();
+        allow update, delete: if isSuperAdmin() || 
+                                 (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
+                                 (isRole('Employee') && request.auth.uid == resource.data.createdBy && resource.data.status == 'Draft');
+    }
   }
 }
