@@ -217,7 +217,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (open && currentUserProfile && user) {
         if (currentUserProfile.role === 'Employee') {
-            // If user is an employee, auto-assign to themself
             const selfUser = {
                 id: user.uid,
                 name: currentUserProfile.name,
@@ -230,12 +229,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             setSelectedUsers([selfUser]);
             form.setValue('assigneeIds', [selfUser.id]);
         } else {
-            // If user is Manager or Super Admin, clear assignees
-            setSelectedUsers([]);
+             setSelectedUsers([]);
             form.setValue('assigneeIds', []);
         }
     }
-  }, [open, currentUserProfile, user, form]);
+}, [open, currentUserProfile, user, form]);
 
 
   const onSubmit = async (data: TaskFormValues) => {
