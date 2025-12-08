@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -86,6 +87,7 @@ export default function CalendarPage() {
   const { profile: currentUser } = useUserProfile();
   const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
+  // --- View Mode Toggle ---
   const [viewMode, setViewMode] = useState<ViewMode>('month');
 
   // --- Filter States ---
@@ -201,6 +203,7 @@ export default function CalendarPage() {
     return Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
   }, []);
 
+  // --- weeklyRenderSegments useMemo ---
   const weeklyRenderSegments = useMemo(() => {
     if (!filteredTasks) return [];
 
@@ -386,6 +389,7 @@ export default function CalendarPage() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+            {/* --- View Mode Toggle --- */}
             <ToggleGroup type="single" value={viewMode} onValueChange={(value) => value && setViewMode(value as ViewMode)} className='hidden md:flex'>
               <ToggleGroupItem value="month">Month</ToggleGroupItem>
               <ToggleGroupItem value="week">Week</ToggleGroupItem>
@@ -557,3 +561,5 @@ export default function CalendarPage() {
     </div>
   );
 }
+
+    
