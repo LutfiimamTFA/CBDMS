@@ -858,7 +858,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                                   {(allUsers || []).map(user => (
                                                     <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
                                                       <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                      {user.name}
+                                                      <span className="truncate">{user.name}</span>
                                                     </Button>
                                                   ))}
                                                 </div>
@@ -1008,7 +1008,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Priority</FormLabel>
                               <div className="col-span-2 flex items-center gap-2">
-                                  { !canEdit ? (
+                                  { !(canEdit || isAssignee) || currentUser?.role === 'Employee' ? (
                                     <div className="flex items-center gap-2 text-sm font-medium">
                                       <priority.icon className={`h-4 w-4 ${priority.color}`} />
                                       {priority.label}
