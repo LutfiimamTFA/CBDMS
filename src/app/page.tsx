@@ -37,8 +37,8 @@ export default function RootPage() {
             // If recurring tasks claim exists, redirect to acknowledgment page.
             router.replace('/force-acknowledge-tasks');
           } else {
-            // Otherwise, proceed to the main dashboard.
-            router.replace('/dashboard');
+            // Otherwise, proceed to the "My Work" page.
+            router.replace('/my-work');
           }
         })
         .catch(() => {

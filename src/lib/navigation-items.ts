@@ -4,6 +4,15 @@ import type { NavigationItem } from './types';
 // This file now serves as a fallback or for initial seeding.
 // The primary source of truth is the 'navigationItems' collection in Firestore.
 export const defaultNavItems: NavigationItem[] = [
+   {
+    id: 'nav_my_work',
+    label: 'nav.my_work',
+    path: '/my-work',
+    icon: 'Inbox',
+    order: 0,
+    roles: ['Super Admin', 'Manager', 'Employee'],
+    parentId: null,
+  },
   {
     id: 'nav_task_board',
     label: 'nav.board',

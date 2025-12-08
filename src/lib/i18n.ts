@@ -8,6 +8,7 @@ export const defaultLang = 'en';
 
 export const ui = {
   en: {
+    'nav.my_work': 'My Work',
     'nav.dashboard': 'Dashboard',
     'nav.tasks': 'Tasks',
     'nav.reports': 'Reports',
@@ -133,6 +134,7 @@ export const ui = {
     'dashboard.role': 'You are logged in as {role}. Happy working and have a productive day!',
   },
   id: {
+    'nav.my_work': 'Pekerjaan Saya',
     'nav.dashboard': 'Dasbor',
     'nav.tasks': 'Tugas',
     'nav.reports': 'Laporan',
