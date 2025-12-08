@@ -1,0 +1,601 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user in the WorkWise application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's full name."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "avatarUrl": {
+            "type": "string",
+            "description": "URL of the user's profile picture.",
+            "format": "uri"
+        },
+        "role": {
+            "type": "string",
+            "description": "The role of the user, determining their access level.",
+            "enum": ["Super Admin", "Manager", "Employee", "Client"]
+        },
+        "companyId": {
+            "type": "string",
+            "description": "The ID of the company the user belongs to."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the user was created.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email",
+        "role",
+        "companyId",
+        "createdAt"
+      ]
+    },
+    "Company": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Company",
+        "type": "object",
+        "description": "Represents a company.",
+        "properties": {
+            "id": {
+                "type": "string",
+                "description": "Unique identifier for the Company entity."
+            },
+            "name": {
+                "type": "string",
+                "description": "The name of the company."
+            },
+            "logoUrl": {
+                "type": "string",
+                "description": "URL of the company logo.",
+                "format": "uri"
+            }
+        },
+        "required": ["id", "name"]
+    },
+    "Brand": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Brand",
+      "type": "object",
+      "description": "Represents a brand or division within the company.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Brand entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the brand."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "The timestamp when the brand was created.",
+          "format": "date-time"
+        }
+      },
+      "required": ["id", "name", "createdAt"]
+    },
+    "Task": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Task",
+      "type": "object",
+      "description": "Represents a task within the WorkWise application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Task entity."
+        },
+        "brandId": {
+          "type": "string",
+          "description": "Reference to the Brand this task belongs to."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the task."
+        },
+        "description": {
+          "type": "string",
+          "description": "A detailed description of the task."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the task. References the name of a document in the /statuses collection."
+        },
+        "assigneeIds": {
+          "type": "array",
+          "description": "References to Users assigned to this task. (Relationship: Task N:N User)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "startDate": {
+          "type": "string",
+          "description": "The planned start date of the task.",
+          "format": "date-time"
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "The planned due date or deadline of the task.",
+          "format": "date-time"
+        },
+        "actualStartDate": {
+          "type": "string",
+          "description": "The actual timestamp when a user first started working on the task.",
+          "format": "date-time"
+        },
+        "actualCompletionDate": {
+            "type": "string",
+            "description": "The actual timestamp when a user marked the task as complete.",
+            "format": "date-time"
+        },
+        "currentSessionStartTime": {
+            "type": "string",
+            "description": "Timestamp for when the current active work session started.",
+            "format": "date-time"
+        },
+        "priority": {
+          "type": "string",
+          "description": "The priority level of the task (e.g., Urgent, High, Normal, Low)."
+        },
+        "timeEstimate": {
+          "type": "number",
+          "description": "The estimated time in hours to complete the task."
+        },
+        "taskDependencyIds": {
+          "type": "array",
+          "description": "References to other Tasks that this Task depends on. (Relationship: Task 1:N Task)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lastActivity": {
+          "type": "object",
+          "description": "A summary of the last activity that occurred on this task for quick auditing in table views.",
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "avatarUrl": { "type": "string" }
+              },
+              "required": ["id", "name"]
+            },
+            "timestamp": { "type": "string", "format": "date-time" },
+            "action": { "type": "string" }
+          },
+          "required": ["user", "timestamp", "action"]
+        },
+        "companyId": {
+            "type": "string",
+            "description": "The ID of the company this task belongs to, for client visibility."
+        }
+      },
+      "required": [
+        "id",
+        "brandId",
+        "title",
+        "description",
+        "status",
+        "assigneeIds",
+        "priority",
+        "timeEstimate",
+        "lastActivity"
+      ]
+    },
+    "TimeTracking": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "TimeTracking",
+      "type": "object",
+      "description": "Represents the time tracked for a specific task by a user.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the TimeTracking entity."
+        },
+        "taskId": {
+          "type": "string",
+          "description": "Reference to the Task being tracked. (Relationship: Task 1:N TimeTracking)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who is tracking time. (Relationship: User 1:N TimeTracking)"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "The start time of the time tracking session.",
+          "format": "date-time"
+        },
+        "endTime": {
+          "type": "string",
+          "description": "The end time of the time tracking session.",
+          "format": "date-time"
+        },
+        "duration": {
+          "type": "number",
+          "description": "The total duration of the time tracking session in hours."
+        }
+      },
+      "required": [
+        "id",
+        "taskId",
+        "userId",
+        "startTime",
+        "endTime",
+        "duration"
+      ]
+    },
+    "RecurringTaskTemplate": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "RecurringTaskTemplate",
+      "type": "object",
+      "description": "A template for creating tasks on a recurring schedule.",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "description": "The title for the tasks created by this template." },
+        "description": { "type": "string", "description": "Default description for generated tasks." },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly"], "description": "How often the task should be created." },
+        "daysOfWeek": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+          },
+          "description": "For weekly tasks, which days to create them on."
+        },
+        "dayOfMonth": { "type": "number", "description": "For monthly tasks, which day of the month to create it on." },
+        "isMandatory": { "type": "boolean", "description": "If true, users must acknowledge the creation of tasks from this template." },
+        "defaultAssigneeIds": { "type": "array", "items": { "type": "string" } },
+        "defaultPriority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
+        "defaultBrandId": { "type": "string" },
+        "companyId": { "type": "string" },
+        "lastGeneratedAt": { "type": "string", "format": "date-time", "description": "The timestamp when a task was last generated from this template." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "title", "frequency", "defaultAssigneeIds", "companyId", "createdAt"]
+    },
+    "NavigationItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "NavigationItem",
+      "type": "object",
+      "description": "Represents a configurable item in the main sidebar navigation.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the navigation item (e.g., 'nav_dashboard')."
+        },
+        "label": {
+          "type": "string",
+          "description": "The text label displayed for the menu item."
+        },
+        "path": {
+          "type": "string",
+          "description": "The URL path the menu item links to (e.g., '/dashboard')."
+        },
+        "icon": {
+          "type": "string",
+          "description": "The name of the lucide-react icon to display."
+        },
+        "order": {
+          "type": "number",
+          "description": "The display order of the menu item in the sidebar."
+        },
+        "roles": {
+          "type": "array",
+          "description": "An array of user roles that can see this navigation item.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["id", "label", "path", "icon", "order", "roles"]
+    },
+    "Notification": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Notification",
+      "type": "object",
+      "description": "Represents a notification for a user.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique ID for the notification." },
+        "userId": { "type": "string", "description": "The ID of the user receiving the notification." },
+        "title": { "type": "string", "description": "The title of the notification." },
+        "message": { "type": "string", "description": "The content of the notification message." },
+        "taskId": { "type": "string", "description": "The ID of the task related to this notification." },
+        "isRead": { "type": "boolean", "description": "Flag indicating if the notification has been read." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the notification was created." },
+        "createdBy": {
+          "type": "object",
+          "description": "User who triggered the notification.",
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "avatarUrl": { "type": "string" }
+          },
+          "required": ["id", "name"]
+        }
+      },
+      "required": ["id", "userId", "title", "message", "taskId", "isRead", "createdAt", "createdBy"]
+    },
+    "WorkflowStatus": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WorkflowStatus",
+      "type": "object",
+      "description": "Represents a customizable status column in the Kanban board.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the status."
+        },
+        "name": {
+          "type": "string",
+          "description": "The display name of the status (e.g., 'In Review')."
+        },
+        "order": {
+          "type": "number",
+          "description": "The display order of the column in the Kanban board."
+        },
+        "color": {
+          "type": "string",
+          "description": "A Tailwind CSS color class for the status indicator (e.g., 'bg-blue-500')."
+        },
+        "companyId": {
+          "type": "string",
+          "description": "The ID of the company this status belongs to."
+        }
+      },
+      "required": ["id", "name", "order", "color", "companyId"]
+    },
+     "Activity": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Activity",
+      "type": "object",
+      "description": "Represents a single activity or event that occurred on a task.",
+      "properties": {
+        "id": { "type": "string" },
+        "user": {
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "avatarUrl": { "type": "string" }
+          },
+          "required": ["id", "name"]
+        },
+        "action": { "type": "string", "description": "A human-readable description of the action taken. E.g., 'changed status from To Do to In Progress'." },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "user", "action", "timestamp"]
+    },
+    "SocialMediaPost": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SocialMediaPost",
+      "type": "object",
+      "description": "Represents a social media post to be scheduled and published.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the social media post." },
+        "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"], "description": "The target social media platform." },
+        "caption": { "type": "string", "description": "The text content or caption for the post." },
+        "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video to be posted." },
+        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "The current status of the post." },
+        "scheduledAt": { "type": "string", "format": "date-time", "description": "The specific date and time the post is scheduled to be published." },
+        "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
+        "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
+        "companyId": { "type": "string", "description": "The ID of the company this post belongs to." }
+      },
+      "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
+    },
+    "DailyReport": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "DailyReport",
+        "type": "object",
+        "description": "Tracks the completion of a recurring task for a specific user on a specific day.",
+        "properties": {
+            "id": { "type": "string", "description": "Unique ID, e.g., 'YYYY-MM-DD_userId_templateId'." },
+            "userId": { "type": "string" },
+            "userName": { "type": "string" },
+            "templateId": { "type": "string" },
+            "date": { "type": "string", "format": "date" },
+            "isCompleted": { "type": "boolean" },
+            "completedAt": { "type": "string", "format": "date-time" },
+            "companyId": { "type": "string" }
+        },
+        "required": ["id", "userId", "templateId", "date", "isCompleted", "companyId"]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles, including their role and company.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+          "path": "/companies/{companyId}",
+          "definition": {
+              "entityName": "Company",
+              "schema": { "$ref": "#/backend/entities/Company" },
+              "description": "Stores company-wide information like name and logo.",
+              "params": [
+                  { "name": "companyId", "description": "The unique identifier for the company." }
+              ]
+          }
+      },
+      {
+        "path": "/brands/{brandId}",
+        "definition": {
+          "entityName": "Brand",
+          "schema": {
+            "$ref": "#/backend/entities/Brand"
+          },
+          "description": "Stores company brands or divisions.",
+          "params": [
+            {
+              "name": "brandId",
+              "description": "The unique identifier for the brand."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/tasks/{taskId}",
+        "definition": {
+          "entityName": "Task",
+          "schema": {
+            "$ref": "#/backend/entities/Task"
+          },
+          "description": "A global collection of tasks. Access is controlled by roles and companyId.",
+          "params": [
+            {
+              "name": "taskId",
+              "description": "The unique identifier for the task."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/tasks/{taskId}/timeTracking/{timeTrackingId}",
+        "definition": {
+          "entityName": "TimeTracking",
+          "schema": {
+            "$ref": "#/backend/entities/TimeTracking"
+          },
+          "description": "Stores time tracking entries for a specific task.",
+          "params": [
+            {
+              "name": "taskId",
+              "description": "The unique identifier for the task."
+            },
+            {
+              "name": "timeTrackingId",
+              "description": "The unique identifier for the time tracking entry."
+            }
+          ]
+        }
+      },
+       {
+        "path": "/tasks/{taskId}/activities/{activityId}",
+        "definition": {
+          "entityName": "Activity",
+          "schema": { "$ref": "#/backend/entities/Activity" },
+          "description": "Subcollection to store the activity log for a single task.",
+           "params": [
+            { "name": "taskId", "description": "The ID of the task." },
+            { "name": "activityId", "description": "The ID of the activity log entry." }
+          ]
+        }
+      },
+      {
+        "path": "/navigationItems/{navItemId}",
+        "definition": {
+          "entityName": "NavigationItem",
+          "schema": {
+            "$ref": "#/backend/entities/NavigationItem"
+          },
+          "description": "Stores the configuration for dynamic sidebar navigation items.",
+          "params": [
+            {
+              "name": "navItemId",
+              "description": "The unique identifier for the navigation item."
+            }
+          ]
+        }
+      },
+       {
+        "path": "/users/{userId}/notifications/{notificationId}",
+        "definition": {
+          "entityName": "Notification",
+          "schema": { "$ref": "#/backend/entities/Notification" },
+          "description": "Subcollection to store notifications for each user.",
+           "params": [
+            { "name": "userId", "description": "The ID of the user." },
+            { "name": "notificationId", "description": "The ID of the notification." }
+          ]
+        }
+      },
+      {
+        "path": "/statuses/{statusId}",
+        "definition": {
+          "entityName": "WorkflowStatus",
+          "schema": { "$ref": "#/backend/entities/WorkflowStatus" },
+          "description": "Stores the customizable columns for the Kanban workflow.",
+          "params": [
+            { "name": "statusId", "description": "The unique ID for the workflow status." }
+          ]
+        }
+      },
+      {
+        "path": "/recurringTaskTemplates/{templateId}",
+        "definition": {
+          "entityName": "RecurringTaskTemplate",
+          "schema": { "$ref": "#/backend/entities/RecurringTaskTemplate" },
+          "description": "Templates for automatically generating recurring tasks.",
+           "params": [
+            { "name": "templateId", "description": "The ID of the template." }
+          ]
+        }
+      },
+      {
+        "path": "/dailyReports/{reportId}",
+        "definition": {
+          "entityName": "DailyReport",
+          "schema": { "$ref": "#/backend/entities/DailyReport" },
+          "description": "Tracks daily completion of recurring tasks by users.",
+          "params": [
+            { "name": "reportId", "description": "The ID of the daily report entry." }
+          ]
+        }
+      },
+      {
+        "path": "/api/run-scheduler",
+        "definition": {
+          "description": "An API endpoint that, when called, runs the scheduler to generate recurring tasks."
+        }
+      },
+      {
+        "path": "/socialMediaPosts/{postId}",
+        "definition": {
+          "entityName": "SocialMediaPost",
+          "schema": { "$ref": "#/backend/entities/SocialMediaPost" },
+          "description": "Stores scheduled social media posts.",
+          "params": [
+            { "name": "postId", "description": "The unique identifier for the social media post." }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks. Finally, a new API route `/api/run-scheduler` is added to handle the server-side logic for task generation. A new 'SocialMediaPost' entity and `/socialMediaPosts` collection have been added to support the new social media scheduling module."
+  }
+}
