@@ -301,19 +301,14 @@ export default function CalendarPage() {
 
                             return (
                                 <Popover key={task.id}>
-                                    <TooltipProvider>
-                                    <Tooltip>
-                                        <PopoverTrigger asChild>
-                                        <TooltipTrigger asChild>
+                                    <PopoverTrigger asChild>
                                         <div className={cn(
-                                            'w-full h-1.5 rounded-full cursor-pointer hover:opacity-80',
+                                            'w-full px-2 py-0.5 rounded-md cursor-pointer hover:opacity-80 text-white text-xs font-medium truncate',
                                             brandColor
-                                        )}></div>
-                                        </TooltipTrigger>
-                                        </PopoverTrigger>
-                                        <TooltipContent><p>{task.title}</p></TooltipContent>
-                                    </Tooltip>
-                                    </TooltipProvider>
+                                        )}>
+                                            {task.title}
+                                        </div>
+                                    </PopoverTrigger>
                                     <PopoverContent className="w-80">
                                         <div className="space-y-3">
                                             <Link href={`/tasks/${task.id}`} className="hover:underline">
@@ -342,7 +337,7 @@ export default function CalendarPage() {
                                                 </div>
                                             </div>
                                             <div className='flex items-center gap-2'>
-                                                {task.assignees?.map(assignee => (
+                                                {(task.assignees || []).map(assignee => (
                                                 <TooltipProvider key={assignee.id}>
                                                     <Tooltip>
                                                     <TooltipTrigger>
@@ -370,5 +365,8 @@ export default function CalendarPage() {
       </main>
     </div>
   );
+
+    
+}
 
     
