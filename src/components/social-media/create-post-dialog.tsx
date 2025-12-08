@@ -495,27 +495,22 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                       Approve & Schedule
                   </Button>
                 </>
-            ) : isEditable ? (
-              <>
-                  {mode === 'create' || (mode === 'edit' && post?.status === 'Draft') ? (
-                      <>
-                          <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
-                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                              {mode === 'create' ? 'Save as Draft' : 'Save Changes'}
-                          </Button>
-                          <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
-                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                              Submit for Approval
-                          </Button>
-                      </>
-                   ) : (
-                         <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Save Changes
-                        </Button>
-                    )
-                  }
-              </>
+            ) : isEditable && mode === 'edit' ? (
+                 <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Changes
+                </Button>
+            ) : isEditable && mode === 'create' ? (
+                <>
+                  <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save as Draft
+                  </Button>
+                  <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Submit for Approval
+                  </Button>
+                </>
             ) : null}
           </div>
         </DialogFooter>
