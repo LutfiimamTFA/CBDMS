@@ -18,7 +18,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import type { SharedLink } from '@/lib/types';
 import { Share2, Link, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Eye, MessageSquare, Edit } from 'lucide-react';
 import { usePathname } from 'next/navigation';
@@ -121,7 +121,7 @@ export function ShareDialog() {
         return;
     }
     
-    const linkData: Omit<SharedLink, 'id'> = {
+    const linkData: Omit<SharedLink, 'id' | 'expiresAt'> & { expiresAt?: string } = {
       targetId,
       targetType,
       accessLevel,
@@ -129,12 +129,16 @@ export function ShareDialog() {
       createdAt: serverTimestamp(),
       companyId: profile.companyId,
       ...(usePassword && { password: password }),
-      expiresAt: getCombinedExpiration(),
     };
+
+    const expiration = getCombinedExpiration();
+    if (expiration) {
+        linkData.expiresAt = expiration;
+    }
 
     try {
       const docRef = await addDoc(collection(firestore, 'sharedLinks'), linkData);
-      setCreatedLink({ ...linkData, id: docRef.id, createdAt: new Date() });
+      setCreatedLink({ ...linkData, id: docRef.id, createdAt: new Date() } as SharedLink);
       toast({ title: 'Share link created!' });
     } catch (error) {
       console.error(error);
@@ -149,18 +153,20 @@ export function ShareDialog() {
     setIsLoading(true);
     
     const linkRef = doc(firestore, 'sharedLinks', createdLink.id);
-    const updates: Partial<SharedLink> = {
+    
+    const updates: { [key: string]: any } = {
         accessLevel,
         expiresAt: getCombinedExpiration(),
         password: usePassword ? (password === '********' ? createdLink.password : password) : undefined,
     };
 
-    Object.keys(updates).forEach(key => (updates[key as keyof typeof updates] === undefined) && delete updates[key as keyof typeof updates]);
+    if (!usePassword) {
+      updates.password = deleteField();
+    }
+    if (!useExpiration) {
+      updates.expiresAt = deleteField();
+    }
     
-    // Explicitly remove fields if they are turned off
-    if (!usePassword) updates.password = undefined;
-    if (!useExpiration) updates.expiresAt = undefined;
-
     try {
       await updateDoc(linkRef, updates);
       toast({ title: 'Link updated successfully!' });
@@ -235,7 +241,7 @@ export function ShareDialog() {
                 <CardContent className='p-4 pt-0 space-y-6'>
                     <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)} className="gap-4">
                         <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary">
-                            <RadioGroupItem value="view" id="view" />
+                             <RadioGroupItem value="view" id="view" />
                             <Label htmlFor="view" className='-mt-1 w-full cursor-pointer'>
                                 <div className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4'/> Can view</div>
                                 <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view the content, but cannot comment or edit.</p>
