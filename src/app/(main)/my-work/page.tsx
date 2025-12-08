@@ -4,7 +4,7 @@
 import React from 'react';
 import { Header } from '@/components/layout/header';
 import { useUserProfile } from '@/firebase';
-import { Loader2, HelpCircle, Star, User, ClipboardList, Calendar, Eye } from 'lucide-react';
+import { Loader2, HelpCircle, Eye, ClipboardList, Calendar } from 'lucide-react';
 import { ActionItems } from '@/components/my-work/action-items';
 import { TodaysFocus } from '@/components/my-work/todays-focus';
 import {
@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/tabs';
 import { MyTasksDataTable } from '@/components/my-work/my-tasks-data-table';
 import { Card, CardContent } from '@/components/ui/card';
+import { DailyChecklist } from '@/components/my-work/daily-checklist';
 
 export default function MyWorkPage() {
   const { profile, isLoading } = useUserProfile();
@@ -87,12 +88,15 @@ export default function MyWorkPage() {
             <TabsTrigger value="upcoming">Akan Datang</TabsTrigger>
           </TabsList>
           <TabsContent value="today" className="mt-6">
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
+                {/* Main content column */}
+                <div className="lg:col-span-2 space-y-6">
+                    <TodaysFocus />
+                </div>
+                {/* Right sidebar column */}
                 <div className="space-y-6">
                     <ActionItems />
-                </div>
-                <div className="space-y-6">
-                    <TodaysFocus />
+                    <DailyChecklist />
                 </div>
             </div>
           </TabsContent>
