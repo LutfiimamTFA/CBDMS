@@ -1100,7 +1100,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               </form>
           </Form>
           <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
-              {(canEdit || isAssignee) && (
+              {canEdit && (
                 <Button type="submit" form="task-details-form" disabled={isSaving}>
                   {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
                   Save Changes
