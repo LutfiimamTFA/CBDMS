@@ -7,6 +7,7 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { LanguageSwitcher } from '../language-switcher';
 import { UserNav } from './user-nav';
 import { NotificationBell } from './notification-bell';
+import { ShareDialog } from '../share-dialog';
 
 interface HeaderProps {
   title: string;
@@ -25,6 +26,7 @@ export function Header({ title, actions }: HeaderProps) {
       <div className="flex items-center gap-4">
         {actions}
         <div className="flex items-center gap-2">
+          <ShareDialog />
           <LanguageSwitcher />
           <ThemeSwitcher />
           <NotificationBell />

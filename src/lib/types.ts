@@ -120,6 +120,17 @@ export type DailyReport = {
   companyId: string;
 };
 
+export type SharedLink = {
+  id: string;
+  targetId: string; // e.g., 'dashboard', or a specific taskId
+  targetType: 'dashboard' | 'task';
+  accessLevel: 'view' | 'comment' | 'edit';
+  password?: string; // Hashed password
+  expiresAt?: string; // ISO date string
+  createdBy: string;
+  createdAt: any;
+  companyId: string;
+};
 
 export type Task = {
   id: string;
