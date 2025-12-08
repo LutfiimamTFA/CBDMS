@@ -51,7 +51,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
-import type { SocialMediaPost, Notification } from '@/lib/types';
+import type { SocialMediaPost, Notification, Comment, User } from '@/lib/types';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
@@ -82,6 +82,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // State for rejection dialog
+  const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const firestore = useFirestore();
   const storage = useStorage();
@@ -177,7 +181,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             userId: userDoc.id,
                             title: 'Content for Approval',
                             message: `${profile.name} submitted a new social media post for approval.`,
-                            taskId: postRef.id,
+                            taskId: postRef.id, // Using post ID as task ID for notifications
                             taskTitle: postData.caption.substring(0, 50),
                             isRead: false,
                             createdAt: serverTimestamp(),
@@ -216,9 +220,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   };
   
-  const handleUpdateStatus = async (newStatus: SocialMediaPost['status']) => {
+  const handleUpdateStatus = async (newStatus: SocialMediaPost['status'], reason?: string) => {
     if (!firestore || !post || !profile || !user) return;
     setIsSaving(true);
+    setRejectionDialogOpen(false);
 
     const postRef = doc(firestore, 'socialMediaPosts', post.id);
     const batch = writeBatch(firestore);
@@ -228,17 +233,36 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         updatedAt: serverTimestamp(),
     });
 
-    // Notify creator if the approver is not the creator
+    let notificationMessage: string;
+    let notificationTitle: string;
+    
+    if (newStatus === 'Scheduled') {
+        notificationTitle = 'Post Approved';
+        notificationMessage = `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`;
+    } else { // Rejected, status becomes 'Draft'
+        notificationTitle = 'Post Needs Revision';
+        notificationMessage = `${profile.name} requested revisions for your post: "${post.caption.substring(0, 30)}...". See comments for details.`;
+        
+        // Add rejection reason as a comment
+        if (reason) {
+            const newComment: Comment = {
+                id: `c-${Date.now()}`,
+                user: profile as User, // Cast profile to User, assuming it matches
+                text: `**Rejection Feedback:** ${reason}`,
+                timestamp: new Date().toISOString(),
+                replies: [],
+            };
+            const existingComments = post.comments || [];
+            batch.update(postRef, { comments: [...existingComments, newComment] });
+        }
+    }
+
     if (post.createdBy !== profile.id) {
         const notifRef = doc(collection(firestore, `users/${post.createdBy}/notifications`));
-        const message = newStatus === 'Scheduled'
-            ? `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`
-            : `Your post "${post.caption.substring(0, 30)}..." was returned to drafts. Check for comments from the manager.`;
-
         const newNotification: Omit<Notification, 'id'> = {
             userId: post.createdBy,
-            title: newStatus === 'Scheduled' ? 'Post Approved' : 'Post Needs Revision',
-            message: message,
+            title: notificationTitle,
+            message: notificationMessage,
             taskId: post.id,
             taskTitle: post.caption.substring(0, 50),
             isRead: false,
@@ -267,6 +291,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       });
     } finally {
       setIsSaving(false);
+      setRejectionReason('');
     }
   };
   
@@ -461,7 +486,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
 
             {isApproverView ? (
                 <>
-                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleUpdateStatus('Draft')} disabled={isSaving}>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRejectionDialogOpen(true)} disabled={isSaving}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
                       Reject
                   </Button>
@@ -472,11 +497,11 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 </>
             ) : isEditable ? (
               <>
-                  {mode === 'create' ? (
+                  {mode === 'create' || (mode === 'edit' && post?.status === 'Draft') ? (
                       <>
                           <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
                               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                              Save as Draft
+                              {mode === 'create' ? 'Save as Draft' : 'Save Changes'}
                           </Button>
                           <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
                               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -484,30 +509,43 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                           </Button>
                       </>
                    ) : (
-                      mode === 'edit' && post?.status === 'Draft' ? (
-                        <>
-                          <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
-                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                              Save Changes
-                          </Button>
-                           <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
-                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                              Submit for Approval
-                          </Button>
-                        </>
-                      ) : (
                          <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Save Changes
                         </Button>
-                      )
-                  )}
+                    )
+                  }
               </>
             ) : null}
           </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    
+    <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Reason for Rejection</DialogTitle>
+                <DialogDescription>
+                    Please provide feedback for the creator on why this post is being rejected. This will be added as a comment.
+                </DialogDescription>
+            </DialogHeader>
+            <Textarea 
+                placeholder="e.g., The caption needs to be more engaging, please revise the image..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                rows={4}
+            />
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
+                <Button variant="destructive" onClick={() => handleUpdateStatus('Draft', rejectionReason)} disabled={!rejectionReason.trim() || isSaving}>
+                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Confirm Rejection
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
     <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent>
             <AlertDialogHeader>

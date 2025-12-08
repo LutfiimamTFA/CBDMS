@@ -165,6 +165,7 @@ export type SocialMediaPost = {
   postedAt?: string;
   createdBy: string;
   companyId: string;
+  comments?: Comment[];
 };
 
 
