@@ -1,10 +1,11 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { Task, Brand, WorkflowStatus, User, Activity } from '@/lib/types';
-import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
+import { collection, query, orderBy, where } from 'firebase/firestore';
 import {
   eachDayOfInterval,
   endOfMonth,
@@ -18,10 +19,6 @@ import {
   isSameDay,
   parseISO,
   isWithinInterval,
-  differenceInCalendarDays,
-  getDay,
-  max,
-  min,
 } from 'date-fns';
 import {
   ChevronLeft,
@@ -38,7 +35,7 @@ import {
 } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { cn, priorityInfo } from '@/lib/utils';
+import { cn, priorityInfo, getBrandColor } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -52,41 +49,14 @@ import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import Link from 'next/link';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { useToast } from '@/hooks/use-toast';
-
-
-const brandColors = [
-  'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-lime-500', 
-  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'
-];
-const getBrandColor = (brandId: string) => {
-  if (!brandId) return 'bg-gray-500';
-  let hash = 0;
-  for (let i = 0; i < brandId.length; i++) {
-    hash = brandId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash % brandColors.length);
-  return brandColors[index];
-};
-
-
-type RenderSegment = {
-  task: Task;
-  startCol: number;
-  span: number;
-  level: number;
-  isStart: boolean;
-  isEnd: boolean;
-};
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type ViewMode = 'month' | 'week';
 
 export default function CalendarPage() {
   const firestore = useFirestore();
   const { profile: currentUser } = useUserProfile();
-  const { toast } = useToast();
   const [currentDate, setCurrentDate] = useState(new Date());
-  // --- View Mode Toggle ---
   const [viewMode, setViewMode] = useState<ViewMode>('month');
 
   // --- Filter States ---
@@ -96,8 +66,19 @@ export default function CalendarPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
 
-  // --- Data Fetching ---
-  const tasksQuery = useMemo(() => (firestore ? query(collection(firestore, 'tasks')) : null), [firestore]);
+  // --- Data Fetching (Role-aware) ---
+  const tasksQuery = useMemo(() => {
+    if (!firestore || !currentUser) return null;
+
+    if (currentUser.role === 'Manager' || currentUser.role === 'Super Admin') {
+      // Managers/Admins see all tasks
+      return query(collection(firestore, 'tasks'));
+    } else {
+      // Employees only see their own tasks
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', currentUser.id));
+    }
+  }, [firestore, currentUser]);
+
   const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   const usersQuery = useMemo(() => (firestore ? query(collection(firestore, 'users'), orderBy('name')) : null), [firestore]);
@@ -130,32 +111,33 @@ export default function CalendarPage() {
       const firstDayOfMonth = startOfMonth(currentDate);
       const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
       const calendarEnd = endOfWeek(endOfMonth(firstDayOfMonth), { weekStartsOn: 0 });
-      const weeks = [];
-      let currentWeekStart = calendarStart;
-      while(currentWeekStart <= calendarEnd) {
-        const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 0 });
-        weeks.push({
-            start: currentWeekStart,
-            end: weekEnd,
-            days: eachDayOfInterval({start: currentWeekStart, end: weekEnd})
-        });
-        currentWeekStart = add(currentWeekStart, { weeks: 1 });
-      }
-      return { start: calendarStart, end: calendarEnd, weeks };
+      const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+      return { start: calendarStart, end: calendarEnd, days };
     } else { // week view
       const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 });
       const weekEnd = endOfWeek(currentDate, { weekStartsOn: 0 });
-      return {
-        start: weekStart,
-        end: weekEnd,
-        weeks: [{
-            start: weekStart,
-            end: weekEnd,
-            days: eachDayOfInterval({ start: weekStart, end: weekEnd })
-        }]
-      };
+      return { start: weekStart, end: weekEnd, days: eachDayOfInterval({ start: weekStart, end: weekEnd }) };
     }
   }, [currentDate, viewMode]);
+
+  const tasksByDueDate = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    if (!filteredTasks) return map;
+    
+    filteredTasks.forEach(task => {
+      if (task.dueDate) {
+        const dueDate = parseISO(task.dueDate);
+        if (isWithinInterval(dueDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+          const key = format(dueDate, 'yyyy-MM-dd');
+          if (!map.has(key)) {
+            map.set(key, []);
+          }
+          map.get(key)?.push(task);
+        }
+      }
+    });
+    return map;
+  }, [filteredTasks, calendarGrid]);
   
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => ({
@@ -202,160 +184,10 @@ export default function CalendarPage() {
     return Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
   }, []);
 
-  // --- weeklyRenderSegments useMemo ---
-  const weeklyRenderSegments = useMemo(() => {
-    if (!filteredTasks) return [];
-
-    return calendarGrid.weeks.map(week => {
-      const weekTasks = filteredTasks
-        .map(task => {
-          const taskStart = task.startDate ? parseISO(task.startDate) : (task.dueDate ? parseISO(task.dueDate) : null);
-          const taskEnd = task.dueDate ? parseISO(task.dueDate) : taskStart;
-          
-          if (!taskStart || !taskEnd) return null;
-          
-          return { ...task, start: taskStart, end: taskEnd < taskStart ? taskStart : taskEnd };
-        })
-        .filter((t): t is Task & { start: Date; end: Date } => {
-          if (!t) return false;
-          const weekInterval = { start: week.start, end: week.end };
-          return isWithinInterval(t.start, weekInterval) || isWithinInterval(t.end, weekInterval) || (t.start < week.start && t.end > week.end);
-        });
-        
-      const segments: RenderSegment[] = [];
-      const levelOccupancy: { endCol: number, level: number }[][] = Array(7).fill(0).map(() => []);
-
-      weekTasks
-        .sort((a,b) => {
-            const aDuration = differenceInCalendarDays(a.end, a.start);
-            const bDuration = differenceInCalendarDays(b.end, b.start);
-            if(aDuration !== bDuration) return bDuration - aDuration;
-            return a.start.getTime() - b.start.getTime();
-        })
-        .forEach(task => {
-          const effectiveStart = max([task.start, week.start]);
-          const effectiveEnd = min([task.end, week.end]);
-
-          if (effectiveStart > effectiveEnd) return;
-          
-          const startCol = getDay(effectiveStart);
-          const endCol = getDay(effectiveEnd);
-          const span = endCol - startCol + 1;
-
-          if (span <= 0) return;
-          
-          let level = 0;
-          while (true) {
-            let isOccupied = false;
-            for (let i = startCol; i <= endCol; i++) {
-              if (levelOccupancy[i].some(occupant => occupant.level === level)) {
-                isOccupied = true;
-                break;
-              }
-            }
-            if (!isOccupied) break;
-            level++;
-          }
-          
-          for (let i = startCol; i <= endCol; i++) {
-            levelOccupancy[i].push({ level, endCol });
-          }
-
-          segments.push({
-            task,
-            startCol,
-            span,
-            level,
-            isStart: isSameDay(task.start, effectiveStart),
-            isEnd: isSameDay(task.end, effectiveEnd),
-          });
-        });
-
-      return { segments, maxLevel: Math.max(...levelOccupancy.flat().map(o => o.level), -1) };
-    });
-  }, [filteredTasks, calendarGrid.weeks]);
-
-  // --- Drag and Drop Handlers ---
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, task: Task) => {
-    // Prevent dragging if the task is done
-    if (task.status === 'Done') {
-        e.preventDefault();
-        return;
-    }
-    e.dataTransfer.setData("application/json", JSON.stringify({
-      taskId: task.id,
-      originalStartDate: task.startDate || task.dueDate,
-    }));
-    e.dataTransfer.effectAllowed = "move";
-  };
-  
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
-  
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (!firestore || !currentUser) return;
-
-    const droppedData = JSON.parse(e.dataTransfer.getData("application/json"));
-    const { taskId, originalStartDate } = droppedData;
-    const targetDateStr = e.currentTarget.dataset.date;
-    
-    if (!taskId || !targetDateStr) return;
-
-    const task = allTasks?.find(t => t.id === taskId);
-    if (!task) return;
-
-    const originalStart = parseISO(originalStartDate);
-    const originalEnd = task.dueDate ? parseISO(task.dueDate) : originalStart;
-    const durationDays = differenceInCalendarDays(originalEnd, originalStart);
-
-    const newStartDate = new Date(targetDateStr);
-    const newDueDate = add(newStartDate, { days: durationDays });
-
-    const taskRef = doc(firestore, 'tasks', taskId);
-
-      const createActivity = (user: User, action: string): Activity => {
-        return {
-          id: `act-${Date.now()}`,
-          user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-          action: action,
-          timestamp: new Date().toISOString(),
-        };
-      };
-      
-      const oldDateFormatted = format(originalStart, 'MMM d');
-      const newDateFormatted = format(newStartDate, 'MMM d');
-      const newActivity = createActivity(currentUser, `rescheduled task from ${oldDateFormatted} to ${newDateFormatted}`);
-
-    try {
-      await updateDoc(taskRef, {
-        startDate: newStartDate.toISOString(),
-        dueDate: newDueDate.toISOString(),
-        updatedAt: serverTimestamp(),
-        activities: [...(task.activities || []), newActivity],
-        lastActivity: newActivity,
-      });
-      toast({
-        title: "Task Rescheduled",
-        description: `"${task.title}" has been moved.`
-      });
-    } catch (error) {
-      console.error("Failed to update task date:", error);
-      toast({
-        variant: "destructive",
-        title: "Update Failed",
-        description: "Could not reschedule the task. Please try again."
-      });
-    }
-  };
-
-
   return (
     <div className="flex h-svh flex-col bg-background">
       <Header title="Team Calendar" />
-      <main className="flex-1 overflow-auto p-4 md:p-6">
+      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
           <div className="flex items-center gap-2">
@@ -388,7 +220,6 @@ export default function CalendarPage() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
-            {/* --- View Mode Toggle --- */}
             <ToggleGroup type="single" value={viewMode} onValueChange={(value) => value && setViewMode(value as ViewMode)} className='hidden md:flex'>
               <ToggleGroupItem value="month">Month</ToggleGroupItem>
               <ToggleGroupItem value="week">Week</ToggleGroupItem>
@@ -434,62 +265,54 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar Grid */}
-        <div className="grid grid-cols-7 border-t border-l border-border">
+        <div className="grid grid-cols-7 border-t border-l border-border bg-secondary/30">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground bg-secondary/50 border-r border-b">
+                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-r border-b">
                     <span className="hidden md:inline">{day}</span>
                     <span className="md:hidden">{day.charAt(0)}</span>
                 </div>
             ))}
         </div>
-        <div className="grid grid-cols-1 border-l border-border">
-            {calendarGrid.weeks.map((week, weekIndex) => (
-                <div key={weekIndex} className="grid grid-cols-7 relative border-b" style={{ minHeight: `${(weeklyRenderSegments[weekIndex]?.maxLevel + 1) * 1.75 + 4}rem`}}>
-                     <div className="absolute top-8 left-0 right-0 bottom-0 grid grid-cols-7">
-                        {weeklyRenderSegments[weekIndex]?.segments.map(segment => {
-                            const { task, startCol, span, level, isStart, isEnd } = segment;
-                            const priority = task.priority ? priorityInfo[task.priority] : null;
-                            const PriorityIcon = priority?.icon;
-                            const taskColor = getBrandColor(task.brandId);
-                            const isDraggable = task.status !== 'Done';
+        <ScrollArea className="flex-1">
+        <div className="grid grid-cols-7 border-l border-border h-full">
+            {calendarGrid.days.map((day, index) => {
+                const dayKey = format(day, 'yyyy-MM-dd');
+                const dayTasks = tasksByDueDate.get(dayKey) || [];
+
+                return (
+                    <div 
+                        key={day.toString()} 
+                        className={cn(
+                            "relative min-h-[6rem] p-2 border-r border-b flex flex-col", 
+                            viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30"
+                        )}
+                    >
+                        <span className={cn(
+                            "font-semibold text-sm", 
+                            isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground",
+                             viewMode === 'month' && !isSameMonth(day, currentDate) && "text-muted-foreground/50",
+                             )}>
+                            {format(day, 'd')}
+                        </span>
+                        <div className="mt-2 flex-1 space-y-1 overflow-hidden">
+                          {dayTasks.map(task => {
+                            const brandColor = getBrandColor(task.brandId);
+                            const priority = priorityInfo[task.priority];
 
                             return (
-                                <Popover key={`${task.id}-${week.start.toString()}`}>
+                                <Popover key={task.id}>
                                     <TooltipProvider>
-                                        <Tooltip>
-                                            <PopoverTrigger asChild>
-                                                <TooltipTrigger asChild>
-                                                <div
-                                                    draggable={isDraggable}
-                                                    onDragStart={(e) => handleDragStart(e, task)}
-                                                    className={cn(
-                                                        'absolute h-6 px-2 flex items-center text-white text-xs font-medium transition-all z-10',
-                                                        taskColor,
-                                                        isStart ? 'rounded-l-md' : '',
-                                                        isEnd ? 'rounded-r-md' : '',
-                                                        isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer',
-                                                        'hover:opacity-80',
-                                                        task.status === 'Done' && 'opacity-60'
-                                                    )}
-                                                    style={{
-                                                        top: `${level * 1.75}rem`,
-                                                        left: `${(startCol / 7) * 100}%`,
-                                                        width: `calc(${(span / 7) * 100}% - 4px)`,
-                                                        marginLeft: '2px',
-                                                        marginRight: '2px',
-                                                    }}
-                                                >
-                                                    <div className="flex items-center gap-1.5 truncate">
-                                                        {PriorityIcon && (
-                                                            <PriorityIcon className="h-3.5 w-3.5 shrink-0" />
-                                                        )}
-                                                        <span className="truncate">{task.title}</span>
-                                                    </div>
-                                                </div>
-                                                </TooltipTrigger>
-                                            </PopoverTrigger>
-                                            <TooltipContent><p>{task.title}</p></TooltipContent>
-                                        </Tooltip>
+                                    <Tooltip>
+                                        <PopoverTrigger asChild>
+                                        <TooltipTrigger asChild>
+                                        <div className={cn(
+                                            'w-full h-1.5 rounded-full cursor-pointer hover:opacity-80',
+                                            brandColor
+                                        )}></div>
+                                        </TooltipTrigger>
+                                        </PopoverTrigger>
+                                        <TooltipContent><p>{task.title}</p></TooltipContent>
+                                    </Tooltip>
                                     </TooltipProvider>
                                     <PopoverContent className="w-80">
                                         <div className="space-y-3">
@@ -497,12 +320,11 @@ export default function CalendarPage() {
                                                 <h4 className="font-bold">{task.title}</h4>
                                             </Link>
                                             <div className='flex justify-between items-start'>
-                                                <Badge variant="secondary" className={cn(taskColor, 'text-white')}>
+                                                <Badge variant="secondary" className={cn(brandColor, 'text-white')}>
                                                 {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
                                                 </Badge>
                                             </div>
                                             <div className="text-sm text-muted-foreground">
-                                                <p>Start: {task.startDate ? format(parseISO(task.startDate), 'MMM d, yyyy') : 'N/A'}</p>
                                                 <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'N/A'}</p>
                                             </div>
                                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -538,25 +360,15 @@ export default function CalendarPage() {
                                     </PopoverContent>
                                 </Popover>
                             );
-                        })}
-                    </div>
-                    {week.days.map((day) => (
-                        <div 
-                            key={day.toString()} 
-                            className={cn("p-2 border-r relative pt-8", viewMode === 'month' && !isSameMonth(day, currentDate) && "bg-muted/30")}
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                            data-date={day.toISOString()}
-                        >
-                            <span className={cn( "absolute top-1.5 left-1.5 font-semibold text-sm", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
-                                {format(day, 'd')}
-                            </span>
+                          })}
                         </div>
-                    ))}
-                </div>
-            ))}
+                    </div>
+                )
+            })}
         </div>
+        </ScrollArea>
       </main>
     </div>
   );
-}
+
+    
