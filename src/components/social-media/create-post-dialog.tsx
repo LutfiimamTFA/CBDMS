@@ -45,7 +45,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, deleteDoc } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, deleteDoc, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -166,7 +166,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             });
 
             // Notify managers/admins
-            const usersSnapshot = await collection(firestore, 'users').get();
+            const usersSnapshot = await getDocs(collection(firestore, 'users'));
             usersSnapshot.forEach(userDoc => {
                 const userData = userDoc.data();
                 if ((userData.role === 'Manager' || userData.role === 'Super Admin') && userData.companyId === profile.companyId) {
