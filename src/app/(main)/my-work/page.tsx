@@ -4,7 +4,7 @@
 import React from 'react';
 import { Header } from '@/components/layout/header';
 import { useUserProfile } from '@/firebase';
-import { Loader2, HelpCircle, Star, User } from 'lucide-react';
+import { Loader2, HelpCircle, Star, User, ClipboardList, Calendar, Eye } from 'lucide-react';
 import { ActionItems } from '@/components/my-work/action-items';
 import { TodaysFocus } from '@/components/my-work/todays-focus';
 import {
@@ -13,6 +13,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import { MyTasksDataTable } from '@/components/my-work/my-tasks-data-table';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function MyWorkPage() {
   const { profile, isLoading } = useUserProfile();
@@ -48,31 +56,61 @@ export default function MyWorkPage() {
             </AccordionTrigger>
             <AccordionContent className="space-y-4 text-sm text-muted-foreground pt-2">
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
-                <Star className="h-5 w-5 mt-1 text-primary shrink-0"/>
-                <div>
-                    <h4 className="font-semibold text-foreground">Action Items (Segera Kerjakan)</h4>
-                    <p>Ini adalah daftar prioritas tertinggi Anda. Berisi hal-hal yang secara spesifik membutuhkan respons atau tindakan langsung dari Anda, seperti mention di komentar atau sub-tugas yang ditugaskan kepada Anda.</p>
-                </div>
+                    <Eye className="h-5 w-5 mt-1 text-primary shrink-0"/>
+                    <div>
+                        <h4 className="font-semibold text-foreground">Fokus Hari Ini</h4>
+                        <p>Tab default yang berisi Action Items (mention & sub-tugas untuk Anda) dan Today's Focus (tugas yang relevan hari ini). Gunakan ini untuk prioritas harian.</p>
+                    </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
-                <User className="h-5 w-5 mt-1 text-primary shrink-0"/>
-                <div>
-                    <h4 className="font-semibold text-foreground">Today's Focus (Fokus Hari Ini)</h4>
-                    <p>Berisi tugas-tugas utama yang sedang aktif Anda kerjakan, yang jatuh tempo hari ini, atau yang sudah terlewat. Ini juga mencakup ceklis tugas harian rutin Anda.</p>
+                    <ClipboardList className="h-5 w-5 mt-1 text-primary shrink-0"/>
+                    <div>
+                        <h4 className="font-semibold text-foreground">Semua Tugas Saya</h4>
+                        <p>Tampilan "mata elang" dari SEMUA tugas yang di-assign kepada Anda, tidak peduli status atau tenggat waktunya. Gunakan tab ini untuk memastikan tidak ada pekerjaan yang terlewat.</p>
+                    </div>
                 </div>
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
+                    <Calendar className="h-5 w-5 mt-1 text-primary shrink-0"/>
+                    <div>
+                        <h4 className="font-semibold text-foreground">Akan Datang (Upcoming)</h4>
+                        <p>Tampilan kalender atau daftar tugas yang akan jatuh tempo dalam 7 atau 30 hari ke depan. Gunakan ini untuk merencanakan pekerjaan minggu depan.</p>
+                    </div>
                 </div>
             </AccordionContent>
             </AccordionItem>
         </Accordion>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
-            <div className="space-y-6">
-                <ActionItems />
+        <Tabs defaultValue="today" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
+            <TabsTrigger value="today">Fokus Hari Ini</TabsTrigger>
+            <TabsTrigger value="all">Semua Tugas Saya</TabsTrigger>
+            <TabsTrigger value="upcoming">Akan Datang</TabsTrigger>
+          </TabsList>
+          <TabsContent value="today" className="mt-6">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+                <div className="space-y-6">
+                    <ActionItems />
+                </div>
+                <div className="space-y-6">
+                    <TodaysFocus />
+                </div>
             </div>
-            <div className="space-y-6">
-                <TodaysFocus />
-            </div>
-        </div>
+          </TabsContent>
+          <TabsContent value="all" className="mt-6">
+            <MyTasksDataTable />
+          </TabsContent>
+          <TabsContent value="upcoming" className="mt-6">
+            <Card>
+                <CardContent className="p-12 text-center">
+                    <h3 className="text-lg font-semibold">Coming Soon!</h3>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                        Tampilan kalender untuk tugas-tugas mendatang akan segera hadir.
+                    </p>
+                </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
       </main>
     </div>
   );

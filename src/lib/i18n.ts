@@ -1,4 +1,5 @@
 
+
 export const languages = {
   en: { code: 'en', name: 'English', countryCode: 'gb' },
   id: { code: 'id', name: 'Indonesia', countryCode: 'id' },
@@ -260,3 +261,4 @@ export const ui = {
     'dashboard.role': 'Anda masuk sebagai {role}. Selamat bekerja dan semoga harimu produktif!',
   },
 } as const;
+
