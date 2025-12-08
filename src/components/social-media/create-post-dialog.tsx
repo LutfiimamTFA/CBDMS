@@ -48,10 +48,11 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save, Edit } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save, Edit, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User } from '@/lib/types';
+import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui/alert';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
@@ -247,7 +248,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         if (reason) {
             const newComment: Comment = {
                 id: `c-${Date.now()}`,
-                user: profile as User, // Cast profile to User, assuming it matches
+                user: profile as User, 
                 text: `**Rejection Feedback:** ${reason}`,
                 timestamp: new Date().toISOString(),
                 replies: [],
@@ -330,10 +331,13 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const isApproverView = mode === 'edit' && isManager && post?.status === 'Needs Approval';
   const isCreatorEditView = mode === 'edit' && isCreator && post?.status === 'Draft';
   
-  // Fields are editable if creating new, or if you are a manager, or if you are the creator editing a draft.
-  const isEditable = mode === 'create' || isManager || isCreatorEditView;
+  // Fields are editable if creating new, or if it's a creator editing their own draft.
+  const isEditable = mode === 'create' || isCreatorEditView;
   
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
+
+  const lastComment = post?.comments && post.comments.length > 0 ? post.comments[post.comments.length - 1] : null;
+  const wasRejected = lastComment && lastComment.text.startsWith('**Rejection Feedback:**');
 
   return (
     <>
@@ -348,6 +352,15 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         </DialogHeader>
         <ScrollArea className='-mt-4'>
             <div className="px-6 py-4">
+                {wasRejected && (
+                  <Alert variant="destructive" className="mb-4">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Revisions Requested</AlertTitle>
+                      <AlertDescriptionUI>
+                          This post was returned for revisions. See the feedback below and use the "Edit" button to make changes.
+                      </AlertDescriptionUI>
+                  </Alert>
+                )}
                 <Form {...form}>
                 <form id="create-post-form" className="space-y-6">
                     <FormField
@@ -496,8 +509,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                   </Button>
                 </>
             ) : mode === 'create' ? (
-                // --- CREATE MODE ---
-                isManager ? (
+                isManager ? ( // Manager creating
                     <>
                         <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
@@ -516,15 +528,17 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         </Button>
                     </>
                 )
-            ) : (
-                 // --- EDIT MODE ---
-                isEditable && (
-                    <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save Changes
+            ) : isCreatorEditView ? (
+                // Creator editing their own draft
+                <>
+                    <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Changes
                     </Button>
-                )
-            )}
+                    <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit for Approval
+                    </Button>
+                </>
+            ) : null }
           </div>
         </DialogFooter>
       </DialogContent>
