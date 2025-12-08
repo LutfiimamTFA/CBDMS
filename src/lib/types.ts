@@ -40,6 +40,11 @@ export type Subtask = {
   id: string;
   title: string;
   completed: boolean;
+  assignee?: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+  };
 };
 
 export type Comment = {
