@@ -22,13 +22,14 @@ import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc } from '
 import type { SharedLink } from '@/lib/types';
 import { Share2, Link, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Eye, MessageSquare, Edit } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { query, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Separator } from './ui/separator';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { ScrollArea } from './ui/scroll-area';
 
 
 export function ShareDialog() {
@@ -203,14 +204,16 @@ export function ShareDialog() {
           Share
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-xl">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+        <DialogHeader className="p-6 pb-0">
           <DialogTitle>Share Dashboard</DialogTitle>
           <DialogDescription>
             {createdLink ? 'Manage settings for the shareable link.' : 'Generate a link to share this view with others.'}
           </DialogDescription>
         </DialogHeader>
-
+        
+        <ScrollArea className='px-6'>
+        <div className="py-4">
         {isLoadingAnything ? (
             <div className="flex justify-center items-center h-48">
                 <Loader2 className="animate-spin h-8 w-8" />
@@ -231,27 +234,27 @@ export function ShareDialog() {
                 </CardHeader>
                 <CardContent className='p-4 pt-0 space-y-6'>
                     <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)} className="gap-4">
-                        <Label className="flex items-start gap-4 rounded-md border p-3 cursor-pointer hover:bg-accent has-[:checked]:bg-accent has-[:checked]:border-primary">
+                        <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary">
                             <RadioGroupItem value="view" id="view" />
-                            <div className='-mt-1'>
+                            <Label htmlFor="view" className='-mt-1 w-full cursor-pointer'>
                                 <div className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4'/> Can view</div>
                                 <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view the content, but cannot comment or edit.</p>
-                            </div>
-                        </Label>
-                        <Label className="flex items-start gap-4 rounded-md border p-3 cursor-pointer hover:bg-accent has-[:checked]:bg-accent has-[:checked]:border-primary">
+                            </Label>
+                        </div>
+                        <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary cursor-not-allowed opacity-50">
                             <RadioGroupItem value="comment" id="comment" disabled/>
-                            <div className='-mt-1'>
-                                <div className="font-semibold flex items-center gap-2 text-muted-foreground"><MessageSquare className='h-4 w-4'/> Can comment (Coming soon)</div>
+                            <Label htmlFor="comment" className='-mt-1 w-full cursor-not-allowed'>
+                                <div className="font-semibold flex items-center gap-2"><MessageSquare className='h-4 w-4'/> Can comment (Coming soon)</div>
                                 <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view and add comments.</p>
-                            </div>
-                        </Label>
-                         <Label className="flex items-start gap-4 rounded-md border p-3 cursor-pointer hover:bg-accent has-[:checked]:bg-accent has-[:checked]:border-primary">
+                            </Label>
+                        </div>
+                         <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary cursor-not-allowed opacity-50">
                             <RadioGroupItem value="edit" id="edit" disabled/>
-                            <div className='-mt-1'>
-                                <div className="font-semibold flex items-center gap-2 text-muted-foreground"><Edit className='h-4 w-4'/> Can edit (Coming soon)</div>
+                            <Label htmlFor="edit" className='-mt-1 w-full cursor-not-allowed'>
+                                <div className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Can edit (Coming soon)</div>
                                 <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view, comment, and edit the content.</p>
-                            </div>
-                        </Label>
+                            </Label>
+                        </div>
                     </RadioGroup>
 
                     <Separator/>
@@ -259,7 +262,7 @@ export function ShareDialog() {
                     <div className="space-y-4">
                         <div className="flex items-center space-x-2">
                            <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword}/>
-                           <Label htmlFor="use-password" className="font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4"/> Require Password</Label>
+                           <Label htmlFor="use-password" className="font-semibold flex items-center gap-2 cursor-pointer"><KeyRound className="h-4 w-4"/> Require Password</Label>
                         </div>
                         {usePassword && (
                             <Input placeholder="Enter a password" value={password === '********' ? '' : password} onChange={e => setPassword(e.target.value)} type='password'/>
@@ -271,7 +274,7 @@ export function ShareDialog() {
                     <div className="space-y-4">
                         <div className="flex items-center space-x-2">
                            <Switch id="use-expiration" checked={useExpiration} onCheckedChange={setUseExpiration}/>
-                           <Label htmlFor="use-expiration" className="font-semibold flex items-center gap-2"><CalendarIcon className="h-4 w-4"/> Set Expiration</Label>
+                           <Label htmlFor="use-expiration" className="font-semibold flex items-center gap-2 cursor-pointer"><CalendarIcon className="h-4 w-4"/> Set Expiration</Label>
                         </div>
                         {useExpiration && (
                            <div className="grid grid-cols-2 gap-2">
@@ -305,16 +308,6 @@ export function ShareDialog() {
                     </div>
                 </CardContent>
             </Card>
-
-            <DialogFooter className='pt-4 flex justify-between w-full'>
-                <Button variant="destructive" onClick={handleDisableLink} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className='mr-2' />} Disable Link
-                </Button>
-                <Button onClick={handleUpdateLink} disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Update Link
-                </Button>
-            </DialogFooter>
-
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center text-center p-4 space-y-4 h-48">
@@ -327,6 +320,18 @@ export function ShareDialog() {
               Create Shareable Link
             </Button>
           </div>
+        )}
+        </div>
+        </ScrollArea>
+        {createdLink && (
+            <DialogFooter className='p-6 pt-0 border-t flex justify-between w-full'>
+                <Button variant="destructive" onClick={handleDisableLink} disabled={isLoading}>
+                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <X className='mr-2' />} Disable Link
+                </Button>
+                <Button onClick={handleUpdateLink} disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Update Link
+                </Button>
+            </DialogFooter>
         )}
       </DialogContent>
     </Dialog>
