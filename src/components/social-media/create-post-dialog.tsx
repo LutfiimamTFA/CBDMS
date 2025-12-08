@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -229,12 +228,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         updatedAt: serverTimestamp(),
     });
 
-    // Notify creator
+    // Notify creator if the approver is not the creator
     if (post.createdBy !== profile.id) {
         const notifRef = doc(collection(firestore, `users/${post.createdBy}/notifications`));
         const message = newStatus === 'Scheduled'
             ? `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`
-            : `Your post "${post.caption.substring(0, 30)}..." was returned to drafts.`;
+            : `Your post "${post.caption.substring(0, 30)}..." was returned to drafts. Check for comments from the manager.`;
 
         const newNotification: Omit<Notification, 'id'> = {
             userId: post.createdBy,
@@ -473,30 +472,35 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 </>
             ) : isEditable ? (
               <>
-                  {mode === 'create' || (mode === 'edit' && post?.status === 'Draft') ? (
+                  {mode === 'create' ? (
                       <>
-                          {isManager ? (
-                              <Button variant="secondary" onClick={() => onFormSubmit('Scheduled')} disabled={isSaving}>
-                                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                  Schedule Directly
-                              </Button>
-                          ) : (
-                              <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
-                                  {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                  Save as Draft
-                              </Button>
-                          )}
-
+                          <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                              Save as Draft
+                          </Button>
                           <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
                               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                              {isManager ? 'Submit for Review' : 'Submit for Approval'}
+                              Submit for Approval
                           </Button>
                       </>
-                  ) : (
-                      <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
-                          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          Save Changes
-                      </Button>
+                   ) : (
+                      mode === 'edit' && post?.status === 'Draft' ? (
+                        <>
+                          <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                              Save Changes
+                          </Button>
+                           <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                              Submit for Approval
+                          </Button>
+                        </>
+                      ) : (
+                         <Button type="button" onClick={() => onFormSubmit(post?.status ?? 'Draft')} disabled={isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Save Changes
+                        </Button>
+                      )
                   )}
               </>
             ) : null}
@@ -524,4 +528,3 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     </>
   );
 }
-
