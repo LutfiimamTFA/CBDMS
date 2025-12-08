@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -121,15 +122,18 @@ export function ShareDialog() {
         return;
     }
     
-    const linkData: Omit<SharedLink, 'id' | 'expiresAt'> & { expiresAt?: string } = {
+    const linkData: Partial<SharedLink> = {
       targetId,
       targetType,
       accessLevel,
       createdBy: profile.id,
       createdAt: serverTimestamp(),
       companyId: profile.companyId,
-      ...(usePassword && { password: password }),
     };
+    
+    if (usePassword && password) {
+        linkData.password = password;
+    }
 
     const expiration = getCombinedExpiration();
     if (expiration) {
@@ -156,15 +160,20 @@ export function ShareDialog() {
     
     const updates: { [key: string]: any } = {
         accessLevel,
-        expiresAt: getCombinedExpiration(),
-        password: usePassword ? (password === '********' ? createdLink.password : password) : undefined,
     };
 
-    if (!usePassword) {
-      updates.password = deleteField();
+    if (useExpiration) {
+        updates.expiresAt = getCombinedExpiration();
+    } else {
+        updates.expiresAt = deleteField();
     }
-    if (!useExpiration) {
-      updates.expiresAt = deleteField();
+    
+    if (usePassword) {
+        if (password && password !== '********') {
+            updates.password = password;
+        }
+    } else {
+        updates.password = deleteField();
     }
     
     try {
@@ -247,17 +256,17 @@ export function ShareDialog() {
                                 <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view the content, but cannot comment or edit.</p>
                             </Label>
                         </div>
-                        <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary cursor-not-allowed opacity-50">
-                            <RadioGroupItem value="comment" id="comment" disabled/>
-                            <Label htmlFor="comment" className='-mt-1 w-full cursor-not-allowed'>
-                                <div className="font-semibold flex items-center gap-2"><MessageSquare className='h-4 w-4'/> Can comment (Coming soon)</div>
+                        <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary">
+                            <RadioGroupItem value="comment" id="comment" />
+                            <Label htmlFor="comment" className='-mt-1 w-full cursor-pointer'>
+                                <div className="font-semibold flex items-center gap-2"><MessageSquare className='h-4 w-4'/> Can comment</div>
                                 <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view and add comments.</p>
                             </Label>
                         </div>
-                         <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary cursor-not-allowed opacity-50">
-                            <RadioGroupItem value="edit" id="edit" disabled/>
-                            <Label htmlFor="edit" className='-mt-1 w-full cursor-not-allowed'>
-                                <div className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Can edit (Coming soon)</div>
+                         <div className="flex items-start gap-4 rounded-md border p-3 has-[:checked]:bg-accent has-[:checked]:border-primary">
+                            <RadioGroupItem value="edit" id="edit" />
+                            <Label htmlFor="edit" className='-mt-1 w-full cursor-pointer'>
+                                <div className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Can edit</div>
                                 <p className="text-xs text-muted-foreground mt-1">Anyone with the link can view, comment, and edit the content.</p>
                             </Label>
                         </div>
@@ -343,3 +352,4 @@ export function ShareDialog() {
     </Dialog>
   );
 }
+    
