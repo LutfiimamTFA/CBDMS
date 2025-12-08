@@ -46,13 +46,14 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save, Edit, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui/alert';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
@@ -68,15 +69,15 @@ interface CreatePostDialogProps {
     children?: React.ReactNode;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
-    mode?: 'create' | 'edit';
     post?: SocialMediaPost;
 }
 
 
-export function CreatePostDialog({ children, open: controlledOpen, onOpenChange: setControlledOpen, mode = 'create', post }: CreatePostDialogProps) {
+export function CreatePostDialog({ children, open: controlledOpen, onOpenChange: setControlledOpen, post }: CreatePostDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
   const setOpen = setControlledOpen ?? setInternalOpen;
+  const mode = post ? 'edit' : 'create';
   
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -336,8 +337,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
 
-  const lastComment = post?.comments && post.comments.length > 0 ? post.comments[post.comments.length - 1] : null;
-  const wasRejected = lastComment && lastComment.text.startsWith('**Rejection Feedback:**');
+  const rejectionComment = post?.comments?.slice().reverse().find(c => c.text.startsWith('**Rejection Feedback:**'));
 
   return (
     <>
@@ -352,12 +352,23 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         </DialogHeader>
         <ScrollArea className='-mt-4'>
             <div className="px-6 py-4">
-                {wasRejected && (
+                {rejectionComment && (
                   <Alert variant="destructive" className="mb-4">
                       <AlertCircle className="h-4 w-4" />
                       <AlertTitle>Revisions Requested</AlertTitle>
                       <AlertDescriptionUI>
-                          This post was returned for revisions. See the feedback below and use the "Edit" button to make changes.
+                        <div className="flex items-start gap-3 mt-2">
+                           <Avatar className="h-8 w-8">
+                                <AvatarImage src={rejectionComment.user.avatarUrl} alt={rejectionComment.user.name} />
+                                <AvatarFallback>{rejectionComment.user.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div className="text-sm">
+                                <p className="font-semibold">{rejectionComment.user.name} <span className="font-normal text-muted-foreground">requested changes:</span></p>
+                                <blockquote className="mt-1 italic border-l-2 pl-3 border-destructive/50">
+                                {rejectionComment.text.replace('**Rejection Feedback:**', '').trim()}
+                                </blockquote>
+                            </div>
+                        </div>
                       </AlertDescriptionUI>
                   </Alert>
                 )}
