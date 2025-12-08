@@ -343,12 +343,12 @@ export function TasksDataTable() {
   };
 
   const canCreateTasks = React.useMemo(() => {
-    if (!profile || !permissions) return false;
+    if (arePermsLoading || !profile || !permissions) return false;
     if (profile.role === 'Super Admin') return true;
     if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
     if (profile.role === 'Employee') return permissions.Employee.canCreateTasks;
     return false;
-  }, [profile, permissions]);
+  }, [profile, permissions, arePermsLoading]);
 
 
   const columns: ColumnDef<Task>[] = [
@@ -903,3 +903,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
