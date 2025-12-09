@@ -11,8 +11,8 @@ import { Loader2 } from 'lucide-react';
 
 export default function SharedTaskPage() {
   const router = useRouter();
-  const params = useParams();
-  const { linkId, taskId } = params as { linkId: string; taskId: string };
+  const params = useParams() as { linkId: string; taskId: string };
+  const { linkId, taskId } = params;
 
   const [isOpen, setIsOpen] = useState(true);
   const firestore = useFirestore();

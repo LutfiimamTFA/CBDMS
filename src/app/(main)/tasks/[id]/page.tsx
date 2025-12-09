@@ -3,14 +3,15 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
-import { notFound, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, useRouter, useSearchParams, useParams } from 'next/navigation';
 import type { Task } from '@/lib/types';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
-export default function TaskPage({ params }: { params: { id: string } }) {
+export default function TaskPage() {
   const router = useRouter();
+  const params = useParams() as { id: string };
   const searchParams = useSearchParams();
   const isSharedView = searchParams.get('shared') === 'true';
   
