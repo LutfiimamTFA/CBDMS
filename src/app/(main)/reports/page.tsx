@@ -2,10 +2,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useUserProfile, useCollection, useFirestore } from '@/firebase';
+import { useUserProfile, useCollection, useFirestore, useSharedSession } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
-import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp, Timer } from 'lucide-react';
+import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp, Timer, Ban } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
@@ -16,6 +16,7 @@ import { subDays, isAfter, parseISO, intervalToDuration } from 'date-fns';
 import { Label } from '@/components/ui/label';
 import { formatDuration } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
+import { notFound } from 'next/navigation';
 
 
 // --- Komponen untuk Laporan Karyawan ---
@@ -352,33 +353,45 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
 export default function ReportsPage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
+  const { session, isLoading: isSessionLoading } = useSharedSession();
+  
+  // Determine if we are in a shared context
+  const activeCompanyId = session ? session.companyId : companyId;
 
   const isSuperAdminOrManager = useMemo(() => {
+    if (session) {
+      // In shared view, reports might be restricted. For now, assume managers can see.
+      return true;
+    }
     return profile?.role === 'Super Admin' || profile?.role === 'Manager';
-  }, [profile]);
+  }, [profile, session]);
 
   // Kueri untuk semua tugas di perusahaan
   const tasksQuery = useMemo(() => {
-    if (!firestore || !companyId) return null;
-    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+    if (!firestore || !activeCompanyId) return null;
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
 
-    // Karyawan hanya melihat tugas mereka sendiri
-    if (profile?.role === 'Employee') {
+    // In a normal session, employees only see their own tasks
+    if (!session && profile?.role === 'Employee') {
         q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
     return q;
-  }, [firestore, companyId, profile]);
+  }, [firestore, activeCompanyId, profile, session]);
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
   // Kueri untuk semua pengguna di perusahaan (hanya untuk Admin/Manager)
   const usersQuery = useMemo(() => {
-      if (!firestore || !companyId || !isSuperAdminOrManager) return null;
-      return query(collection(firestore, 'users'), where('companyId', '==', companyId));
-  }, [firestore, companyId, isSuperAdminOrManager]);
+      if (!firestore || !activeCompanyId || !isSuperAdminOrManager) return null;
+      return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+  }, [firestore, activeCompanyId, isSuperAdminOrManager]);
   const { data: allUsers, isLoading: isAdminUsersLoading } = useCollection<User>(usersQuery);
 
-  const isLoading = isProfileLoading || isTasksLoading || (isSuperAdminOrManager && isAdminUsersLoading);
+  const isLoading = isProfileLoading || isTasksLoading || (isSuperAdminOrManager && isAdminUsersLoading) || isSessionLoading;
 
+  if (session && !session.allowedNavItems.includes('nav_performance_analysis')) {
+    return notFound();
+  }
+  
   return (
     <div className="flex h-svh flex-col bg-background">
       <Header title="Performance Analysis" />
@@ -396,3 +409,5 @@ export default function ReportsPage() {
     </div>
   );
 }
+
+    

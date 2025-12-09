@@ -26,9 +26,8 @@ import {
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { cn, getBrandColor } from '@/lib/utils';
-import Link from 'next/link';
 import { ScrollArea } from '../ui/scroll-area';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 
 interface SharedCalendarViewProps {
   tasks: Task[];
@@ -38,6 +37,8 @@ interface SharedCalendarViewProps {
 export function SharedCalendarView({ tasks, permissions = null }: SharedCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const router = useRouter();
+  const params = useParams();
+  const linkId = params.linkId as string;
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = startOfMonth(currentDate);
@@ -52,7 +53,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
     return { start: calendarStart, end: calendarEnd, days };
   }, [currentDate]);
 
-  const postsByDay = useMemo(() => {
+  const tasksByDay = useMemo(() => {
     const map = new Map<string, Task[]>();
     tasks.forEach(task => {
       if (task.dueDate) {
@@ -74,7 +75,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
 
   const handleCardClick = (taskId: string) => {
     if (permissions?.canViewDetails) {
-      router.push(`/share/${location.pathname.split('/')[2]}/${taskId}`);
+      router.push(`/share/${linkId}/${taskId}`);
     }
   };
 
@@ -104,7 +105,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
       <div className="grid grid-cols-7 grid-rows-6 flex-1 overflow-hidden">
         {calendarGrid.days.map((day, index) => {
           const dayKey = format(day, 'yyyy-MM-dd');
-          const tasksForDay = postsByDay.get(dayKey) || [];
+          const tasksForDay = tasksByDay.get(dayKey) || [];
           return (
             <div 
               key={day.toString()} 
@@ -160,3 +161,4 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
   );
 }
 
+    

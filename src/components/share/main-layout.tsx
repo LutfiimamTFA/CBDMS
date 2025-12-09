@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -15,9 +16,9 @@ import {
 } from '@/components/ui/sidebar';
 import {
   Loader2,
-  User,
   Icon as LucideIcon,
   LogOut,
+  Ban,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -62,18 +63,53 @@ export function MainLayout() {
 
   const filteredNavItems = useMemo(() => {
     if (!session || !navItemsFromDB) return [];
-    return navItemsFromDB.filter(item => 
-      !item.path.startsWith('/admin') && item.roles.includes(session.sharedAsRole)
-    );
+    
+    // Filter nav items based on what's allowed in the shared link, then sort
+    return navItemsFromDB
+        .filter(item => session.allowedNavItems.includes(item.id))
+        .sort((a,b) => a.order - b.order);
+        
   }, [session, navItemsFromDB]);
 
-
   const isLoading = isSessionLoading || isNavItemsLoading;
+  
+  // Security Gatekeeper: Check if the current path is allowed.
+  const currentNavItem = useMemo(() => {
+      if (!navItemsFromDB || !pathname) return null;
+      // Find the nav item that matches the current path, excluding the /share/[linkId] part
+      return navItemsFromDB.find(item => `/share/${linkId}${item.path}` === pathname);
+  }, [navItemsFromDB, pathname, linkId]);
 
   if (isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+  
+  if (!session) {
+      return (
+         <div className="flex h-screen w-full items-center justify-center bg-background">
+            <div className="text-center">
+                <h2 className="text-xl font-bold">Session Invalid</h2>
+                <p className="text-muted-foreground">This share link may be expired or invalid.</p>
+                <Button variant="link" asChild><Link href="/">Return to App</Link></Button>
+            </div>
+        </div>
+      )
+  }
+
+  // If the current route is not in the allowed list, show an access denied message.
+  if (currentNavItem && !session.allowedNavItems.includes(currentNavItem.id)) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="text-center">
+            <Ban className="mx-auto h-12 w-12 text-destructive" />
+            <h2 className="mt-4 text-xl font-bold">Access Denied</h2>
+            <p className="text-muted-foreground">You do not have permission to view this page.</p>
+            <Button variant="link" asChild><Link href={`/share/${linkId}`}>Go to shared home</Link></Button>
+        </div>
       </div>
     );
   }
@@ -108,8 +144,9 @@ export function MainLayout() {
           </Button>
         </SidebarFooter>
       </Sidebar>
-      {/* The content is rendered by Next.js's router based on the URL */}
-      <SidebarInset />
+      <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   );
 }
+
+    

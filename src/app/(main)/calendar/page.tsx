@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
-import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile, useSharedSession } from '@/firebase';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
 import { collection, query, orderBy, where } from 'firebase/firestore';
 import {
@@ -53,12 +53,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import Link from 'next/link';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { notFound } from 'next/navigation';
 
 type ViewMode = 'month' | 'week';
 
 export default function CalendarPage() {
   const firestore = useFirestore();
-  const { profile: currentUser } = useUserProfile();
+  const { profile: currentUser, companyId } = useUserProfile();
+  const { session, isLoading: isSessionLoading } = useSharedSession();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
 
@@ -68,32 +70,35 @@ export default function CalendarPage() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedPriorities, setSelectedPriorities] = useState<string[]>([]);
+  
+  const activeCompanyId = session ? session.companyId : companyId;
 
   // --- Data Fetching (Role-aware) ---
   const tasksQuery = useMemo(() => {
-    if (!firestore || !currentUser) return null;
+    if (!firestore || !activeCompanyId) return null;
 
-    if (currentUser.role === 'Manager' || currentUser.role === 'Super Admin') {
-      // Managers/Admins see all tasks
-      return query(collection(firestore, 'tasks'));
-    } else {
-      // Employees only see their own tasks
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', currentUser.id));
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+    
+    // In a normal session, employees only see their own tasks
+    if (!session && currentUser?.role === 'Employee') {
+      q = query(q, where('assigneeIds', 'array-contains', currentUser.id));
     }
-  }, [firestore, currentUser]);
+    return q;
+
+  }, [firestore, activeCompanyId, currentUser, session]);
 
   const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
-  const usersQuery = useMemo(() => (firestore ? query(collection(firestore, 'users'), orderBy('name')) : null), [firestore]);
+  const usersQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId), orderBy('name')) : null), [firestore, activeCompanyId]);
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
-  const brandsQuery = useMemo(() => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null), [firestore]);
+  const brandsQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId), orderBy('name')) : null), [firestore, activeCompanyId]);
   const { data: allBrands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   
-  const statusesQuery = useMemo(() => (firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null), [firestore]);
+  const statusesQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'statuses'), where('companyId', '==', activeCompanyId), orderBy('order')) : null), [firestore, activeCompanyId]);
   const { data: allStatuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
-  const isLoading = isTasksLoading || areUsersLoading || areBrandsLoading || areStatusesLoading;
+  const isLoading = isTasksLoading || areUsersLoading || areBrandsLoading || areStatusesLoading || isSessionLoading;
 
   // --- Filtering Logic ---
   const filteredTasks = useMemo(() => {
@@ -186,6 +191,10 @@ export default function CalendarPage() {
   const priorityOptions = useMemo(() => {
     return Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
   }, []);
+
+  if (session && !session.allowedNavItems.includes('nav_calendar')) {
+    return notFound();
+  }
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -385,3 +394,5 @@ export default function CalendarPage() {
 
     
 }
+
+    

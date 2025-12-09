@@ -124,10 +124,7 @@ export type SharedLink = {
   id: string;
   name: string;
   companyId: string;
-  targetType: 'dashboard' | 'brand' | 'priority' | 'assignee';
-  targetId: string | null;
-  targetName: string;
-  sharedAsRole: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
+  allowedNavItems: string[];
   password?: string;
   expiresAt?: string;
   permissions: {
@@ -250,3 +247,5 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+    

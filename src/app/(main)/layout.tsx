@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -25,6 +26,7 @@ import {
   ChevronDown,
   User,
   Icon as LucideIcon,
+  Ban,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -34,6 +36,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 const Icon = ({
   name,
@@ -56,6 +59,7 @@ export default function MainLayout({
   const router = useRouter();
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const firestore = useFirestore();
+  const { session } = useSharedSession(); // Check if we are in a shared session
 
   const navItemsCollectionRef = useMemo(
     () =>
@@ -103,17 +107,39 @@ export default function MainLayout({
   });
 
   useEffect(() => {
-    if (!isUserLoading && !user) {
+    if (!isUserLoading && !user && !session) {
       router.push('/login');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, router, session]);
   
   const currentRole = profile?.role;
 
   const filteredNavItems = useMemo(() => {
+    if (session) {
+        return navItems.filter(item => session.allowedNavItems.includes(item.id));
+    }
     if (!currentRole || navItems.length === 0) return [];
     return navItems.filter(item => item.roles.includes(currentRole));
-  }, [currentRole, navItems]);
+  }, [currentRole, navItems, session]);
+
+  // Security Gatekeeper for Shared Views
+  const currentNavItemId = useMemo(() => {
+    if (!navItemsFromDB) return null;
+    const item = navItemsFromDB.find(item => item.path === pathname && item.path !== '');
+    return item?.id || null;
+  }, [navItemsFromDB, pathname]);
+
+  if (session && currentNavItemId && !session.allowedNavItems.includes(currentNavItemId)) {
+     return (
+      <div className="flex h-screen w-full items-center justify-center bg-background text-center">
+        <div>
+          <Ban className="mx-auto h-12 w-12 text-destructive" />
+          <h1 className="mt-4 text-2xl font-bold">Access Denied</h1>
+          <p className="mt-2 text-muted-foreground">You do not have permission to view this page.</p>
+        </div>
+      </div>
+    );
+  }
 
 
   const renderNavItems = useCallback(
@@ -126,7 +152,8 @@ export default function MainLayout({
         .sort((a, b) => a.order - b.order)
         .map((item) => {
           const children = childMap.get(item.id) || [];
-          const isActive = pathname === item.path || (item.path !== '/' && item.path.length > 1 && pathname.startsWith(item.path));
+          const path = session ? `/share/${session.id}${item.path}` : item.path;
+          const isActive = pathname === path || (path !== '/' && path.length > 1 && pathname.startsWith(path));
 
           if (children.length > 0) {
             return (
@@ -159,7 +186,7 @@ export default function MainLayout({
 
           return (
             <SidebarMenuItem key={item.id}>
-              <Link href={item.path} passHref>
+              <Link href={path} passHref>
                 <SidebarMenuButton
                   isActive={isActive}
                   tooltip={item.label}
@@ -174,12 +201,12 @@ export default function MainLayout({
           );
         });
     },
-    [filteredNavItems, childMap, pathname, openSections, t]
+    [filteredNavItems, childMap, pathname, openSections, session, t]
   );
 
   const isLoading = isUserLoading || isNavItemsLoading;
 
-  if (isLoading) {
+  if (isLoading && !session) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -187,7 +214,7 @@ export default function MainLayout({
     );
   }
 
-  if (!user || !profile) {
+  if (!user && !session) {
     return null;
   }
 
@@ -200,7 +227,8 @@ export default function MainLayout({
         <SidebarContent>
           <SidebarMenu>{renderNavItems(filteredNavItems)}</SidebarMenu>
         </SidebarContent>
-        <SidebarFooter>
+        {!session && (
+          <SidebarFooter>
             <SidebarMenu>
               <SidebarMenuItem>
                 <Link href="/settings">
@@ -215,8 +243,11 @@ export default function MainLayout({
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
+        )}
       </Sidebar>
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   );
 }
+
+    

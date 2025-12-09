@@ -1,21 +1,18 @@
+
 'use client';
 
 import { notFound, useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
-import { collection, doc, query, where } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
-import type { SharedLink, Task } from '@/lib/types';
+import type { SharedLink } from '@/lib/types';
 import { useMemo, useState, useEffect } from 'react';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MainLayout } from '@/components/share/main-layout';
 
-export default function SharedLinkPage({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function SharedLinkPage() {
     const params = useParams();
     const router = useRouter();
     const linkId = params.linkId as string;
@@ -42,10 +39,28 @@ export default function SharedLinkPage({
     };
     
     useEffect(() => {
-        if (sharedLink && !sharedLink.password) {
-            setIsAuthenticated(true);
+        // Automatically authenticate if there's no password or if it's expired
+        if (sharedLink) {
+            if (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date()) {
+                // Link has expired, show not found.
+                notFound();
+                return;
+            }
+            if (!sharedLink.password) {
+                setIsAuthenticated(true);
+            }
         }
     }, [sharedLink]);
+
+    useEffect(() => {
+        if (isAuthenticated && sharedLink) {
+            const firstAllowedPath = sharedLink.allowedNavItems[0] || '';
+            const navItem = defaultNavItems.find(item => item.id === firstAllowedPath);
+            if (navItem?.path) {
+                router.replace(`/share/${linkId}${navItem.path}`);
+            }
+        }
+    }, [isAuthenticated, sharedLink, linkId, router]);
 
     if (isLinkLoading) {
         return (
@@ -82,6 +97,20 @@ export default function SharedLinkPage({
         )
     }
 
-    // Render the main layout for the shared view
-    return <MainLayout />;
+    // Render the main layout for the shared view, which will handle the redirect.
+    return (
+        <div className="flex h-screen w-full items-center justify-center bg-background">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    );
 }
+
+// Minimal placeholder for nav items to avoid breaking the build, will be replaced by actual data.
+const defaultNavItems = [
+    { id: 'nav_dashboard', path: '/dashboard' },
+    { id: 'nav_list', path: '/tasks' },
+    { id: 'nav_calendar', path: '/calendar' },
+    { id: 'nav_reports', path: '/reports' }
+];
+
+    
