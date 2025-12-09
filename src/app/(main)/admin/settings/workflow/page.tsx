@@ -54,9 +54,7 @@ export default function WorkflowSettingsPage() {
   const { toast } = useToast();
 
   const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
-  const [initialStatuses, setInitialStatuses] = useState<WorkflowStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSavingOrder, setIsSavingOrder] = useState(false);
 
   const [isNewStatusDialogOpen, setNewStatusDialogOpen] = useState(false);
   const [newStatusName, setNewStatusName] = useState('');
@@ -86,7 +84,6 @@ export default function WorkflowSettingsPage() {
   useEffect(() => {
     if (dbStatuses) {
         setStatuses(dbStatuses);
-        setInitialStatuses(dbStatuses);
         setIsLoading(false);
     }
   }, [dbStatuses]);
@@ -114,40 +111,34 @@ export default function WorkflowSettingsPage() {
     seedInitialStatuses();
   }, [statusesCollectionRef, isDbStatusesLoading, firestore, profile, toast]);
   
-  const orderHasChanged = useMemo(() => JSON.stringify(statuses) !== JSON.stringify(initialStatuses), [statuses, initialStatuses]);
-
-  const handleDragSort = () => {
-    if (draggedItem.current === null || dragOverItem.current === null) return;
+  const handleDragEnd = async () => {
+    if (draggedItem.current === null || dragOverItem.current === null || !firestore) return;
     
     const statusesClone = [...statuses];
     const dragged = statusesClone.splice(draggedItem.current, 1)[0];
     statusesClone.splice(dragOverItem.current, 0, dragged);
     
+    setStatuses(statusesClone); // Optimistic UI update
+
     draggedItem.current = null;
     dragOverItem.current = null;
-    setStatuses(statusesClone);
-  };
-  
-  const handleSaveOrder = async () => {
-    if (!firestore) return;
-    setIsSavingOrder(true);
+    
+    // Auto-save the new order
     const batch = writeBatch(firestore);
-    statuses.forEach((status, index) => {
+    statusesClone.forEach((status, index) => {
         const docRef = doc(firestore, 'statuses', status.id);
         batch.update(docRef, { order: index });
     });
     
     try {
         await batch.commit();
-        setInitialStatuses(statuses); // Update initial state to reflect saved order
-        toast({ title: 'Order Saved', description: 'Your workflow order has been updated.' });
+        toast({ title: 'Order Saved', description: 'Your workflow order has been automatically updated.' });
     } catch (error) {
         console.error('Failed to save order:', error);
+        setStatuses(statuses); // Revert on failure
         toast({ variant: 'destructive', title: 'Error', description: 'Could not save the new order.' });
-    } finally {
-        setIsSavingOrder(false);
     }
-  }
+  };
 
   const handleCreateStatus = async () => {
     if (!newStatusName.trim() || !firestore || !profile) return;
@@ -220,12 +211,6 @@ export default function WorkflowSettingsPage() {
                     </p>
                 </div>
                 <div className='flex gap-2'>
-                  {orderHasChanged && (
-                      <Button onClick={handleSaveOrder} disabled={isSavingOrder}>
-                          {isSavingOrder ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : <Save className="mr-2 h-4 w-4" />}
-                          Save Order
-                      </Button>
-                  )}
                   <Dialog open={isNewStatusDialogOpen} onOpenChange={setNewStatusDialogOpen}>
                       <DialogTrigger asChild>
                           <Button><Plus className="mr-2 h-4 w-4" /> Add Status</Button>
@@ -271,7 +256,7 @@ export default function WorkflowSettingsPage() {
                             draggable
                             onDragStart={() => (draggedItem.current = index)}
                             onDragEnter={() => (dragOverItem.current = index)}
-                            onDragEnd={handleDragSort}
+                            onDragEnd={handleDragEnd}
                             onDragOver={(e) => e.preventDefault()}
                         >
                             <div className='flex items-center gap-3'>
@@ -339,6 +324,3 @@ export default function WorkflowSettingsPage() {
     </div>
   );
 }
-
-
-    
