@@ -211,77 +211,6 @@ export function TasksDataTable() {
       timestamp: new Date().toISOString(),
     };
   };
-
-  const handleStatusChange = (taskId: string, newStatus: string) => {
-    if (!firestore || !profile) return;
-    const taskToUpdate = data.find(task => task.id === taskId);
-    if (!taskToUpdate) return;
-    
-    const performUpdate = async () => {
-        const batch = writeBatch(firestore);
-        const taskRef = doc(firestore, 'tasks', taskId);
-
-        const newActivity = createActivity(profile, `changed status from "${taskToUpdate.status}" to "${newStatus}"`);
-        const updatedActivities = [...(taskToUpdate.activities || []), newActivity];
-        
-        batch.update(taskRef, { 
-          status: newStatus,
-          activities: updatedActivities,
-          lastActivity: newActivity,
-          updatedAt: serverTimestamp(),
-        });
-        
-        // --- Notification Logic ---
-        if (newStatus === 'Preview') {
-            (users || []).forEach(user => {
-              if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
-                  const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
-                  const newNotification: Omit<Notification, 'id'> = {
-                      userId: user.id,
-                      title: 'Task Ready for Review',
-                      message: `${profile.name} has moved the task "${taskToUpdate.title}" to Preview.`,
-                      taskId: taskToUpdate.id, 
-                      taskTitle: taskToUpdate.title,
-                      isRead: false,
-                      createdAt: serverTimestamp() as any,
-                      createdBy: {
-                          id: profile.id,
-                          name: profile.name,
-                          avatarUrl: profile.avatarUrl || '',
-                      },
-                  };
-                  batch.set(notifRef, newNotification);
-              }
-            });
-        }
-
-        try {
-            await batch.commit();
-            toast({
-                title: 'Status Updated',
-                description: `Task status changed to ${newStatus} and relevant users have been notified.`
-            })
-        } catch (error) {
-            console.error('Failed to update status and send notifications:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Update Failed',
-                description: 'Could not update task status.'
-            });
-        }
-    };
-
-    if (newStatus === 'Done' && profile.role === 'Employee') {
-       toast({
-          variant: "destructive",
-          title: "Permission Denied",
-          description: "Only Managers or Admins can mark a task as Done. Please move to 'Preview' for review."
-      });
-      return;
-    }
-
-    performUpdate();
-  };
   
   const handleDeleteTask = (taskId: string) => {
       if (!firestore) return;
@@ -430,101 +359,6 @@ export function TasksDataTable() {
       },
     },
     {
-      accessorKey: 'status',
-      header: t('tasks.column.status'),
-      cell: ({ row }) => {
-        const task = row.original;
-        const currentStatus = row.getValue('status') as string;
-        
-        const statusOption = statusOptions.find(s => s.value === currentStatus);
-        const Icon = statusOption?.icon || Circle;
-
-        const isReadOnly = session || (profile?.role === 'Employee' && currentStatus === 'Done');
-
-        if (isReadOnly) {
-             const statusDetails = statuses?.find(s => s.name === currentStatus);
-             return (
-                <Badge variant="outline" className="font-normal">
-                    <span className={`h-2 w-2 rounded-full mr-2`} style={{backgroundColor: statusDetails?.color || 'bg-gray-500'}}></span>
-                    <span>{currentStatus}</span>
-                </Badge>
-            )
-        }
-
-        return (
-          <Select value={currentStatus} onValueChange={(newStatus: string) => handleStatusChange(task.id, newStatus)}>
-            <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0">
-                <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4 text-muted-foreground" />
-                    <SelectValue />
-                </div>
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        );
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id))
-      },
-    },
-    {
-        accessorKey: 'priority',
-        header: t('tasks.column.priority'),
-        sortingFn: prioritySortingFn,
-        cell: ({ row }) => {
-          const task = row.original;
-          const currentPriority = row.getValue('priority') as Priority;
-          const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
-          
-          const priority = priorityInfo[currentPriority];
-          if (!priority) return null;
-          const Icon = priority.icon;
-
-          if (profile?.role === 'Employee' || session) {
-              return (
-                <Badge variant="outline" className='font-normal'>
-                    <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
-                    <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
-                </Badge>
-              )
-          }
-
-          return (
-            <div className="flex items-center gap-2">
-              {isChecking && <Loader2 className="h-4 w-4 animate-spin" />}
-              <Select
-                value={currentPriority}
-                onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
-                disabled={isChecking || profile?.role === 'Employee'}
-              >
-                <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0" disabled={profile?.role === 'Employee'}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.values(priorityInfo).map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      <div className="flex items-center gap-2">
-                        <p.icon className={`h-4 w-4 ${p.color}`} />
-                        <span>{t(`priority.${p.value.toLowerCase()}` as any)}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          );
-        },
-        filterFn: (row, id, value) => {
-          return value.includes(row.getValue(id));
-        },
-      },
-    {
       accessorKey: 'assigneeIds',
       header: t('tasks.column.assignees'),
       cell: ({ row }) => {
@@ -573,39 +407,91 @@ export function TasksDataTable() {
       },
     },
     {
-      accessorKey: 'lastActivity',
-      header: 'Last Activity',
+      accessorKey: 'status',
+      header: t('tasks.column.status'),
       cell: ({ row }) => {
-        const activity = row.original.lastActivity;
-        if (!activity || !activity.timestamp) return <span className="text-muted-foreground">-</span>;
+        const statusName = row.getValue('status') as string;
+        const statusDetails = statuses?.find(s => s.name === statusName);
         
-        const time = format(new Date(activity.timestamp), "PP, HH:mm");
-        const actionText = `${activity.user.name} ${activity.action}`
+        const getIcon = (status: string) => {
+          if (status === 'To Do') return <Circle className="h-3 w-3" />;
+          if (status === 'Doing') return <CircleDashed className="h-3 w-3" />;
+          if (status === 'Preview') return <Eye className="h-3 w-3" />;
+          if (status === 'Done') return <CheckCircle2 className="h-3 w-3" />;
+          return <Circle className="h-3 w-3" />;
+        };
 
         return (
-            <div className="flex items-center gap-2">
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Avatar className="h-7 w-7">
-                                <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
-                                <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>{actionText}</p>
-                            <p className="text-xs text-muted-foreground">{time}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-                 <div className="flex flex-col">
-                    <span className="text-sm truncate max-w-40">{actionText}</span>
-                    <span className="text-xs text-muted-foreground">{time}</span>
-                </div>
-            </div>
-        )
+          <Badge variant="outline" className="font-medium" style={{
+              backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent',
+              borderColor: statusDetails?.color,
+              color: statusDetails?.color
+          }}>
+              <div className="flex items-center gap-2">
+                  {getIcon(statusName)}
+                  <span>{statusName}</span>
+              </div>
+          </Badge>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id))
       },
     },
+    {
+        accessorKey: 'priority',
+        header: t('tasks.column.priority'),
+        sortingFn: prioritySortingFn,
+        cell: ({ row }) => {
+          const task = row.original;
+          const currentPriority = row.getValue('priority') as Priority;
+          const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
+          
+          const priority = priorityInfo[currentPriority];
+          if (!priority) return null;
+          const Icon = priority.icon;
+
+          if (profile?.role === 'Employee' || session) {
+              return (
+                <Badge variant="outline" className='font-normal'>
+                    <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                    <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
+                </Badge>
+              )
+          }
+
+          return (
+            <div className="flex items-center gap-2">
+              {isChecking && <Loader2 className="h-4 w-4 animate-spin" />}
+              <Select
+                value={currentPriority}
+                onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
+                disabled={isChecking || profile?.role === 'Employee'}
+              >
+                <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0" disabled={profile?.role === 'Employee'}>
+                   <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 ${priority.color}`} />
+                    <SelectValue />
+                   </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(priorityInfo).map((p) => (
+                    <SelectItem key={p.value} value={p.value}>
+                      <div className="flex items-center gap-2">
+                        <p.icon className={`h-4 w-4 ${p.color}`} />
+                        <span>{t(`priority.${p.value.toLowerCase()}` as any)}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          );
+        },
+        filterFn: (row, id, value) => {
+          return value.includes(row.getValue(id));
+        },
+      },
     {
       id: "actions",
       cell: ({ row }) => {
