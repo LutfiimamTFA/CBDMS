@@ -413,13 +413,7 @@ export function TasksDataTable() {
         const statusName = row.getValue('status') as string;
         const statusDetails = statuses?.find(s => s.name === statusName);
         
-        const getIcon = (status: string) => {
-          if (status === 'To Do') return <Circle className="h-3 w-3" />;
-          if (status === 'Doing') return <CircleDashed className="h-3 w-3" />;
-          if (status === 'Preview') return <Eye className="h-3 w-3" />;
-          if (status === 'Done') return <CheckCircle2 className="h-3 w-3" />;
-          return <Circle className="h-3 w-3" />;
-        };
+        const Icon = statusOptions.find(s => s.value === statusName)?.icon || Circle;
 
         return (
           <Badge variant="outline" className="font-medium" style={{
@@ -428,7 +422,7 @@ export function TasksDataTable() {
               color: statusDetails?.color
           }}>
               <div className="flex items-center gap-2">
-                  {getIcon(statusName)}
+                  <Icon className="h-3 w-3" />
                   <span>{statusName}</span>
               </div>
           </Badge>
@@ -468,7 +462,7 @@ export function TasksDataTable() {
                 onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
                 disabled={isChecking || profile?.role === 'Employee'}
               >
-                <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0" disabled={profile?.role === 'Employee'}>
+                <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0" disabled={profile?.role === 'Employee'}>
                    <div className="flex items-center gap-2">
                     <Icon className={`h-4 w-4 ${priority.color}`} />
                     <SelectValue />
