@@ -68,9 +68,9 @@ export default function GuidePage() {
               <h1 className="mt-4 text-3xl font-bold tracking-tight">
                 Selamat Datang di Pusat Panduan, {profile?.name}!
               </h1>
-              <p className="mt-2 text-lg text-muted-foreground flex items-center justify-center gap-2">
+              <div className="mt-2 text-lg text-muted-foreground flex items-center justify-center gap-2">
                 Anda login sebagai <RoleBadge role={profile?.role || ''} />. Berikut adalah panduan yang dirancang untuk Anda.
-              </p>
+              </div>
             </div>
 
             <Accordion type="multiple" className="w-full">
