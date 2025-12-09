@@ -35,6 +35,7 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 const Icon = ({
   name,
@@ -56,6 +57,7 @@ export default function MainLayout({
   const { t } = useI18n();
   const router = useRouter();
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
+  const { session, isLoading: isSessionLoading } = useSharedSession();
   const firestore = useFirestore();
 
   const navItemsCollectionRef = useMemo(
@@ -104,15 +106,24 @@ export default function MainLayout({
   });
 
   useEffect(() => {
+    // In share mode, we don't check for user login
+    if (session) return;
+    
     if (!isUserLoading && !user) {
       router.push('/login');
     }
-  }, [user, isUserLoading, router]);
+  }, [user, isUserLoading, router, session]);
+  
+  const currentRole = useMemo(() => {
+    if (session) return session.role;
+    if (profile) return profile.role;
+    return null;
+  }, [session, profile]);
 
   const filteredNavItems = useMemo(() => {
-    if (!profile || navItems.length === 0) return [];
-    return navItems.filter(item => item.roles.includes(profile.role));
-  }, [profile, navItems]);
+    if (!currentRole || navItems.length === 0) return [];
+    return navItems.filter(item => item.roles.includes(currentRole));
+  }, [currentRole, navItems]);
 
 
   const renderNavItems = useCallback(
@@ -176,7 +187,7 @@ export default function MainLayout({
     [filteredNavItems, childMap, pathname, openSections, t]
   );
 
-  const isLoading = isUserLoading || isNavItemsLoading;
+  const isLoading = (isUserLoading && !session) || isNavItemsLoading || isSessionLoading;
 
   if (isLoading) {
     return (
@@ -186,7 +197,8 @@ export default function MainLayout({
     );
   }
 
-  if (!user || !profile) {
+  // If in normal mode, require user & profile. In share mode, these can be null.
+  if (!session && (!user || !profile)) {
     return null;
   }
 
@@ -199,21 +211,23 @@ export default function MainLayout({
         <SidebarContent>
           <SidebarMenu>{renderNavItems(filteredNavItems)}</SidebarMenu>
         </SidebarContent>
-        <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <Link href="/settings">
-                <SidebarMenuButton
-                  isActive={pathname === '/settings'}
-                  tooltip={t('nav.profile')}
-                >
-                  <User />
-                  <span>{t('nav.profile')}</span>
-                </SidebarMenuButton>
-              </Link>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarFooter>
+        {!session && (
+          <SidebarFooter>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <Link href="/settings">
+                  <SidebarMenuButton
+                    isActive={pathname === '/settings'}
+                    tooltip={t('nav.profile')}
+                  >
+                    <User />
+                    <span>{t('nav.profile')}</span>
+                  </SidebarMenuButton>
+                </Link>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarFooter>
+        )}
       </Sidebar>
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
