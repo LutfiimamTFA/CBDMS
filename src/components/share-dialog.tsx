@@ -254,10 +254,8 @@ export function ShareDialog() {
   };
   
   const shareUrl = useMemo(() => {
-    // In dev, use localhost, in prod use the public URL
-    const isDevelopment = process.env.NODE_ENV === 'development';
     const projectId = firebaseConfig.projectId;
-    const baseUrl = isDevelopment ? 'http://localhost:3000' : `https://${projectId}.web.app`;
+    const baseUrl = `https://${projectId}.web.app`;
     
     if (!activeLink) return baseUrl;
     return `${baseUrl}/share/${activeLink.id}`;
@@ -270,6 +268,7 @@ export function ShareDialog() {
   };
   
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isNavItemsLoading;
+  const isManagerOrAdmin = profile?.role === 'Super Admin' || profile?.role === 'Manager';
 
   const PermissionSwitch = ({ id, label, description, checked, onCheckedChange, disabled = false }: {id: string, label: string, description: string, checked: boolean, onCheckedChange: (checked: boolean) => void, disabled?: boolean}) => (
     <div className="flex items-start justify-between space-x-2">
@@ -333,9 +332,11 @@ export function ShareDialog() {
                                 <Button variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start text-left h-auto py-2" onClick={() => loadLinkDetails(link)}>
                                     <span className="truncate">{link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}</span>
                                 </Button>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
-                                    <History className="h-4 w-4" />
-                                </Button>
+                                {isManagerOrAdmin && (
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
+                                        <History className="h-4 w-4" />
+                                    </Button>
+                                )}
                               </div>
                           ))}
                       </div>
@@ -480,3 +481,4 @@ export function ShareDialog() {
     </>
   );
 }
+
