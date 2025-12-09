@@ -359,6 +359,60 @@ export function TasksDataTable() {
       },
     },
     {
+      accessorKey: 'priority',
+      header: t('tasks.column.priority'),
+      sortingFn: prioritySortingFn,
+      cell: ({ row }) => {
+        const task = row.original;
+        const currentPriority = row.getValue('priority') as Priority;
+        const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
+        
+        const priority = priorityInfo[currentPriority];
+        if (!priority) return null;
+        const Icon = priority.icon;
+
+        if (profile?.role === 'Employee' || session) {
+            return (
+              <Badge variant="outline" className='font-normal'>
+                  <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                  <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
+              </Badge>
+            )
+        }
+
+        return (
+          <div className="flex items-center gap-2">
+            {isChecking && <Loader2 className="h-4 w-4 animate-spin" />}
+            <Select
+              value={currentPriority}
+              onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
+              disabled={isChecking || profile?.role === 'Employee'}
+            >
+              <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
+                 <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                    <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
+                 </div>
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(priorityInfo).map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    <div className="flex items-center gap-2">
+                      <p.icon className={`h-4 w-4 ${p.color}`} />
+                      <span>{t(`priority.${p.value.toLowerCase()}` as any)}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        );
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id));
+      },
+    },
+    {
       accessorKey: 'assigneeIds',
       header: t('tasks.column.assignees'),
       cell: ({ row }) => {
@@ -430,60 +484,6 @@ export function TasksDataTable() {
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
-      },
-    },
-    {
-      accessorKey: 'priority',
-      header: t('tasks.column.priority'),
-      sortingFn: prioritySortingFn,
-      cell: ({ row }) => {
-        const task = row.original;
-        const currentPriority = row.getValue('priority') as Priority;
-        const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
-        
-        const priority = priorityInfo[currentPriority];
-        if (!priority) return null;
-        const Icon = priority.icon;
-
-        if (profile?.role === 'Employee' || session) {
-            return (
-              <Badge variant="outline" className='font-normal'>
-                  <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
-                  <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
-              </Badge>
-            )
-        }
-
-        return (
-          <div className="flex items-center gap-2">
-            {isChecking && <Loader2 className="h-4 w-4 animate-spin" />}
-            <Select
-              value={currentPriority}
-              onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
-              disabled={isChecking || profile?.role === 'Employee'}
-            >
-              <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
-                 <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 ${priority.color}`} />
-                    <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
-                 </div>
-              </SelectTrigger>
-              <SelectContent>
-                {Object.values(priorityInfo).map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    <div className="flex items-center gap-2">
-                      <p.icon className={`h-4 w-4 ${p.color}`} />
-                      <span>{t(`priority.${p.value.toLowerCase()}` as any)}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      },
-      filterFn: (row, id, value) => {
-        return value.includes(row.getValue(id));
       },
     },
     {
