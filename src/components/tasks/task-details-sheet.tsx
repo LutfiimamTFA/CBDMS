@@ -136,9 +136,10 @@ export function TaskDetailsSheet({
   const firestore = useFirestore();
   const storage = useStorage();
   
-  const usersCollectionRef = useMemo(() => 
-    firestore ? collection(firestore, 'users') : null,
-  [firestore]);
+  const usersCollectionRef = useMemo(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'users');
+  }, [firestore]);
   const { data: allUsers } = useCollection<User>(usersCollectionRef);
   
   const statusesQuery = useMemo(() => 
@@ -984,15 +985,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
                     {isEmployee && initialTask.status === 'Doing' && !isSharedView && (
-                        <div className="space-y-2">
-                          <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
-                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                              Submit for Review
-                          </Button>
-                          {!allSubtasksCompleted && (
-                              <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
-                          )}
-                        </div>
+                         <div className="space-y-2">
+                           <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
+                               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                               Submit for Review
+                           </Button>
+                           {!allSubtasksCompleted && (
+                               <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
+                           )}
+                         </div>
                     )}
                     
                     {isManagerOrAdmin && initialTask.status === 'Preview' && (
