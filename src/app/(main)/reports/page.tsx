@@ -351,34 +351,33 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
 // --- Komponen Utama Halaman Laporan ---
 export default function ReportsPage() {
   const firestore = useFirestore();
-  const { profile, isLoading: isProfileLoading } = useUserProfile();
+  const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
 
   const isSuperAdminOrManager = useMemo(() => {
     return profile?.role === 'Super Admin' || profile?.role === 'Manager';
   }, [profile]);
 
-  // Kueri untuk karyawan: hanya tugas yang ditugaskan kepada mereka
-  const employeeTasksQuery = useMemo(() => {
-    if (!firestore || !profile || isSuperAdminOrManager) return null;
-    return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
-  }, [firestore, profile, isSuperAdminOrManager]);
-  const { data: employeeTasks, isLoading: isEmployeeTasksLoading } = useCollection<Task>(employeeTasksQuery);
+  // Kueri untuk semua tugas di perusahaan
+  const tasksQuery = useMemo(() => {
+    if (!firestore || !companyId) return null;
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
-  // Kueri untuk Admin/Manager: semua tugas
-  const allTasksQuery = useMemo(() => {
-    if (!firestore || !isSuperAdminOrManager) return null;
-    return collection(firestore, 'tasks');
-  }, [firestore, isSuperAdminOrManager]);
-  const { data: allTasks, isLoading: isAdminTasksLoading } = useCollection<Task>(allTasksQuery);
+    // Karyawan hanya melihat tugas mereka sendiri
+    if (profile?.role === 'Employee') {
+        q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    }
+    return q;
+  }, [firestore, companyId, profile]);
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
-  // Kueri untuk Admin/Manager: semua pengguna
-  const allUsersQuery = useMemo(() => {
-      if (!firestore || !isSuperAdminOrManager) return null;
-      return collection(firestore, 'users');
-  }, [firestore, isSuperAdminOrManager]);
-  const { data: allUsers, isLoading: isAdminUsersLoading } = useCollection<User>(allUsersQuery);
+  // Kueri untuk semua pengguna di perusahaan (hanya untuk Admin/Manager)
+  const usersQuery = useMemo(() => {
+      if (!firestore || !companyId || !isSuperAdminOrManager) return null;
+      return query(collection(firestore, 'users'), where('companyId', '==', companyId));
+  }, [firestore, companyId, isSuperAdminOrManager]);
+  const { data: allUsers, isLoading: isAdminUsersLoading } = useCollection<User>(usersQuery);
 
-  const isLoading = isProfileLoading || (isSuperAdminOrManager ? (isAdminTasksLoading || isAdminUsersLoading) : isEmployeeTasksLoading);
+  const isLoading = isProfileLoading || isTasksLoading || (isSuperAdminOrManager && isAdminUsersLoading);
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -389,9 +388,9 @@ export default function ReportsPage() {
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         ) : isSuperAdminOrManager ? (
-          <AdminAnalysisDashboard allTasks={allTasks} allUsers={allUsers} isLoading={isLoading} />
+          <AdminAnalysisDashboard allTasks={tasks} allUsers={allUsers} isLoading={isLoading} />
         ) : (
-          <EmployeeReport tasks={employeeTasks} isLoading={isLoading} />
+          <EmployeeReport tasks={tasks} isLoading={isLoading} />
         )}
       </main>
     </div>

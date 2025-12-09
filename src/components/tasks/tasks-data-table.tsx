@@ -56,6 +56,7 @@ import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase
 import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -77,20 +78,22 @@ const prioritySortingFn = (row: any, rowB: any, columnId: string) => {
 
 export function TasksDataTable() {
   const firestore = useFirestore();
-  const { profile, isLoading: isProfileLoading } = useUserProfile();
+  const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const { permissions, isLoading: arePermsLoading } = usePermissions();
+  const { session } = useSharedSession();
 
 
   const tasksQuery = React.useMemo(() => {
-    if (!firestore || !profile) return null;
-    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
-      return query(collection(firestore, 'tasks'));
+    if (!firestore || !companyId) return null;
+
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+
+    if (profile?.role === 'Employee' && !session) {
+        q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
-    return query(
-      collection(firestore, 'tasks'),
-      where('assigneeIds', 'array-contains', profile.id)
-    );
-  }, [firestore, profile]);
+    
+    return q;
+  }, [firestore, companyId, profile, session]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
@@ -343,12 +346,13 @@ export function TasksDataTable() {
   };
 
   const canCreateTasks = React.useMemo(() => {
+    if (session) return false; // Cannot create tasks in shared view
     if (arePermsLoading || !profile || !permissions) return false;
     if (profile.role === 'Super Admin') return true;
     if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
     if (profile.role === 'Employee') return permissions.Employee.canCreateTasks;
     return false;
-  }, [profile, permissions, arePermsLoading]);
+  }, [profile, permissions, arePermsLoading, session]);
 
 
   const columns: ColumnDef<Task>[] = [
@@ -383,7 +387,7 @@ export function TasksDataTable() {
                     </Tooltip>
                 </TooltipProvider>
             )}
-            <Link href={`/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
+            <Link href={session ? `/share/${session.linkId}/${task.id}` : `/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
             {hasDescription && (
                 <TooltipProvider>
                     <Tooltip>
@@ -422,7 +426,7 @@ export function TasksDataTable() {
         const statusOption = statusOptions.find(s => s.value === currentStatus);
         const Icon = statusOption?.icon || Circle;
 
-        if (profile?.role === 'Employee') {
+        if (profile?.role === 'Employee' || session) {
              const statusDetails = statuses?.find(s => s.name === currentStatus);
              return (
                 <Badge variant="outline" className="font-normal">
@@ -467,7 +471,7 @@ export function TasksDataTable() {
           if (!priority) return null;
           const Icon = priority.icon;
 
-          if (profile?.role === 'Employee') {
+          if (profile?.role === 'Employee' || session) {
               return (
                 <Badge variant="outline" className='font-normal'>
                     <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
@@ -587,6 +591,8 @@ export function TasksDataTable() {
       id: "actions",
       cell: ({ row }) => {
         const task = row.original;
+        
+        if (session) return null; // No actions in shared view
 
         return (
           <DropdownMenu>
@@ -903,5 +909,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-    

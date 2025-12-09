@@ -15,39 +15,40 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 export default function DashboardPage() {
-  const { profile, isLoading: isProfileLoading } = useUserProfile();
+  const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const firestore = useFirestore();
   const { t } = useI18n();
+  const { session } = useSharedSession();
 
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Query untuk tugas
   const tasksQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
+    if (!firestore || !companyId) return null;
 
-    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
-      return query(collection(firestore, 'tasks'));
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+
+    if (profile?.role === 'Employee' && !session) {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
 
-    return query(
-      collection(firestore, 'tasks'),
-      where('assigneeIds', 'array-contains', profile.id)
-    );
-  }, [firestore, profile]);
+    return q;
+  }, [firestore, companyId, profile, session]);
   
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   // Query untuk semua pengguna di perusahaan (untuk filter)
   const usersQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
+    if (!firestore || !companyId) return null;
     return query(
         collection(firestore, 'users'), 
-        where('companyId', '==', profile.companyId)
+        where('companyId', '==', companyId)
     );
-  }, [firestore, profile]);
+  }, [firestore, companyId]);
 
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
@@ -83,7 +84,7 @@ export default function DashboardPage() {
         title={t('nav.board')}
         actions={
           <div className="flex items-center gap-2">
-            {profile?.role !== 'Super Admin' && <SmartSuggestions />}
+            {!session && profile?.role !== 'Super Admin' && <SmartSuggestions />}
           </div>
         }
       />
@@ -96,9 +97,9 @@ export default function DashboardPage() {
           <div className="flex h-full flex-col">
             <div className="mb-4 space-y-4">
               <div>
-                <h2 className="text-2xl font-bold tracking-tight">{t('dashboard.welcome').replace('{name}', profile?.name || '')}</h2>
+                <h2 className="text-2xl font-bold tracking-tight">{t('dashboard.welcome').replace('{name}', profile?.name || 'Guest')}</h2>
                 <p className="text-muted-foreground">
-                  {t('dashboard.role').replace('{role}', profile?.role || '')}
+                  {t('dashboard.role').replace('{role}', profile?.role || 'Guest')}
                 </p>
               </div>
 
