@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -20,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
-import type { SharedLink, Brand, User } from '@/lib/types';
+import type { SharedLink, Brand, User, NavigationItem } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -29,6 +28,19 @@ import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { defaultNavItems } from '@/lib/navigation-items';
+import * as lucideIcons from 'lucide-react';
+
+const Icon = ({
+  name,
+  ...props
+}: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
+  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
+  if (!LucideIconComponent) {
+    return <lucideIcons.HelpCircle {...props} />;
+  }
+  return <LucideIconComponent {...props} />;
+};
 
 const defaultPermissions = {
   canViewDetails: true,
@@ -45,8 +57,9 @@ export function ShareDialog() {
 
   // Form state
   const [linkName, setLinkName] = useState('');
-  const [targetType, setTargetType] = useState<'dashboard' | 'brand' | 'priority' | 'assignee'>('dashboard');
-  const [targetId, setTargetId] = useState<string | null>('dashboard');
+  
+  // Nav Items State
+  const [allowedNavItems, setAllowedNavItems] = useState<string[]>([]);
 
   // Security State
   const [usePassword, setUsePassword] = useState(false);
@@ -67,21 +80,15 @@ export function ShareDialog() {
     return query(collection(firestore, 'sharedLinks'), where('companyId', '==', profile.companyId));
   }, [firestore, profile?.companyId]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
+  
+  const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
+  const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
 
-  const brandsQuery = useMemo(() => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null), [firestore]);
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+  const userVisibleNavItems = useMemo(() => {
+    if (!allNavItems || !profile) return [];
+    return allNavItems.filter(item => item.roles.includes(profile.role));
+  }, [allNavItems, profile]);
 
-  const usersQuery = useMemo(() => {
-    if (!firestore || !profile?.companyId) return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
-  }, [firestore, profile?.companyId]);
-  const { data: users, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
-
-  useEffect(() => {
-    if (!activeLink && !isLinksLoading && existingLinks && existingLinks.length > 0) {
-      loadLinkDetails(existingLinks[0]);
-    }
-  }, [existingLinks, isLinksLoading, activeLink]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -89,15 +96,31 @@ export function ShareDialog() {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!activeLink && !isLinksLoading && existingLinks && existingLinks.length > 0) {
+        loadLinkDetails(existingLinks[0]);
+    }
+  }, [existingLinks, isLinksLoading]);
+
+
   const handlePermissionChange = (permission: keyof typeof permissions, value: boolean) => {
     setPermissions(prev => ({ ...prev, [permission]: value }));
+  };
+  
+  const handleNavItemChange = (itemId: string, isChecked: boolean) => {
+      setAllowedNavItems(prev => {
+          if (isChecked) {
+              return [...prev, itemId];
+          } else {
+              return prev.filter(id => id !== itemId);
+          }
+      });
   };
 
   const handleOpenNew = () => {
     setActiveLink(null);
     setLinkName('');
-    setTargetType('dashboard');
-    setTargetId('dashboard');
+    setAllowedNavItems([]);
     setUsePassword(false);
     setPassword('');
     setUseExpiration(false);
@@ -109,8 +132,7 @@ export function ShareDialog() {
   const loadLinkDetails = (link: SharedLink) => {
     setActiveLink(link);
     setLinkName(link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`);
-    setTargetType(link.targetType);
-    setTargetId(link.targetId);
+    setAllowedNavItems(link.allowedNavItems || []);
     
     if (link.password) {
       setUsePassword(true);
@@ -142,13 +164,6 @@ export function ShareDialog() {
     return combinedDate.toISOString();
   };
 
-  const getTargetName = () => {
-      if (targetType === 'dashboard') return 'Entire Dashboard';
-      if (targetType === 'brand') return brands?.find(b => b.id === targetId)?.name || 'Unknown Brand';
-      if (targetType === 'priority') return targetId;
-      if (targetType === 'assignee') return users?.find(u => u.id === targetId)?.name || 'Unknown User';
-      return 'Unknown Target';
-  }
 
   const handleCreateOrUpdateLink = async () => {
     if (!firestore || !profile) {
@@ -159,12 +174,10 @@ export function ShareDialog() {
 
     const isCreating = !activeLink;
 
-    const linkData: any = {
+    const linkData: Partial<SharedLink> = {
         name: linkName,
         sharedAsRole: profile.role,
-        targetType,
-        targetId,
-        targetName: getTargetName(),
+        allowedNavItems,
         permissions,
     };
 
@@ -178,13 +191,13 @@ export function ShareDialog() {
             linkData.password = password;
         }
     } else if (!isCreating) {
-        linkData.password = deleteField();
+        linkData.password = deleteField() as any;
     }
 
     if (useExpiration && expiresAtDate) {
-        linkData.expiresAt = getCombinedExpiration();
+        linkData.expiresAt = getCombinedExpiration() as any;
     } else if (!isCreating) {
-        linkData.expiresAt = deleteField();
+        linkData.expiresAt = deleteField() as any;
     }
     
     try {
@@ -207,6 +220,7 @@ export function ShareDialog() {
             if (newLinkDoc.exists()){
                 const newLink = newLinkDoc.data() as SharedLink;
                 setActiveLink({ ...newLink, id: docRef.id });
+                loadLinkDetails({ ...newLink, id: docRef.id });
             }
             toast({ title: 'Share link created!' });
         }
@@ -240,29 +254,33 @@ export function ShareDialog() {
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || areBrandsLoading || areUsersLoading;
+  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isNavItemsLoading;
 
-  const renderTargetSelect = () => {
-    switch(targetType) {
-        case 'brand':
-            return <Select value={targetId || ''} onValueChange={setTargetId}><SelectTrigger><SelectValue placeholder="Select a brand..." /></SelectTrigger><SelectContent>{brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>;
-        case 'priority':
-            return <Select value={targetId || ''} onValueChange={setTargetId}><SelectTrigger><SelectValue placeholder="Select a priority..." /></SelectTrigger><SelectContent>{['Urgent', 'High', 'Medium', 'Low'].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>;
-        case 'assignee':
-            return <Select value={targetId || ''} onValueChange={setTargetId}><SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger><SelectContent>{users?.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent></Select>;
-        case 'dashboard':
-        default:
-            return <Input value="Entire Dashboard" readOnly disabled />;
-    }
-  };
-
-  const PermissionSwitch = ({ id, label, description, checked, onCheckedChange }: {id: string, label: string, description: string, checked: boolean, onCheckedChange: (checked: boolean) => void}) => (
+  const PermissionSwitch = ({ id, label, description, checked, onCheckedChange, disabled = false }: {id: string, label: string, description: string, checked: boolean, onCheckedChange: (checked: boolean) => void, disabled?: boolean}) => (
     <div className="flex items-start justify-between space-x-2">
       <div className="flex-grow">
-        <Label htmlFor={id} className="font-medium">{label}</Label>
+        <Label htmlFor={id} className={cn("font-medium", disabled && "text-muted-foreground")}>{label}</Label>
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
+    </div>
+  );
+  
+  const NavItemCheckbox = ({ item }: { item: NavigationItem }) => (
+    <div className="flex items-start gap-3 p-2 rounded-md hover:bg-secondary">
+      <Switch
+        id={`nav-${item.id}`}
+        checked={allowedNavItems.includes(item.id)}
+        onCheckedChange={(checked) => handleNavItemChange(item.id, checked)}
+        className="mt-1"
+      />
+      <div className="grid gap-0.5">
+        <Label htmlFor={`nav-${item.id}`} className="font-medium flex items-center gap-2">
+            <Icon name={item.icon} className="h-4 w-4 text-muted-foreground"/>
+            {item.label}
+        </Label>
+        <p className="text-xs text-muted-foreground">{item.path}</p>
+      </div>
     </div>
   );
 
@@ -306,7 +324,7 @@ export function ShareDialog() {
               <div className="p-6 space-y-6">
                 {isLoadingAnything ? (
                     <div className="flex justify-center items-center h-96">
-                        <Loader2 className="animate-spin h-8 w-8" />
+                        <Loader2 className="h-8 w-8 animate-spin" />
                     </div>
                 ) : (
                   <>
@@ -318,14 +336,24 @@ export function ShareDialog() {
                     <Card>
                       <CardHeader>
                         <h3 className="font-semibold">Shared Experience</h3>
-                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</div>
+                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{profile?.role}</Badge> role's access, but limited to the items you select below.</div>
                       </CardHeader>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <Label className="flex items-center gap-2"><Eye className="h-4 w-4"/> Shared Navigation</Label>
+                            <p className="text-sm text-muted-foreground pt-1">Select which pages the viewer of this link will be able to see.</p>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                           {userVisibleNavItems.map(item => <NavItemCheckbox key={item.id} item={item} />)}
+                        </CardContent>
                     </Card>
 
                     <Card>
                       <CardHeader>
                         <Label className="flex items-center gap-2"><Shield className="h-4 w-4"/> Permissions</Label>
-                        <p className="text-sm text-muted-foreground pt-1">Control exactly what viewers can do with this link.</p>
+                        <p className="text-sm text-muted-foreground pt-1">Control exactly what viewers can do within the pages you've shared.</p>
                       </CardHeader>
                       <CardContent className='space-y-5'>
                         <PermissionSwitch id="perm-view" label="View Full Task Details" description="Allows viewers to open tasks and see all fields." checked={permissions.canViewDetails} onCheckedChange={(val) => handlePermissionChange('canViewDetails', val)} />
