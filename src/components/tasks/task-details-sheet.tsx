@@ -157,6 +157,7 @@ export function TaskDetailsSheet({
   const groupedUsers = useMemo(() => {
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
+    // Super Admin can see everyone
     if (currentUser.role === 'Super Admin') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
@@ -164,12 +165,14 @@ export function TaskDetailsSheet({
       return { managers, employees, clients };
     }
     
+    // Manager can see other Managers and Employees
     if (currentUser.role === 'Manager') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers, employees, clients: [] };
     }
     
+    // Employee can see other Employees
     if (currentUser.role === 'Employee') {
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers: [], employees, clients: [] };
@@ -727,66 +730,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
   const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
   
-  const handleMarkComplete = async () => {
-    if (!currentUser || !firestore) return;
-
-    if (isRunning) {
-      await handlePauseSession();
-    }
-
-    setIsSaving(true);
-
-    const batch = writeBatch(firestore);
-    const taskRef = doc(firestore, 'tasks', initialTask.id);
-    const newActivity: Activity = createActivity(currentUser, 'completed the task');
-
-    batch.update(taskRef, {
-      status: 'Done',
-      actualCompletionDate: new Date().toISOString(),
-      lastActivity: newActivity,
-      activities: [...(activities || []), newActivity],
-    });
-
-    // Notify creator if they are not the one completing it
-    if (initialTask.createdBy.id !== currentUser.id) {
-      const notificationRef = doc(collection(firestore, `users/${initialTask.createdBy.id}/notifications`));
-      const notification: Omit<Notification, 'id'> = {
-        id: notificationRef.id,
-        userId: initialTask.createdBy.id,
-        title: 'Task Completed',
-        message: `${currentUser.name} has completed the task: "${initialTask.title}"`,
-        taskId: initialTask.id,
-        taskTitle: initialTask.title,
-        isRead: false,
-        createdAt: serverTimestamp(),
-        createdBy: {
-          id: currentUser.id,
-          name: currentUser.name,
-          avatarUrl: currentUser.avatarUrl || '',
-        },
-      };
-      batch.set(notificationRef, notification);
-    }
-
-    try {
-      await batch.commit();
-      toast({
-        title: 'Task Completed!',
-        description: 'Status has been updated to "Done".',
-      });
-    } catch (error: any) {
-      console.error('Failed to complete task:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: error.message || 'Could not complete the task.',
-      });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-
   const handleReopenTask = async () => {
     if (!currentUser || !firestore) return;
     setIsSaving(true);
@@ -854,7 +797,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {isAssignee && !isSharedView && (
+                        {isAssignee && !isSharedView && initialTask.status !== 'Done' && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
