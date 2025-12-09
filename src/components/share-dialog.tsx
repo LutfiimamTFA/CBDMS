@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,19 +15,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, where, query, orderBy, deleteField } from 'firebase/firestore';
-import type { SharedLink, Brand, User } from '@/lib/types';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc } from 'firebase/firestore';
+import type { SharedLink } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { Card, CardContent, CardHeader } from './ui/card';
+import { Card, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 
 export function ShareDialog() {
@@ -52,9 +51,18 @@ export function ShareDialog() {
   }, [firestore, profile]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
+  // This effect now correctly handles initialization without overriding user actions.
+  useEffect(() => {
+    // Only auto-select the first link if no link is currently active
+    // and the list of links has loaded and is not empty.
+    if (!activeLink && existingLinks && existingLinks.length > 0) {
+      loadLinkDetails(existingLinks[0]);
+    }
+  }, [existingLinks, activeLink]); // Depend on existingLinks and activeLink
+
   const handleOpenNew = () => {
     setActiveLink(null);
-    setLinkName('New Share Link');
+    setLinkName('');
     setUsePassword(false);
     setPassword('');
     setUseExpiration(false);
@@ -99,26 +107,35 @@ export function ShareDialog() {
     };
     setIsLoading(true);
 
+    const linkData: any = {
+        name: linkName,
+        companyId: profile.companyId,
+        sharedAsRole: profile.role,
+        createdBy: profile.id,
+    };
+
+    if (usePassword && password) {
+        if (password !== '********') {
+            linkData.password = password;
+        }
+    } else {
+        linkData.password = null; // Explicitly set to null for Firestore
+    }
+
+    if (useExpiration && expiresAtDate) {
+        linkData.expiresAt = getCombinedExpiration();
+    } else {
+        linkData.expiresAt = null; // Explicitly set to null
+    }
+
     try {
         if (activeLink) {
             // Update existing link
             const linkRef = doc(firestore, 'sharedLinks', activeLink.id);
-            const linkData: any = {
-                name: linkName
-            };
-            if (usePassword) {
-                if (password && password !== '********') {
-                    linkData.password = password;
-                }
-            } else {
-                linkData.password = deleteField();
-            }
-            if (useExpiration) {
-                linkData.expiresAt = getCombinedExpiration();
-            } else {
-                linkData.expiresAt = deleteField();
-            }
-            await updateDoc(linkRef, linkData);
+            // Don't overwrite createdBy and createdAt on update
+            const { createdBy, createdAt, ...updateData } = linkData; 
+            await updateDoc(linkRef, updateData);
+            
             toast({ title: 'Link updated!' });
             const updatedLinkDoc = await getDoc(linkRef);
             if (updatedLinkDoc.exists()) {
@@ -128,20 +145,10 @@ export function ShareDialog() {
 
         } else {
             // Create new link
-            const linkData: any = {
-                companyId: profile.companyId,
-                createdBy: profile.id,
+            const docRef = await addDoc(collection(firestore, 'sharedLinks'), {
+                ...linkData,
                 createdAt: serverTimestamp(),
-                sharedAsRole: profile.role,
-                name: linkName,
-            };
-            if (usePassword && password) {
-                linkData.password = password;
-            }
-            if (useExpiration && expiresAtDate) {
-                linkData.expiresAt = getCombinedExpiration();
-            }
-            const docRef = await addDoc(collection(firestore, 'sharedLinks'), linkData);
+            });
             const newLinkDoc = await getDoc(docRef);
             if (newLinkDoc.exists()){
                 const newLink = newLinkDoc.data() as SharedLink;
