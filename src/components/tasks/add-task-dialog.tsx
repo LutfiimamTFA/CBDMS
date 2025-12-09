@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -42,6 +41,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
 } from '../ui/dropdown-menu';
 import { Label } from '../ui/label';
 import {
@@ -178,6 +179,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
     return workloadMap;
   }, [allTasks, users]);
+
+  const groupedUsers = useMemo(() => {
+      const managers = (users || []).filter(u => u.role === 'Manager');
+      const employees = (users || []).filter(u => u.role === 'Employee');
+      const clients = (users || []).filter(u => u.role === 'Client');
+      return { managers, employees, clients };
+  }, [users]);
 
 
   const quickDateOptions = [
@@ -912,22 +920,49 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                           </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                          {(users || []).filter(user => user.role === 'Employee' || user.role === 'Client').map((user) => (
-                                              <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                  <div className="flex w-full items-center justify-between">
+                                        {groupedUsers.managers.length > 0 && (
+                                            <>
+                                                <DropdownMenuLabel>Managers</DropdownMenuLabel>
+                                                {groupedUsers.managers.map(user => (
+                                                    <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                                        <div className="flex w-full items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                                                <span>{user.name}</span>
+                                                            </div>
+                                                            <span className="text-xs text-muted-foreground">{userWorkload.get(user.id) || 0} tugas aktif</span>
+                                                        </div>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                                <DropdownMenuSeparator />
+                                            </>
+                                        )}
+                                        <DropdownMenuLabel>Employees</DropdownMenuLabel>
+                                        {groupedUsers.employees.map(user => (
+                                            <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                                <div className="flex w-full items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        <Avatar className="h-6 w-6 mr-2">
-                                                            <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                                            <AvatarFallback>{user.name?.charAt(0)}</AvatarFallback>
-                                                        </Avatar>
+                                                        <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                                         <span>{user.name}</span>
                                                     </div>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {userWorkload.get(user.id) || 0} tugas aktif
-                                                    </span>
-                                                  </div>
-                                              </DropdownMenuItem>
-                                          ))}
+                                                    <span className="text-xs text-muted-foreground">{userWorkload.get(user.id) || 0} tugas aktif</span>
+                                                </div>
+                                            </DropdownMenuItem>
+                                        ))}
+                                        {groupedUsers.clients.length > 0 && (
+                                            <>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuLabel>Clients</DropdownMenuLabel>
+                                                {groupedUsers.clients.map(user => (
+                                                    <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                                      <div className="flex items-center gap-2">
+                                                          <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                                          <span>{user.name}</span>
+                                                      </div>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                            </>
+                                        )}
                                       </DropdownMenuContent>
                                   </DropdownMenu>
                                 {selectedUsers.length > 0 && (
