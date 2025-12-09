@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -81,7 +80,6 @@ export function ShareDialog() {
       return query(
           collection(firestore, 'sharedLinks'),
           where('companyId', '==', profile.companyId),
-          where('targetType', '==', 'dashboard')
       )
   }, [firestore, profile]);
 
@@ -89,10 +87,10 @@ export function ShareDialog() {
 
   const activeLink = useMemo(() => {
       if (existingLinks && existingLinks.length > 0) {
-          return existingLinks.find(l => l.targetId === targetId);
+          return existingLinks.find(l => l.targetType === targetType && l.targetId === targetId);
       }
       return null;
-  }, [existingLinks, targetId]);
+  }, [existingLinks, targetId, targetType]);
 
   useEffect(() => {
     if (activeLink) {
@@ -111,15 +109,31 @@ export function ShareDialog() {
         }
     } else {
         setCreatedLink(null);
+        setPermissions({ canViewTasks: true });
+        setPassword('');
+        setUsePassword(false);
+        setExpiresAtDate(undefined);
+        setUseExpiration(false);
     }
   }, [activeLink]);
+  
+  useEffect(() => {
+    // Reset targetId and targetName when targetType changes, unless it's dashboard
+    if (targetType === 'dashboard') {
+        setTargetId('dashboard');
+        setTargetName('Entire Dashboard');
+    } else {
+        setTargetId('');
+        setTargetName('');
+    }
+  }, [targetType]);
   
   const handlePermissionChange = (permission: Permission, value: boolean) => {
     setPermissions(prev => ({...prev, [permission]: value}));
   };
 
   const getCombinedExpiration = () => {
-    if (!useExpiration || !expiresAtDate) return null;
+    if (!useExpiration || !expiresAtDate) return undefined;
     const [hours, minutes] = expiresAtTime.split(':').map(Number);
     const combinedDate = new Date(expiresAtDate);
     combinedDate.setHours(hours, minutes);
@@ -128,6 +142,12 @@ export function ShareDialog() {
 
   const handleCreateOrUpdateLink = async () => {
     if (!firestore || !profile) return;
+    
+    if (targetType !== 'dashboard' && !targetId) {
+        toast({ variant: 'destructive', title: 'Target not selected', description: `Please select a specific ${targetType}.`});
+        return;
+    }
+
     setIsLoading(true);
     
     if (usePassword && !password) {
@@ -207,6 +227,52 @@ export function ShareDialog() {
   
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading;
 
+  const renderTargetSelector = () => {
+    switch (targetType) {
+      case 'brand':
+        return (
+          <Select onValueChange={val => {
+            const brand = allBrands?.find(b => b.id === val);
+            setTargetId(val);
+            setTargetName(brand?.name || '');
+          }} value={targetId}>
+            <SelectTrigger><SelectValue placeholder="Select a brand..."/></SelectTrigger>
+            <SelectContent>
+              {allBrands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        );
+      case 'priority':
+        return (
+          <Select onValueChange={val => {
+            setTargetId(val);
+            setTargetName(val);
+          }} value={targetId}>
+            <SelectTrigger><SelectValue placeholder="Select a priority..."/></SelectTrigger>
+            <SelectContent>
+              {priorityOptions.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        );
+      case 'assignee':
+        return (
+          <Select onValueChange={val => {
+            const user = allUsers?.find(u => u.id === val);
+            setTargetId(val);
+            setTargetName(user?.name || '');
+          }} value={targetId}>
+            <SelectTrigger><SelectValue placeholder="Select an assignee..."/></SelectTrigger>
+            <SelectContent>
+              {allUsers?.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        );
+      case 'dashboard':
+      default:
+        return <Select disabled><SelectTrigger><SelectValue placeholder="Entire Dashboard"/></SelectTrigger></Select>;
+    }
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -241,16 +307,12 @@ export function ShareDialog() {
                   <SelectTrigger><SelectValue/></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="dashboard">Entire Dashboard</SelectItem>
-                    <SelectItem value="brand" disabled>Tasks by Brand</SelectItem>
-                    <SelectItem value="priority" disabled>Tasks by Priority</SelectItem>
-                    <SelectItem value="assignee" disabled>Tasks by Assignee</SelectItem>
+                    <SelectItem value="brand">Tasks by Brand</SelectItem>
+                    <SelectItem value="priority">Tasks by Priority</SelectItem>
+                    <SelectItem value="assignee">Tasks by Assignee</SelectItem>
                   </SelectContent>
                 </Select>
-                 <Select disabled={targetType === 'dashboard'}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Select target..."/>
-                    </SelectTrigger>
-                 </Select>
+                {renderTargetSelector()}
               </CardContent>
             </Card>
 
