@@ -24,8 +24,6 @@ export const guideContent: GuideContent = {
         - **Undang Pengguna Baru:** Gunakan tombol "Add User" di halaman Users untuk membuat akun baru. Anda bisa menentukan peran (Manager, Employee, Client) dan password awal saat pembuatan.
         <br/>
         - **Edit & Hapus Pengguna:** Dari daftar pengguna, Anda bisa mengedit detail seperti nama dan peran, atau menghapus pengguna secara permanen.
-        <br/>
-        - **Generate Temp Password:** Fitur ini memungkinkan Anda membuat password sementara untuk pengguna yang lupa kata sandi. Pengguna tersebut akan dipaksa mengubahnya saat login berikutnya.
       `,
     },
     {
@@ -54,6 +52,58 @@ export const guideContent: GuideContent = {
         - **Export Data:** Gunakan fitur ini untuk membuat backup data Anda dalam format JSON atau CSV.
         <br/>
         - **Danger Zone:** Tombol "Reset Application Data" akan menghapus semua data transaksional (tugas, proyek, dll.) tetapi akan MEMPERTAHANKAN semua akun pengguna. Gunakan dengan hati-hati.
+      `,
+    },
+    {
+      id: 'manager_project_management',
+      title: 'Manajemen Proyek & Tugas',
+      content: `
+        Sebagai Manajer, fokus Anda adalah memastikan proyek berjalan lancar.
+        <br/><br/>
+        - **Papan Kanban:** Gunakan papan ini untuk memantau progres tim secara visual. Seret (drag) kartu tugas untuk mengubah statusnya.
+        <br/>
+        - **Daftar Tugas:** Gunakan filter berlapis (berdasarkan judul, merek, status, prioritas) untuk menemukan tugas spesifik dengan cepat.
+        <br/>
+        - **Kalender Tim:** Ini adalah 'pandangan mata elang' Anda. Lihat timeline semua proyek, identifikasi jadwal yang padat, dan geser tugas untuk menjadwal ulang.
+      `,
+    },
+    {
+      id: 'manager_team_management',
+      title: 'Mengelola Tim Anda',
+      content: `
+        Berdayakan tim Anda untuk mencapai hasil terbaik.
+        <br/><br/>
+        - **Mendelegasikan Tugas:** Saat membuat atau mengedit tugas, Anda bisa menugaskannya ke satu atau lebih karyawan.
+        <br/>
+        - **Ceklis Harian:** Buka halaman 'Daily Checklist' dan gunakan filter nama untuk memantau penyelesaian tugas rutin harian anggota tim Anda.
+      `,
+    },
+    {
+      id: 'manager_automation',
+      title: 'Otomatisasi & Efisiensi',
+      content: `
+        Hemat waktu dengan fitur otomatisasi kami.
+        <br/><br/>
+        - **Template Tugas Berulang:** Buka 'Settings > Recurring Tasks' untuk membuat template tugas yang akan dibuat secara otomatis (harian, mingguan, dll.). Ini sangat berguna untuk laporan, rapat rutin, atau tugas-tugas administrasi lainnya.
+      `,
+    },
+    {
+      id: 'manager_reports',
+      title: 'Analisis & Laporan',
+      content: `
+        Gunakan data untuk membuat keputusan yang lebih baik.
+        <br/><br/>
+        - **Halaman Laporan:** Analisis performa tim, lihat tingkat penyelesaian tepat waktu, dan identifikasi di mana sebagian besar waktu kerja dihabiskan melalui grafik interaktif.
+      `,
+    },
+     {
+      id: 'manager_social_media',
+      title: 'Alur Kerja Media Sosial',
+      content: `
+        Kelola konten untuk klien atau merek Anda secara profesional.
+        <br/><br/>
+        - **Review Konten:** Di halaman 'Social Media', Anda akan melihat postingan yang menunggu persetujuan.
+        - **Approval:** Buka setiap postingan untuk me-review, lalu gunakan tombol "Approve & Schedule" untuk menjadwalkan atau "Reject" untuk mengembalikannya ke drafter.
       `,
     },
   ],
