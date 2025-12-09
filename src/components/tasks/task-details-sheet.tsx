@@ -264,7 +264,7 @@ export function TaskDetailsSheet({
         console.error("Failed to pause session:", error);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
     }
-  }, [firestore, currentUser, initialTask]);
+  }, [firestore, currentUser, initialTask, toast]);
 
 
   const handleStatusChange = async (newStatus: string) => {
@@ -1040,6 +1040,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
+                    {isEmployee && initialTask.status === 'Doing' && !isSharedView && (
+                        <div className="space-y-2">
+                          <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                              Submit for Review
+                          </Button>
+                          {!allSubtasksCompleted && (
+                              <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
+                          )}
+                        </div>
+                    )}
+                    
                     {isManagerOrAdmin && initialTask.status === 'Preview' && (
                         <div className="space-y-2">
                            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleStatusChange('Done')} disabled={isSaving}>
@@ -1049,18 +1061,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               <RefreshCcw className="mr-2 h-4 w-4" />Request Revisions
                            </Button>
                         </div>
-                    )}
-                    
-                    {isAssignee && initialTask.status === 'Doing' && !isSharedView && (
-                          <div className="space-y-2">
-                            <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
-                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                Submit for Review
-                            </Button>
-                            {!allSubtasksCompleted && (
-                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
-                            )}
-                          </div>
                     )}
 
                     {isAssignee && initialTask.status === 'Done' && !isSharedView && (
