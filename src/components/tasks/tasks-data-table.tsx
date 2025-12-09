@@ -304,7 +304,7 @@ export function TasksDataTable() {
       cell: ({ row }) => {
         const task = row.original;
         const hasDescription = task.description && task.description.trim() !== '';
-
+        
         const completionStatus = React.useMemo(() => {
             if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
             const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
@@ -495,7 +495,7 @@ export function TasksDataTable() {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8 p-0 opacity-50 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                <Button variant="outline" size="icon" className="h-8 w-8 p-0 opacity-50 focus:opacity-100 group-hover:opacity-100 transition-opacity">
                     <span className="sr-only">Open menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -815,3 +815,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
