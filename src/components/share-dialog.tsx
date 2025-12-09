@@ -119,7 +119,7 @@ export function ShareDialog() {
   };
 
   const getCombinedExpiration = () => {
-    if (!useExpiration || !expiresAtDate) return undefined;
+    if (!useExpiration || !expiresAtDate) return null;
     const [hours, minutes] = expiresAtTime.split(':').map(Number);
     const combinedDate = new Date(expiresAtDate);
     combinedDate.setHours(hours, minutes);
@@ -152,14 +152,10 @@ export function ShareDialog() {
     const expiration = getCombinedExpiration();
     if (expiration) {
         linkData.expiresAt = expiration;
-    } else {
-        linkData.expiresAt = undefined;
+    } else if (createdLink && createdLink.expiresAt) {
+        linkData.expiresAt = deleteField() as any;
     }
     
-    // Clear undefined fields before sending to Firestore
-    Object.keys(linkData).forEach(key => linkData[key as keyof typeof linkData] === undefined && delete linkData[key as keyof typeof linkData]);
-
-
     try {
       if (createdLink) {
         // Update existing link
