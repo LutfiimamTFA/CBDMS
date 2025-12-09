@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -18,13 +19,13 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
 import type { SharedLink } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { Card, CardHeader } from './ui/card';
+import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
@@ -51,14 +52,11 @@ export function ShareDialog() {
   }, [firestore, profile]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
-  // This effect now correctly handles initialization without overriding user actions.
   useEffect(() => {
-    // Only auto-select the first link if no link is currently active
-    // and the list of links has loaded and is not empty.
     if (!activeLink && existingLinks && existingLinks.length > 0) {
       loadLinkDetails(existingLinks[0]);
     }
-  }, [existingLinks, activeLink]); // Depend on existingLinks and activeLink
+  }, [existingLinks]);
 
   const handleOpenNew = () => {
     setActiveLink(null);
@@ -107,11 +105,13 @@ export function ShareDialog() {
     };
     setIsLoading(true);
 
+    const isCreating = !activeLink;
+
     const linkData: any = {
         name: linkName,
-        companyId: profile.companyId,
         sharedAsRole: profile.role,
-        createdBy: profile.id,
+        ...(isCreating && { companyId: profile.companyId }),
+        ...(isCreating && { createdBy: profile.id }),
     };
 
     if (usePassword && password) {
@@ -119,22 +119,20 @@ export function ShareDialog() {
             linkData.password = password;
         }
     } else {
-        linkData.password = null; // Explicitly set to null for Firestore
+        linkData.password = isCreating ? null : deleteField();
     }
 
     if (useExpiration && expiresAtDate) {
         linkData.expiresAt = getCombinedExpiration();
     } else {
-        linkData.expiresAt = null; // Explicitly set to null
+        linkData.expiresAt = isCreating ? null : deleteField();
     }
 
     try {
         if (activeLink) {
             // Update existing link
             const linkRef = doc(firestore, 'sharedLinks', activeLink.id);
-            // Don't overwrite createdBy and createdAt on update
-            const { createdBy, createdAt, ...updateData } = linkData; 
-            await updateDoc(linkRef, updateData);
+            await updateDoc(linkRef, linkData);
             
             toast({ title: 'Link updated!' });
             const updatedLinkDoc = await getDoc(linkRef);
@@ -200,7 +198,7 @@ export function ShareDialog() {
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Generate a secure link to share a live view of your workspace.
+            Generate a secure link to share a live view of your workspace. The shared view will match your current role.
           </DialogDescription>
         </DialogHeader>
         
