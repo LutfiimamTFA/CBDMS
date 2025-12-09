@@ -1,3 +1,4 @@
+
 'use client';
 import { useMemo } from 'react';
 import { useFirebase } from '@/firebase/provider';
@@ -67,7 +68,7 @@ export function useUserProfile(): UseUserProfileResult {
       // Create a virtual profile based on the shared link
       const virtualProfile: WithId<UserProfile> = {
         id: 'shared-session-user',
-        name: sharedSession.targetName,
+        name: 'Shared View', // A generic name for the shared context
         email: '',
         role: 'Client', // Default virtual role, actual permissions govern actions
         companyId: sharedSession.companyId,

@@ -184,7 +184,7 @@ export function ShareDialog() {
 
     const isCreating = !activeLink;
 
-    const linkData: Partial<Omit<SharedLink, 'id'>> = {
+    const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
         name: linkName,
         allowedNavItems,
         permissions,
@@ -254,10 +254,11 @@ export function ShareDialog() {
   };
   
   const shareUrl = useMemo(() => {
+    // In dev, use localhost, in prod use the public URL
     const isDevelopment = process.env.NODE_ENV === 'development';
     const projectId = firebaseConfig.projectId;
-    // Use public URL for sharing, not localhost.
-    const baseUrl = `https://${projectId}.web.app`;
+    const baseUrl = isDevelopment ? 'http://localhost:3000' : `https://${projectId}.web.app`;
+    
     if (!activeLink) return baseUrl;
     return `${baseUrl}/share/${activeLink.id}`;
 }, [activeLink]);
@@ -274,7 +275,7 @@ export function ShareDialog() {
     <div className="flex items-start justify-between space-x-2">
       <div className="flex-grow">
         <Label htmlFor={id} className={cn("font-medium", disabled && "text-muted-foreground")}>{label}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
     </div>
@@ -424,7 +425,7 @@ export function ShareDialog() {
               <div>
                 {activeLink && (
                   <Button variant="destructive" onClick={handleDisableLink} disabled={isLoading}>
-                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className='mr-2' />} Disable Link
+                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className='mr-2 h-4 w-4' />} Disable Link
                   </Button>
                 )}
               </div>

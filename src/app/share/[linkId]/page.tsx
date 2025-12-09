@@ -5,12 +5,15 @@ import { notFound, useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
-import type { SharedLink } from '@/lib/types';
+import type { SharedLink, NavigationItem } from '@/lib/types';
 import { useMemo, useState, useEffect } from 'react';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { MainLayout } from '@/components/share/main-layout';
+import { useCollection } from '@/firebase/firestore/use-collection';
+import { query, orderBy } from 'firebase/firestore';
+
 
 export default function SharedLinkPage() {
     const params = useParams();
@@ -28,6 +31,17 @@ export default function SharedLinkPage() {
     }, [firestore, linkId]);
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
+
+    const navItemsQuery = useMemo(
+        () =>
+        firestore
+            ? query(collection(firestore, 'navigationItems'), orderBy('order'))
+            : null,
+        [firestore]
+    );
+
+    const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
+
 
     const handleAuth = () => {
         if (sharedLink?.password === password) {
@@ -53,16 +67,19 @@ export default function SharedLinkPage() {
     }, [sharedLink]);
 
     useEffect(() => {
-        if (isAuthenticated && sharedLink) {
-            const firstAllowedPath = sharedLink.allowedNavItems[0] || '';
-            const navItem = defaultNavItems.find(item => item.id === firstAllowedPath);
+        if (isAuthenticated && sharedLink && allNavItems) {
+            const firstAllowedPathId = sharedLink.allowedNavItems[0] || '';
+            const navItem = allNavItems.find(item => item.id === firstAllowedPathId);
             if (navItem?.path) {
                 router.replace(`/share/${linkId}${navItem.path}`);
+            } else {
+                 // Fallback if no valid path is found
+                router.replace(`/share/${linkId}/dashboard`);
             }
         }
-    }, [isAuthenticated, sharedLink, linkId, router]);
+    }, [isAuthenticated, sharedLink, allNavItems, linkId, router]);
 
-    if (isLinkLoading) {
+    if (isLinkLoading || isNavItemsLoading) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -104,13 +121,3 @@ export default function SharedLinkPage() {
         </div>
     );
 }
-
-// Minimal placeholder for nav items to avoid breaking the build, will be replaced by actual data.
-const defaultNavItems = [
-    { id: 'nav_dashboard', path: '/dashboard' },
-    { id: 'nav_list', path: '/tasks' },
-    { id: 'nav_calendar', path: '/calendar' },
-    { id: 'nav_reports', path: '/reports' }
-];
-
-    

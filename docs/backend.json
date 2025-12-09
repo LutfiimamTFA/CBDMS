@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -353,7 +354,7 @@
         },
         "color": {
           "type": "string",
-          "description": "A Tailwind CSS color class for the status indicator (e.g., 'bg-blue-500')."
+          "description": "A hex color code for the status indicator (e.g., '#3b82f6')."
         },
         "companyId": {
           "type": "string",
@@ -601,7 +602,6 @@
           ]
         }
       }
-    ],
-    "reasoning": "The SharedLink entity has been updated to support a more granular and secure sharing model. The `targetType`, `targetId`, `targetName`, and `sharedAsRole` fields have been replaced with a single `allowedNavItems` array. This array will store the IDs of the NavigationItem entities that a viewer of this link is allowed to see. This 'default-deny' approach is more secure, as it only exposes explicitly permitted parts of the application. The rest of the data structure remains unchanged to support existing application functionality."
+    ]
   }
 }
