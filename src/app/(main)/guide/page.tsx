@@ -81,8 +81,9 @@ export default function GuidePage() {
                   </AccordionTrigger>
                   <AccordionContent
                     className="prose prose-sm dark:prose-invert max-w-none px-2 text-base"
-                    dangerouslySetInnerHTML={renderContent(topic.content)}
-                  />
+                  >
+                    <div dangerouslySetInnerHTML={renderContent(topic.content)} />
+                  </AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>
