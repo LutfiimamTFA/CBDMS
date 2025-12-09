@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import type { WorkflowStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Trash2, Edit, Save, GripVertical } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit, Save, GripVertical, Eye } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -45,7 +45,8 @@ import { cn } from '@/lib/utils';
 const defaultStatuses: Omit<WorkflowStatus, 'id' | 'companyId'>[] = [
     { name: 'To Do', order: 0, color: '#808080' },
     { name: 'Doing', order: 1, color: '#3b82f6' },
-    { name: 'Done', order: 2, color: '#22c55e' },
+    { name: 'Preview', order: 2, color: '#a855f7' },
+    { name: 'Done', order: 3, color: '#22c55e' },
 ];
 
 export default function WorkflowSettingsPage() {
@@ -261,7 +262,11 @@ export default function WorkflowSettingsPage() {
                         >
                             <div className='flex items-center gap-3'>
                                 <GripVertical className='h-5 w-5 text-muted-foreground' />
-                                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></span>
+                                {status.name === 'Preview' ? (
+                                    <Eye className="h-4 w-4" style={{ color: status.color }}/>
+                                ) : (
+                                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></span>
+                                )}
                                 <span className="font-medium">{status.name}</span>
                             </div>
                             <div className='flex items-center gap-2'>
@@ -324,3 +329,5 @@ export default function WorkflowSettingsPage() {
     </div>
   );
 }
+
+    

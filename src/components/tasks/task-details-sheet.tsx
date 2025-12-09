@@ -949,12 +949,17 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
                     {isManagerOrAdmin && initialTask.status === 'Preview' && (
-                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleStatusChange('Done')} disabled={isSaving}>
-                            <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete Task
-                        </Button>
+                        <div className="space-y-2">
+                           <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleStatusChange('Done')} disabled={isSaving}>
+                              <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                           </Button>
+                           <Button variant="outline" className="w-full" onClick={() => handleStatusChange('Doing')} disabled={isSaving}>
+                              <RefreshCcw className="mr-2 h-4 w-4" />Request Revisions
+                           </Button>
+                        </div>
                     )}
                     
-                    {isAssignee && !isSharedView && initialTask.status !== 'Done' && initialTask.status !== 'Preview' && (
+                    {isAssignee && !isSharedView && initialTask.status === 'Doing' && (
                           <div className="space-y-2">
                             <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
                                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -1246,3 +1251,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    

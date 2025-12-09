@@ -358,7 +358,7 @@ export function TasksDataTable() {
         return value.includes(row.getValue(id))
       },
     },
-    {
+     {
       accessorKey: 'priority',
       header: t('tasks.column.priority'),
       sortingFn: prioritySortingFn,
@@ -815,3 +815,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
