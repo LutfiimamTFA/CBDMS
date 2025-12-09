@@ -388,7 +388,7 @@ export function TasksDataTable() {
               disabled={isChecking || profile?.role === 'Employee'}
             >
               <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
-                <div className="flex items-center gap-2">
+                 <div className="flex items-center gap-2">
                     <priority.icon className={`h-4 w-4 ${priority.color}`} />
                     <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
                 </div>
@@ -815,5 +815,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-    
