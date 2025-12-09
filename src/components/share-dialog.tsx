@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -59,7 +60,7 @@ export function ShareDialog() {
   const { toast } = useToast();
   
   const linksQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
+    if (!firestore || !profile?.companyId) return null;
     return query(collection(firestore, 'sharedLinks'), where('companyId', '==', profile.companyId));
   }, [firestore, profile]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
@@ -67,7 +68,10 @@ export function ShareDialog() {
   const brandsQuery = useMemo(() => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null), [firestore]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
-  const usersQuery = useMemo(() => (firestore ? query(collection(firestore, 'users'), where('companyId', '==', profile?.companyId)) : null), [firestore, profile]);
+  const usersQuery = useMemo(() => {
+    if (!firestore || !profile?.companyId) return null; // Guard clause
+    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
+  }, [firestore, profile]);
   const { data: users, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
   const priorityOptions = Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label }));
