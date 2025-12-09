@@ -1,14 +1,13 @@
-
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
+import { useDoc, useFirestore } from '@/firebase';
+import type { SharedLink } from '@/lib/types';
+import { doc } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 
-// This context is no longer needed with the granular permission model.
-// The share page will handle its own logic based on the link data.
-
 interface SharedSessionContextType {
-  session: null;
+  session: SharedLink | null;
   isLoading: boolean;
   error: Error | null;
 }
@@ -24,13 +23,24 @@ export function useSharedSession() {
 }
 
 export function SharedSessionProvider({ children }: { children: React.ReactNode }) {
+  const params = useParams();
+  const firestore = useFirestore();
+  const linkId = params.linkId as string | undefined;
+
+  const linkDocRef = useMemo(() => {
+    if (!firestore || !linkId) return null;
+    return doc(firestore, 'sharedLinks', linkId);
+  }, [firestore, linkId]);
+
+  const { data: session, isLoading, error } = useDoc<SharedLink>(linkDocRef);
+
   const value = useMemo(
     () => ({
-      session: null,
-      isLoading: false,
-      error: null,
+      session: session || null,
+      isLoading,
+      error,
     }),
-    []
+    [session, isLoading, error]
   );
 
   return (

@@ -1,9 +1,9 @@
-
 'use client';
 import { useMemo } from 'react';
 import { useFirebase } from '@/firebase/provider';
 import { useDoc, type WithId } from '@/firebase/firestore/use-doc';
 import { doc } from 'firebase/firestore';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 // Define the shape of the user profile stored in Firestore
 interface UserProfile {
@@ -39,12 +39,15 @@ export function useUserProfile(): UseUserProfileResult {
     userError: authError,
     firestore,
   } = useFirebase();
+  const { session: sharedSession, isLoading: isSessionLoading } = useSharedSession();
+
 
   // Create a memoized reference to the user's profile document.
   const profileDocRef = useMemo(() => {
-    if (!user?.uid || !firestore) return null;
+    // If in a shared session, we don't need to fetch a specific user's profile
+    if (sharedSession || !user?.uid || !firestore) return null;
     return doc(firestore, 'users', user.uid);
-  }, [user?.uid, firestore]);
+  }, [user?.uid, firestore, sharedSession]);
 
   // Use the useDoc hook to fetch the profile data for a logged-in user.
   const {
@@ -52,14 +55,29 @@ export function useUserProfile(): UseUserProfileResult {
     isLoading: isProfileLoading,
     error: profileError,
   } = useDoc<UserProfile>(profileDocRef);
-
+  
   // Combine loading states and errors
-  const isLoading = isAuthLoading || isProfileLoading;
+  const isLoading = isAuthLoading || isProfileLoading || isSessionLoading;
   const error = authError || profileError;
 
-  const companyId = useMemo(() => {
-    return loggedInProfile?.companyId || null;
-  }, [loggedInProfile]);
+  // Determine the active profile and companyId
+  const { profile, companyId } = useMemo(() => {
+    // Prioritize shared session context
+    if (sharedSession) {
+      // Create a virtual profile based on the shared link
+      const virtualProfile: WithId<UserProfile> = {
+        id: 'shared-session-user',
+        name: sharedSession.targetName,
+        email: '',
+        role: 'Client', // Default virtual role, actual permissions govern actions
+        companyId: sharedSession.companyId,
+        createdAt: sharedSession.createdAt,
+      };
+      return { profile: virtualProfile, companyId: sharedSession.companyId };
+    }
+    // Fallback to logged-in user's profile
+    return { profile: loggedInProfile, companyId: loggedInProfile?.companyId || null };
+  }, [sharedSession, loggedInProfile]);
 
-  return { user, profile: loggedInProfile, companyId, isLoading, error };
+  return { user, profile, companyId, isLoading, error };
 }

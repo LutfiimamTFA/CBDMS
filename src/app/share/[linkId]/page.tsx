@@ -1,12 +1,11 @@
-
 'use client';
 
-import { notFound, useParams, useRouter, useSearchParams } from 'next/navigation';
+import { notFound, useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import type { SharedLink, Task } from '@/lib/types';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
@@ -16,20 +15,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import { KanbanSquare, List } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
+import { SharedCalendarView } from '@/components/share/shared-calendar-view';
 
 export default function SharedLinkPage() {
     const params = useParams();
     const router = useRouter();
-    const searchParams = useSearchParams();
     const linkId = params.linkId as string;
     const firestore = useFirestore();
 
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
-
-    const [openedTaskId, setOpenedTaskId] = useState<string | null>(null);
+    const [defaultView, setDefaultView] = useState<'board' | 'list' | 'calendar'>('board');
 
     const linkDocRef = useMemo(() => {
         if (!firestore) return null;
@@ -43,7 +40,7 @@ export default function SharedLinkPage() {
 
         let q = query(collection(firestore, 'tasks'), where('companyId', '==', sharedLink.companyId));
         
-        if (sharedLink.targetType && sharedLink.targetId) {
+        if (sharedLink.targetType && sharedLink.targetId && sharedLink.targetId !== 'all') {
             if (sharedLink.targetType === 'brand') {
                 q = query(q, where('brandId', '==', sharedLink.targetId));
             } else if (sharedLink.targetType === 'priority') {
@@ -57,12 +54,6 @@ export default function SharedLinkPage() {
 
     const { data: tasks, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
     
-    const taskForSheet = useMemo(() => {
-        if (!openedTaskId || !tasks) return null;
-        return tasks.find(t => t.id === openedTaskId) || null;
-    }, [openedTaskId, tasks]);
-
-
     const handleAuth = () => {
         if (sharedLink?.password === password) {
             setIsAuthenticated(true);
@@ -72,8 +63,7 @@ export default function SharedLinkPage() {
         }
     };
     
-    // Auto-authenticate if link has no password
-    useMemo(() => {
+    useEffect(() => {
         if (sharedLink && !sharedLink.password) {
             setIsAuthenticated(true);
         }
@@ -131,10 +121,11 @@ export default function SharedLinkPage() {
                         <Loader2 className="h-8 w-8 animate-spin" />
                     </div>
                 ): (
-                    <Tabs defaultValue="board" className="h-full flex flex-col p-4 md:p-6">
+                    <Tabs defaultValue={defaultView} onValueChange={(v) => setDefaultView(v as any)} className="h-full flex flex-col p-4 md:p-6">
                         <TabsList className='mb-4 w-fit self-start'>
                            <TabsTrigger value="board"><KanbanSquare className='h-4 w-4 mr-2'/> Board View</TabsTrigger>
                            <TabsTrigger value="list"><List className='h-4 w-4 mr-2'/> List View</TabsTrigger>
+                           <TabsTrigger value="calendar"><Calendar className='h-4 w-4 mr-2'/> Calendar View</TabsTrigger>
                         </TabsList>
                         <TabsContent value="board" className="flex-1 overflow-hidden">
                             <KanbanBoard tasks={tasks || []} permissions={sharedLink.permissions} />
@@ -142,17 +133,12 @@ export default function SharedLinkPage() {
                         <TabsContent value="list" className="flex-1 overflow-auto">
                             <TasksDataTable tasks={tasks || []} permissions={sharedLink.permissions} />
                         </TabsContent>
+                         <TabsContent value="calendar" className="flex-1 overflow-hidden">
+                            <SharedCalendarView tasks={tasks || []} permissions={sharedLink.permissions} />
+                        </TabsContent>
                     </Tabs>
                 )}
             </main>
-             {taskForSheet && (
-                <TaskDetailsSheet 
-                    task={taskForSheet}
-                    open={!!openedTaskId}
-                    onOpenChange={(isOpen) => !isOpen && setOpenedTaskId(null)}
-                    permissions={sharedLink.permissions}
-                />
-            )}
         </div>
     );
 }
