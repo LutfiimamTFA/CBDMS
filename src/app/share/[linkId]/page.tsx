@@ -6,18 +6,16 @@ import { collection, doc, query, where } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import type { SharedLink, Task } from '@/lib/types';
 import { useMemo, useState, useEffect } from 'react';
-import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useCollection } from '@/firebase/firestore/use-collection';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TasksDataTable } from '@/components/tasks/tasks-data-table';
-import { KanbanSquare, List } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { SharedCalendarView } from '@/components/share/shared-calendar-view';
+import { MainLayout } from '@/components/share/main-layout';
 
-export default function SharedLinkPage() {
+export default function SharedLinkPage({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
     const params = useParams();
     const router = useRouter();
     const linkId = params.linkId as string;
@@ -26,7 +24,6 @@ export default function SharedLinkPage() {
     const [password, setPassword] = useState('');
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [authError, setAuthError] = useState<string | null>(null);
-    const [defaultView, setDefaultView] = useState<'board' | 'list' | 'calendar'>('board');
 
     const linkDocRef = useMemo(() => {
         if (!firestore) return null;
@@ -35,25 +32,6 @@ export default function SharedLinkPage() {
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
 
-    const tasksQuery = useMemo(() => {
-        if (!firestore || !sharedLink || !isAuthenticated) return null;
-
-        let q = query(collection(firestore, 'tasks'), where('companyId', '==', sharedLink.companyId));
-        
-        if (sharedLink.targetType && sharedLink.targetId && sharedLink.targetId !== 'all') {
-            if (sharedLink.targetType === 'brand') {
-                q = query(q, where('brandId', '==', sharedLink.targetId));
-            } else if (sharedLink.targetType === 'priority') {
-                q = query(q, where('priority', '==', sharedLink.targetId));
-            } else if (sharedLink.targetType === 'assignee') {
-                q = query(q, where('assigneeIds', 'array-contains', sharedLink.targetId));
-            }
-        }
-        return q;
-    }, [firestore, sharedLink, isAuthenticated]);
-
-    const { data: tasks, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
-    
     const handleAuth = () => {
         if (sharedLink?.password === password) {
             setIsAuthenticated(true);
@@ -104,41 +82,6 @@ export default function SharedLinkPage() {
         )
     }
 
-    return (
-        <div className="flex h-svh flex-col bg-background">
-            <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
-                <div className="flex items-center gap-4">
-                    <Logo />
-                    <Badge variant="outline">Preview Mode</Badge>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                    Viewing: <span className="font-semibold text-foreground">{sharedLink.targetName}</span>
-                </div>
-            </header>
-            <main className="flex-1 overflow-hidden">
-                {areTasksLoading ? (
-                     <div className="flex h-full items-center justify-center">
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                    </div>
-                ): (
-                    <Tabs defaultValue={defaultView} onValueChange={(v) => setDefaultView(v as any)} className="h-full flex flex-col p-4 md:p-6">
-                        <TabsList className='mb-4 w-fit self-start'>
-                           <TabsTrigger value="board"><KanbanSquare className='h-4 w-4 mr-2'/> Board View</TabsTrigger>
-                           <TabsTrigger value="list"><List className='h-4 w-4 mr-2'/> List View</TabsTrigger>
-                           <TabsTrigger value="calendar"><Calendar className='h-4 w-4 mr-2'/> Calendar View</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="board" className="flex-1 overflow-hidden">
-                            <KanbanBoard tasks={tasks || []} permissions={sharedLink.permissions} />
-                        </TabsContent>
-                        <TabsContent value="list" className="flex-1 overflow-auto">
-                            <TasksDataTable tasks={tasks || []} permissions={sharedLink.permissions} />
-                        </TabsContent>
-                         <TabsContent value="calendar" className="flex-1 overflow-hidden">
-                            <SharedCalendarView tasks={tasks || []} permissions={sharedLink.permissions} />
-                        </TabsContent>
-                    </Tabs>
-                )}
-            </main>
-        </div>
-    );
+    // Render the main layout for the shared view
+    return <MainLayout />;
 }

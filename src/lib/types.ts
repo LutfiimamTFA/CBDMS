@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -119,21 +120,10 @@ export type DailyReport = {
   companyId: string;
 };
 
-export type SharedLinkPermissions = {
-  canViewDetails: boolean;
-  canComment: boolean;
-  canChangeStatus: boolean;
-  canEditContent: boolean;
-  canAssignUsers: boolean;
-};
-
 export type SharedLink = {
   id: string;
-  targetName: string;
   companyId: string;
-  targetType: 'dashboard' | 'brand' | 'priority' | 'assignee';
-  targetId?: string; // Optional ID for brand, priority, assignee
-  permissions: SharedLinkPermissions;
+  sharedAsRole: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
   password?: string; // Hashed password
   expiresAt?: string; // ISO date string
   createdBy: string;

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -18,26 +19,22 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, where, query } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, where, query, orderBy } from 'firebase/firestore';
 import type { SharedLink, User, Brand, Priority } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
-import { cn, priorityInfo } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useCollection } from '@/firebase/firestore/use-collection';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { deleteField } from 'firebase/firestore';
 
 export function ShareDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeLink, setActiveLink] = useState<SharedLink | null>(null);
 
-  const [linkName, setLinkName] = useState('');
-  const [sharedAsRole, setSharedAsRole] = useState<'Manager' | 'Client' | 'Employee'>('Client');
-  
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
   const [useExpiration, setUseExpiration] = useState(false);
@@ -56,8 +53,6 @@ export function ShareDialog() {
 
   const handleOpenNew = () => {
     setActiveLink(null);
-    setLinkName('');
-    setSharedAsRole('Client');
     setUsePassword(false);
     setPassword('');
     setUseExpiration(false);
@@ -67,8 +62,6 @@ export function ShareDialog() {
   
   const loadLinkDetails = (link: SharedLink) => {
     setActiveLink(link);
-    setLinkName(link.targetName);
-    setSharedAsRole(link.sharedAsRole);
     if (link.password) {
       setUsePassword(true);
       setPassword('********'); // Placeholder for security
@@ -97,8 +90,8 @@ export function ShareDialog() {
   };
 
   const handleCreateOrUpdateLink = async () => {
-    if (!firestore || !profile || !linkName) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Link name is required.' });
+    if (!firestore || !profile) {
+        toast({ variant: 'destructive', title: 'Error', description: 'User profile not loaded.' });
         return;
     };
     setIsLoading(true);
@@ -107,10 +100,7 @@ export function ShareDialog() {
         if (activeLink) {
             // Update existing link
             const linkRef = doc(firestore, 'sharedLinks', activeLink.id);
-            const linkData: any = {
-                targetName: linkName,
-                sharedAsRole: sharedAsRole,
-            };
+            const linkData: any = {};
             if (usePassword) {
                 if (password && password !== '********') {
                     linkData.password = password;
@@ -125,17 +115,19 @@ export function ShareDialog() {
             }
             await updateDoc(linkRef, linkData);
             toast({ title: 'Link updated!' });
-            const updatedLink = (await getDoc(linkRef)).data() as SharedLink;
-            setActiveLink({ ...updatedLink, id: linkRef.id });
+            const updatedLinkDoc = await getDoc(linkRef);
+            if (updatedLinkDoc.exists()) {
+                const updatedLink = updatedLinkDoc.data() as SharedLink;
+                setActiveLink({ ...updatedLink, id: updatedLinkDoc.id });
+            }
 
         } else {
             // Create new link
             const linkData: any = {
-                targetName: linkName,
-                sharedAsRole: sharedAsRole,
                 companyId: profile.companyId,
                 createdBy: profile.id,
-                createdAt: serverTimestamp()
+                createdAt: serverTimestamp(),
+                sharedAsRole: profile.role, // Automatically set the role
             };
             if (usePassword && password) {
                 linkData.password = password;
@@ -144,8 +136,11 @@ export function ShareDialog() {
                 linkData.expiresAt = getCombinedExpiration();
             }
             const docRef = await addDoc(collection(firestore, 'sharedLinks'), linkData);
-            const newLink = (await getDoc(docRef)).data() as SharedLink;
-            setActiveLink({ ...newLink, id: docRef.id });
+            const newLinkDoc = await getDoc(docRef);
+            if (newLinkDoc.exists()){
+                const newLink = newLinkDoc.data() as SharedLink;
+                setActiveLink({ ...newLink, id: docRef.id });
+            }
             toast({ title: 'Share link created!' });
         }
     } catch (error) {
@@ -192,7 +187,7 @@ export function ShareDialog() {
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Generate a secure link to share a view of your workspace, simulating a specific user role.
+            Generate a secure link to share a live view of your workspace.
           </DialogDescription>
         </DialogHeader>
         
@@ -210,7 +205,7 @@ export function ShareDialog() {
                             <div className="flex justify-center p-4"><Loader2 className="animate-spin h-5 w-5"/></div>
                         ) : (existingLinks || []).map(link => (
                             <Button key={link.id} variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start" onClick={() => loadLinkDetails(link)}>
-                                {link.targetName}
+                                Shared as {link.sharedAsRole}
                             </Button>
                         ))}
                     </div>
@@ -226,31 +221,10 @@ export function ShareDialog() {
                   <>
                     <Card>
                       <CardHeader>
-                        <Label htmlFor="link-name">Link Name</Label>
-                        <p className="text-sm text-muted-foreground">Give this share link a descriptive name.</p>
+                        <h3 className="font-semibold">Shared Experience</h3>
+                        <p className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</p>
                       </CardHeader>
-                      <CardContent>
-                        <Input id="link-name" placeholder="e.g., 'Client Preview for Project X'" value={linkName || ''} onChange={e => setLinkName(e.target.value)} />
-                      </CardContent>
                     </Card>
-                    
-                    <Card>
-                       <CardHeader>
-                        <Label htmlFor="shared-as-role">Share as Role</Label>
-                        <p className="text-sm text-muted-foreground">The recipient will experience the app as this role.</p>
-                      </CardHeader>
-                      <CardContent>
-                         <Select value={sharedAsRole} onValueChange={(v) => setSharedAsRole(v as any)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Manager">Manager</SelectItem>
-                                <SelectItem value="Employee">Employee</SelectItem>
-                                <SelectItem value="Client">Client</SelectItem>
-                            </SelectContent>
-                        </Select>
-                      </CardContent>
-                    </Card>
-
                     <Card>
                       <CardHeader>
                         <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security Options</Label>
