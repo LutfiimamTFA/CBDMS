@@ -65,14 +65,23 @@ export function ShareDialog() {
   const linksQuery = useMemo(() => {
     if (!firestore || !profile?.companyId) return null;
     return query(collection(firestore, 'sharedLinks'), where('companyId', '==', profile.companyId));
-  }, [firestore, profile]);
+  }, [firestore, profile?.companyId]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
   const brandsQuery = useMemo(() => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null), [firestore]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
-  const usersQuery = useMemo(() => (firestore ? query(collection(firestore, 'users'), where('companyId', '==', profile?.companyId)) : null), [firestore, profile]);
+  const usersQuery = useMemo(() => {
+    if (!firestore || !profile?.companyId) return null;
+    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
+  }, [firestore, profile?.companyId]);
   const { data: users, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
+
+  useEffect(() => {
+    if (!activeLink && !isLinksLoading && existingLinks && existingLinks.length > 0) {
+      loadLinkDetails(existingLinks[0]);
+    }
+  }, [existingLinks, isLinksLoading, activeLink]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -157,9 +166,12 @@ export function ShareDialog() {
         targetId,
         targetName: getTargetName(),
         permissions,
-        ...(isCreating && { companyId: profile.companyId }),
-        ...(isCreating && { createdBy: profile.id }),
     };
+
+    if (isCreating) {
+        linkData.companyId = profile.companyId;
+        linkData.createdBy = profile.id;
+    }
 
     if (usePassword && password) {
         if (password !== '********') {
@@ -304,21 +316,10 @@ export function ShareDialog() {
                     </div>
                     
                     <Card>
-                        <CardHeader>
-                            <h3 className="font-semibold">What to Share</h3>
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-2 gap-4">
-                            <Select value={targetType} onValueChange={(val) => setTargetType(val as any)}>
-                                <SelectTrigger><SelectValue/></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="dashboard">Entire Dashboard</SelectItem>
-                                    <SelectItem value="brand">Tasks by Brand</SelectItem>
-                                    <SelectItem value="priority">Tasks by Priority</SelectItem>
-                                    <SelectItem value="assignee">Tasks by Assignee</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            {renderTargetSelect()}
-                        </CardContent>
+                      <CardHeader>
+                        <h3 className="font-semibold">Shared Experience</h3>
+                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</div>
+                      </CardHeader>
                     </Card>
 
                     <Card>
@@ -337,7 +338,7 @@ export function ShareDialog() {
 
                     <Card>
                       <CardHeader>
-                        <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security</Label>
+                        <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security Options</Label>
                       </CardHeader>
                       <CardContent className='space-y-6'>
                         <div className="space-y-3">
