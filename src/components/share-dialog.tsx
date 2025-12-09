@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
 import type { SharedLink, Brand, User, NavigationItem } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon } from 'lucide-react';
+import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from './ui/card';
@@ -71,6 +71,8 @@ export function ShareDialog() {
 
   // Permissions State
   const [permissions, setPermissions] = useState(defaultPermissions);
+  const [historyLink, setHistoryLink] = useState<SharedLink | null>(null);
+
 
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
@@ -84,6 +86,9 @@ export function ShareDialog() {
   
   const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
   const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
+  
+  const usersQuery = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  const { data: allUsers } = useCollection<User>(usersQuery);
 
   const userVisibleNavItems = useMemo(() => {
     if (!allNavItems || !profile) return [];
@@ -180,7 +185,6 @@ export function ShareDialog() {
 
     const linkData: Partial<Omit<SharedLink, 'id'>> = {
         name: linkName,
-        sharedAsRole: profile.role,
         allowedNavItems,
         permissions,
         companyId: profile.companyId,
@@ -249,10 +253,11 @@ export function ShareDialog() {
   };
   
   const shareUrl = useMemo(() => {
-    if (!activeLink) return '';
-    const projectId = firebaseConfig.projectId;
-    const baseUrl = `https://${projectId}.web.app`;
-    return `${baseUrl}/share/${activeLink.id}`;
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      const projectId = firebaseConfig.projectId;
+      const baseUrl = isDevelopment ? 'http://localhost:3000' : `https://${projectId}.web.app`;
+      if (!activeLink) return baseUrl;
+      return `${baseUrl}/share/${activeLink.id}`;
   }, [activeLink]);
 
 
@@ -292,135 +297,183 @@ export function ShareDialog() {
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Share2 className="mr-2 h-4 w-4" />
-          Share
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Share View</DialogTitle>
-          <DialogDescription>
-            Generate a secure, permission-based link to share a live view of your workspace.
-          </DialogDescription>
-        </DialogHeader>
-        
-        <div className="grid grid-cols-4 h-full overflow-hidden">
-            <div className="col-span-1 border-r h-full flex flex-col">
-                <div className="p-2">
-                    <Button variant="ghost" className="w-full justify-start mb-2" onClick={handleOpenNew}>
-                      <Plus className="mr-2 h-4 w-4"/> Create New Link
-                    </Button>
-                </div>
-                <Separator />
-                <ScrollArea className="flex-1">
-                    <div className="p-2">
-                        {isLinksLoading ? (
-                            <div className="flex justify-center p-4"><Loader2 className="animate-spin h-5 w-5"/></div>
-                        ) : (existingLinks || []).map(link => (
-                            <Button key={link.id} variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start" onClick={() => loadLinkDetails(link)}>
-                                {link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}
-                            </Button>
-                        ))}
-                    </div>
-                </ScrollArea>
-            </div>
-            <ScrollArea className='col-span-3'>
-              <div className="p-6 space-y-6">
-                {isLoadingAnything ? (
-                    <div className="flex justify-center items-center h-96">
-                        <Loader2 className="h-8 w-8 animate-spin" />
-                    </div>
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      <Label htmlFor="link-name">Link Name</Label>
-                      <Input id="link-name" value={linkName || ''} onChange={e => setLinkName(e.target.value)} placeholder="e.g. Q3 Report for Client" />
-                    </div>
-                    
-                    <Card>
-                      <CardHeader>
-                        <h3 className="font-semibold">Shared Experience</h3>
-                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</div>
-                      </CardHeader>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <Label className="flex items-center gap-2"><Eye className="h-4 w-4"/> Shared Navigation</Label>
-                            <p className="text-sm text-muted-foreground pt-1">Select which pages the viewer of this link will be able to see.</p>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                           {userVisibleNavItems.map(item => <NavItemCheckbox key={item.id} item={item} />)}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <Label className="flex items-center gap-2"><Shield className="h-4 w-4"/> Permissions</Label>
-                        <p className="text-sm text-muted-foreground pt-1">Control exactly what viewers can do within the pages you've shared.</p>
-                      </CardHeader>
-                      <CardContent className='space-y-5'>
-                        <PermissionSwitch id="perm-view" label="View Full Task Details" description="Allows viewers to open tasks and see all fields." checked={permissions.canViewDetails} onCheckedChange={(val) => handlePermissionChange('canViewDetails', val)} />
-                        <PermissionSwitch id="perm-comment" label="Comment on Tasks" description="Allows viewers to post comments and mention users." checked={permissions.canComment} onCheckedChange={(val) => handlePermissionChange('canComment', val)} />
-                        <PermissionSwitch id="perm-status" label="Change Task Status" description="Allows viewers to drag-and-drop tasks between columns." checked={permissions.canChangeStatus} onCheckedChange={(val) => handlePermissionChange('canChangeStatus', val)} />
-                        <PermissionSwitch id="perm-edit" label="Edit Task Content" description="Allows viewers to change title, description, dates, etc." checked={permissions.canEditContent} onCheckedChange={(val) => handlePermissionChange('canEditContent', val)} />
-                        <PermissionSwitch id="perm-assign" label="Assign/Unassign Users" description="Allows viewers to change who is assigned to a task." checked={permissions.canAssignUsers} onCheckedChange={(val) => handlePermissionChange('canAssignUsers', val)} />
-                      </CardContent>
-                    </Card>
-
-                    <Card>
-                      <CardHeader>
-                        <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security Options</Label>
-                      </CardHeader>
-                      <CardContent className='space-y-6'>
-                        <div className="space-y-3">
-                          <div className="flex items-center space-x-2"><Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword}/><Label htmlFor="use-password">Require Password</Label></div>
-                          {usePassword && <Input placeholder="Enter a password" value={password || ''} onChange={e => setPassword(e.target.value)} type='password'/>}
-                        </div>
-                        <Separator/>
-                        <div className="space-y-3">
-                          <div className="flex items-center space-x-2"><Switch id="use-expiration" checked={useExpiration} onCheckedChange={setUseExpiration}/><Label htmlFor="use-expiration">Set Expiration Date</Label></div>
-                          {useExpiration && (
-                            <div className="grid grid-cols-2 gap-2">
-                              <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("justify-start text-left font-normal", !expiresAtDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{expiresAtDate ? format(expiresAtDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><CalendarComponent mode="single" selected={expiresAtDate} onSelect={setExpiresAtDate} disabled={(date) => date < new Date()} initialFocus /></PopoverContent></Popover>
-                              <Input type="time" value={expiresAtTime || ''} onChange={e => setExpiresAtTime(e.target.value)}/>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {activeLink && (
-                      <div className="space-y-2 pt-4">
-                        <Label htmlFor="share-link">Your Shareable Link</Label>
-                        <div className="flex items-center gap-2">
-                          <Input id="share-link" value={shareUrl} readOnly />
-                          <Button size="icon" variant="secondary" onClick={copyToClipboard}><Copy className="h-4 w-4" /></Button>
-                        </div>
+    <>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Share2 className="mr-2 h-4 w-4" />
+            Share
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+          <DialogHeader className="p-6 pb-0">
+            <DialogTitle>Share View</DialogTitle>
+            <DialogDescription>
+              Generate a secure, permission-based link to share a live view of your workspace.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-4 h-full overflow-hidden">
+              <div className="col-span-1 border-r h-full flex flex-col">
+                  <div className="p-2">
+                      <Button variant="ghost" className="w-full justify-start mb-2" onClick={handleOpenNew}>
+                        <Plus className="mr-2 h-4 w-4"/> Create New Link
+                      </Button>
+                  </div>
+                  <Separator />
+                  <ScrollArea className="flex-1">
+                      <div className="p-2">
+                          {isLinksLoading ? (
+                              <div className="flex justify-center p-4"><Loader2 className="animate-spin h-5 w-5"/></div>
+                          ) : (existingLinks || []).map(link => (
+                              <div key={link.id} className="flex items-center justify-between rounded-md hover:bg-secondary">
+                                <Button variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start text-left h-auto py-2" onClick={() => loadLinkDetails(link)}>
+                                    <span className="truncate">{link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}</span>
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
+                                    <History className="h-4 w-4" />
+                                </Button>
+                              </div>
+                          ))}
                       </div>
-                    )}
-                  </>
+                  </ScrollArea>
+              </div>
+              <ScrollArea className='col-span-3'>
+                <div className="p-6 space-y-6">
+                  {isLoadingAnything ? (
+                      <div className="flex justify-center items-center h-96">
+                          <Loader2 className="h-8 w-8 animate-spin" />
+                      </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="link-name">Link Name</Label>
+                        <Input id="link-name" value={linkName || ''} onChange={e => setLinkName(e.target.value)} placeholder="e.g. Q3 Report for Client" />
+                      </div>
+                      
+                      <Card>
+                        <CardHeader>
+                          <h3 className="font-semibold">Shared Experience</h3>
+                          <p className="text-sm text-muted-foreground">The generated link provides a view consistent with your current role: <Badge variant="outline">{profile?.role}</Badge>.</p>
+                        </CardHeader>
+                      </Card>
+
+                      <Card>
+                          <CardHeader>
+                              <Label className="flex items-center gap-2"><Eye className="h-4 w-4"/> Shared Navigation</Label>
+                              <p className="text-sm text-muted-foreground pt-1">Select which pages the viewer of this link will be able to see.</p>
+                          </CardHeader>
+                          <CardContent className="space-y-2">
+                             {userVisibleNavItems.map(item => <NavItemCheckbox key={item.id} item={item} />)}
+                          </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <Label className="flex items-center gap-2"><Shield className="h-4 w-4"/> Permissions</Label>
+                          <p className="text-sm text-muted-foreground pt-1">Control exactly what viewers can do within the pages you've shared.</p>
+                        </CardHeader>
+                        <CardContent className='space-y-5'>
+                          <PermissionSwitch id="perm-view" label="View Full Task Details" description="Allows viewers to open tasks and see all fields." checked={permissions.canViewDetails} onCheckedChange={(val) => handlePermissionChange('canViewDetails', val)} />
+                          <PermissionSwitch id="perm-comment" label="Comment on Tasks" description="Allows viewers to post comments and mention users." checked={permissions.canComment} onCheckedChange={(val) => handlePermissionChange('canComment', val)} />
+                          <PermissionSwitch id="perm-status" label="Change Task Status" description="Allows viewers to drag-and-drop tasks between columns." checked={permissions.canChangeStatus} onCheckedChange={(val) => handlePermissionChange('canChangeStatus', val)} />
+                          <PermissionSwitch id="perm-edit" label="Edit Task Content" description="Allows viewers to change title, description, dates, etc." checked={permissions.canEditContent} onCheckedChange={(val) => handlePermissionChange('canEditContent', val)} />
+                          <PermissionSwitch id="perm-assign" label="Assign/Unassign Users" description="Allows viewers to change who is assigned to a task." checked={permissions.canAssignUsers} onCheckedChange={(val) => handlePermissionChange('canAssignUsers', val)} />
+                        </CardContent>
+                      </Card>
+
+                      <Card>
+                        <CardHeader>
+                          <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security Options</Label>
+                        </CardHeader>
+                        <CardContent className='space-y-6'>
+                          <div className="space-y-3">
+                            <div className="flex items-center space-x-2"><Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword}/><Label htmlFor="use-password">Require Password</Label></div>
+                            {usePassword && <Input placeholder="Enter a password" value={password || ''} onChange={e => setPassword(e.target.value)} type='password'/>}
+                          </div>
+                          <Separator/>
+                          <div className="space-y-3">
+                            <div className="flex items-center space-x-2"><Switch id="use-expiration" checked={useExpiration} onCheckedChange={setUseExpiration}/><Label htmlFor="use-expiration">Set Expiration Date</Label></div>
+                            {useExpiration && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("justify-start text-left font-normal", !expiresAtDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{expiresAtDate ? format(expiresAtDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><CalendarComponent mode="single" selected={expiresAtDate} onSelect={setExpiresAtDate} disabled={(date) => date < new Date()} initialFocus /></PopoverContent></Popover>
+                                <Input type="time" value={expiresAtTime || ''} onChange={e => setExpiresAtTime(e.target.value)}/>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {activeLink && (
+                        <div className="space-y-2 pt-4">
+                          <Label htmlFor="share-link">Your Shareable Link</Label>
+                          <div className="flex items-center gap-2">
+                            <Input id="share-link" value={shareUrl} readOnly />
+                            <Button size="icon" variant="secondary" onClick={copyToClipboard}><Copy className="h-4 w-4" /></Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </ScrollArea>
+          </div>
+          <DialogFooter className='p-6 pt-4 border-t flex justify-between w-full'>
+              <div>
+                {activeLink && (
+                  <Button variant="destructive" onClick={handleDisableLink} disabled={isLoading}>
+                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className='mr-2' />} Disable Link
+                  </Button>
                 )}
               </div>
-            </ScrollArea>
-        </div>
-        <DialogFooter className='p-6 pt-4 border-t flex justify-between w-full'>
-            <div>
-              {activeLink && (
-                <Button variant="destructive" onClick={handleDisableLink} disabled={isLoading}>
-                    {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Trash2 className='mr-2' />} Disable Link
-                </Button>
-              )}
-            </div>
-            <Button onClick={handleCreateOrUpdateLink} disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                {activeLink ? 'Update Link' : 'Create Link'}
-            </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              <Button onClick={handleCreateOrUpdateLink} disabled={isLoading}>
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                  {activeLink ? 'Update Link' : 'Create Link'}
+              </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!historyLink} onOpenChange={() => setHistoryLink(null)}>
+        <DialogContent>
+          <DialogHeader>
+              <DialogTitle>Link History: {historyLink?.name}</DialogTitle>
+              <DialogDescription>Audit log for this shared link.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4 text-sm">
+             <div className="flex justify-between">
+                <span className="text-muted-foreground">Created By:</span>
+                <span className="font-medium">{allUsers?.find(u => u.id === historyLink?.createdBy)?.name || 'Unknown User'}</span>
+             </div>
+             <div className="flex justify-between">
+                <span className="text-muted-foreground">Created At:</span>
+                <span className="font-medium">{historyLink?.createdAt ? format(historyLink.createdAt.toDate(), 'PP, p') : 'N/A'}</span>
+             </div>
+             <div className="flex justify-between">
+                <span className="text-muted-foreground">Last Updated:</span>
+                <span className="font-medium">{historyLink?.updatedAt ? format(historyLink.updatedAt.toDate(), 'PP, p') : 'Never'}</span>
+             </div>
+              <Separator />
+              <div>
+                <h4 className="font-medium mb-2">Permitted Navigation</h4>
+                <div className="flex flex-wrap gap-2">
+                    {(historyLink?.allowedNavItems || []).map(navId => {
+                        const navItem = allNavItems?.find(item => item.id === navId);
+                        return <Badge key={navId} variant="secondary">{navItem?.label || navId}</Badge>
+                    })}
+                </div>
+              </div>
+               <div>
+                <h4 className="font-medium mb-2">Enabled Permissions</h4>
+                <ul className="list-disc list-inside space-y-1">
+                    {historyLink && Object.entries(historyLink.permissions).filter(([, value]) => value === true).map(([key]) => (
+                        <li key={key}>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</li>
+                    ))}
+                </ul>
+              </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

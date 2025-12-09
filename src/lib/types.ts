@@ -136,6 +136,7 @@ export type SharedLink = {
   };
   createdBy: string;
   createdAt: any;
+  updatedAt?: any;
 };
 
 
@@ -247,5 +248,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
-    

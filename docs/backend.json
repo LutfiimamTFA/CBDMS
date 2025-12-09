@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -401,6 +400,40 @@
         "companyId": { "type": "string", "description": "The ID of the company this post belongs to." }
       },
       "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
+    },
+    "SharedLink": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "SharedLink",
+      "type": "object",
+      "description": "Represents a secure, shareable link to a customized view of the application.",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "description": "A user-friendly name for the link (e.g., 'Client Preview Q3')." },
+        "companyId": { "type": "string", "description": "The company whose data is being shared." },
+        "allowedNavItems": {
+          "type": "array",
+          "description": "An array of NavigationItem IDs that are visible through this link.",
+          "items": { "type": "string" }
+        },
+        "password": { "type": "string", "description": "An optional password to protect the link." },
+        "expiresAt": { "type": "string", "format": "date-time", "description": "An optional expiration date for the link." },
+        "permissions": {
+          "type": "object",
+          "description": "A set of granular permissions for what the viewer can do.",
+          "properties": {
+            "canViewDetails": { "type": "boolean" },
+            "canComment": { "type": "boolean" },
+            "canChangeStatus": { "type": "boolean" },
+            "canEditContent": { "type": "boolean" },
+            "canAssignUsers": { "type": "boolean" }
+          },
+          "required": ["canViewDetails", "canComment", "canChangeStatus", "canEditContent", "canAssignUsers"]
+        },
+        "createdBy": { "type": "string", "description": "The ID of the user who created the link." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "companyId", "allowedNavItems", "permissions", "createdBy", "createdAt"]
     }
   },
   "auth": {
@@ -556,8 +589,19 @@
             { "name": "postId", "description": "The unique identifier for the social media post." }
           ]
         }
+      },
+      {
+        "path": "/sharedLinks/{linkId}",
+        "definition": {
+          "entityName": "SharedLink",
+          "schema": { "$ref": "#/backend/entities/SharedLink" },
+          "description": "Stores secure, shareable links that provide a customized application experience.",
+          "params": [
+            { "name": "linkId", "description": "The unique identifier for the shared link." }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks. Finally, a new API route `/api/run-scheduler` is added to handle the server-side logic for task generation. A new 'SocialMediaPost' entity and `/socialMediaPosts` collection have been added to support the new social media scheduling module."
+    "reasoning": "The SharedLink entity has been updated to support a more granular and secure sharing model. The `targetType`, `targetId`, `targetName`, and `sharedAsRole` fields have been replaced with a single `allowedNavItems` array. This array will store the IDs of the NavigationItem entities that a viewer of this link is allowed to see. This 'default-deny' approach is more secure, as it only exposes explicitly permitted parts of the application. The rest of the data structure remains unchanged to support existing application functionality."
   }
 }
