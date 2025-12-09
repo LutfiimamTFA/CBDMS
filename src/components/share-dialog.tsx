@@ -336,7 +336,7 @@ export function ShareDialog() {
                     <Card>
                       <CardHeader>
                         <h3 className="font-semibold">Shared Experience</h3>
-                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{profile?.role}</Badge> role's access, but limited to the items you select below.</div>
+                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role's access, but limited to the items you select below.</div>
                       </CardHeader>
                     </Card>
 
