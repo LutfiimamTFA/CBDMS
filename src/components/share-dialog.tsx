@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,8 +19,8 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, where, query, orderBy } from 'firebase/firestore';
-import type { SharedLink, User, Brand, Priority } from '@/lib/types';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, where, query, orderBy, deleteField } from 'firebase/firestore';
+import type { SharedLink } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -28,13 +28,14 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Badge } from './ui/badge';
 
 export function ShareDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeLink, setActiveLink] = useState<SharedLink | null>(null);
 
+  const [linkName, setLinkName] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
   const [useExpiration, setUseExpiration] = useState(false);
@@ -53,6 +54,7 @@ export function ShareDialog() {
 
   const handleOpenNew = () => {
     setActiveLink(null);
+    setLinkName('New Share Link');
     setUsePassword(false);
     setPassword('');
     setUseExpiration(false);
@@ -62,9 +64,10 @@ export function ShareDialog() {
   
   const loadLinkDetails = (link: SharedLink) => {
     setActiveLink(link);
+    setLinkName(link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`);
     if (link.password) {
       setUsePassword(true);
-      setPassword('********'); // Placeholder for security
+      setPassword('********');
     } else {
       setUsePassword(false);
       setPassword('');
@@ -100,7 +103,9 @@ export function ShareDialog() {
         if (activeLink) {
             // Update existing link
             const linkRef = doc(firestore, 'sharedLinks', activeLink.id);
-            const linkData: any = {};
+            const linkData: any = {
+                name: linkName
+            };
             if (usePassword) {
                 if (password && password !== '********') {
                     linkData.password = password;
@@ -127,12 +132,13 @@ export function ShareDialog() {
                 companyId: profile.companyId,
                 createdBy: profile.id,
                 createdAt: serverTimestamp(),
-                sharedAsRole: profile.role, // Automatically set the role
+                sharedAsRole: profile.role,
+                name: linkName,
             };
             if (usePassword && password) {
                 linkData.password = password;
             }
-            if (useExpiration) {
+            if (useExpiration && expiresAtDate) {
                 linkData.expiresAt = getCombinedExpiration();
             }
             const docRef = await addDoc(collection(firestore, 'sharedLinks'), linkData);
@@ -143,9 +149,9 @@ export function ShareDialog() {
             }
             toast({ title: 'Share link created!' });
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
-        toast({ variant: 'destructive', title: 'Operation Failed' });
+        toast({ variant: 'destructive', title: 'Operation Failed', description: error.message || "An unknown error occurred." });
     } finally {
         setIsLoading(false);
     }
@@ -176,7 +182,7 @@ export function ShareDialog() {
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(val) => {setIsOpen(val); handleOpenNew()}}>
+    <Dialog open={isOpen} onOpenChange={(val) => {setIsOpen(val); if (!val) handleOpenNew()}}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Share2 className="mr-2 h-4 w-4" />
@@ -205,7 +211,7 @@ export function ShareDialog() {
                             <div className="flex justify-center p-4"><Loader2 className="animate-spin h-5 w-5"/></div>
                         ) : (existingLinks || []).map(link => (
                             <Button key={link.id} variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start" onClick={() => loadLinkDetails(link)}>
-                                Shared as {link.sharedAsRole}
+                                {link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}
                             </Button>
                         ))}
                     </div>
@@ -219,6 +225,10 @@ export function ShareDialog() {
                     </div>
                 ) : (
                   <>
+                    <div className="space-y-2">
+                      <Label htmlFor="link-name">Link Name</Label>
+                      <Input id="link-name" value={linkName || ''} onChange={e => setLinkName(e.target.value)} placeholder="e.g. Q3 Report for Client" />
+                    </div>
                     <Card>
                       <CardHeader>
                         <h3 className="font-semibold">Shared Experience</h3>
