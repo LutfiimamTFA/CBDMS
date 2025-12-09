@@ -404,7 +404,7 @@ export function TaskDetailsSheet({
   
   const handleRemoveSubtask = (subtaskId: string) => {
     setSubtasks(subtasks.filter(st => st.id !== subtaskId));
-  };
+  }
   
   const handleAssignSubtask = (subtaskId: string, user: User | null) => {
     const newSubtasks = subtasks.map(st => {
@@ -1251,5 +1251,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    
