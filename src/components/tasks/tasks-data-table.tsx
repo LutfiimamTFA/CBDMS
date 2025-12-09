@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -108,6 +107,12 @@ export function TasksDataTable() {
     [firestore]
   );
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+  
+  const usersQuery = React.useMemo(() => {
+    if (!firestore || !companyId) return null;
+    return query(collection(firestore, 'users'), where('companyId', '==', companyId));
+  }, [firestore, companyId]);
+  const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
 
   const [data, setData] = React.useState<Task[]>([]);
   React.useEffect(() => {
@@ -162,6 +167,23 @@ export function TasksDataTable() {
       icon: Building2,
     }));
   }, [brands]);
+
+  const assigneeOptions = React.useMemo(() => {
+    if (!users || !profile) return [];
+    
+    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
+        return users
+            .filter(u => u.role === 'Manager' || u.role === 'Employee')
+            .map(u => ({ value: u.id, label: u.name }));
+    }
+    
+    // For Employees
+    return users
+        .filter(u => u.role === 'Employee')
+        .map(u => ({ value: u.id, label: u.name }));
+        
+  }, [users, profile]);
+
 
   const createActivity = (user: User, action: string): Activity => {
     return {
@@ -510,10 +532,10 @@ export function TasksDataTable() {
         },
       },
     {
-      accessorKey: 'assignees',
+      accessorKey: 'assigneeIds',
       header: t('tasks.column.assignees'),
       cell: ({ row }) => {
-        const assignees = row.getValue('assignees') as any[] | undefined;
+        const assignees = row.original.assignees || [];
         if (!assignees || assignees.length === 0) {
             return <div className="text-muted-foreground">-</div>;
         }
@@ -551,6 +573,10 @@ export function TasksDataTable() {
             )}
           </div>
         );
+      },
+       filterFn: (row, id, value) => {
+        const assigneeIds = row.original.assigneeIds;
+        return value.some((val: string) => assigneeIds.includes(val));
       },
     },
     {
@@ -661,7 +687,7 @@ export function TasksDataTable() {
   });
 
   const isFiltered = table.getState().columnFilters.length > 0
-  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading;
+  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading;
 
   return (
     <>
@@ -681,6 +707,13 @@ export function TasksDataTable() {
                 column={table.getColumn("brandId")}
                 title="Brand"
                 options={brandOptions}
+              />
+            )}
+             {table.getColumn("assigneeIds") && (
+              <DataTableFacetedFilter
+                column={table.getColumn("assigneeIds")}
+                title={t('tasks.column.assignees')}
+                options={assigneeOptions}
               />
             )}
             {table.getColumn("status") && (
