@@ -358,7 +358,7 @@ export function TasksDataTable() {
         return value.includes(row.getValue(id))
       },
     },
-     {
+    {
       accessorKey: 'priority',
       header: t('tasks.column.priority'),
       sortingFn: prioritySortingFn,
@@ -388,10 +388,10 @@ export function TasksDataTable() {
               disabled={isChecking || profile?.role === 'Employee'}
             >
               <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
-                 <div className="flex items-center gap-2">
-                    <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                <div className="flex items-center gap-2">
+                    <priority.icon className={`h-4 w-4 ${priority.color}`} />
                     <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
-                 </div>
+                </div>
               </SelectTrigger>
               <SelectContent>
                 {Object.values(priorityInfo).map((p) => (
