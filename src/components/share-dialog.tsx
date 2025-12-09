@@ -99,8 +99,11 @@ export function ShareDialog() {
   useEffect(() => {
     if (!activeLink && !isLinksLoading && existingLinks && existingLinks.length > 0) {
         loadLinkDetails(existingLinks[0]);
+    } else if (!activeLink && !isLinksLoading && (!existingLinks || existingLinks.length === 0)) {
+        // If there are no links, ensure the 'new link' form is shown
+        handleOpenNew();
     }
-  }, [existingLinks, isLinksLoading]);
+  }, [existingLinks, isLinksLoading, activeLink]);
 
 
   const handlePermissionChange = (permission: keyof typeof permissions, value: boolean) => {
@@ -174,20 +177,17 @@ export function ShareDialog() {
 
     const isCreating = !activeLink;
 
-    const linkData: Partial<SharedLink> = {
+    const linkData: Partial<Omit<SharedLink, 'id'>> = {
         name: linkName,
         sharedAsRole: profile.role,
         allowedNavItems,
         permissions,
+        companyId: profile.companyId,
+        createdBy: profile.id,
     };
 
-    if (isCreating) {
-        linkData.companyId = profile.companyId;
-        linkData.createdBy = profile.id;
-    }
-
     if (usePassword && password) {
-        if (password !== '********') {
+        if (password !== '********') { // Only update if password is changed
             linkData.password = password;
         }
     } else if (!isCreating) {
@@ -203,7 +203,7 @@ export function ShareDialog() {
     try {
         if (activeLink) {
             const linkRef = doc(firestore, 'sharedLinks', activeLink.id);
-            await updateDoc(linkRef, linkData);
+            await updateDoc(linkRef, { ...linkData, updatedAt: serverTimestamp() });
             toast({ title: 'Link updated!' });
             const updatedLinkDoc = await getDoc(linkRef);
             if (updatedLinkDoc.exists()) {
