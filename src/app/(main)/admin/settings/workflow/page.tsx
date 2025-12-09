@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import {
@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import type { WorkflowStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Trash2, Edit } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit, Save, GripVertical } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -40,6 +40,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 
 const defaultStatuses: Omit<WorkflowStatus, 'id' | 'companyId'>[] = [
     { name: 'To Do', order: 0, color: '#808080' },
@@ -53,7 +54,9 @@ export default function WorkflowSettingsPage() {
   const { toast } = useToast();
 
   const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
+  const [initialStatuses, setInitialStatuses] = useState<WorkflowStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
 
   const [isNewStatusDialogOpen, setNewStatusDialogOpen] = useState(false);
   const [newStatusName, setNewStatusName] = useState('');
@@ -62,12 +65,16 @@ export default function WorkflowSettingsPage() {
   const [editStatus, setEditStatus] = useState<WorkflowStatus | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<WorkflowStatus | null>(null);
 
+  // Drag and drop state
+  const draggedItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+
+
   const statusesCollectionRef = useMemo(
     () =>
       firestore && profile
         ? query(
             collection(firestore, 'statuses'),
-            // where('companyId', '==', profile.companyId),
             orderBy('order')
           )
         : null,
@@ -79,10 +86,11 @@ export default function WorkflowSettingsPage() {
   useEffect(() => {
     if (dbStatuses) {
         setStatuses(dbStatuses);
+        setInitialStatuses(dbStatuses);
+        setIsLoading(false);
     }
   }, [dbStatuses]);
 
-  // Effect to seed initial statuses if the collection is empty
   useEffect(() => {
     if (!statusesCollectionRef || isDbStatusesLoading || !firestore || !profile) return;
     
@@ -97,15 +105,49 @@ export default function WorkflowSettingsPage() {
             await batch.commit();
             toast({
                 title: 'Workflow Initialized',
-                description: 'Default statuses (To Do, Doing, Done) have been created.'
+                description: 'Default statuses have been created.'
             })
         }
-        setIsLoading(false);
+        if (!isDbStatusesLoading) setIsLoading(false);
     }
 
     seedInitialStatuses();
   }, [statusesCollectionRef, isDbStatusesLoading, firestore, profile, toast]);
   
+  const orderHasChanged = useMemo(() => JSON.stringify(statuses) !== JSON.stringify(initialStatuses), [statuses, initialStatuses]);
+
+  const handleDragSort = () => {
+    if (draggedItem.current === null || dragOverItem.current === null) return;
+    
+    const statusesClone = [...statuses];
+    const dragged = statusesClone.splice(draggedItem.current, 1)[0];
+    statusesClone.splice(dragOverItem.current, 0, dragged);
+    
+    draggedItem.current = null;
+    dragOverItem.current = null;
+    setStatuses(statusesClone);
+  };
+  
+  const handleSaveOrder = async () => {
+    if (!firestore) return;
+    setIsSavingOrder(true);
+    const batch = writeBatch(firestore);
+    statuses.forEach((status, index) => {
+        const docRef = doc(firestore, 'statuses', status.id);
+        batch.update(docRef, { order: index });
+    });
+    
+    try {
+        await batch.commit();
+        setInitialStatuses(statuses); // Update initial state to reflect saved order
+        toast({ title: 'Order Saved', description: 'Your workflow order has been updated.' });
+    } catch (error) {
+        console.error('Failed to save order:', error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not save the new order.' });
+    } finally {
+        setIsSavingOrder(false);
+    }
+  }
 
   const handleCreateStatus = async () => {
     if (!newStatusName.trim() || !firestore || !profile) return;
@@ -142,14 +184,12 @@ export default function WorkflowSettingsPage() {
   const handleDeleteStatus = async () => {
     if (!deleteStatus || !firestore) return;
      try {
-      // TODO: Add logic to handle tasks that currently have this status
       const docRef = doc(firestore, 'statuses', deleteStatus.id);
       await deleteDoc(docRef);
-      // Re-order remaining statuses
+      const remainingStatuses = statuses.filter(s => s.id !== deleteStatus.id);
+      
       const batch = writeBatch(firestore);
-      statuses
-        .filter(s => s.id !== deleteStatus.id)
-        .forEach((status, index) => {
+      remainingStatuses.forEach((status, index) => {
             const docRef = doc(firestore, 'statuses', status.id);
             batch.update(docRef, { order: index });
         });
@@ -176,49 +216,66 @@ export default function WorkflowSettingsPage() {
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Manage Workflow</h2>
                     <p className="text-muted-foreground">
-                        Customize the columns on your Kanban board.
+                        Customize the columns on your Kanban board. Drag and drop to reorder.
                     </p>
                 </div>
-                <Dialog open={isNewStatusDialogOpen} onOpenChange={setNewStatusDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button><Plus className="mr-2 h-4 w-4" /> Add Status</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Create New Status</DialogTitle>
-                            <DialogDescription>
+                <div className='flex gap-2'>
+                  {orderHasChanged && (
+                      <Button onClick={handleSaveOrder} disabled={isSavingOrder}>
+                          {isSavingOrder ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : <Save className="mr-2 h-4 w-4" />}
+                          Save Order
+                      </Button>
+                  )}
+                  <Dialog open={isNewStatusDialogOpen} onOpenChange={setNewStatusDialogOpen}>
+                      <DialogTrigger asChild>
+                          <Button><Plus className="mr-2 h-4 w-4" /> Add Status</Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                          <DialogHeader>
+                              <DialogTitle>Create New Status</DialogTitle>
+                              <DialogDescription>
                                This will add a new column to your team's Kanban board.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                           <div className='space-y-2'>
-                             <Label htmlFor="new-status-name">Status Name</Label>
-                             <Input id="new-status-name" value={newStatusName} onChange={(e) => setNewStatusName(e.target.value)} placeholder="e.g. In Review"/>
-                           </div>
-                           <div className='space-y-2'>
-                             <Label htmlFor="new-status-color">Status Color</Label>
-                             <div className='flex items-center gap-2'>
-                                <Input id="new-status-color" type="color" value={newStatusColor} onChange={(e) => setNewStatusColor(e.target.value)} className="w-16 h-10 p-1"/>
-                                <span className='text-sm text-muted-foreground'>Choose a color for this status.</span>
+                              </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                             <div className='space-y-2'>
+                               <Label htmlFor="new-status-name">Status Name</Label>
+                               <Input id="new-status-name" value={newStatusName} onChange={(e) => setNewStatusName(e.target.value)} placeholder="e.g. In Review"/>
                              </div>
-                           </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="ghost" onClick={() => setNewStatusDialogOpen(false)}>Cancel</Button>
-                            <Button onClick={handleCreateStatus}>Create</Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                             <div className='space-y-2'>
+                               <Label htmlFor="new-status-color">Status Color</Label>
+                               <div className='flex items-center gap-2'>
+                                  <Input id="new-status-color" type="color" value={newStatusColor} onChange={(e) => setNewStatusColor(e.target.value)} className="w-16 h-10 p-1"/>
+                                  <span className='text-sm text-muted-foreground'>Choose a color for this status.</span>
+                               </div>
+                             </div>
+                          </div>
+                          <DialogFooter>
+                              <Button variant="ghost" onClick={() => setNewStatusDialogOpen(false)}>Cancel</Button>
+                              <Button onClick={handleCreateStatus}>Create</Button>
+                          </DialogFooter>
+                      </DialogContent>
+                  </Dialog>
+                </div>
             </div>
             
             <div className="rounded-lg border p-4">
                 <div className="space-y-2">
-                    {statuses.map((status) => (
+                    {statuses.map((status, index) => (
                         <div
                             key={status.id}
-                            className="flex items-center justify-between rounded-md bg-secondary/50 p-3"
+                            className={cn(
+                                "flex items-center justify-between rounded-md bg-secondary/50 p-2 transition-all cursor-grab active:cursor-grabbing",
+                                draggedItem.current === index && 'opacity-50'
+                            )}
+                            draggable
+                            onDragStart={() => (draggedItem.current = index)}
+                            onDragEnter={() => (dragOverItem.current = index)}
+                            onDragEnd={handleDragSort}
+                            onDragOver={(e) => e.preventDefault()}
                         >
                             <div className='flex items-center gap-3'>
+                                <GripVertical className='h-5 w-5 text-muted-foreground' />
                                 <span className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></span>
                                 <span className="font-medium">{status.name}</span>
                             </div>
@@ -282,3 +339,6 @@ export default function WorkflowSettingsPage() {
     </div>
   );
 }
+
+
+    
