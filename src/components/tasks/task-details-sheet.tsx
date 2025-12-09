@@ -124,6 +124,7 @@ export function TaskDetailsSheet({
 
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<User | null>(null);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
@@ -189,6 +190,7 @@ export function TaskDetailsSheet({
         setActivities(initialTask.activities || []);
         setNewComment('');
         setCommentAttachment(null);
+        setNewSubtaskAssignee(null);
 
         if (initialTask.currentSessionStartTime) {
             const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
@@ -396,10 +398,16 @@ export function TaskDetailsSheet({
   };
 
   const handleAddSubtask = () => {
-    if(!newSubtask.trim()) return;
-    const subtask: Subtask = { id: `st-${Date.now()}`, title: newSubtask, completed: false };
+    if (!newSubtask.trim()) return;
+    const subtask: Subtask = {
+      id: `st-${Date.now()}`,
+      title: newSubtask,
+      completed: false,
+      ...(newSubtaskAssignee && { assignee: { id: newSubtaskAssignee.id, name: newSubtaskAssignee.name, avatarUrl: newSubtaskAssignee.avatarUrl || '' } }),
+    };
     setSubtasks([...subtasks, subtask]);
     setNewSubtask('');
+    setNewSubtaskAssignee(null);
   };
   
   const handleRemoveSubtask = (subtaskId: string) => {
@@ -889,10 +897,34 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                         </div>
                                     ))}
                                 </div>
-                                {canManageSubtasks && <div className="flex items-center gap-2">
-                                    <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}/>
-                                    <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
-                                </div>}
+                                {canManageSubtasks && (
+                                  <div className="flex items-center gap-2">
+                                    <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                          {newSubtaskAssignee ? (
+                                            <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
+                                          ) : (
+                                            <UserPlus className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-60 p-1">
+                                        <div className="space-y-1">
+                                          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                          {(allUsers || []).map(user => (
+                                            <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                              <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                              <span className="truncate">{user.name}</span>
+                                            </Button>
+                                          ))}
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+                                    <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
+                                  </div>
+                                )}
                             </TabsContent>
                             <TabsContent value="comments" className="mt-4">
                                 <div className="space-y-6">
