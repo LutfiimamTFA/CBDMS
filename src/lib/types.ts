@@ -122,9 +122,17 @@ export type DailyReport = {
 
 export type SharedLink = {
   id: string;
-  targetId: string; // e.g., 'dashboard', or a specific taskId
-  targetType: 'dashboard' | 'task';
-  accessLevel: 'view' | 'comment' | 'edit';
+  targetType: 'dashboard' | 'brand' | 'priority' | 'assignee';
+  targetId: string;
+  targetName?: string;
+  permissions: {
+      canViewTasks?: boolean;
+      canViewDetails?: boolean;
+      canComment?: boolean;
+      canChangeStatus?: boolean;
+      canEditContent?: boolean;
+      canAssignUsers?: boolean;
+  };
   password?: string; // Hashed password
   expiresAt?: string; // ISO date string
   createdBy: string;

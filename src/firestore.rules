@@ -141,8 +141,11 @@ service cloud.firestore {
     }
 
     match /sharedLinks/{linkId} {
+      // Allow anyone to retrieve a single document if they have the direct link ID.
       allow get: if true;
+      // Prevent anyone from listing all available share links. This is a crucial security measure.
       allow list: if false;
+      // Only authenticated users can create, update, or delete share links.
       allow write: if isSignedIn();
     }
   }
