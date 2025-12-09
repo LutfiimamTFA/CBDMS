@@ -1,8 +1,9 @@
+
 'use client';
 
 import React, { useState, useMemo, useRef } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, User, WorkflowStatus } from '@/lib/types';
+import type { Task, User, WorkflowStatus, SharedLink } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import {
@@ -22,6 +23,7 @@ interface KanbanColumnProps {
   onDragEnd: () => void;
   canDrag: boolean;
   draggingTaskId: string | null;
+  permissions?: SharedLink['permissions'] | null;
 }
 
 const getDragAfterElement = (container: HTMLElement, y: number): HTMLElement | null => {
@@ -50,6 +52,7 @@ export function KanbanColumn({
   onDragEnd,
   canDrag,
   draggingTaskId,
+  permissions = null,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
@@ -94,6 +97,17 @@ export function KanbanColumn({
     setIsDragOver(false);
     setDropIndicatorIndex(null);
     onDrop(e, status.name);
+  };
+  
+  const handleCardClick = (taskId: string) => {
+    const canViewDetails = permissions ? permissions.canViewDetails : true;
+    if (!canViewDetails) return;
+
+    if (permissions) { // In a shared view
+      router.push(`/share/${location.pathname.split('/').pop()}/${taskId}`);
+    } else { // Internal app view
+      router.push(`/tasks/${taskId}`);
+    }
   };
 
   return (
@@ -168,8 +182,12 @@ export function KanbanColumn({
                       draggable={canDrag}
                       onDragStart={(e) => onDragStart(e, task.id)}
                       onDragEnd={onDragEnd}
-                      onClick={() => router.push(`/tasks/${task.id}`)}
-                      className={cn("transition-opacity", isDragging && "opacity-30")}
+                      onClick={() => handleCardClick(task.id)}
+                      className={cn(
+                        "transition-opacity", 
+                        isDragging && "opacity-30",
+                        (permissions && !permissions.canViewDetails) ? 'cursor-default' : 'cursor-pointer'
+                      )}
                       data-dragging={isDragging}
                     >
                       <TaskCard 

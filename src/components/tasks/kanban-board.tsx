@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './kanban-column';
-import type { Task, WorkflowStatus, Activity, User } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, SharedLink } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -12,9 +13,10 @@ import { usePermissions } from '@/context/permissions-provider';
 
 interface KanbanBoardProps {
   tasks: Task[];
+  permissions?: SharedLink['permissions'] | null;
 }
 
-export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
+export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
   const { profile } = useUserProfile();
@@ -27,19 +29,22 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
   const statusesQuery = useMemo(
     () =>
-      firestore && profile
+      firestore
         ? query(collection(firestore, 'statuses'), orderBy('order'))
         : null,
-    [firestore, profile]
+    [firestore]
   );
 
   const { data: statuses, isLoading: areStatusesLoading } =
     useCollection<WorkflowStatus>(statusesQuery);
     
   const canDrag = useMemo(() => {
+    if (permissions) {
+      return permissions.canChangeStatus === true;
+    }
     if (!profile) return false;
     return profile.role === 'Super Admin' || profile.role === 'Manager';
-  }, [profile]);
+  }, [profile, permissions]);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
@@ -132,6 +137,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
             onDragEnd={handleDragEnd}
             canDrag={canDrag}
             draggingTaskId={draggingTaskId}
+            permissions={permissions}
           />
         ))}
       </div>
