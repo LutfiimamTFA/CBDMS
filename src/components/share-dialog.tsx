@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -253,12 +254,13 @@ export function ShareDialog() {
   };
   
   const shareUrl = useMemo(() => {
-      const isDevelopment = process.env.NODE_ENV === 'development';
-      const projectId = firebaseConfig.projectId;
-      const baseUrl = isDevelopment ? 'http://localhost:3000' : `https://${projectId}.web.app`;
-      if (!activeLink) return baseUrl;
-      return `${baseUrl}/share/${activeLink.id}`;
-  }, [activeLink]);
+    const isDevelopment = process.env.NODE_ENV === 'development';
+    const projectId = firebaseConfig.projectId;
+    // Use public URL for sharing, not localhost.
+    const baseUrl = `https://${projectId}.web.app`;
+    if (!activeLink) return baseUrl;
+    return `${baseUrl}/share/${activeLink.id}`;
+}, [activeLink]);
 
 
   const copyToClipboard = () => {
@@ -354,7 +356,7 @@ export function ShareDialog() {
                       <Card>
                         <CardHeader>
                           <h3 className="font-semibold">Shared Experience</h3>
-                          <p className="text-sm text-muted-foreground">The generated link provides a view consistent with your current role: <Badge variant="outline">{profile?.role}</Badge>.</p>
+                          <span className="text-sm text-muted-foreground">The generated link provides a view consistent with your current role: <Badge variant="outline">{profile?.role}</Badge>.</span>
                         </CardHeader>
                       </Card>
 
