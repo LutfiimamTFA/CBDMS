@@ -122,10 +122,21 @@ export type DailyReport = {
 
 export type SharedLink = {
   id: string;
+  name: string;
   companyId: string;
+  targetType: 'dashboard' | 'brand' | 'priority' | 'assignee';
+  targetId: string | null;
+  targetName: string;
   sharedAsRole: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
-  password?: string; // Hashed password
-  expiresAt?: string; // ISO date string
+  password?: string;
+  expiresAt?: string;
+  permissions: {
+    canViewDetails: boolean;
+    canComment: boolean;
+    canChangeStatus: boolean;
+    canEditContent: boolean;
+    canAssignUsers: boolean;
+  };
   createdBy: string;
   createdAt: any;
 };

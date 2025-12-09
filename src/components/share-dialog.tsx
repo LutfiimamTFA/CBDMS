@@ -18,29 +18,45 @@ import { Switch } from '@/components/ui/switch';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useUserProfile } from '@/firebase';
+import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
-import type { SharedLink } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2 } from 'lucide-react';
+import type { SharedLink, Brand, User } from '@/lib/types';
+import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { useCollection } from '@/firebase/firestore/use-collection';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+
+const defaultPermissions = {
+  canViewDetails: true,
+  canComment: false,
+  canChangeStatus: false,
+  canEditContent: false,
+  canAssignUsers: false,
+};
 
 export function ShareDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeLink, setActiveLink] = useState<SharedLink | null>(null);
 
+  // Form state
   const [linkName, setLinkName] = useState('');
+  const [targetType, setTargetType] = useState<'dashboard' | 'brand' | 'priority' | 'assignee'>('dashboard');
+  const [targetId, setTargetId] = useState<string | null>('dashboard');
+
+  // Security State
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
   const [useExpiration, setUseExpiration] = useState(false);
   const [expiresAtDate, setExpiresAtDate] = useState<Date | undefined>();
   const [expiresAtTime, setExpiresAtTime] = useState<string>('00:00');
+
+  // Permissions State
+  const [permissions, setPermissions] = useState(defaultPermissions);
 
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
@@ -52,25 +68,41 @@ export function ShareDialog() {
   }, [firestore, profile]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
+  const brandsQuery = useMemo(() => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null), [firestore]);
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+
+  const usersQuery = useMemo(() => (firestore ? query(collection(firestore, 'users'), where('companyId', '==', profile?.companyId)) : null), [firestore, profile]);
+  const { data: users, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
+
   useEffect(() => {
-    if (!activeLink && existingLinks && existingLinks.length > 0) {
-      loadLinkDetails(existingLinks[0]);
+    if (!isOpen) {
+      handleOpenNew();
     }
-  }, [existingLinks]);
+  }, [isOpen]);
+
+  const handlePermissionChange = (permission: keyof typeof permissions, value: boolean) => {
+    setPermissions(prev => ({ ...prev, [permission]: value }));
+  };
 
   const handleOpenNew = () => {
     setActiveLink(null);
     setLinkName('');
+    setTargetType('dashboard');
+    setTargetId('dashboard');
     setUsePassword(false);
     setPassword('');
     setUseExpiration(false);
     setExpiresAtDate(undefined);
     setExpiresAtTime('00:00');
+    setPermissions(defaultPermissions);
   };
   
   const loadLinkDetails = (link: SharedLink) => {
     setActiveLink(link);
     setLinkName(link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`);
+    setTargetType(link.targetType);
+    setTargetId(link.targetId);
+    
     if (link.password) {
       setUsePassword(true);
       setPassword('********');
@@ -78,6 +110,7 @@ export function ShareDialog() {
       setUsePassword(false);
       setPassword('');
     }
+
     if (link.expiresAt) {
       const expirationDate = new Date(link.expiresAt);
       setUseExpiration(true);
@@ -88,6 +121,8 @@ export function ShareDialog() {
       setExpiresAtDate(undefined);
       setExpiresAtTime('00:00');
     }
+
+    setPermissions(link.permissions || defaultPermissions);
   };
 
   const getCombinedExpiration = () => {
@@ -97,6 +132,14 @@ export function ShareDialog() {
     combinedDate.setHours(hours, minutes);
     return combinedDate.toISOString();
   };
+
+  const getTargetName = () => {
+      if (targetType === 'dashboard') return 'Entire Dashboard';
+      if (targetType === 'brand') return brands?.find(b => b.id === targetId)?.name || 'Unknown Brand';
+      if (targetType === 'priority') return targetId;
+      if (targetType === 'assignee') return users?.find(u => u.id === targetId)?.name || 'Unknown User';
+      return 'Unknown Target';
+  }
 
   const handleCreateOrUpdateLink = async () => {
     if (!firestore || !profile) {
@@ -110,6 +153,10 @@ export function ShareDialog() {
     const linkData: any = {
         name: linkName,
         sharedAsRole: profile.role,
+        targetType,
+        targetId,
+        targetName: getTargetName(),
+        permissions,
         ...(isCreating && { companyId: profile.companyId }),
         ...(isCreating && { createdBy: profile.id }),
     };
@@ -118,31 +165,28 @@ export function ShareDialog() {
         if (password !== '********') {
             linkData.password = password;
         }
-    } else {
-        linkData.password = isCreating ? null : deleteField();
+    } else if (!isCreating) {
+        linkData.password = deleteField();
     }
 
     if (useExpiration && expiresAtDate) {
         linkData.expiresAt = getCombinedExpiration();
-    } else {
-        linkData.expiresAt = isCreating ? null : deleteField();
+    } else if (!isCreating) {
+        linkData.expiresAt = deleteField();
     }
-
+    
     try {
         if (activeLink) {
-            // Update existing link
             const linkRef = doc(firestore, 'sharedLinks', activeLink.id);
             await updateDoc(linkRef, linkData);
-            
             toast({ title: 'Link updated!' });
             const updatedLinkDoc = await getDoc(linkRef);
             if (updatedLinkDoc.exists()) {
-                const updatedLink = updatedLinkDoc.data() as SharedLink;
-                setActiveLink({ ...updatedLink, id: updatedLinkDoc.id });
+                const updatedData = updatedLinkDoc.data() as SharedLink;
+                setActiveLink({ ...updatedData, id: updatedLinkDoc.id });
+                loadLinkDetails({ ...updatedData, id: updatedLinkDoc.id });
             }
-
         } else {
-            // Create new link
             const docRef = await addDoc(collection(firestore, 'sharedLinks'), {
                 ...linkData,
                 createdAt: serverTimestamp(),
@@ -167,7 +211,7 @@ export function ShareDialog() {
     setIsLoading(true);
     try {
         await deleteDoc(doc(firestore, 'sharedLinks', activeLink.id));
-        handleOpenNew(); // Reset to "Create New" view
+        handleOpenNew();
         toast({ title: 'Share link disabled' });
     } catch (error) {
         console.error(error);
@@ -184,10 +228,34 @@ export function ShareDialog() {
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading;
+  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || areBrandsLoading || areUsersLoading;
+
+  const renderTargetSelect = () => {
+    switch(targetType) {
+        case 'brand':
+            return <Select value={targetId || ''} onValueChange={setTargetId}><SelectTrigger><SelectValue placeholder="Select a brand..." /></SelectTrigger><SelectContent>{brands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select>;
+        case 'priority':
+            return <Select value={targetId || ''} onValueChange={setTargetId}><SelectTrigger><SelectValue placeholder="Select a priority..." /></SelectTrigger><SelectContent>{['Urgent', 'High', 'Medium', 'Low'].map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>;
+        case 'assignee':
+            return <Select value={targetId || ''} onValueChange={setTargetId}><SelectTrigger><SelectValue placeholder="Select a user..." /></SelectTrigger><SelectContent>{users?.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent></Select>;
+        case 'dashboard':
+        default:
+            return <Input value="Entire Dashboard" readOnly disabled />;
+    }
+  };
+
+  const PermissionSwitch = ({ id, label, description, checked, onCheckedChange }: {id: string, label: string, description: string, checked: boolean, onCheckedChange: (checked: boolean) => void}) => (
+    <div className="flex items-start justify-between space-x-2">
+      <div className="flex-grow">
+        <Label htmlFor={id} className="font-medium">{label}</Label>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  );
 
   return (
-    <Dialog open={isOpen} onOpenChange={(val) => {setIsOpen(val); if (!val) handleOpenNew()}}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Share2 className="mr-2 h-4 w-4" />
@@ -198,7 +266,7 @@ export function ShareDialog() {
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Generate a secure link to share a live view of your workspace. The shared view will match your current role.
+            Generate a secure, permission-based link to share a live view of your workspace.
           </DialogDescription>
         </DialogHeader>
         
@@ -234,15 +302,42 @@ export function ShareDialog() {
                       <Label htmlFor="link-name">Link Name</Label>
                       <Input id="link-name" value={linkName || ''} onChange={e => setLinkName(e.target.value)} placeholder="e.g. Q3 Report for Client" />
                     </div>
+                    
                     <Card>
-                      <CardHeader>
-                        <h3 className="font-semibold">Shared Experience</h3>
-                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</div>
-                      </CardHeader>
+                        <CardHeader>
+                            <h3 className="font-semibold">What to Share</h3>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-2 gap-4">
+                            <Select value={targetType} onValueChange={(val) => setTargetType(val as any)}>
+                                <SelectTrigger><SelectValue/></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="dashboard">Entire Dashboard</SelectItem>
+                                    <SelectItem value="brand">Tasks by Brand</SelectItem>
+                                    <SelectItem value="priority">Tasks by Priority</SelectItem>
+                                    <SelectItem value="assignee">Tasks by Assignee</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {renderTargetSelect()}
+                        </CardContent>
                     </Card>
+
                     <Card>
                       <CardHeader>
-                        <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security Options</Label>
+                        <Label className="flex items-center gap-2"><Shield className="h-4 w-4"/> Permissions</Label>
+                        <p className="text-sm text-muted-foreground pt-1">Control exactly what viewers can do with this link.</p>
+                      </CardHeader>
+                      <CardContent className='space-y-5'>
+                        <PermissionSwitch id="perm-view" label="View Full Task Details" description="Allows viewers to open tasks and see all fields." checked={permissions.canViewDetails} onCheckedChange={(val) => handlePermissionChange('canViewDetails', val)} />
+                        <PermissionSwitch id="perm-comment" label="Comment on Tasks" description="Allows viewers to post comments and mention users." checked={permissions.canComment} onCheckedChange={(val) => handlePermissionChange('canComment', val)} />
+                        <PermissionSwitch id="perm-status" label="Change Task Status" description="Allows viewers to drag-and-drop tasks between columns." checked={permissions.canChangeStatus} onCheckedChange={(val) => handlePermissionChange('canChangeStatus', val)} />
+                        <PermissionSwitch id="perm-edit" label="Edit Task Content" description="Allows viewers to change title, description, dates, etc." checked={permissions.canEditContent} onCheckedChange={(val) => handlePermissionChange('canEditContent', val)} />
+                        <PermissionSwitch id="perm-assign" label="Assign/Unassign Users" description="Allows viewers to change who is assigned to a task." checked={permissions.canAssignUsers} onCheckedChange={(val) => handlePermissionChange('canAssignUsers', val)} />
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <Label className="flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security</Label>
                       </CardHeader>
                       <CardContent className='space-y-6'>
                         <div className="space-y-3">
