@@ -406,32 +406,18 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "SharedLink",
       "type": "object",
-      "description": "Represents a secure, shareable link to a part of the application, with granular permissions.",
+      "description": "Represents a secure, shareable link that simulates a specific user role for a given company context.",
       "properties": {
         "id": { "type": "string", "description": "Unique identifier for the link, used in the URL." },
-        "targetType": { "type": "string", "enum": ["dashboard", "brand", "priority", "assignee"], "description": "The type of content being shared." },
-        "targetId": { "type": "string", "description": "ID of the item being shared, e.g., 'dashboard' or a specific brandId." },
-        "targetName": { "type": "string", "description": "A human-readable name for the target, e.g., 'Brand A', 'Urgent Tasks'." },
-        "permissions": {
-          "type": "object",
-          "description": "Granular permissions granted by this link.",
-          "properties": {
-            "canViewTasks": { "type": "boolean", "default": true },
-            "canViewDetails": { "type": "boolean" },
-            "canComment": { "type": "boolean" },
-            "canChangeStatus": { "type": "boolean" },
-            "canEditContent": { "type": "boolean" },
-            "canAssignUsers": { "type": "boolean" }
-          },
-          "required": ["canViewTasks"]
-        },
+        "sharedAsRole": { "type": "string", "enum": ["Manager", "Employee", "Client"], "description": "The virtual role to simulate for the link recipient." },
+        "targetName": { "type": "string", "description": "A human-readable name for the link, e.g., 'Client Preview Link'." },
         "password": { "type": "string", "description": "An optional, hashed password for an extra layer of security." },
         "expiresAt": { "type": "string", "format": "date-time", "description": "An optional expiration date for the link." },
         "createdBy": { "type": "string", "description": "The ID of the user who created the link." },
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the link was created." },
         "companyId": { "type": "string", "description": "The ID of the company this link belongs to." }
       },
-      "required": ["id", "targetType", "targetId", "permissions", "createdBy", "createdAt", "companyId"]
+      "required": ["id", "sharedAsRole", "createdBy", "createdAt", "companyId"]
     }
   },
   "auth": {
@@ -593,13 +579,13 @@
         "definition": {
           "entityName": "SharedLink",
           "schema": { "$ref": "#/backend/entities/SharedLink" },
-          "description": "Stores secure, shareable links to parts of the application.",
+          "description": "Stores secure, shareable links that simulate a user role.",
           "params": [
             { "name": "linkId", "description": "The unique identifier for the shared link." }
           ]
         }
       }
     ],
-    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks. Finally, a new API route `/api/run-scheduler` is added to handle the server-side logic for task generation. A new 'SocialMediaPost' entity and `/socialMediaPosts` collection have been added to support the new social media scheduling module. The 'SharedLink' entity has been significantly updated to support granular, collaborative permissions instead of a simple accessLevel, and its collection path has been added to Firestore."
+    "reasoning": "The Firestore data structure is updated to support Role-Based Access Control (RBAC). The User entity now includes a `role` and `companyId`. The Task collection is now a root-level collection `/tasks` to allow more flexible, role-based queries (e.g., a Manager listing all tasks for their company) which is difficult with nested collections. A new `navigationItems` collection is added to support dynamic, role-based sidebar navigation. A new `statuses` collection has been added to allow for dynamic, user-configurable Kanban columns. The `status` field in the `Task` entity now refers to a document name in this new collection. A new `brands` collection is added for brand/division management, and `brandId` is now a required field in Tasks. Security rules will be heavily relied upon to enforce who can see which tasks and navigation items, based on their role, companyId, and assignee. A new `activities` subcollection has been added under each task to store a log of all changes made to that task. The main `Task` entity now also includes a `lastActivity` field to store a denormalized summary of the latest change for quick display in table views. A new 'recurringTaskTemplates' collection is added to support the creation of scheduled, recurring tasks. Finally, a new API route `/api/run-scheduler` is added to handle the server-side logic for task generation. A new 'SocialMediaPost' entity and `/socialMediaPosts` collection have been added to support the new social media scheduling module. The 'SharedLink' entity has been refactored to support the 'Share as Role' concept, replacing granular permissions with a single 'sharedAsRole' field."
   }
 }

@@ -19,8 +19,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
-import type { SharedLink, Brand, User } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Eye, MessageSquare, Edit, Folder, Star, User as UserIcon, Workflow } from 'lucide-react';
+import type { SharedLink, User } from '@/lib/types';
+import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Users, Briefcase } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -28,33 +28,20 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { query, where, orderBy } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Separator } from './ui/separator';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { ScrollArea } from './ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { priorityInfo } from '@/lib/utils';
 
-type Permission = "canViewTasks" | "canViewDetails" | "canComment" | "canChangeStatus" | "canEditContent" | "canAssignUsers";
-const allPermissions: {key: Permission, label: string, description: string}[] = [
-    { key: 'canViewTasks', label: 'View Task List', description: 'Can see the list of tasks.' },
-    { key: 'canViewDetails', label: 'View Full Details', description: 'Can open tasks to see description, subtasks, etc.' },
-    { key: 'canComment', label: 'Add Comments', description: 'Can participate in discussions on tasks.' },
-    { key: 'canChangeStatus', label: 'Change Status', description: 'Can move tasks between columns (e.g., "To Do" to "Doing").' },
-    { key: 'canEditContent', label: 'Edit Content', description: 'Can change task titles and descriptions.' },
-    { key: 'canAssignUsers', label: 'Assign Users', description: 'Can assign or unassign users from tasks.' },
-];
-
+const availableRoles = ['Manager', 'Employee', 'Client'] as const;
+type SharedRole = (typeof availableRoles)[number];
 
 export function ShareDialog() {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [createdLink, setCreatedLink] = useState<SharedLink | null>(null);
   
-  const [targetType, setTargetType] = useState<SharedLink['targetType']>('dashboard');
-  const [targetId, setTargetId] = useState<string>('dashboard');
-  const [targetName, setTargetName] = useState<string>('Entire Dashboard');
+  const [sharedAsRole, setSharedAsRole] = useState<SharedRole>('Client');
+  const [targetName, setTargetName] = useState<string>('Client Access Link');
 
-  const [permissions, setPermissions] = useState<SharedLink['permissions']>({ canViewTasks: true });
-  
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
   const [useExpiration, setUseExpiration] = useState(false);
@@ -63,39 +50,34 @@ export function ShareDialog() {
 
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
-  const pathname = usePathname();
   const { toast } = useToast();
-
-  const brandsQuery = useMemo(() => firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null, [firestore]);
-  const { data: allBrands } = useCollection<Brand>(brandsQuery);
-
-  const usersQuery = useMemo(() => firestore ? query(collection(firestore, 'users'), orderBy('name')) : null, [firestore]);
-  const { data: allUsers } = useCollection<User>(usersQuery);
-
-  const priorityOptions = Object.values(priorityInfo);
 
   const linksQuery = useMemo(() => {
       if (!firestore || !profile) return null;
-      // For now, only query for dashboard links as it's the only supported type
       return query(
           collection(firestore, 'sharedLinks'),
           where('companyId', '==', profile.companyId),
+          // We can't filter by role directly in the query as it might not exist
+          // We will filter client-side for now
       )
   }, [firestore, profile]);
 
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
+  // Find the active link based on the selected role
   const activeLink = useMemo(() => {
       if (existingLinks && existingLinks.length > 0) {
-          return existingLinks.find(l => l.targetType === targetType && l.targetId === targetId);
+          return existingLinks.find(l => l.sharedAsRole === sharedAsRole);
       }
       return null;
-  }, [existingLinks, targetId, targetType]);
+  }, [existingLinks, sharedAsRole]);
 
+
+  // Effect to sync UI state when activeLink changes (e.g., when user selects a different role)
   useEffect(() => {
     if (activeLink) {
         setCreatedLink(activeLink);
-        setPermissions(activeLink.permissions || { canViewTasks: true });
+        setTargetName(activeLink.targetName || `${activeLink.sharedAsRole} Access Link`);
         setPassword(activeLink.password ? '********' : '');
         setUsePassword(!!activeLink.password);
         
@@ -108,29 +90,17 @@ export function ShareDialog() {
             setUseExpiration(false);
         }
     } else {
+        // Reset to default state if no link exists for the selected role
         setCreatedLink(null);
-        setPermissions({ canViewTasks: true });
+        setTargetName(`${sharedAsRole} Access Link`);
         setPassword('');
         setUsePassword(false);
         setExpiresAtDate(undefined);
+        setExpiresAtTime('00:00');
         setUseExpiration(false);
     }
-  }, [activeLink]);
+  }, [activeLink, sharedAsRole]);
   
-  useEffect(() => {
-    // Reset targetId and targetName when targetType changes, unless it's dashboard
-    if (targetType === 'dashboard') {
-        setTargetId('dashboard');
-        setTargetName('Entire Dashboard');
-    } else {
-        setTargetId('');
-        setTargetName('');
-    }
-  }, [targetType]);
-  
-  const handlePermissionChange = (permission: Permission, value: boolean) => {
-    setPermissions(prev => ({...prev, [permission]: value}));
-  };
 
   const getCombinedExpiration = () => {
     if (!useExpiration || !expiresAtDate) return undefined;
@@ -142,11 +112,6 @@ export function ShareDialog() {
 
   const handleCreateOrUpdateLink = async () => {
     if (!firestore || !profile) return;
-    
-    if (targetType !== 'dashboard' && !targetId) {
-        toast({ variant: 'destructive', title: 'Target not selected', description: `Please select a specific ${targetType}.`});
-        return;
-    }
 
     setIsLoading(true);
     
@@ -157,22 +122,21 @@ export function ShareDialog() {
     }
     
     const linkData: Partial<SharedLink> = {
-      targetType,
-      targetId,
+      sharedAsRole,
       targetName,
-      permissions,
       createdBy: profile.id,
       companyId: profile.companyId,
     };
     
     if (usePassword && password && password !== '********') {
-        linkData.password = password;
+        linkData.password = password; // In a real app, hash this!
     }
 
     const expiration = getCombinedExpiration();
     if (expiration) {
         linkData.expiresAt = expiration;
     } else if (createdLink && createdLink.expiresAt) {
+        // If expiration is disabled on an existing link, remove the field
         linkData.expiresAt = deleteField() as any;
     }
     
@@ -182,6 +146,8 @@ export function ShareDialog() {
         const linkRef = doc(firestore, 'sharedLinks', createdLink.id);
         await updateDoc(linkRef, linkData);
         toast({ title: 'Link updated successfully!' });
+        // Manually update local state to reflect change immediately
+        setCreatedLink(prev => prev ? { ...prev, ...linkData } as SharedLink : null);
       } else {
         // Create new link
         linkData.createdAt = serverTimestamp();
@@ -204,11 +170,10 @@ export function ShareDialog() {
         await deleteDoc(doc(firestore, 'sharedLinks', createdLink.id));
         setCreatedLink(null);
         // Reset state
-        setPermissions({ canViewTasks: true });
-        setUsePassword(false);
         setPassword('');
-        setUseExpiration(false);
+        setUsePassword(false);
         setExpiresAtDate(undefined);
+        setUseExpiration(false);
         toast({ title: 'Share link disabled' });
     } catch (error) {
         console.error(error);
@@ -227,52 +192,6 @@ export function ShareDialog() {
   
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading;
 
-  const renderTargetSelector = () => {
-    switch (targetType) {
-      case 'brand':
-        return (
-          <Select onValueChange={val => {
-            const brand = allBrands?.find(b => b.id === val);
-            setTargetId(val);
-            setTargetName(brand?.name || '');
-          }} value={targetId}>
-            <SelectTrigger><SelectValue placeholder="Select a brand..."/></SelectTrigger>
-            <SelectContent>
-              {allBrands?.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        );
-      case 'priority':
-        return (
-          <Select onValueChange={val => {
-            setTargetId(val);
-            setTargetName(val);
-          }} value={targetId}>
-            <SelectTrigger><SelectValue placeholder="Select a priority..."/></SelectTrigger>
-            <SelectContent>
-              {priorityOptions.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        );
-      case 'assignee':
-        return (
-          <Select onValueChange={val => {
-            const user = allUsers?.find(u => u.id === val);
-            setTargetId(val);
-            setTargetName(user?.name || '');
-          }} value={targetId}>
-            <SelectTrigger><SelectValue placeholder="Select an assignee..."/></SelectTrigger>
-            <SelectContent>
-              {allUsers?.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        );
-      case 'dashboard':
-      default:
-        return <Select disabled value="dashboard"><SelectTrigger><SelectValue placeholder="Entire Dashboard"/></SelectTrigger></Select>;
-    }
-  }
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -281,11 +200,11 @@ export function ShareDialog() {
           Share
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+      <DialogContent className="sm:max-w-xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
         <DialogHeader className="p-6 pb-0">
-          <DialogTitle>Create Collaborative View</DialogTitle>
+          <DialogTitle>Create Shared Role View</DialogTitle>
           <DialogDescription>
-            Generate a secure link to share a specific view of your workspace with granular permissions.
+            Generate a secure link that simulates a specific user role, providing a complete but controlled user experience.
           </DialogDescription>
         </DialogHeader>
         
@@ -299,48 +218,28 @@ export function ShareDialog() {
           <>
             <Card>
               <CardHeader>
-                <CardTitle className='text-base flex items-center gap-2'><Folder className="h-4 w-4"/> What to share?</CardTitle>
-                <CardDescription>Select the specific part of your workspace you want to share.</CardDescription>
+                <CardTitle className='text-base flex items-center gap-2'><Users className="h-4 w-4"/> Share As Role</CardTitle>
+                <CardDescription>Select the role you want to simulate for the person using this link.</CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
-                <Select value={targetType} onValueChange={(v) => setTargetType(v as SharedLink['targetType'])}>
+              <CardContent className="space-y-4">
+                <Select value={sharedAsRole} onValueChange={(v) => setSharedAsRole(v as SharedRole)}>
                   <SelectTrigger><SelectValue/></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="dashboard">Entire Dashboard</SelectItem>
-                    <SelectItem value="brand">Tasks by Brand</SelectItem>
-                    <SelectItem value="priority">Tasks by Priority</SelectItem>
-                    <SelectItem value="assignee">Tasks by Assignee</SelectItem>
+                    {availableRoles.map(role => (
+                       <SelectItem key={role} value={role}>{role}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-                {renderTargetSelector()}
+                <div>
+                  <Label htmlFor="link-name">Link Name (Optional)</Label>
+                  <Input id="link-name" value={targetName} onChange={(e) => setTargetName(e.target.value)} placeholder="e.g., Client Preview Link"/>
+                </div>
               </CardContent>
             </Card>
-
-             <Card>
-                <CardHeader>
-                    <CardTitle className="text-base flex items-center gap-2"><Settings className="h-4 w-4"/> Permissions</CardTitle>
-                    <CardDescription>Control what people with the link can do.</CardDescription>
-                </CardHeader>
-                <CardContent className='space-y-4'>
-                  {allPermissions.map(({ key, label, description }) => (
-                    <div key={key} className="flex items-start space-x-3">
-                      <Switch 
-                        id={`perm-${key}`} 
-                        checked={permissions[key as keyof typeof permissions] || false}
-                        onCheckedChange={(checked) => handlePermissionChange(key, checked)}
-                      />
-                      <div className='grid gap-1.5 leading-none -mt-1'>
-                        <Label htmlFor={`perm-${key}`} className='cursor-pointer'>{label}</Label>
-                        <p className='text-xs text-muted-foreground'>{description}</p>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-             </Card>
-
+            
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2"><KeyRound className="h-4 w-4"/> Security Options</CardTitle>
                 <CardDescription>Add extra layers of security to your shared link.</CardDescription>
               </CardHeader>
               <CardContent className='space-y-6'>
