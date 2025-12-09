@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -90,15 +90,19 @@ type AIValidationState = {
   onConfirm: () => void;
 };
 
+interface TaskDetailsSheetProps {
+  task: Task;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  permissions?: SharedLink['permissions'] | null;
+}
+
 export function TaskDetailsSheet({ 
   task: initialTask, 
   open,
   onOpenChange,
-}: { 
-  task: Task; 
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
+  permissions = null,
+}: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
@@ -148,6 +152,16 @@ export function TaskDetailsSheet({
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
   const { user: authUser, profile: currentUser } = useUserProfile();
+
+  // Determine permissions
+  const isSharedView = !!permissions;
+  const canEditContent = isSharedView ? (permissions.canEditContent || false) : (currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager'));
+  const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
+  const canChangeStatus = isSharedView ? (permissions.canChangeStatus || false) : !!currentUser;
+  const canAssignUsers = isSharedView ? (permissions.canAssignUsers || false) : canEditContent;
+  const canManageSubtasks = isSharedView ? (permissions.canEditContent || false) : !!currentUser;
+  
+  const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
 
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
@@ -581,12 +595,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
   const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
-
-  const canEdit = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager');
   
-  const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
-
-
   const handleStartSession = async () => {
     if (!firestore || !currentUser) return;
     
@@ -710,7 +719,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             status: 'Doing',
             actualCompletionDate: deleteField(),
             lastActivity: newActivity,
-            activities: [...(activities || []), newActivity],
+            activities: [...(initialTask.activities || []), newActivity],
         });
         
         toast({
@@ -766,7 +775,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {isAssignee && (
+                        {isAssignee && !isSharedView && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
@@ -798,11 +807,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           </div>
                         )}
 
-                        <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEdit} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
+                        <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
                         <div className="space-y-2">
                           <h3 className="font-semibold text-sm">Description</h3>
-                          <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} readOnly={!canEdit} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
+                          <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} readOnly={!canEditContent} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
                         </div>
 
                         <div className="space-y-4">
@@ -815,7 +824,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                     {getFileIcon(att.name)}
                                     <span className="truncate" title={att.name}>{att.name}</span>
                                   </a>
-                                  {canEdit && (
+                                  {canEditContent && (
                                     <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
                                       <X className="h-4 w-4" />
                                     </Button>
@@ -824,7 +833,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               ))}
                             </div>
                           )}
-                          {canEdit && (
+                          {canEditContent && (
                             <div className="grid grid-cols-2 gap-4">
                               <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
                               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
@@ -843,11 +852,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                     {subtasks.map((subtask) => (
                                         <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
-                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!(canEdit || isAssignee)} />
+                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canManageSubtasks} />
                                             <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
                                             
                                             <Popover>
-                                              <PopoverTrigger asChild>
+                                              <PopoverTrigger asChild disabled={!canManageSubtasks}>
                                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
                                                   {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
                                                 </Button>
@@ -865,11 +874,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                               </PopoverContent>
                                             </Popover>
 
-                                            {canEdit && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}
+                                            {canManageSubtasks && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}
                                         </div>
                                     ))}
                                 </div>
-                                {(canEdit || isAssignee) && <div className="flex items-center gap-2">
+                                {canManageSubtasks && <div className="flex items-center gap-2">
                                     <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())}/>
                                     <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
                                 </div>}
@@ -893,30 +902,32 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                             </div>
                                         </div>
                                     ))}
-                                    <div className="flex gap-3 pt-4 border-t">
-                                        <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                                        <div className="flex-1 relative">
-                                            <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-24" />
-                                            {commentAttachment && (
-                                              <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
-                                                <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                                <span className="truncate">{commentAttachment.name}</span>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setCommentAttachment(null)}>
-                                                  <X className="h-4 w-4" />
-                                                </Button>
-                                              </div>
-                                            )}
-                                            <div className="absolute top-2 right-2 flex items-center gap-1">
-                                                <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
-                                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
-                                                    <Paperclip className="h-4 w-4"/>
-                                                </Button>
-                                                <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
-                                                    {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
-                                                </Button>
+                                    {canComment && (
+                                        <div className="flex gap-3 pt-4 border-t">
+                                            <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
+                                            <div className="flex-1 relative">
+                                                <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-24" />
+                                                {commentAttachment && (
+                                                  <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
+                                                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                                    <span className="truncate">{commentAttachment.name}</span>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setCommentAttachment(null)}>
+                                                      <X className="h-4 w-4" />
+                                                    </Button>
+                                                  </div>
+                                                )}
+                                                <div className="absolute top-2 right-2 flex items-center gap-1">
+                                                    <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
+                                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
+                                                        <Paperclip className="h-4 w-4"/>
+                                                    </Button>
+                                                    <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
+                                                        {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
                                 </div>
                             </TabsContent>
                         </Tabs>
@@ -926,7 +937,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {isAssignee && initialTask.status !== 'Done' && (
+                    {isAssignee && initialTask.status !== 'Done' && !isSharedView && (
                           <div className="space-y-2">
                             <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
                                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -937,7 +948,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             )}
                           </div>
                     )}
-                    {isAssignee && initialTask.status === 'Done' && (
+                    {isAssignee && initialTask.status === 'Done' && !isSharedView && (
                          <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                              <RefreshCcw className="mr-2 h-4 w-4" />
@@ -951,7 +962,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Brand</FormLabel>
                               <div className="col-span-2">
-                                { !canEdit ? (
+                                { !canEditContent ? (
                                     <div className="flex items-center gap-2 text-sm font-medium">
                                         <Building2 className="h-4 w-4 text-muted-foreground" />
                                         {brand?.name || 'N/A'}
@@ -986,7 +997,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
                                <FormField control={form.control} name="status" render={({ field }) => (
-                                <Select onValueChange={handleStatusChange} value={field.value}>
+                                <Select onValueChange={handleStatusChange} value={field.value} disabled={!canChangeStatus}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
                                     {allStatuses?.map(s => (
@@ -1008,7 +1019,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Priority</FormLabel>
                               <div className="col-span-2 flex items-center gap-2">
-                                  { !(canEdit || isAssignee) || currentUser?.role === 'Employee' ? (
+                                  { !(canChangeStatus) ? (
                                     <div className="flex items-center gap-2 text-sm font-medium">
                                       <priority.icon className={`h-4 w-4 ${priority.color}`} />
                                       {priority.label}
@@ -1030,7 +1041,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <FormItem className="grid grid-cols-3 items-center gap-2">
                                <FormLabel className="text-muted-foreground">Due Date</FormLabel>
                                <div className="col-span-2">
-                                 {!canEdit ? (
+                                 {!canEditContent ? (
                                      <div className="text-sm font-medium">
                                          {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}
                                      </div>
@@ -1068,10 +1079,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                       <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
                                       <p className="text-sm font-medium">{user.name}</p>
                                   </div>
-                                  {canEdit && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
+                                  {canAssignUsers && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
                               </div>
                            ))}
-                          {canEdit && (
+                          {canAssignUsers && (
                               <Popover>
                                   <PopoverTrigger asChild>
                                       <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
@@ -1100,10 +1111,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               {currentTags.map((tag) => (
                                   <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
                                       {tag.label}
-                                      {canEdit && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
+                                      {canEditContent && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
                                   </div>
                               ))}
-                              {canEdit && (
+                              {canEditContent && (
                                    <Popover>
                                       <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
                                       <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
@@ -1122,7 +1133,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                          <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel>
                             <div className="col-span-2">
-                              {!canEdit ? (
+                              {!canEditContent ? (
                                 <div className="text-sm font-medium">{timeEstimateValue} hours</div>
                               ) : (
                                 <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" />
@@ -1146,7 +1157,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               </form>
           </Form>
           <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
-              {canEdit && (
+              {canEditContent && (
                 <Button type="submit" form="task-details-form" disabled={isSaving}>
                   {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
                   Save Changes
