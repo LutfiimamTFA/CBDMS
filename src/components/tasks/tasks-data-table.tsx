@@ -358,7 +358,7 @@ export function TasksDataTable() {
         return value.includes(row.getValue(id))
       },
     },
-    {
+     {
       accessorKey: 'priority',
       header: t('tasks.column.priority'),
       sortingFn: prioritySortingFn,
@@ -369,12 +369,11 @@ export function TasksDataTable() {
         
         const priority = priorityInfo[currentPriority];
         if (!priority) return null;
-        const Icon = priority.icon;
 
         if (profile?.role === 'Employee' || session) {
             return (
               <Badge variant="outline" className='font-normal'>
-                  <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                  <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
                   <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
               </Badge>
             )
@@ -390,7 +389,7 @@ export function TasksDataTable() {
             >
               <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
                  <div className="flex items-center gap-2">
-                    <Icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                    <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
                     <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
                  </div>
               </SelectTrigger>
@@ -496,7 +495,7 @@ export function TasksDataTable() {
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity">
+                <Button variant="outline" size="icon" className="h-8 w-8 p-0 opacity-50 group-hover:opacity-100 focus:opacity-100 transition-opacity">
                     <span className="sr-only">Open menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                 </Button>
