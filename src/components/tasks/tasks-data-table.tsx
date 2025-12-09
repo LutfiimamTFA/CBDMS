@@ -147,12 +147,22 @@ export function TasksDataTable() {
 
   const statusOptions = React.useMemo(() => {
     if (!statuses) return [];
+    
+    // Employee cannot directly mark as Done
+    if (profile?.role === 'Employee') {
+        return statuses.filter(s => s.name !== 'Done').map(s => ({
+            value: s.name,
+            label: s.name,
+            icon: s.name === 'To Do' ? Circle : s.name === 'Doing' ? CircleDashed : CheckCircle2,
+        }));
+    }
+
     return statuses.map(s => ({
         value: s.name,
         label: s.name,
         icon: s.name === 'To Do' ? Circle : s.name === 'Doing' ? CircleDashed : CheckCircle2,
     }));
-  }, [statuses]);
+  }, [statuses, profile]);
 
   const priorityOptions = Object.values(priorityInfo).map(p => ({
       value: p.value,
@@ -215,53 +225,28 @@ export function TasksDataTable() {
         });
         
         // --- Notification Logic ---
-        const userIdsToNotify = new Set<string>();
-        
-        const taskCreatorId = taskToUpdate.createdBy.id;
-        if (taskCreatorId !== profile.id && (newStatus === 'Done' || (taskToUpdate.status === 'To Do' && newStatus === 'Doing'))) {
-            const notifRef = doc(collection(firestore, `users/${taskCreatorId}/notifications`));
-            const message = newStatus === 'Done' 
-                ? `${profile.name} has completed the task: "${taskToUpdate.title}"`
-                : `${profile.name} has started working on the task: "${taskToUpdate.title}"`;
-
-            batch.set(notifRef, {
-                userId: taskCreatorId,
-                title: newStatus === 'Done' ? 'Task Completed' : 'Task In Progress',
-                message,
-                taskId: taskToUpdate.id,
-                taskTitle: taskToUpdate.title,
-                isRead: false,
-                createdAt: serverTimestamp(),
-                createdBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
+        if (newStatus === 'Preview') {
+            (users || []).forEach(user => {
+              if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
+                  const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
+                  const newNotification: Omit<Notification, 'id'> = {
+                      userId: user.id,
+                      title: 'Task Ready for Review',
+                      message: `${profile.name} has moved the task "${taskToUpdate.title}" to Preview.`,
+                      taskId: taskToUpdate.id, 
+                      taskTitle: taskToUpdate.title,
+                      isRead: false,
+                      createdAt: serverTimestamp() as any,
+                      createdBy: {
+                          id: profile.id,
+                          name: profile.name,
+                          avatarUrl: profile.avatarUrl || '',
+                      },
+                  };
+                  batch.set(notifRef, newNotification);
+              }
             });
         }
-        
-        taskToUpdate.assigneeIds.forEach(id => {
-            if (id !== profile.id) {
-                userIdsToNotify.add(id);
-            }
-        });
-        
-        const notificationMessage = `${profile.name} changed the status of "${taskToUpdate.title}" to ${newStatus}.`;
-
-        userIdsToNotify.forEach(userId => {
-            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-            const newNotification: Omit<Notification, 'id'> = {
-                userId,
-                title: 'Task Status Updated',
-                message: notificationMessage,
-                taskId: taskToUpdate.id,
-                taskTitle: taskToUpdate.title,
-                isRead: false,
-                createdAt: serverTimestamp(),
-                createdBy: {
-                    id: profile.id,
-                    name: profile.name,
-                    avatarUrl: profile.avatarUrl || '',
-                },
-            };
-            batch.set(notifRef, newNotification);
-        });
 
         try {
             await batch.commit();
@@ -279,18 +264,16 @@ export function TasksDataTable() {
         }
     };
 
-    if (newStatus === 'Done') {
-        setConfirmationDialog({
-            isOpen: true,
-            task: taskToUpdate,
-            onConfirm: () => {
-                performUpdate();
-                setConfirmationDialog({ isOpen: false });
-            },
-        });
-    } else {
-        performUpdate();
+    if (newStatus === 'Done' && profile.role === 'Employee') {
+       toast({
+          variant: "destructive",
+          title: "Permission Denied",
+          description: "Only Managers or Admins can mark a task as Done. Please move to 'Preview' for review."
+      });
+      return;
     }
+
+    performUpdate();
   };
   
   const handleDeleteTask = (taskId: string) => {
@@ -449,7 +432,9 @@ export function TasksDataTable() {
         const statusOption = statusOptions.find(s => s.value === currentStatus);
         const Icon = statusOption?.icon || Circle;
 
-        if (profile?.role === 'Employee' || session) {
+        const isReadOnly = session || (profile?.role === 'Employee' && currentStatus === 'Done');
+
+        if (isReadOnly) {
              const statusDetails = statuses?.find(s => s.name === currentStatus);
              return (
                 <Badge variant="outline" className="font-normal">
@@ -943,4 +928,3 @@ export function TasksDataTable() {
     </>
   );
 }
-

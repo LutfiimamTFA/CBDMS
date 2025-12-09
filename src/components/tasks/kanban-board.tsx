@@ -3,10 +3,10 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { KanbanColumn } from './kanban-column';
-import type { Task, WorkflowStatus, Activity, User, SharedLink } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
@@ -34,6 +34,12 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         : null,
     [firestore]
   );
+  
+  const usersQuery = useMemo(
+    () => (firestore && profile ? query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)) : null),
+    [firestore, profile]
+  );
+  const { data: allUsers } = useCollection<User>(usersQuery);
 
   const { data: statuses, isLoading: areStatusesLoading } =
     useCollection<WorkflowStatus>(statusesQuery);
@@ -43,7 +49,8 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       return permissions.canChangeStatus === true;
     }
     if (!profile) return false;
-    return profile.role === 'Super Admin' || profile.role === 'Manager';
+    // Semua peran bisa drag, tapi tujuannya dibatasi di handleDrop
+    return true;
   }, [profile, permissions]);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
@@ -62,11 +69,24 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     const task = tasks.find(t => t.id === taskId);
 
     if (task && task.status !== newStatus) {
+      
+      // --- Workflow Logic ---
+      const isEmployee = profile.role === 'Employee';
+      if (isEmployee && newStatus === 'Done') {
+        toast({
+            variant: "destructive",
+            title: "Action Not Allowed",
+            description: "Only Managers or Admins can mark tasks as 'Done'."
+        });
+        return; // Block the drop
+      }
+
       // Optimistic UI update
       setTasks(currentTasks => 
         currentTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t)
       );
-
+      
+      const batch = writeBatch(firestore);
       const taskRef = doc(firestore, 'tasks', taskId);
       
       const createActivity = (user: User, action: string): Activity => {
@@ -91,12 +111,45 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         updates.actualStartDate = new Date().toISOString();
       }
       
-      if (newStatus === 'Done') {
+      // If task is moved to Done, set completion date
+      if (newStatus === 'Done' && task.status !== 'Done') {
         updates.actualCompletionDate = new Date().toISOString();
       }
+      
+      // If task is moved out of Done, clear completion date
+      if (newStatus !== 'Done' && task.status === 'Done') {
+         updates.actualCompletionDate = deleteField() as any;
+      }
+      
+      batch.update(taskRef, updates);
+
+      // --- Notification Logic for "Preview" status ---
+      if (newStatus === 'Preview') {
+          (allUsers || []).forEach(user => {
+              if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
+                  const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
+                  const newNotification: Omit<Notification, 'id'> = {
+                      userId: user.id,
+                      title: 'Task Ready for Review',
+                      message: `${profile.name} has moved the task "${task.title}" to Preview.`,
+                      taskId: task.id, 
+                      taskTitle: task.title,
+                      isRead: false,
+                      createdAt: serverTimestamp() as any,
+                      createdBy: {
+                          id: profile.id,
+                          name: profile.name,
+                          avatarUrl: profile.avatarUrl || '',
+                      },
+                  };
+                  batch.set(notifRef, newNotification);
+              }
+          });
+      }
+
 
       try {
-        await updateDoc(taskRef, updates);
+        await batch.commit();
         toast({
             title: "Task Updated",
             description: `Task moved to "${newStatus}".`

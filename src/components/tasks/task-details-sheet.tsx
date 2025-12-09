@@ -162,6 +162,8 @@ export function TaskDetailsSheet({
   const canManageSubtasks = isSharedView ? (permissions.canEditContent || false) : !!currentUser;
   
   const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
+  const isEmployee = currentUser?.role === 'Employee';
+  const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
 
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
@@ -744,6 +746,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
     return isLate ? 'Late' : 'On Time';
   }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
+  
+  const filteredStatuses = useMemo(() => {
+      if (!allStatuses) return [];
+      if (isEmployee) {
+          // Karyawan tidak bisa langsung 'Done'
+          return allStatuses.filter(s => s.name !== 'Done');
+      }
+      return allStatuses;
+  }, [allStatuses, isEmployee]);
 
 
   return (
@@ -937,17 +948,24 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {isAssignee && initialTask.status !== 'Done' && !isSharedView && (
+                    {isManagerOrAdmin && initialTask.status === 'Preview' && (
+                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleStatusChange('Done')} disabled={isSaving}>
+                            <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete Task
+                        </Button>
+                    )}
+                    
+                    {isAssignee && !isSharedView && initialTask.status !== 'Done' && initialTask.status !== 'Preview' && (
                           <div className="space-y-2">
-                            <Button className="w-full" onClick={handleMarkComplete} disabled={!allSubtasksCompleted || isSaving}>
+                            <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
                                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                                Mark as Complete
+                                Submit for Review
                             </Button>
                             {!allSubtasksCompleted && (
-                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat menyelesaikan tugas ini.</p>
+                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
                             )}
                           </div>
                     )}
+
                     {isAssignee && initialTask.status === 'Done' && !isSharedView && (
                          <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -1000,7 +1018,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 <Select onValueChange={handleStatusChange} value={field.value} disabled={!canChangeStatus}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
-                                    {allStatuses?.map(s => (
+                                    {filteredStatuses?.map(s => (
                                         <SelectItem key={s.id} value={s.name}>
                                             <div className="flex items-center gap-2">
                                                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }}></span>
