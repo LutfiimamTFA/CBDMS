@@ -83,11 +83,6 @@ export default function UsersPage() {
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
   
-  // State for the new temp password feature
-  const [isConfirmTempPassOpen, setConfirmTempPassOpen] = useState(false);
-  const [isTempPassResultOpen, setTempPassResultOpen] = useState(false);
-  const [generatedPassword, setGeneratedPassword] = useState('');
-  
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -278,38 +273,6 @@ export default function UsersPage() {
     }
   };
 
-  const handleGenerateTempPassword = async () => {
-    if (!selectedUser) return;
-    setIsLoading(true);
-    setConfirmTempPassOpen(false);
-
-    try {
-        const response = await fetch('/api/generate-temp-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid: selectedUser.id }),
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to generate password.');
-        }
-        
-        const { tempPassword } = await response.json();
-        setGeneratedPassword(tempPassword);
-        setTempPassResultOpen(true);
-
-    } catch (error: any) {
-        toast({
-            variant: 'destructive',
-            title: 'Generation Failed',
-            description: error.message,
-        });
-    } finally {
-        setIsLoading(false);
-    }
-  }
-
   const openEditDialog = (user: User) => {
     setSelectedUser(user);
     setEditDialogOpen(true);
@@ -320,16 +283,6 @@ export default function UsersPage() {
     setDeleteDialogOpen(true);
   };
   
-  const openConfirmTempPassDialog = (user: User) => {
-    setSelectedUser(user);
-    setConfirmTempPassOpen(true);
-  }
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast({ title: "Password Copied", description: "The temporary password has been copied to your clipboard." });
-  }
-
   const roleColors: Record<User['role'], string> = {
     'Super Admin': 'bg-red-500 text-white',
     'Manager': 'bg-blue-500 text-white',
@@ -480,12 +433,6 @@ export default function UsersPage() {
                                     <DropdownMenuItem onClick={() => openEditDialog(user)}>
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
-                                    {currentUserProfile?.role === 'Super Admin' && (
-                                        <DropdownMenuItem onClick={() => openConfirmTempPassDialog(user)}>
-                                            <KeyRound className="mr-2 h-4 w-4" />
-                                            Generate Temp Password
-                                        </DropdownMenuItem>
-                                    )}
                                     {canDeleteUsers && <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
@@ -579,53 +526,6 @@ export default function UsersPage() {
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
-
-      {/* Confirm Temp Password Dialog */}
-      <AlertDialog open={isConfirmTempPassOpen} onOpenChange={setConfirmTempPassOpen}>
-          <AlertDialogContent>
-              <AlertDialogHeader>
-                  <AlertDialogTitle>Generate Temporary Password?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                      This will generate a new temporary password for <span className="font-bold">{selectedUser?.name}</span>.
-                      The user's current password will no longer work. You will be shown the password once to share with them.
-                  </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleGenerateTempPassword} disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Yes, generate password
-                  </AlertDialogAction>
-              </AlertDialogFooter>
-          </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Show Generated Password Dialog */}
-       <Dialog open={isTempPassResultOpen} onOpenChange={setTempPassResultOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Password Generated for {selectedUser?.name}</DialogTitle>
-            <DialogDescription>
-                Please copy this password and share it securely with the user.
-                <strong className="text-destructive"> This password will only be shown once.</strong>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex items-center space-x-2 my-4">
-            <Input id="temp-password" value={generatedPassword} readOnly className="font-mono text-lg h-12"/>
-            <Button type="button" size="icon" className="h-12 w-12" onClick={() => copyToClipboard(generatedPassword)}>
-                <Copy className="h-6 w-6" />
-            </Button>
-           </div>
-           <p className="text-sm text-muted-foreground">
-               For security, advise the user to change this password immediately after they log in from their profile settings.
-           </p>
-          <DialogFooter>
-            <Button type="button" onClick={() => setTempPassResultOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

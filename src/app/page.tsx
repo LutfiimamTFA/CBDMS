@@ -35,10 +35,7 @@ export default function RootPage() {
       // The `true` argument is critical here.
       getIdTokenResult(auth.currentUser, true)
         .then((idTokenResult) => {
-          if (idTokenResult.claims.mustChangePassword) {
-            // If the claim exists, force redirect to the change password page.
-            router.replace('/force-change-password');
-          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
+          if (idTokenResult.claims.mustAcknowledgeTasks) {
             // If recurring tasks claim exists, redirect to acknowledgment page.
             router.replace('/force-acknowledge-tasks');
           } else {
