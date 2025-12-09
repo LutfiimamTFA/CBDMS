@@ -238,10 +238,43 @@ export function TaskDetailsSheet({
     };
   };
 
+  const handlePauseSession = useCallback(async () => {
+    if (!firestore || !currentUser || !initialTask.currentSessionStartTime) return;
+    
+    const taskRef = doc(firestore, "tasks", initialTask.id);
+    
+    const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
+    const now = Date.now();
+    const sessionDurationInSeconds = (now - startTime) / 1000;
+    const newTimeTrackedInHours = (initialTask.timeTracked || 0) + (sessionDurationInSeconds / 3600);
+    
+    const newActivity: Activity = createActivity(currentUser, `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`);
+    
+    try {
+        await updateDoc(taskRef, {
+            timeTracked: newTimeTrackedInHours,
+            currentSessionStartTime: deleteField(),
+            lastActivity: newActivity,
+            activities: [...(initialTask.activities || []), newActivity]
+        });
+        setIsRunning(false);
+        setElapsedTime(0);
+        toast({ title: 'Session Paused', description: 'Your work has been logged.' });
+    } catch (error) {
+        console.error("Failed to pause session:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
+    }
+  }, [firestore, currentUser, initialTask]);
+
+
   const handleStatusChange = async (newStatus: string) => {
     if (!firestore || !currentUser) return;
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
+
+    if (isRunning) {
+        await handlePauseSession();
+    }
 
     const taskRef = doc(firestore, 'tasks', initialTask.id);
     const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
@@ -692,34 +725,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   }
   
-  const handlePauseSession = async () => {
-    if (!firestore || !currentUser || !initialTask.currentSessionStartTime) return;
-    
-    const taskRef = doc(firestore, "tasks", initialTask.id);
-    
-    const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
-    const now = Date.now();
-    const sessionDurationInSeconds = (now - startTime) / 1000;
-    const newTimeTrackedInHours = (initialTask.timeTracked || 0) + (sessionDurationInSeconds / 3600);
-    
-    const newActivity: Activity = createActivity(currentUser, `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`);
-    
-    try {
-        await updateDoc(taskRef, {
-            timeTracked: newTimeTrackedInHours,
-            currentSessionStartTime: deleteField(),
-            lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity]
-        });
-        setIsRunning(false);
-        setElapsedTime(0);
-        toast({ title: 'Session Paused', description: 'Your work has been logged.' });
-    } catch (error) {
-        console.error("Failed to pause session:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
-    }
-  }
-
   const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
   
   const handleMarkComplete = async () => {
@@ -819,16 +824,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
     return isLate ? 'Late' : 'On Time';
   }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
-  
-  const filteredStatuses = useMemo(() => {
-      if (!allStatuses) return [];
-      if (isEmployee) {
-          // Karyawan tidak bisa langsung 'Done'
-          return allStatuses.filter(s => s.name !== 'Done');
-      }
-      return allStatuses;
-  }, [allStatuses, isEmployee]);
-
 
   return (
     <>
@@ -1120,7 +1115,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 <Select onValueChange={handleStatusChange} value={field.value} disabled={!canChangeStatus}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
-                                    {filteredStatuses?.map(s => (
+                                    {allStatuses?.map(s => (
                                         <SelectItem key={s.id} value={s.name}>
                                             <div className="flex items-center gap-2">
                                                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }}></span>

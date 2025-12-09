@@ -32,6 +32,7 @@ export default function DashboardPage() {
 
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
+    // If it's an employee (and not in a shared session), only show their assigned tasks.
     if (profile?.role === 'Employee' && !session) {
       q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
