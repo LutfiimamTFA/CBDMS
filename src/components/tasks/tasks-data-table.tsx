@@ -454,7 +454,10 @@ export function TasksDataTable() {
         return (
           <Select value={currentStatus} onValueChange={(newStatus: string) => handleStatusChange(task.id, newStatus)}>
             <SelectTrigger className="w-[140px] border-none bg-secondary focus:ring-0">
-              <SelectValue />
+                <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                    <SelectValue />
+                </div>
             </SelectTrigger>
             <SelectContent>
               {statusOptions.map((s) => (
