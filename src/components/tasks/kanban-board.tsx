@@ -198,5 +198,3 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     </ScrollArea>
   );
 }
-
-    

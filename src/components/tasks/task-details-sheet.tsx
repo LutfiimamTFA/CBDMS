@@ -245,18 +245,46 @@ export function TaskDetailsSheet({
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
 
-    form.setValue('status', newStatus);
-
     const taskRef = doc(firestore, 'tasks', initialTask.id);
     const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
     
     try {
-        await updateDoc(taskRef, {
+        const batch = writeBatch(firestore);
+        
+        const updates: Partial<Task> = {
             status: newStatus,
             activities: [...(initialTask.activities || []), newActivity],
             lastActivity: newActivity,
-            updatedAt: serverTimestamp(),
-        });
+            updatedAt: serverTimestamp() as any,
+        };
+
+        if (newStatus === 'Preview') {
+          (allUsers || []).forEach(user => {
+              if (user.companyId === currentUser.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
+                  const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
+                  const newNotification: Omit<Notification, 'id'> = {
+                      userId: user.id,
+                      title: 'Task Ready for Review',
+                      message: `${currentUser.name} has moved the task "${initialTask.title}" to Preview.`,
+                      taskId: initialTask.id, 
+                      taskTitle: initialTask.title,
+                      isRead: false,
+                      createdAt: serverTimestamp() as any,
+                      createdBy: {
+                          id: currentUser.id,
+                          name: currentUser.name,
+                          avatarUrl: currentUser.avatarUrl || '',
+                      },
+                  };
+                  batch.set(notifRef, newNotification);
+              }
+          });
+        }
+        
+        batch.update(taskRef, updates);
+        await batch.commit();
+
+        form.setValue('status', newStatus);
         toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
     } catch (error) {
         console.error('Failed to update status:', error);
@@ -1018,7 +1046,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         </div>
                     )}
                     
-                    {isAssignee && !isSharedView && initialTask.status === 'Doing' && (
+                    {isAssignee && initialTask.status === 'Doing' && !isSharedView && (
                           <div className="space-y-2">
                             <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
                                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
