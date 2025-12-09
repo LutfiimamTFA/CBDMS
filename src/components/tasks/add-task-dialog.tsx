@@ -76,7 +76,6 @@ const taskSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   brandId: z.string().min(1, 'Brand is required'),
   description: z.string().optional(),
-  status: z.string().min(1, 'Status is required'),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required'),
   timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
@@ -197,7 +196,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       title: '',
       brandId: '',
       description: '',
-      status: statuses?.[0]?.name || '',
       priority: 'Medium',
       assigneeIds: [],
       recurring: 'never',
@@ -207,12 +205,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       tags: [],
     },
   });
-  
-  useEffect(() => {
-    if (statuses && statuses.length > 0 && !form.getValues('status')) {
-      form.setValue('status', statuses[0].name);
-    }
-  }, [statuses, form]);
 
   useEffect(() => {
     if (open && currentUserProfile && user) {
@@ -255,6 +247,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
     const newTaskData = {
         ...cleanedData,
+        status: 'To Do', // Always start as 'To Do'
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         assignees: selectedUsers,
@@ -794,21 +787,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     />
                     
                     <div className="grid grid-cols-2 gap-4">
-                      <FormField control={form.control} name="status" render={({ field }) => (
-                          <FormItem>
-                              <FormLabel>{t('addtask.form.status')}</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.status.placeholder')} /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                {areStatusesLoading ? (
-                                    <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                                ) : (
-                                    statuses?.map((s) => (<SelectItem key={s.id} value={s.name}><div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }}></span>{s.name}</div></SelectItem>))
-                                )}
-                              </SelectContent>
-                              </Select><FormMessage />
-                          </FormItem>
-                      )}/>
-                      <FormField control={form.control} name="priority" render={({ field }) => (
+                       <FormField control={form.control} name="priority" render={({ field }) => (
                         <FormItem>
                             <FormLabel>{t('addtask.form.priority')}</FormLabel>
                             <div className="flex items-center gap-2">
@@ -1058,7 +1037,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </Tabs>
 
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
+                      <Label className="flex items-center gap-2"><TagIcon className="w-4 h-4" />Tags</Label>
                       <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-10">
                         {selectedTags.map(tag => (<div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>{tag.label}<button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100"><X className="h-3 w-3" /></button></div>))}
                         <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 w-6 p-0">+</Button></PopoverTrigger>
