@@ -30,6 +30,7 @@ import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { defaultNavItems } from '@/lib/navigation-items';
 import * as lucideIcons from 'lucide-react';
+import { firebaseConfig } from '@/firebase/config';
 
 const Icon = ({
   name,
@@ -247,7 +248,13 @@ export function ShareDialog() {
     }
   };
   
-  const shareUrl = activeLink ? `${window.location.origin}/share/${activeLink.id}` : '';
+  const shareUrl = useMemo(() => {
+    if (!activeLink) return '';
+    const projectId = firebaseConfig.projectId;
+    const baseUrl = `https://${projectId}.web.app`;
+    return `${baseUrl}/share/${activeLink.id}`;
+  }, [activeLink]);
+
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -336,7 +343,7 @@ export function ShareDialog() {
                     <Card>
                       <CardHeader>
                         <h3 className="font-semibold">Shared Experience</h3>
-                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role's access, but limited to the items you select below.</div>
+                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</div>
                       </CardHeader>
                     </Card>
 
