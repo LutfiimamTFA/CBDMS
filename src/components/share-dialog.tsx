@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -20,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, deleteDoc, getDoc, where, query, orderBy, deleteField } from 'firebase/firestore';
-import type { SharedLink } from '@/lib/types';
+import type { SharedLink, Brand, User } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -28,6 +27,7 @@ import { useCollection } from '@/firebase/firestore/use-collection';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Badge } from './ui/badge';
 
 export function ShareDialog() {
@@ -232,7 +232,7 @@ export function ShareDialog() {
                     <Card>
                       <CardHeader>
                         <h3 className="font-semibold">Shared Experience</h3>
-                        <p className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</p>
+                        <div className="text-sm text-muted-foreground">The generated link will provide a view consistent with the <Badge variant="outline">{activeLink?.sharedAsRole || profile?.role}</Badge> role.</div>
                       </CardHeader>
                     </Card>
                     <Card>
