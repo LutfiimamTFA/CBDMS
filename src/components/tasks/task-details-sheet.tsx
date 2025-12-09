@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -156,7 +157,6 @@ export function TaskDetailsSheet({
   const groupedUsers = useMemo(() => {
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
-    // Super Admin can see everyone
     if (currentUser.role === 'Super Admin') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
@@ -164,14 +164,12 @@ export function TaskDetailsSheet({
       return { managers, employees, clients };
     }
     
-    // Manager can see other Managers and Employees
     if (currentUser.role === 'Manager') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers, employees, clients: [] };
     }
     
-    // Employee can see other Employees
     if (currentUser.role === 'Employee') {
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers: [], employees, clients: [] };
@@ -665,15 +663,27 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!firestore || !currentUser) return;
     
     const taskRef = doc(firestore, "tasks", initialTask.id);
-    const newActivity: Activity = createActivity(currentUser, 'started a work session');
+    
+    let activitiesToAdd: Activity[] = [];
+    const updates: Partial<Task> = {
+        currentSessionStartTime: new Date().toISOString(),
+    };
+
+    if (initialTask.status === 'To Do') {
+        updates.status = 'Doing';
+        activitiesToAdd.push(createActivity(currentUser, 'changed status from "To Do" to "Doing"'));
+    }
+
+    activitiesToAdd.push(createActivity(currentUser, 'started a work session'));
+    updates.activities = [...(initialTask.activities || []), ...activitiesToAdd];
+    updates.lastActivity = activitiesToAdd[activitiesToAdd.length - 1];
+
+    if (!initialTask.actualStartDate) {
+        updates.actualStartDate = new Date().toISOString();
+    }
     
     try {
-        await updateDoc(taskRef, {
-            actualStartDate: initialTask.actualStartDate || new Date().toISOString(),
-            currentSessionStartTime: new Date().toISOString(),
-            lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity]
-        });
+        await updateDoc(taskRef, updates);
         setIsRunning(true);
         toast({ title: 'Session Started', description: 'Your work session is now being tracked.' });
     } catch (error) {
