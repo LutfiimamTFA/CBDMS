@@ -33,7 +33,7 @@ import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash2, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, User, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2 } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import {
@@ -126,6 +126,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = React.useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = React.useState<UserType | null>(null);
   const [dependencies, setDependencies] = React.useState<string[]>([]);
   const [blocking, setBlocking] = React.useState<string[]>([]);
   const [comments, setComments] = React.useState<Comment[]>([]);
@@ -181,10 +182,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   }, [allTasks, users]);
 
   const groupedUsers = useMemo(() => {
-      const managers = (users || []).filter(u => u.role === 'Manager');
-      const employees = (users || []).filter(u => u.role === 'Employee');
-      const clients = (users || []).filter(u => u.role === 'Client');
-      return { managers, employees, clients };
+    const managers = (users || []).filter(u => u.role === 'Manager' || u.role === 'Super Admin');
+    const employees = (users || []).filter(u => u.role === 'Employee');
+    const clients = (users || []).filter(u => u.role === 'Client');
+    return { managers, employees, clients };
   }, [users]);
 
 
@@ -537,9 +538,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         id: `sub-${Date.now()}`,
         title: newSubtaskTitle,
         completed: false,
+        ...(newSubtaskAssignee && { assignee: { id: newSubtaskAssignee.id, name: newSubtaskAssignee.name, avatarUrl: newSubtaskAssignee.avatarUrl || '' } }),
       };
       setSubtasks([...subtasks, newSubtask]);
       setNewSubtaskTitle('');
+      setNewSubtaskAssignee(null);
     }
   };
 
@@ -553,6 +556,19 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setSubtasks(subtasks.filter(st => st.id !== subtaskId));
   }
   
+  const handleAssignSubtask = (subtaskId: string, user: UserType | null) => {
+    const newSubtasks = subtasks.map(st => {
+      if (st.id === subtaskId) {
+        return { 
+          ...st, 
+          assignee: user ? { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' } : undefined 
+        };
+      }
+      return st;
+    });
+    setSubtasks(newSubtasks);
+  };
+
   const handlePostComment = () => {
     if (!newComment.trim() || !currentUserProfile || !user) return;
     const comment: Comment = {
@@ -996,15 +1012,57 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
                         <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
                             {subtasks.map((subtask) => (
-                                <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md">
+                                <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
                                     <Checkbox id={`subtask-create-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
                                     <label htmlFor={`subtask-create-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveSubtask(subtask.id)}><Trash2 className="h-4 w-4"/></Button>
+                                    
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                                          {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-60 p-1">
+                                        <div className="space-y-1">
+                                          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
+                                          {(users || []).map(user => (
+                                            <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                                              <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                              <span className="truncate">{user.name}</span>
+                                            </Button>
+                                          ))}
+                                        </div>
+                                      </PopoverContent>
+                                    </Popover>
+
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
                                 </div>
                             ))}
                         </div>
                         <div className="flex items-center gap-2">
                             <Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                  {newSubtaskAssignee ? (
+                                    <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
+                                  ) : (
+                                    <UserPlus className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-60 p-1">
+                                <div className="space-y-1">
+                                  <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                  {(users || []).map(user => (
+                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                      <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                      <span className="truncate">{user.name}</span>
+                                    </Button>
+                                  ))}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                             <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
                         </div>
                       </TabsContent>
