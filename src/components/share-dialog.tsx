@@ -269,7 +269,7 @@ export function ShareDialog() {
         );
       case 'dashboard':
       default:
-        return <Select disabled><SelectTrigger><SelectValue placeholder="Entire Dashboard"/></SelectTrigger></Select>;
+        return <Select disabled value="dashboard"><SelectTrigger><SelectValue placeholder="Entire Dashboard"/></SelectTrigger></Select>;
     }
   }
 
