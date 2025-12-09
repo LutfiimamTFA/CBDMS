@@ -462,10 +462,7 @@ export function TasksDataTable() {
             <SelectContent>
               {statusOptions.map((s) => (
                 <SelectItem key={s.value} value={s.value}>
-                  <div className="flex items-center gap-2">
-                    <s.icon className="h-4 w-4 text-muted-foreground" />
-                    <span>{s.label}</span>
-                  </div>
+                  {s.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -938,3 +935,5 @@ export function TasksDataTable() {
     </>
   );
 }
+
+    
