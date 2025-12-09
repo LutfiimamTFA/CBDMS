@@ -120,15 +120,25 @@ export type DailyReport = {
   companyId: string;
 };
 
+export type SharedLinkPermissions = {
+  canViewDetails: boolean;
+  canComment: boolean;
+  canChangeStatus: boolean;
+  canEditContent: boolean;
+  canAssignUsers: boolean;
+};
+
 export type SharedLink = {
   id: string;
-  sharedAsRole: 'Manager' | 'Employee' | 'Client';
-  targetName?: string;
+  targetName: string;
+  companyId: string;
+  targetType: 'dashboard' | 'brand' | 'priority' | 'assignee';
+  targetId?: string; // Optional ID for brand, priority, assignee
+  permissions: SharedLinkPermissions;
   password?: string; // Hashed password
   expiresAt?: string; // ISO date string
   createdBy: string;
   createdAt: any;
-  companyId: string;
 };
 
 

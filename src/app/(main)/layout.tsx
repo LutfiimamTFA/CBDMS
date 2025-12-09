@@ -35,7 +35,6 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
-import { useSharedSession } from '@/context/shared-session-provider';
 
 const Icon = ({
   name,
@@ -57,7 +56,6 @@ export default function MainLayout({
   const { t } = useI18n();
   const router = useRouter();
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
-  const { session, isLoading: isSessionLoading } = useSharedSession();
   const firestore = useFirestore();
 
   const navItemsCollectionRef = useMemo(
@@ -106,19 +104,12 @@ export default function MainLayout({
   });
 
   useEffect(() => {
-    // In share mode, we don't check for user login
-    if (session) return;
-    
     if (!isUserLoading && !user) {
       router.push('/login');
     }
-  }, [user, isUserLoading, router, session]);
+  }, [user, isUserLoading, router]);
   
-  const currentRole = useMemo(() => {
-    if (session) return session.role;
-    if (profile) return profile.role;
-    return null;
-  }, [session, profile]);
+  const currentRole = profile?.role;
 
   const filteredNavItems = useMemo(() => {
     if (!currentRole || navItems.length === 0) return [];
@@ -187,7 +178,7 @@ export default function MainLayout({
     [filteredNavItems, childMap, pathname, openSections, t]
   );
 
-  const isLoading = (isUserLoading && !session) || isNavItemsLoading || isSessionLoading;
+  const isLoading = isUserLoading || isNavItemsLoading;
 
   if (isLoading) {
     return (
@@ -197,8 +188,7 @@ export default function MainLayout({
     );
   }
 
-  // If in normal mode, require user & profile. In share mode, these can be null.
-  if (!session && (!user || !profile)) {
+  if (!user || !profile) {
     return null;
   }
 
@@ -211,8 +201,7 @@ export default function MainLayout({
         <SidebarContent>
           <SidebarMenu>{renderNavItems(filteredNavItems)}</SidebarMenu>
         </SidebarContent>
-        {!session && (
-          <SidebarFooter>
+        <SidebarFooter>
             <SidebarMenu>
               <SidebarMenuItem>
                 <Link href="/settings">
@@ -227,7 +216,6 @@ export default function MainLayout({
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarFooter>
-        )}
       </Sidebar>
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
