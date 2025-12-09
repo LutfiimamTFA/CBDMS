@@ -184,16 +184,28 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const groupedUsers = useMemo(() => {
     if (!users || !currentUserProfile) return { managers: [], employees: [], clients: [] };
     
-    if (currentUserProfile.role === 'Manager' || currentUserProfile.role === 'Super Admin') {
-      const managers = (users || []).filter(u => u.role === 'Manager' || u.role === 'Super Admin');
+    // Super Admin can see everyone
+    if (currentUserProfile.role === 'Super Admin') {
+      const managers = (users || []).filter(u => u.role === 'Manager');
       const employees = (users || []).filter(u => u.role === 'Employee');
       const clients = (users || []).filter(u => u.role === 'Client');
       return { managers, employees, clients };
     }
     
-    // For Employees
-    const employees = (users || []).filter(u => u.role === 'Employee');
-    return { managers: [], employees, clients: [] };
+    // Manager can see other Managers and Employees
+    if (currentUserProfile.role === 'Manager') {
+      const managers = (users || []).filter(u => u.role === 'Manager');
+      const employees = (users || []).filter(u => u.role === 'Employee');
+      return { managers, employees, clients: [] };
+    }
+    
+    // Employee can see other Employees
+    if (currentUserProfile.role === 'Employee') {
+      const employees = (users || []).filter(u => u.role === 'Employee');
+      return { managers: [], employees, clients: [] };
+    }
+
+    return { managers: [], employees: [], clients: [] };
 
   }, [users, currentUserProfile]);
 
@@ -265,7 +277,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
     const newTaskData = {
         ...cleanedData,
-        status: 'To Do', // Always start as 'To Do'
+        status: 'To Do',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         assignees: selectedUsers,

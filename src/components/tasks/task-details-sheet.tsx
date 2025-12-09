@@ -153,6 +153,34 @@ export function TaskDetailsSheet({
 
   const { user: authUser, profile: currentUser } = useUserProfile();
 
+  const groupedUsers = useMemo(() => {
+    if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
+    
+    // Super Admin can see everyone
+    if (currentUser.role === 'Super Admin') {
+      const managers = (allUsers || []).filter(u => u.role === 'Manager');
+      const employees = (allUsers || []).filter(u => u.role === 'Employee');
+      const clients = (allUsers || []).filter(u => u.role === 'Client');
+      return { managers, employees, clients };
+    }
+    
+    // Manager can see other Managers and Employees
+    if (currentUser.role === 'Manager') {
+      const managers = (allUsers || []).filter(u => u.role === 'Manager');
+      const employees = (allUsers || []).filter(u => u.role === 'Employee');
+      return { managers, employees, clients: [] };
+    }
+    
+    // Employee can see other Employees
+    if (currentUser.role === 'Employee') {
+      const employees = (allUsers || []).filter(u => u.role === 'Employee');
+      return { managers: [], employees, clients: [] };
+    }
+
+    return { managers: [], employees: [], clients: [] };
+
+  }, [allUsers, currentUser]);
+
   // Determine permissions
   const isSharedView = !!permissions;
   const canEditContent = isSharedView ? (permissions.canEditContent || false) : (currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager'));
@@ -1143,12 +1171,29 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                   </PopoverTrigger>
                                   <PopoverContent className="w-60 p-1">
                                       <div className="space-y-1">
-                                          {(allUsers || []).map((user) => (
-                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleSelectUser(user)}>
-                                                  <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                                  <span>{user.name}</span>
-                                              </Button>
-                                          ))}
+                                        {groupedUsers.managers.length > 0 && (
+                                            <>
+                                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
+                                                {groupedUsers.managers.map(user => (
+                                                  <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
+                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                    <span className="truncate">{user.name}</span>
+                                                  </Button>
+                                                ))}
+                                                <Separator/>
+                                            </>
+                                        )}
+                                        {groupedUsers.employees.length > 0 && (
+                                            <>
+                                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
+                                                {groupedUsers.employees.map(user => (
+                                                  <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
+                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                    <span className="truncate">{user.name}</span>
+                                                  </Button>
+                                                ))}
+                                            </>
+                                        )}
                                       </div>
                                   </PopoverContent>
                               </Popover>
