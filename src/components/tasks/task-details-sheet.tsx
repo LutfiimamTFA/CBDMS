@@ -235,7 +235,7 @@ export function TaskDetailsSheet({
 
   const createActivity = (user: User, action: string): Activity => {
     return {
-      id: `act-${Date.now()}`,
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
       action: action,
       timestamp: new Date().toISOString(),
