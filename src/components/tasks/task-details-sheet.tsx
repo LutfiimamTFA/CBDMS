@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -179,7 +178,7 @@ export function TaskDetailsSheet({
       return { managers: [], employees, clients: [] };
     }
 
-    return { managers: [], employees: [], clients: [] };
+    return { managers: [], employees, clients: [] };
 
   }, [allUsers, currentUser]);
 
@@ -701,7 +700,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     
     const taskRef = doc(firestore, "tasks", initialTask.id);
     
-    let activitiesToAdd: Activity[] = [];
+    const activitiesToAdd: Activity[] = [];
     const updates: Partial<Task> = {
         currentSessionStartTime: new Date().toISOString(),
     };

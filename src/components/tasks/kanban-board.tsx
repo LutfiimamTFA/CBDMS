@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -62,6 +61,15 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
   const handleDragEnd = () => {
     setDraggingTaskId(null);
   }
+  
+  const createActivity = (user: User, action: string): Activity => {
+    return {
+      id: `act-${crypto.randomUUID()}`,
+      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+      action: action,
+      timestamp: new Date().toISOString(),
+    };
+  };
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag || !firestore || !profile) return;
@@ -88,15 +96,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       
       const batch = writeBatch(firestore);
       const taskRef = doc(firestore, 'tasks', taskId);
-      
-      const createActivity = (user: User, action: string): Activity => {
-        return {
-          id: `act-${Date.now()}`,
-          user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-          action: action,
-          timestamp: new Date().toISOString(),
-        };
-      };
       
       const newActivity = createActivity(profile, `moved task from "${task.status}" to "${newStatus}"`);
       
