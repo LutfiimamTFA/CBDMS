@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { KanbanColumn } from './kanban-column';
+import React, { useState, useMemo, useRef } from 'react';
+import { TaskCard } from './task-card';
 import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
@@ -18,7 +18,7 @@ interface KanbanBoardProps {
 
 const createActivity = (user: User, action: string): Activity => {
   return {
-    id: `act-${crypto.randomUUID()}`,
+    id: `act-${crypto.randomUUID()}`, // Guarantees a unique ID for every new activity.
     user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
     action: action,
     timestamp: new Date().toISOString(),
@@ -58,7 +58,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       return permissions.canChangeStatus === true;
     }
     if (!profile) return false;
-    // Semua peran bisa drag, tapi tujuannya dibatasi di handleDrop
     return true;
   }, [profile, permissions]);
 
@@ -79,7 +78,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
 
     if (task && task.status !== newStatus) {
       
-      // --- Workflow Logic ---
       const isEmployee = profile.role === 'Employee';
       if (isEmployee && newStatus === 'Done') {
         toast({
@@ -87,10 +85,9 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
             title: "Action Not Allowed",
             description: "Only Managers or Admins can mark tasks as 'Done'."
         });
-        return; // Block the drop
+        return;
       }
 
-      // Optimistic UI update
       setTasks(currentTasks => 
         currentTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t)
       );
@@ -98,11 +95,13 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       const batch = writeBatch(firestore);
       const taskRef = doc(firestore, 'tasks', taskId);
       
+      // A single, unique activity object is created for this action.
       const newActivity = createActivity(profile, `moved task from "${task.status}" to "${newStatus}"`);
-      
+      const updatedActivities = [...(task.activities || []), newActivity];
+
       const updates: Partial<Task> = {
         status: newStatus,
-        activities: [...(task.activities || []), newActivity],
+        activities: updatedActivities,
         lastActivity: newActivity,
         updatedAt: serverTimestamp() as any,
       };
@@ -125,6 +124,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
           allUsers.forEach(user => {
               if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
                   const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
+                  // Correctly typed notification object
                   const newNotification: Omit<Notification, 'id'> = {
                       userId: user.id,
                       title: 'Task Ready for Review',
@@ -148,7 +148,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         });
       } catch (error) {
         console.error("Failed to update task status:", error);
-        // Revert UI on failure
         setTasks(currentTasks => 
             currentTasks.map(t => t.id === taskId ? { ...t, status: task.status } : t)
         );

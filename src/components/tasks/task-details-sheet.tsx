@@ -97,6 +97,7 @@ interface TaskDetailsSheetProps {
   permissions?: SharedLink['permissions'] | null;
 }
 
+// Centralized activity creation function to guarantee unique IDs.
 const createActivity = (user: User, action: string): Activity => {
     return {
       id: `act-${crypto.randomUUID()}`,
@@ -122,7 +123,7 @@ export function TaskDetailsSheet({
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   
-  const [comments, setComments] = useState<Comment[]>([]);
+  // Local state for comments is removed. We will use initialTask.comments directly.
   const [newComment, setNewComment] = useState('');
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [isUploadingCommentAttachment, setIsUploadingCommentAttachment] = useState(false);
@@ -216,11 +217,14 @@ export function TaskDetailsSheet({
             timeEstimate: initialTask.timeEstimate,
             dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
         });
+        
+        // Always reset state from the single source of truth (initialTask)
         setSubtasks(initialTask.subtasks || []);
-        setComments(initialTask.comments || []);
         setCurrentAssignees(initialTask.assignees || []);
         setCurrentTags(initialTask.tags || []);
         setAttachments(initialTask.attachments || []);
+        
+        // Reset comment form state
         setNewComment('');
         setCommentAttachment(null);
         setNewSubtaskAssignee(null);
@@ -277,6 +281,7 @@ export function TaskDetailsSheet({
     }
     
     const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    const updatedActivities = [...(initialTask.activities || []), newActivity];
 
     const taskRef = doc(firestore, 'tasks', initialTask.id);
     
@@ -285,7 +290,7 @@ export function TaskDetailsSheet({
         
         const updates: Partial<Task> = {
             status: newStatus,
-            activities: [...(initialTask.activities || []), newActivity],
+            activities: updatedActivities,
             lastActivity: newActivity,
             updatedAt: serverTimestamp() as Timestamp,
         };
@@ -406,6 +411,7 @@ export function TaskDetailsSheet({
     setIsUploadingCommentAttachment(true);
     
     let attachmentData;
+    let newComments = [...(initialTask.comments || [])];
 
     try {
         if (commentAttachment) {
@@ -420,7 +426,7 @@ export function TaskDetailsSheet({
         }
 
         const comment: Comment = {
-          id: `c-${Date.now()}`,
+          id: `c-${crypto.randomUUID()}`,
           user: {
             id: currentUser.id,
             name: currentUser.name,
@@ -435,12 +441,14 @@ export function TaskDetailsSheet({
           replies: [],
           ...(attachmentData && { attachment: attachmentData }),
         };
-        setComments([...comments, comment]);
-        setNewComment('');
-        setCommentAttachment(null);
+        newComments.push(comment);
 
         const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-        await updateDoc(taskDocRef, { comments: [...comments, comment] });
+        await updateDoc(taskDocRef, { comments: newComments });
+        
+        // Only update local state after successful Firestore write
+        setNewComment('');
+        setCommentAttachment(null);
 
     } catch (error) {
         console.error("Failed to post comment or upload attachment:", error);
@@ -480,7 +488,7 @@ export function TaskDetailsSheet({
   const handleAddSubtask = () => {
     if (!newSubtask.trim()) return;
     const subtask: Subtask = {
-      id: `st-${Date.now()}`,
+      id: `st-${crypto.randomUUID()}`,
       title: newSubtask,
       completed: false,
       ...(newSubtaskAssignee && { assignee: { id: newSubtaskAssignee.id, name: newSubtaskAssignee.name, avatarUrl: newSubtaskAssignee.avatarUrl || '' } }),
@@ -611,7 +619,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         assigneeIds: currentAssignees.map((a) => a.id),
         tags: currentTags,
         subtasks: subtasks,
-        comments: comments,
+        comments: initialTask.comments, // Comments are updated separately
         attachments: attachments,
         ...activityData,
         updatedAt: serverTimestamp() as any,
@@ -762,6 +770,17 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
     return isLate ? 'Late' : 'On Time';
   }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
+  
+  // This function sanitizes the activities array before rendering to prevent duplicate key errors.
+  const getUniqueActivities = (activities: Activity[]): Activity[] => {
+    if (!activities) return [];
+    const seen = new Set();
+    return activities.filter(activity => {
+        const duplicate = seen.has(activity.id);
+        seen.add(activity.id);
+        return !duplicate;
+    });
+  };
 
   return (
     <>
@@ -926,7 +945,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             </TabsContent>
                             <TabsContent value="comments" className="mt-4">
                                 <div className="space-y-6">
-                                    {comments.map(comment => (
+                                    {(initialTask.comments || []).map(comment => (
                                         <div key={comment.id} className="flex gap-3">
                                             <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
                                             <div className="flex-1">
@@ -1263,7 +1282,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           <ScrollArea className="max-h-[60vh] -mx-6 px-6">
             <div className="space-y-6 py-4">
               {initialTask.activities && initialTask.activities.length > 0 ? (
-                initialTask.activities
+                // FIX: Sanitize the activities array to ensure all keys are unique before rendering.
+                getUniqueActivities(initialTask.activities)
                   .slice()
                   .sort((a, b) => {
                     const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
