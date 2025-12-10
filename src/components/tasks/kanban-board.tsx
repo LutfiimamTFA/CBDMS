@@ -125,7 +125,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
           (allUsers || []).forEach(user => {
               if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
                   const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
-                  const newNotification: Omit<Notification, 'id'> = {
+                  const newNotification: Omit<Notification, 'id'|'taskTitle'> = {
                       userId: user.id,
                       title: 'Task Ready for Review',
                       message: `${profile.name} has moved the task "${task.title}" to Preview.`,

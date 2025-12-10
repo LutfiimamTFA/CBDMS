@@ -299,7 +299,7 @@ export function TaskDetailsSheet({
                       userId: user.id,
                       title: 'Task Ready for Review',
                       message: `${currentUser.name} has moved the task "${initialTask.title}" to Preview.`,
-                      taskId: initialTask.id,
+                      taskId: initialTask.id, 
                       isRead: false,
                       createdAt: serverTimestamp() as any,
                       createdBy: newActivity.user,
