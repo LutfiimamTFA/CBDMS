@@ -98,13 +98,14 @@ interface TaskDetailsSheetProps {
 }
 
 const createActivity = (user: User, action: string): Activity => {
-  return {
-    id: `act-${crypto.randomUUID()}`,
-    user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-    action: action,
-    timestamp: new Date().toISOString(),
-  };
+    return {
+      id: `act-${crypto.randomUUID()}`,
+      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+      action: action,
+      timestamp: new Date().toISOString(),
+    };
 };
+  
 
 export function TaskDetailsSheet({ 
   task: initialTask, 

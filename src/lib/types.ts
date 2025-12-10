@@ -247,3 +247,4 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+

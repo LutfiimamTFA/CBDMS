@@ -121,11 +121,11 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       
       batch.update(taskRef, updates);
 
-      if (newStatus === 'Preview') {
-          (allUsers || []).forEach(user => {
+      if (newStatus === 'Preview' && allUsers) {
+          allUsers.forEach(user => {
               if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
                   const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
-                  const newNotification: Omit<Notification, 'id'|'taskTitle'> = {
+                  const newNotification: Omit<Notification, 'id'> = {
                       userId: user.id,
                       title: 'Task Ready for Review',
                       message: `${profile.name} has moved the task "${task.title}" to Preview.`,
