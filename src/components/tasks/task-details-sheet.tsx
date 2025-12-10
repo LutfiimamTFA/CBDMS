@@ -158,7 +158,6 @@ export function TaskDetailsSheet({
   const groupedUsers = useMemo(() => {
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
-    // Super Admin can see everyone
     if (currentUser.role === 'Super Admin') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
@@ -166,14 +165,12 @@ export function TaskDetailsSheet({
       return { managers, employees, clients };
     }
     
-    // Manager can see other Managers and Employees
     if (currentUser.role === 'Manager') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers, employees, clients: [] };
     }
     
-    // Employee can see other Employees
     if (currentUser.role === 'Employee') {
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers: [], employees, clients: [] };
