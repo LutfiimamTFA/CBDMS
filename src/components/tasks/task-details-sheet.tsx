@@ -97,6 +97,15 @@ interface TaskDetailsSheetProps {
   permissions?: SharedLink['permissions'] | null;
 }
 
+const createActivity = (user: User, action: string): Activity => {
+  return {
+    id: `act-${crypto.randomUUID()}`,
+    user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+    action: action,
+    timestamp: new Date().toISOString(),
+  };
+};
+
 export function TaskDetailsSheet({ 
   task: initialTask, 
   open,
@@ -229,14 +238,6 @@ export function TaskDetailsSheet({
     }
   }, [initialTask, form, open]);
 
-  const createActivity = (user: User, action: string): Activity => {
-    return {
-      id: `act-${crypto.randomUUID()}`,
-      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-      action: action,
-      timestamp: new Date().toISOString(),
-    };
-  };
 
   const handlePauseSession = useCallback(async () => {
     if (!firestore || !currentUser || !initialTask.currentSessionStartTime) return;
@@ -290,8 +291,8 @@ export function TaskDetailsSheet({
             updatedAt: serverTimestamp() as any,
         };
 
-        if (newStatus === 'Preview') {
-          (allUsers || []).forEach(user => {
+        if (newStatus === 'Preview' && allUsers) {
+          allUsers.forEach(user => {
               if (user.companyId === currentUser.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
                   const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
                   const newNotification: Omit<Notification, 'id'> = {
@@ -753,15 +754,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   const handleSubmitForReview = async () => {
-    setIsSaving(true);
-    try {
-      // 1. Update status task di backend
-      await handleStatusChange('Preview');
-  
-    } finally {
-      setIsSaving(false);
-    }
+    await handleStatusChange('Preview');
   };
+  
   
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
@@ -986,7 +981,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                   <div className="p-6 space-y-6">
                     {isEmployee && initialTask.status === 'Doing' && !isSharedView && (
                          <div className="space-y-2">
-                           <Button className="w-full" onClick={() => handleStatusChange('Preview')} disabled={!allSubtasksCompleted || isSaving}>
+                           <Button className="w-full" onClick={() => handleSubmitForReview()} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                Submit for Review
                            </Button>

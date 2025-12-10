@@ -16,6 +16,15 @@ interface KanbanBoardProps {
   permissions?: SharedLink['permissions'] | null;
 }
 
+const createActivity = (user: User, action: string): Activity => {
+  return {
+    id: `act-${crypto.randomUUID()}`,
+    user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+    action: action,
+    timestamp: new Date().toISOString(),
+  };
+};
+
 export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
@@ -63,15 +72,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     setDraggingTaskId(null);
   }
   
-  const createActivity = (user: User, action: string): Activity => {
-    return {
-      id: `act-${crypto.randomUUID()}`,
-      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-      action: action,
-      timestamp: new Date().toISOString(),
-    };
-  };
-
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag || !firestore || !profile) return;
     const taskId = e.dataTransfer.getData('taskId');
