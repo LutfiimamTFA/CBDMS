@@ -275,9 +275,10 @@ export function TaskDetailsSheet({
     if (isRunning) {
         await handlePauseSession();
     }
+    
+    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
 
     const taskRef = doc(firestore, 'tasks', initialTask.id);
-    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
     
     try {
         const batch = writeBatch(firestore);
@@ -1277,7 +1278,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     return dateB - dateA;
                   })
                   .map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-4">
+                    <div key={`${activity.id}-${activity.timestamp}`} className="flex items-start gap-4">
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
                         <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
@@ -1292,6 +1293,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                       </div>
                     </div>
                   ))
+                  
               ) : (
                 <p className="text-center text-muted-foreground py-8">
                   No activities recorded for this task yet.
