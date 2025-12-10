@@ -130,8 +130,7 @@ export function TaskDetailsSheet({
   const [currentAssignees, setCurrentAssignees] = useState<User[]>([]);
   const [currentTags, setCurrentTags] = useState<Tag[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [activities, setActivities] = useState<Activity[]>([]);
-
+  
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<User | null>(null);
@@ -222,7 +221,6 @@ export function TaskDetailsSheet({
         setCurrentAssignees(initialTask.assignees || []);
         setCurrentTags(initialTask.tags || []);
         setAttachments(initialTask.attachments || []);
-        setActivities(initialTask.activities || []);
         setNewComment('');
         setCommentAttachment(null);
         setNewSubtaskAssignee(null);
@@ -599,7 +597,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (actionDescription) {
         const newActivity: Activity = createActivity(currentUser, actionDescription);
         activityData = {
-            activities: [...(activities || []), newActivity],
+            activities: [...(initialTask.activities || []), newActivity],
             lastActivity: newActivity,
         };
     }
@@ -1264,8 +1262,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           </DialogHeader>
           <ScrollArea className="max-h-[60vh] -mx-6 px-6">
             <div className="space-y-6 py-4">
-              {activities && activities.length > 0 ? (
-                activities
+              {initialTask.activities && initialTask.activities.length > 0 ? (
+                initialTask.activities
                   .slice()
                   .sort((a, b) => {
                     const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
