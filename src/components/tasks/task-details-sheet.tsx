@@ -272,7 +272,7 @@ export function TaskDetailsSheet({
 
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!firestore || !currentUser) return;
+    if (!firestore || !currentUser || !newStatus) return;
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
 
@@ -1056,7 +1056,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
                                <FormField control={form.control} name="status" render={({ field }) => (
-                                <Select onValueChange={handleStatusChange} value={field.value} disabled={!canChangeStatus}>
+                                <Select onValueChange={(v) => handleStatusChange(v)} value={field.value} disabled={!canChangeStatus}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
                                     {allStatuses?.map(s => (
