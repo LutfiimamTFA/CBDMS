@@ -158,6 +158,7 @@ export function TaskDetailsSheet({
   const groupedUsers = useMemo(() => {
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
+    // Super Admin can see everyone
     if (currentUser.role === 'Super Admin') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
@@ -165,12 +166,14 @@ export function TaskDetailsSheet({
       return { managers, employees, clients };
     }
     
+    // Manager can see other Managers and Employees
     if (currentUser.role === 'Manager') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers, employees, clients: [] };
     }
     
+    // Employee can see other Employees
     if (currentUser.role === 'Employee') {
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers: [], employees, clients: [] };
@@ -826,7 +829,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               )}
                           </div>
                         )}
-
+                        
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
                         <div className="space-y-2">
