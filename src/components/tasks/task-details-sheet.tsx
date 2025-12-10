@@ -298,8 +298,7 @@ export function TaskDetailsSheet({
                       userId: user.id,
                       title: 'Task Ready for Review',
                       message: `${currentUser.name} has moved the task "${initialTask.title}" to Preview.`,
-                      taskId: initialTask.id, 
-                      taskTitle: initialTask.title,
+                      taskId: initialTask.id,
                       isRead: false,
                       createdAt: serverTimestamp() as any,
                       createdBy: newActivity.user,
@@ -1278,7 +1277,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     return dateB - dateA;
                   })
                   .map((activity) => (
-                    <div key={`${activity.id}-${activity.timestamp}`} className="flex items-start gap-4">
+                    <div key={activity.id} className="flex items-start gap-4">
                       <Avatar className="h-9 w-9">
                         <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
                         <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>

@@ -239,7 +239,6 @@ export type Notification = {
   title: string;
   message: string;
   taskId: string;
-  taskTitle: string;
   isRead: boolean;
   createdAt: any;
   createdBy: {
@@ -248,3 +247,4 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+

@@ -130,7 +130,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
                       title: 'Task Ready for Review',
                       message: `${profile.name} has moved the task "${task.title}" to Preview.`,
                       taskId: task.id, 
-                      taskTitle: task.title,
                       isRead: false,
                       createdAt: serverTimestamp() as any,
                       createdBy: newActivity.user,
