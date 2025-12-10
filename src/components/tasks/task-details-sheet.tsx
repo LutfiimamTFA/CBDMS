@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -300,7 +301,7 @@ export function TaskDetailsSheet({
                       taskTitle: initialTask.title,
                       isRead: false,
                       createdAt: serverTimestamp() as any,
-                      createdBy: newActivity.user
+                      createdBy: newActivity.user,
                   };
                   batch.set(notifRef, newNotification);
               }
@@ -751,7 +752,17 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
 
-
+  const handleSubmitForReview = async () => {
+    setIsSaving(true);
+    try {
+      // 1. Update status task di backend
+      await handleStatusChange('Preview');
+  
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
     const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
