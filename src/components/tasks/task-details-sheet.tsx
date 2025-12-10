@@ -47,7 +47,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -102,7 +102,7 @@ const createActivity = (user: User, action: string): Activity => {
       id: `act-${crypto.randomUUID()}`,
       user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
       action: action,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString() as any,
     };
 };
   
@@ -287,7 +287,7 @@ export function TaskDetailsSheet({
             status: newStatus,
             activities: [...(initialTask.activities || []), newActivity],
             lastActivity: newActivity,
-            updatedAt: serverTimestamp() as any,
+            updatedAt: serverTimestamp() as Timestamp,
         };
 
         if (newStatus === 'Preview' && allUsers) {
@@ -300,7 +300,7 @@ export function TaskDetailsSheet({
                       message: `${currentUser.name} has moved the task "${initialTask.title}" to Preview.`,
                       taskId: initialTask.id, 
                       isRead: false,
-                      createdAt: serverTimestamp() as any,
+                      createdAt: serverTimestamp() as Timestamp,
                       createdBy: newActivity.user,
                   };
                   batch.set(notifRef, newNotification);
