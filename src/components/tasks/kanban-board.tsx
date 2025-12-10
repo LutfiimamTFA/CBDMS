@@ -110,19 +110,16 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         updates.actualStartDate = new Date().toISOString();
       }
       
-      // If task is moved to Done, set completion date
       if (newStatus === 'Done' && task.status !== 'Done') {
         updates.actualCompletionDate = new Date().toISOString();
       }
       
-      // If task is moved out of Done, clear completion date
       if (newStatus !== 'Done' && task.status === 'Done') {
          updates.actualCompletionDate = deleteField() as any;
       }
       
       batch.update(taskRef, updates);
 
-      // --- Notification Logic for "Preview" status ---
       if (newStatus === 'Preview') {
           (allUsers || []).forEach(user => {
               if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
@@ -135,11 +132,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
                       taskTitle: task.title,
                       isRead: false,
                       createdAt: serverTimestamp() as any,
-                      createdBy: {
-                          id: profile.id,
-                          name: profile.name,
-                          avatarUrl: profile.avatarUrl || '',
-                      },
+                      createdBy: newActivity.user,
                   };
                   batch.set(notifRef, newNotification);
               }

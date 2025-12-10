@@ -157,7 +157,6 @@ export function TaskDetailsSheet({
   const groupedUsers = useMemo(() => {
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
-    // Super Admin can see everyone
     if (currentUser.role === 'Super Admin') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
@@ -165,14 +164,12 @@ export function TaskDetailsSheet({
       return { managers, employees, clients };
     }
     
-    // Manager can see other Managers and Employees
     if (currentUser.role === 'Manager') {
       const managers = (allUsers || []).filter(u => u.role === 'Manager');
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers, employees, clients: [] };
     }
     
-    // Employee can see other Employees
     if (currentUser.role === 'Employee') {
       const employees = (allUsers || []).filter(u => u.role === 'Employee');
       return { managers: [], employees, clients: [] };
@@ -182,7 +179,6 @@ export function TaskDetailsSheet({
 
   }, [allUsers, currentUser]);
 
-  // Determine permissions
   const isSharedView = !!permissions;
   const canEditContent = isSharedView ? (permissions.canEditContent || false) : (currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager'));
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
@@ -304,11 +300,7 @@ export function TaskDetailsSheet({
                       taskTitle: initialTask.title,
                       isRead: false,
                       createdAt: serverTimestamp() as any,
-                      createdBy: {
-                          id: currentUser.id,
-                          name: currentUser.name,
-                          avatarUrl: currentUser.avatarUrl || '',
-                      },
+                      createdBy: newActivity.user
                   };
                   batch.set(notifRef, newNotification);
               }
@@ -474,14 +466,12 @@ export function TaskDetailsSheet({
     const newSubtasks = subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
     setSubtasks(newSubtasks);
     
-    // Immediately save to Firestore
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
     try {
         await updateDoc(taskDocRef, { subtasks: newSubtasks });
     } catch (error) {
         console.error("Failed to update subtask:", error);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not save subtask status.' });
-        // Revert UI on failure
         setSubtasks(subtasks);
     }
   };
