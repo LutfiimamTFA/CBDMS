@@ -24,18 +24,17 @@ export default function TasksPage() {
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !activeCompanyId || !profile) return null;
 
-    // In a shared session, we just get all tasks for the company
-    if (session) {
-        return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
-    }
-
-    // For internal users, logic depends on role
-    const isManagerOrAdmin = profile.role === 'Super Admin' || profile.role === 'Manager';
-    if (isManagerOrAdmin) {
+    // Managers and Super Admins see all tasks within the company.
+    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
       return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
-    } else { // Employee
+    }
+    
+    // Employees only see tasks assigned to them.
+    if (profile.role === 'Employee') {
       return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
+
+    return null;
   }, [firestore, activeCompanyId, profile, session]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);

@@ -26,21 +26,24 @@ export default function DashboardPage() {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
+  const activeCompanyId = session ? session.companyId : companyId;
+
   // Query untuk tugas
   const tasksQuery = useMemo(() => {
-    if (!firestore || !companyId) return null;
+    if (!firestore || !activeCompanyId || !profile) return null;
 
-    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-
-    // For Employees in a normal session, they only see their assigned tasks.
-    // Managers and Super Admins in a normal session see all company tasks.
-    // In a shared session, visibility is governed by the session itself, so no role-based filtering is applied here.
-    if (profile?.role === 'Employee' && !session) {
-      q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    // Managers and Super Admins see all tasks within the company.
+    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
+      return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+    }
+    
+    // Employees only see tasks assigned to them.
+    if (profile.role === 'Employee') {
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
 
-    return q;
-  }, [firestore, companyId, profile, session]);
+    return null; // Fallback for other roles or scenarios
+  }, [firestore, activeCompanyId, profile, session]);
   
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
