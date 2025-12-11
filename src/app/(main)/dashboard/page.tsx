@@ -32,7 +32,9 @@ export default function DashboardPage() {
 
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
-    // If it's an employee (and not in a shared session), only show their assigned tasks.
+    // For Employees in a normal session, they only see their assigned tasks.
+    // Managers and Super Admins in a normal session see all company tasks.
+    // In a shared session, visibility is governed by the session itself, so no role-based filtering is applied here.
     if (profile?.role === 'Employee' && !session) {
       q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }

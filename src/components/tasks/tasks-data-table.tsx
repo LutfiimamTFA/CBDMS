@@ -88,7 +88,9 @@ export function TasksDataTable() {
 
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
-    if (profile?.role === 'Employee' && !session) {
+    // Employees and Managers in a normal session only see tasks assigned to them on this page.
+    // Super Admins see all company tasks.
+    if ((profile?.role === 'Employee' || profile?.role === 'Manager') && !session) {
         q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
     
@@ -815,5 +817,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
-    
