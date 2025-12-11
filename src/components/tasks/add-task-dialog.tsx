@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -184,7 +185,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const groupedUsers = useMemo(() => {
     if (!users || !currentUserProfile) return { managers: [], employees: [], clients: [] };
     
-    // Super Admin can see everyone
+    // Super Admin can see everyone, grouped.
     if (currentUserProfile.role === 'Super Admin') {
       const managers = (users || []).filter(u => u.role === 'Manager');
       const employees = (users || []).filter(u => u.role === 'Employee');
@@ -192,14 +193,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       return { managers, employees, clients };
     }
     
-    // Manager can see other Managers and Employees
+    // Manager can only see their own team (themselves + their employees).
     if (currentUserProfile.role === 'Manager') {
-      const managers = (users || []).filter(u => u.role === 'Manager');
-      const employees = (users || []).filter(u => u.role === 'Employee');
-      return { managers, employees, clients: [] };
+      const theirTeam = (users || []).filter(u => u.id === currentUserProfile.id || u.managerId === currentUserProfile.id);
+      return { managers: [], employees: theirTeam, clients: [] }; // Put them all in 'employees' for a single list
     }
     
-    // Employee can see other Employees
+    // Employee can see other Employees.
     if (currentUserProfile.role === 'Employee') {
       const employees = (users || []).filter(u => u.role === 'Employee');
       return { managers: [], employees, clients: [] };
@@ -955,7 +955,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                           </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                        {groupedUsers.managers.length > 0 && (
+                                        {currentUserProfile?.role === 'Super Admin' && groupedUsers.managers.length > 0 && (
                                             <>
                                                 <DropdownMenuLabel>Managers</DropdownMenuLabel>
                                                 {groupedUsers.managers.map(user => (
@@ -974,7 +974,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                         )}
                                         {groupedUsers.employees.length > 0 && (
                                             <>
-                                                <DropdownMenuLabel>Employees</DropdownMenuLabel>
+                                                <DropdownMenuLabel>{currentUserProfile?.role === 'Manager' ? 'My Team' : 'Employees'}</DropdownMenuLabel>
                                                 {groupedUsers.employees.map(user => (
                                                     <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
                                                         <div className="flex w-full items-center justify-between">
@@ -988,7 +988,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                                 ))}
                                             </>
                                         )}
-                                        {groupedUsers.clients.length > 0 && (
+                                        {currentUserProfile?.role === 'Super Admin' && groupedUsers.clients.length > 0 && (
                                             <>
                                                 <DropdownMenuSeparator />
                                                 <DropdownMenuLabel>Clients</DropdownMenuLabel>
@@ -1151,7 +1151,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </Tabs>
 
                     <div className="space-y-2">
-                      <Label className="flex items-center gap-2"><Tag className="w-4 h-4" />Tags</Label>
+                      <Label className="flex items-center gap-2"><TagIcon className="w-4 h-4" />Tags</Label>
                       <div className="flex flex-wrap gap-2 p-2 border rounded-md min-h-10">
                         {selectedTags.map(tag => (<div key={tag.label} className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${tag.color}`}>{tag.label}<button type="button" onClick={() => handleRemoveTag(tag.label)} className="opacity-70 hover:opacity-100"><X className="h-3 w-3" /></button></div>))}
                         <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 w-6 p-0">+</Button></PopoverTrigger>
@@ -1185,3 +1185,4 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </Dialog>
   );
 }
+
