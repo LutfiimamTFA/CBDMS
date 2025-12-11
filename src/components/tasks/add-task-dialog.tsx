@@ -205,7 +205,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       return { managers: [], employees, clients: [] };
     }
 
-    return { managers: [], employees: [], clients: [] };
+    return { managers: [], employees, clients: [] };
 
   }, [users, currentUserProfile]);
 
