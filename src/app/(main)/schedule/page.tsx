@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -14,6 +13,8 @@ import { Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getBrandColor } from '@/lib/utils';
 import { priorityInfo } from '@/lib/utils';
+import { parseISO } from 'date-fns';
+
 
 export default function SchedulePage() {
   const firestore = useFirestore();
@@ -43,22 +44,40 @@ export default function SchedulePage() {
     return allTasks.map(task => {
       const priorityColor = priorityInfo[task.priority]?.color || 'text-gray-500';
       const brandColor = getBrandColor(task.brandId);
+      
+      // Improved date handling logic
+      let startDate;
+      if (task.startDate) {
+        startDate = parseISO(task.startDate);
+      } else if (task.dueDate) {
+        // If no start date, use due date as the start
+        startDate = parseISO(task.dueDate);
+      } else if (task.createdAt?.toDate) {
+        // Fallback for server timestamp object
+        startDate = task.createdAt.toDate();
+      } else if (typeof task.createdAt === 'string') {
+        // Fallback for ISO string from client
+        startDate = parseISO(task.createdAt);
+      } else {
+        // Final fallback to now, though unlikely
+        startDate = new Date();
+      }
 
       return {
         id: task.id,
         title: task.title,
-        start: task.startDate ? new Date(task.startDate) : new Date(task.createdAt.toDate()),
-        end: task.dueDate ? new Date(task.dueDate) : null,
+        start: startDate,
+        end: task.dueDate ? parseISO(task.dueDate) : null,
         allDay: true,
         extendedProps: {
             priority: task.priority,
         },
         // We use inline styles here because FullCalendar's class management can be tricky
         // and this ensures our colors are applied reliably.
-        backgroundColor: brandColor.replace('bg-', '#'), // This is a trick to convert tailwind bg to hex
-        borderColor: brandColor.replace('bg-', '#'),
+        backgroundColor: brandColor,
+        borderColor: brandColor,
       };
-    });
+    }).filter(event => event.start); // Ensure we only include events with a valid start date
   }, [allTasks]);
 
   const handleEventClick = (clickInfo: any) => {

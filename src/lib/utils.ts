@@ -75,12 +75,18 @@ export function formatDuration(duration: Duration) {
 }
 
 const brandColors = [
-  'bg-cyan-500', 'bg-purple-500', 'bg-amber-500', 'bg-lime-500', 
-  'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-rose-500'
+  '#06b6d4', // cyan-500
+  '#8b5cf6', // purple-500
+  '#f59e0b', // amber-500
+  '#84cc16', // lime-500
+  '#ec4899', // pink-500
+  '#14b8a6', // teal-500
+  '#6366f1', // indigo-500
+  '#f43f5e'  // rose-500
 ];
 
 export const getBrandColor = (brandId: string) => {
-  if (!brandId) return 'bg-gray-500';
+  if (!brandId) return '#6b7280'; // gray-500
   let hash = 0;
   for (let i = 0; i < brandId.length; i++) {
     hash = brandId.charCodeAt(i) + ((hash << 5) - hash);
