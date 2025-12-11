@@ -111,7 +111,7 @@ export default function UsersPage() {
   const usersCollectionRef = useMemo(() => {
     if (!firestore || !currentUserProfile) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
-    // For Managers, we fetch all employees and managers to filter on client side.
+    // For Managers, we fetch all managers and employees to filter on client side.
     if (currentUserProfile.role === 'Manager') {
         q = query(q, where('role', 'in', ['Manager', 'Employee']));
     }
@@ -235,11 +235,18 @@ export default function UsersPage() {
       if (currentUserProfile?.role === 'Manager' && (data.role === 'Super Admin' || data.role === 'Manager')) {
         throw new Error("Managers can only create Employee or Client users.");
       }
+
+      const payload: any = { ...data, companyId: currentUserProfile.companyId };
+      
+      // If the creator is a Manager, automatically assign the new user to them.
+      if (currentUserProfile.role === 'Manager' && data.role === 'Employee') {
+        payload.managerId = currentUserProfile.id;
+      }
       
       const response = await fetch('/api/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({...data, companyId: currentUserProfile.companyId }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -476,7 +483,7 @@ export default function UsersPage() {
                                 )}
                               />
                             </div>
-                             {createFormRole === 'Manager' && (
+                             {currentUserProfile?.role === 'Super Admin' && createFormRole === 'Manager' && (
                                 <Controller
                                     control={createForm.control}
                                     name="brandIds"
@@ -493,7 +500,7 @@ export default function UsersPage() {
                                     )}
                                 />
                              )}
-                             {createFormRole === 'Employee' && (
+                             {currentUserProfile?.role === 'Super Admin' && createFormRole === 'Employee' && (
                                 <div className="space-y-2">
                                     <Label htmlFor="manager-create">Assign Manager</Label>
                                     <Controller
@@ -601,14 +608,13 @@ export default function UsersPage() {
                             <Badge className={roleColors[user.role]}>{user.role}</Badge>
                         </TableCell>
                         <TableCell>
-                          {user.role === 'Manager' && (
+                          {user.role === 'Manager' ? (
                             <div className="flex flex-wrap gap-1">
                               {managedBrands.map(brandName => <Badge key={brandName} variant="secondary">{brandName}</Badge>)}
                             </div>
-                          )}
-                          {user.role === 'Employee' && manager && (
+                          ) : user.role === 'Employee' && manager ? (
                              <span className="text-sm text-muted-foreground">{manager.name}</span>
-                          )}
+                          ) : null}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
                           {user.createdAt ? format(parseISO(user.createdAt), 'PPpp') : 'N/A'}
@@ -823,10 +829,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-    
-
-    
-
-
-
