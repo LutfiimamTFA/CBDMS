@@ -358,7 +358,6 @@ export default function UsersPage() {
       const isCurrentlyEmergencyAdmin = companySettings?.emergencyAdminUserId === manager.id;
       const newEmergencyAdminId = isCurrentlyEmergencyAdmin ? null : manager.id;
       
-      // Use setDoc with merge to create the document if it doesn't exist, or update it if it does.
       await setDoc(companySettingsDocRef, { emergencyAdminUserId: newEmergencyAdminId }, { merge: true });
 
       toast({
@@ -522,14 +521,14 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead className="hidden md:table-cell">Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Scope / Manager</TableHead>
                 <TableHead className="hidden lg:table-cell">Created At</TableHead>
                 {canManageUsers && <TableHead><span className="sr-only">Actions</span></TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isUsersLoading || permissionsLoading || isCompanySettingsLoading ? (
+              {isUsersLoading || permissionsLoading || isCompanySettingsLoading || areBrandsLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
                     <div className='flex items-center justify-center gap-2'>
@@ -545,6 +544,9 @@ export default function UsersPage() {
                   const isCurrentUser = user.id === currentUserProfile?.id;
                   const canEditThisUser = currentUserProfile?.role === 'Super Admin' || (currentUserProfile?.role === 'Manager' && user.role !== 'Manager' && user.role !== 'Super Admin');
                   const isEmergencyAdmin = emergencyAdminId === user.id;
+
+                  const manager = users?.find(u => u.id === user.managerId);
+                  const managedBrands = user.brandIds?.map(id => brands?.find(b => b.id === id)?.name).filter(Boolean) || [];
 
                   return (
                     <React.Fragment key={user.id}>
@@ -571,11 +573,20 @@ export default function UsersPage() {
                                 </TooltipProvider>
                               )}
                           </div>
-                          <div className='text-muted-foreground text-sm md:hidden'>{user.email}</div>
+                          <div className='text-muted-foreground text-sm'>{user.email}</div>
                         </TableCell>
-                        <TableCell className="hidden md:table-cell">{user.email}</TableCell>
                         <TableCell>
                             <Badge className={roleColors[user.role]}>{user.role}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          {user.role === 'Manager' && managedBrands.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {managedBrands.map(brandName => <Badge key={brandName} variant="secondary">{brandName}</Badge>)}
+                            </div>
+                          )}
+                          {user.role === 'Employee' && manager && (
+                             <span className="text-sm text-muted-foreground">{manager.name}</span>
+                          )}
                         </TableCell>
                         <TableCell className="hidden lg:table-cell">
                           {user.createdAt ? format(parseISO(user.createdAt), 'PPpp') : 'N/A'}
