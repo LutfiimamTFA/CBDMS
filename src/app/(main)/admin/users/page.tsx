@@ -81,8 +81,17 @@ const editUserSchema = z.object({
   brandIds: z.array(z.string()).optional(),
 });
 
+const setPasswordSchema = z.object({
+    newPassword: z.string().min(6, 'Password must be at least 6 characters long.'),
+    confirmPassword: z.string(),
+}).refine(data => data.newPassword === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+});
+
 type UserFormValues = z.infer<typeof userSchema>;
 type EditUserFormValues = z.infer<typeof editUserSchema>;
+type SetPasswordFormValues = z.infer<typeof setPasswordSchema>;
 
 export default function UsersPage() {
   const { toast } = useToast();
@@ -93,6 +102,7 @@ export default function UsersPage() {
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isPasswordDialogOpen, setPasswordDialogOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -164,6 +174,14 @@ export default function UsersPage() {
 
   const editForm = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
+  });
+
+  const passwordForm = useForm<SetPasswordFormValues>({
+      resolver: zodResolver(setPasswordSchema),
+      defaultValues: {
+          newPassword: '',
+          confirmPassword: '',
+      }
   });
   
   const createFormRole = createForm.watch('role');
@@ -300,6 +318,38 @@ export default function UsersPage() {
     }
   };
 
+   const handleSetPassword = async (data: SetPasswordFormValues) => {
+        if (!selectedUser) return;
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/set-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: selectedUser.id, password: data.newPassword }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to set password.');
+            }
+            
+            toast({
+                title: 'Password Updated',
+                description: `Password for ${selectedUser.name} has been changed.`,
+            });
+            passwordForm.reset();
+            setPasswordDialogOpen(false);
+        } catch (error: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Operation Failed',
+                description: error.message,
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
   const handleToggleEmergencyAdmin = async (manager: User) => {
     if (!companySettingsDocRef) return;
     setIsUpdatingEmergencyStatus(manager.id);
@@ -339,6 +389,11 @@ export default function UsersPage() {
     setSelectedUser(user);
     setDeleteDialogOpen(true);
   };
+
+  const openPasswordDialog = (user: User) => {
+      setSelectedUser(user);
+      setPasswordDialogOpen(true);
+  }
 
   const roleColors: Record<User['role'], string> = {
     'Super Admin': 'bg-red-500 text-white',
@@ -404,7 +459,7 @@ export default function UsersPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                       {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                                      {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
+                                      <SelectItem value="Manager">Manager</SelectItem>
                                       <SelectItem value="Employee">Employee</SelectItem>
                                       <SelectItem value="Client">Client</SelectItem>
                                     </SelectContent>
@@ -540,9 +595,12 @@ export default function UsersPage() {
                                     <DropdownMenuItem onClick={() => openEditDialog(user)}>
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
+                                     <DropdownMenuItem onClick={() => openPasswordDialog(user)}>
+                                        <KeyRound className="mr-2 h-4 w-4" /> Set Password
+                                    </DropdownMenuItem>
                                      {currentUserProfile?.role === 'Super Admin' && user.role === 'Manager' && (
                                         <DropdownMenuItem
-                                          disabled={isUpdatingEmergencyStatus !== null || (emergencyAdminId !== null && !isEmergencyAdmin)}
+                                          disabled={isUpdatingEmergencyStatus !== null && !isEmergencyAdmin}
                                           onClick={() => handleToggleEmergencyAdmin(user)}
                                         >
                                           {isUpdatingEmergencyStatus === user.id ? (
@@ -666,6 +724,36 @@ export default function UsersPage() {
               </div>
           </ScrollArea>
         </DialogContent>
+      </Dialog>
+      
+        <Dialog open={isPasswordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+                <DialogTitle>Set New Password for {selectedUser?.name}</DialogTitle>
+                <DialogDescription>
+                    Enter and confirm the new password for this user. They will be able to log in with this new password immediately.
+                </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={passwordForm.handleSubmit(handleSetPassword)} className="space-y-4 pt-4">
+                <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input id="newPassword" type="password" {...passwordForm.register('newPassword')} />
+                    {passwordForm.formState.errors.newPassword && <p className="text-sm text-destructive">{passwordForm.formState.errors.newPassword.message}</p>}
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Input id="confirmPassword" type="password" {...passwordForm.register('confirmPassword')} />
+                    {passwordForm.formState.errors.confirmPassword && <p className="text-sm text-destructive">{passwordForm.formState.errors.confirmPassword.message}</p>}
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={() => setPasswordDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Set Password
+                    </Button>
+                </DialogFooter>
+            </form>
+          </DialogContent>
       </Dialog>
 
       {/* Delete Confirmation Dialog */}

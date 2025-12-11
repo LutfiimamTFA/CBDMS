@@ -22,9 +22,11 @@ service cloud.firestore {
     }
 
     function isEmergencyAdmin(userId) {
-      // Check if a companySettings doc exists and if the user ID matches the emergency admin ID
-      return exists(/databases/$(database)/documents/companySettings/$(getRequestingUserData().companyId)) && 
-             getCompanySettings(getRequestingUserData().companyId).emergencyAdminUserId == userId;
+      let userCompanyId = getUserData(userId).companyId;
+      // Check if a companySettings doc exists for the user's company
+      // and if the user ID matches the emergency admin ID.
+      return exists(/databases/$(database)/documents/companySettings/$(userCompanyId)) && 
+             getCompanySettings(userCompanyId).emergencyAdminUserId == userId;
     }
 
     function isSuperAdmin() {
@@ -165,5 +167,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
