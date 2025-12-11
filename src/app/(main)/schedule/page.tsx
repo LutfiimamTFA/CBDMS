@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -41,43 +42,29 @@ export default function SchedulePage() {
 
   const calendarEvents = useMemo(() => {
     if (!allTasks) return [];
-    return allTasks.map(task => {
-      const priorityColor = priorityInfo[task.priority]?.color || 'text-gray-500';
-      const brandColor = getBrandColor(task.brandId);
-      
-      // Improved date handling logic
-      let startDate;
-      if (task.startDate) {
-        startDate = parseISO(task.startDate);
-      } else if (task.dueDate) {
-        // If no start date, use due date as the start
-        startDate = parseISO(task.dueDate);
-      } else if (task.createdAt?.toDate) {
-        // Fallback for server timestamp object
-        startDate = task.createdAt.toDate();
-      } else if (typeof task.createdAt === 'string') {
-        // Fallback for ISO string from client
-        startDate = parseISO(task.createdAt);
-      } else {
-        // Final fallback to now, though unlikely
-        startDate = new Date();
-      }
+    return allTasks
+      .filter(task => !!task.dueDate) // Only include tasks that have a due date
+      .map(task => {
+        const priorityColor = priorityInfo[task.priority]?.color || 'text-gray-500';
+        const brandColor = getBrandColor(task.brandId);
+        
+        const eventDate = parseISO(task.dueDate!);
 
-      return {
-        id: task.id,
-        title: task.title,
-        start: startDate,
-        end: task.dueDate ? parseISO(task.dueDate) : null,
-        allDay: true,
-        extendedProps: {
-            priority: task.priority,
-        },
-        // We use inline styles here because FullCalendar's class management can be tricky
-        // and this ensures our colors are applied reliably.
-        backgroundColor: brandColor,
-        borderColor: brandColor,
-      };
-    }).filter(event => event.start); // Ensure we only include events with a valid start date
+        return {
+          id: task.id,
+          title: task.title,
+          start: eventDate,
+          end: eventDate,
+          allDay: true,
+          extendedProps: {
+              priority: task.priority,
+          },
+          // We use inline styles here because FullCalendar's class management can be tricky
+          // and this ensures our colors are applied reliably.
+          backgroundColor: brandColor,
+          borderColor: brandColor,
+        };
+    });
   }, [allTasks]);
 
   const handleEventClick = (clickInfo: any) => {
