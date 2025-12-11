@@ -11,6 +11,7 @@ export type User = {
   role: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
   createdAt?: string;
   companyId: string;
+  managerId?: string;
 };
 
 export type Company = {

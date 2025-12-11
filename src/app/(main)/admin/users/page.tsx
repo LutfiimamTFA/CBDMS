@@ -66,9 +66,10 @@ const userSchema = z.object({
   email: z.string().email('Invalid email address.'),
   role: z.enum(['Super Admin', 'Manager', 'Employee', 'Client']),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
+  managerId: z.string().optional(),
 });
 
-const editUserSchema = userSchema.omit({ password: true });
+const editUserSchema = userSchema.omit({ password: true, email: true });
 
 type UserFormValues = z.infer<typeof userSchema>;
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -91,6 +92,8 @@ export default function UsersPage() {
     [firestore]
   );
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersCollectionRef);
+  
+  const managers = useMemo(() => (users || []).filter(u => u.role === 'Manager'), [users]);
 
   const sortedAndGroupedUsers = useMemo(() => {
     if (!users || !currentUserProfile) return [];
@@ -129,6 +132,7 @@ export default function UsersPage() {
       email: '',
       role: 'Employee',
       password: '',
+      managerId: '',
     },
   });
 
@@ -136,6 +140,9 @@ export default function UsersPage() {
     resolver: zodResolver(editUserSchema),
   });
   
+  const createFormRole = createForm.watch('role');
+  const editFormRole = editForm.watch('role');
+
   const canManageUsers = useMemo(() => {
     if (!currentUserProfile || !permissions) return false;
     if (currentUserProfile.role === 'Super Admin') return true;
@@ -159,8 +166,8 @@ export default function UsersPage() {
     if (selectedUser) {
       editForm.reset({
         name: selectedUser.name,
-        email: selectedUser.email,
         role: selectedUser.role,
+        managerId: selectedUser.managerId || '',
       });
     }
   }, [selectedUser, editForm]);
@@ -169,7 +176,6 @@ export default function UsersPage() {
     if (!firestore || !currentUserProfile) return;
     setIsLoading(true);
     try {
-      // Managers can only create Employees or Clients
       if (currentUserProfile?.role === 'Manager' && (data.role === 'Super Admin' || data.role === 'Manager')) {
         throw new Error("Managers can only create Employee or Client users.");
       }
@@ -206,24 +212,17 @@ export default function UsersPage() {
     if (!selectedUser || !firestore || !currentUserProfile) return;
     setIsLoading(true);
     try {
-      // Direct update for manager, API for super admin
-      if (currentUserProfile?.role === 'Manager') {
-        if (data.role === 'Super Admin' || data.role === 'Manager') {
-          throw new Error("Managers can only edit Employee or Client users.");
-        }
-        const userRef = doc(firestore, 'users', selectedUser.id);
-        await setDoc(userRef, { name: data.name, role: data.role }, { merge: true });
-      } else { // Super Admin
-        const response = await fetch('/api/update-user', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uid: selectedUser.id, ...data }),
-        });
+      const apiPayload = { uid: selectedUser.id, ...data };
+      
+      const response = await fetch('/api/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(apiPayload),
+      });
         
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to update user.');
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update user.');
       }
 
       toast({
@@ -317,23 +316,23 @@ export default function UsersPage() {
                     </DialogHeader>
                     <form onSubmit={createForm.handleSubmit(handleCreateUser)} className="space-y-4">
                         <div className="space-y-2">
-                        <Label htmlFor="name-create">Full Name</Label>
-                        <Input id="name-create" {...createForm.register('name')} />
-                        {createForm.formState.errors.name && <p className="text-sm text-destructive">{createForm.formState.errors.name.message}</p>}
+                          <Label htmlFor="name-create">Full Name</Label>
+                          <Input id="name-create" {...createForm.register('name')} />
+                          {createForm.formState.errors.name && <p className="text-sm text-destructive">{createForm.formState.errors.name.message}</p>}
                         </div>
                         <div className="space-y-2">
-                        <Label htmlFor="email-create">Email Address</Label>
-                        <Input id="email-create" type="email" {...createForm.register('email')} />
-                        {createForm.formState.errors.email && <p className="text-sm text-destructive">{createForm.formState.errors.email.message}</p>}
+                          <Label htmlFor="email-create">Email Address</Label>
+                          <Input id="email-create" type="email" {...createForm.register('email')} />
+                          {createForm.formState.errors.email && <p className="text-sm text-destructive">{createForm.formState.errors.email.message}</p>}
                         </div>
                         <div className="space-y-2">
-                        <Label htmlFor="password-create">Password</Label>
-                        <Input id="password-create" type="password" {...createForm.register('password')} />
-                        {createForm.formState.errors.password && <p className="text-sm text-destructive">{createForm.formState.errors.password.message}</p>}
+                          <Label htmlFor="password-create">Password</Label>
+                          <Input id="password-create" type="password" {...createForm.register('password')} />
+                          {createForm.formState.errors.password && <p className="text-sm text-destructive">{createForm.formState.errors.password.message}</p>}
                         </div>
                         <div className="space-y-2">
-                        <Label htmlFor="role-create">Role</Label>
-                        <Controller
+                          <Label htmlFor="role-create">Role</Label>
+                          <Controller
                             control={createForm.control}
                             name="role"
                             render={({ field }) => (
@@ -349,8 +348,27 @@ export default function UsersPage() {
                                 </SelectContent>
                             </Select>
                             )}
-                        />
+                          />
                         </div>
+                         {createFormRole === 'Employee' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="manager-create">Assign Manager</Label>
+                                <Controller
+                                    control={createForm.control}
+                                    name="managerId"
+                                    render={({ field }) => (
+                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <SelectTrigger id="manager-create">
+                                        <SelectValue placeholder="Select a manager" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                        {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    )}
+                                />
+                            </div>
+                         )}
                         <DialogFooter>
                         <Button type="button" variant="ghost" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
                         <Button type="submit" disabled={isLoading}>
@@ -390,7 +408,6 @@ export default function UsersPage() {
                   lastRole = user.role;
                   const isCurrentUser = user.id === currentUserProfile?.id;
                   
-                  // A manager cannot edit another manager or a super admin
                   const canEditThisUser = currentUserProfile?.role === 'Super Admin' || (currentUserProfile?.role === 'Manager' && user.role !== 'Manager' && user.role !== 'Super Admin');
 
 
@@ -474,7 +491,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="email-edit">Email Address</Label>
-              <Input id="email-edit" type="email" {...editForm.register('email')} readOnly />
+              <Input id="email-edit" type="email" value={selectedUser?.email || ''} readOnly />
             </div>
             <div className="space-y-2">
               <Label htmlFor="role-edit">Role</Label>
@@ -496,6 +513,25 @@ export default function UsersPage() {
                     )}
                   />
             </div>
+            {editFormRole === 'Employee' && (
+                <div className="space-y-2">
+                    <Label htmlFor="manager-edit">Assign Manager</Label>
+                    <Controller
+                        control={editForm.control}
+                        name="managerId"
+                        render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger id="manager-edit">
+                            <SelectValue placeholder="Select a manager" />
+                            </SelectTrigger>
+                            <SelectContent>
+                            {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        )}
+                    />
+                </div>
+            )}
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={isLoading}>

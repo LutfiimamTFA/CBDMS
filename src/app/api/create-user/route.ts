@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const db = getFirestore(app);
 
     const data = await req.json();
-    const { name, email, password, role, companyId } = data;
+    const { name, email, password, role, companyId, managerId } = data;
 
     if (!email || !password || !name || !role) {
       return new Response(JSON.stringify({ message: 'Name, email, password, and role are required.' }), { status: 400 });
@@ -39,8 +39,7 @@ export async function POST(req: Request) {
     // Set custom claims for role
     await auth.setCustomUserClaims(userRecord.uid, { role });
 
-    // Simpan data user di Firestore
-    await db.collection("users").doc(userRecord.uid).set({
+    const userData: any = {
       id: userRecord.uid,
       name,
       email,
@@ -48,7 +47,14 @@ export async function POST(req: Request) {
       companyId: companyId || 'company-a', // Use provided companyId or default
       avatarUrl: `https://i.pravatar.cc/150?u=${userRecord.uid}`,
       createdAt: new Date().toISOString()
-    });
+    };
+
+    if (managerId && role === 'Employee') {
+      userData.managerId = managerId;
+    }
+
+    // Simpan data user di Firestore
+    await db.collection("users").doc(userRecord.uid).set(userData);
 
     return new Response(JSON.stringify({ uid: userRecord.uid }), {
       status: 201,

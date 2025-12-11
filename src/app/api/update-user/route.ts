@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -18,7 +19,7 @@ function initializeAdminApp(): App {
 export async function POST(request: Request) {
   try {
     const app = initializeAdminApp();
-    const { uid, name, role } = await request.json();
+    const { uid, name, role, managerId } = await request.json();
 
     if (!uid || !name || !role) {
       return NextResponse.json({ message: 'Missing required fields (uid, name, role).' }, { status: 400 });
@@ -27,11 +28,20 @@ export async function POST(request: Request) {
     const auth = getAuth(app);
     const firestore = getFirestore(app);
     
-    // Update Firestore document
-    await firestore.collection('users').doc(uid).update({
+    const userDataToUpdate: any = {
       name,
       role,
-    });
+    };
+    
+    if (role === 'Employee' && managerId) {
+      userDataToUpdate.managerId = managerId;
+    } else {
+      // Ensure managerId is removed if role is not Employee or if it's not provided
+      userDataToUpdate.managerId = null; 
+    }
+
+    // Update Firestore document
+    await firestore.collection('users').doc(uid).update(userDataToUpdate);
     
     // Update Auth display name
     await auth.updateUser(uid, {
