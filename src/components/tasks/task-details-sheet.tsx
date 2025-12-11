@@ -295,23 +295,23 @@ export function TaskDetailsSheet({
             updatedAt: serverTimestamp() as Timestamp,
         };
 
-        if (newStatus === 'Preview' && allUsers) {
-          allUsers.forEach(user => {
-              if (user.companyId === currentUser.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
-                  const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
-                  const newNotification: Omit<Notification, 'id'> = {
-                      userId: user.id,
-                      title: 'Task Ready for Review',
-                      message: `${currentUser.name} has moved the task "${initialTask.title}" to Preview.`,
-                      taskId: initialTask.id, 
-                      isRead: false,
-                      createdAt: serverTimestamp() as Timestamp,
-                      createdBy: newActivity.user,
-                  };
-                  batch.set(notifRef, newNotification);
-              }
-          });
-        }
+        const notificationTitle = `Status Changed: ${initialTask.title}`;
+        const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
+
+        initialTask.assigneeIds.forEach(assigneeId => {
+            if (assigneeId === currentUser.id) return;
+            const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+            const newNotification: Omit<Notification, 'id'> = {
+                userId: assigneeId,
+                title: notificationTitle,
+                message: notificationMessage,
+                taskId: initialTask.id,
+                isRead: false,
+                createdAt: serverTimestamp() as any,
+                createdBy: newActivity.user,
+            };
+            batch.set(notifRef, newNotification);
+        });
         
         batch.update(taskRef, updates);
         await batch.commit();
@@ -410,10 +410,11 @@ export function TaskDetailsSheet({
 
     setIsUploadingCommentAttachment(true);
     
-    let attachmentData;
-    let newComments = [...(initialTask.comments || [])];
-
     try {
+        const batch = writeBatch(firestore);
+        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+
+        let attachmentData;
         if (commentAttachment) {
             const attachmentId = `${Date.now()}-${commentAttachment.name}`;
             const storageRef = ref(storage, `attachments/${initialTask.id}/comments/${attachmentId}`);
@@ -424,6 +425,8 @@ export function TaskDetailsSheet({
                 url: url,
             };
         }
+
+        const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
 
         const comment: Comment = {
           id: `c-${crypto.randomUUID()}`,
@@ -441,15 +444,57 @@ export function TaskDetailsSheet({
           replies: [],
           ...(attachmentData && { attachment: attachmentData }),
         };
-        newComments.push(comment);
-
-        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-        await updateDoc(taskDocRef, { comments: newComments });
         
-        // Only update local state after successful Firestore write
+        const newComments = [...(initialTask.comments || []), comment];
+        
+        batch.update(taskDocRef, { 
+            comments: newComments,
+            lastActivity: newActivity,
+            activities: [...(initialTask.activities || []), newActivity]
+        });
+
+        // --- START: Improved Notification Logic for Comments ---
+        const notificationTitle = `New Comment: ${initialTask.title}`;
+        const notificationMessage = `${currentUser.name} commented on "${initialTask.title.substring(0, 30)}..."`;
+
+        const notifiedUserIds = new Set<string>();
+
+        // Notify all assignees
+        initialTask.assigneeIds.forEach(assigneeId => {
+            if (assigneeId !== currentUser.id) {
+                notifiedUserIds.add(assigneeId);
+            }
+        });
+
+        // Notify mentioned users
+        const mentionedUsers = newComment.match(/@(\w+)/g)?.map(m => m.substring(1)) || [];
+        if (allUsers && mentionedUsers.length > 0) {
+            allUsers.forEach(user => {
+                if (mentionedUsers.includes(user.name.split(' ')[0]) && user.id !== currentUser.id) {
+                    notifiedUserIds.add(user.id);
+                }
+            });
+        }
+        
+        notifiedUserIds.forEach(userId => {
+            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+            const newNotification: Omit<Notification, 'id'> = {
+                userId,
+                title: notificationTitle,
+                message: notificationMessage,
+                taskId: initialTask.id,
+                isRead: false,
+                createdAt: serverTimestamp() as any,
+                createdBy: newActivity.user,
+            };
+            batch.set(notifRef, newNotification);
+        });
+        // --- END: Improved Notification Logic for Comments ---
+
+        await batch.commit();
+
         setNewComment('');
         setCommentAttachment(null);
-
     } catch (error) {
         console.error("Failed to post comment or upload attachment:", error);
         toast({

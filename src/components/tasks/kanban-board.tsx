@@ -12,11 +12,6 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
 
-interface KanbanBoardProps {
-  tasks: Task[];
-  permissions?: SharedLink['permissions'] | null;
-}
-
 const createActivity = (user: User, action: string): Activity => {
   return {
     id: `act-${crypto.randomUUID()}`, // Guarantees a unique ID for every new activity.
@@ -45,12 +40,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     [firestore]
   );
   
-  const usersQuery = useMemo(
-    () => (firestore && profile ? query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)) : null),
-    [firestore, profile]
-  );
-  const { data: allUsers } = useCollection<User>(usersQuery);
-
   const { data: statuses, isLoading: areStatusesLoading } =
     useCollection<WorkflowStatus>(statusesQuery);
     
@@ -96,7 +85,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       const batch = writeBatch(firestore);
       const taskRef = doc(firestore, 'tasks', taskId);
       
-      // A single, unique activity object is created for this action.
       const newActivity = createActivity(profile, `moved task from "${task.status}" to "${newStatus}"`);
       const updatedActivities = [...(task.activities || []), newActivity];
 
@@ -121,24 +109,27 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       
       batch.update(taskRef, updates);
 
-      if (newStatus === 'Preview' && allUsers) {
-          allUsers.forEach(user => {
-              if (user.companyId === profile.companyId && (user.role === 'Manager' || user.role === 'Super Admin')) {
-                  const notifRef = doc(collection(firestore, `users/${user.id}/notifications`));
-                  // Correctly typed notification object
-                  const newNotification: Omit<Notification, 'id'> = {
-                      userId: user.id,
-                      title: 'Task Ready for Review',
-                      message: `${profile.name} has moved the task "${task.title}" to Preview.`,
-                      taskId: task.id, 
-                      isRead: false,
-                      createdAt: serverTimestamp() as any,
-                      createdBy: newActivity.user,
-                  };
-                  batch.set(notifRef, newNotification);
-              }
-          });
-      }
+      // --- START: Improved Notification Logic ---
+      const notificationTitle = `Status Changed: ${task.title}`;
+      const notificationMessage = `${profile.name} changed the status of "${task.title.substring(0, 30)}..." to ${newStatus}.`;
+      
+      task.assigneeIds.forEach(assigneeId => {
+        // Don't notify the person who made the change
+        if (assigneeId === profile.id) return;
+
+        const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+        const newNotification: Omit<Notification, 'id'> = {
+            userId: assigneeId,
+            title: notificationTitle,
+            message: notificationMessage,
+            taskId: task.id, 
+            isRead: false,
+            createdAt: serverTimestamp() as any,
+            createdBy: newActivity.user,
+        };
+        batch.set(notifRef, newNotification);
+      });
+      // --- END: Improved Notification Logic ---
 
 
       try {
