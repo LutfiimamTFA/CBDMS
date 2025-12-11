@@ -4,7 +4,7 @@
 import React, { useMemo } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Task } from '@/lib/types';
+import type { Task, User } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { isToday, isPast, parseISO } from 'date-fns';
 import { useRouter } from 'next/navigation';
@@ -12,13 +12,32 @@ import { TaskCard } from '../tasks/task-card';
 
 export function TodaysFocus() {
     const firestore = useFirestore();
-    const { user, isLoading: userLoading } = useUserProfile();
+    const { user, profile, isLoading: userLoading } = useUserProfile();
     const router = useRouter();
 
+    const usersQuery = React.useMemo(() => {
+        if (!firestore || !profile || profile.role !== 'Manager') return null;
+        return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+    }, [firestore, profile]);
+    const { data: teamUsers, isLoading: isTeamLoading } = useCollection<User>(usersQuery);
+
     const tasksQuery = useMemo(() => {
-        if (!firestore || !user) return null;
+        if (!firestore || !user || !profile) return null;
+
+        if (profile.role === 'Manager') {
+          const teamMemberIds = (teamUsers || []).map(u => u.id);
+          const allRelevantIds = [...teamMemberIds, profile.id];
+          if (allRelevantIds.length === 0) return null; 
+          return query(
+            collection(firestore, 'tasks'),
+            where('assigneeIds', 'array-contains-any', allRelevantIds)
+          );
+        }
+
+        // For Employee
         return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
-    }, [firestore, user]);
+    }, [firestore, user, profile, teamUsers]);
+    
     const { data: allTasks, isLoading: tasksLoading } = useCollection<Task>(tasksQuery);
     
     const todaysTasks = useMemo(() => {
@@ -45,7 +64,7 @@ export function TodaysFocus() {
         });
     }, [allTasks]);
 
-    const isLoading = userLoading || tasksLoading;
+    const isLoading = userLoading || tasksLoading || (profile?.role === 'Manager' && isTeamLoading);
 
     return (
         <div>
@@ -71,3 +90,4 @@ export function TodaysFocus() {
         </div>
     );
 }
+

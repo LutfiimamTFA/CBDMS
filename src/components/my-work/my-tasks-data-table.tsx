@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Priority } from '@/lib/types';
+import type { Task, Priority, User } from '@/lib/types';
 import { priorityInfo } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { Loader2 } from 'lucide-react';
@@ -96,14 +96,31 @@ export function MyTasksDataTable() {
   const [sorting, setSorting] = React.useState<SortingState>([ { id: 'priority', desc: true } ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
+  const usersQuery = React.useMemo(() => {
+    if (!firestore || !profile || profile.role !== 'Manager') return null;
+    return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+  }, [firestore, profile]);
+  const { data: teamUsers, isLoading: isTeamLoading } = useCollection<User>(usersQuery);
+
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
-    // Query for all tasks assigned to the current user
+
+    if (profile.role === 'Manager') {
+      const teamMemberIds = (teamUsers || []).map(u => u.id);
+      const allRelevantIds = [...teamMemberIds, profile.id];
+      if (allRelevantIds.length === 0) return null;
+      return query(
+        collection(firestore, 'tasks'),
+        where('assigneeIds', 'array-contains-any', allRelevantIds)
+      );
+    }
+    
+    // For Employee
     return query(
       collection(firestore, 'tasks'),
       where('assigneeIds', 'array-contains', profile.id)
     );
-  }, [firestore, profile]);
+  }, [firestore, profile, teamUsers]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
@@ -122,7 +139,7 @@ export function MyTasksDataTable() {
     },
   });
   
-  const isLoading = isProfileLoading || isTasksLoading;
+  const isLoading = isProfileLoading || isTasksLoading || (profile?.role === 'Manager' && isTeamLoading);
 
   return (
     <div className="space-y-4">
@@ -216,4 +233,5 @@ export function MyTasksDataTable() {
     </div>
   );
 }
+
 

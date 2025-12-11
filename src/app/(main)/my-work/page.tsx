@@ -1,7 +1,7 @@
 
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { useUserProfile } from '@/firebase';
 import { Loader2, HelpCircle, Eye, ClipboardList, Calendar } from 'lucide-react';
@@ -119,3 +119,4 @@ export default function MyWorkPage() {
     </div>
   );
 }
+
