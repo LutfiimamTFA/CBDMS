@@ -30,8 +30,8 @@ import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activit
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { format, parseISO, formatDistanceToNow, isAfter } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, ChevronDown, FileText, AlertCircle, Eye } from 'lucide-react';
+import { format, parseISO, isAfter } from 'date-fns';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
@@ -50,9 +50,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { ScrollArea } from '../ui/scroll-area';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
-import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { useFirestore, useUserProfile } from '@/firebase';
 import { collection, doc, query, where, writeBatch, serverTimestamp, orderBy } from 'firebase/firestore';
-import { deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
@@ -75,51 +75,20 @@ const prioritySortingFn = (row: any, rowB: any, columnId: string) => {
     return 0;
 };
 
+interface TasksDataTableProps {
+    tasks: Task[];
+    statuses: WorkflowStatus[];
+    brands: Brand[];
+    users: User[];
+}
 
-export function TasksDataTable() {
+export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTableProps) {
   const firestore = useFirestore();
-  const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
+  const { profile } = useUserProfile();
   const { permissions, isLoading: arePermsLoading } = usePermissions();
   const { session } = useSharedSession();
-
-
-  const tasksQuery = React.useMemo(() => {
-    if (!firestore || !profile || !companyId) return null;
-
-    // Logic for query based on role
-    const isManagerOrAdmin = profile.role === 'Super Admin' || profile.role === 'Manager';
-
-    if (isManagerOrAdmin) {
-      // Managers and Admins see all tasks within the company
-      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-    } else {
-      // Employees only see tasks assigned to them
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
-    }
-    
-  }, [firestore, companyId, profile]);
-
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
-  const statusesQuery = React.useMemo(() => 
-    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
-  
-  const brandsQuery = React.useMemo(
-    () => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null),
-    [firestore]
-  );
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
-  
-  const usersQuery = React.useMemo(() => {
-    if (!firestore || !companyId) return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', companyId));
-  }, [firestore, companyId]);
-  const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
-
-  const [data, setData] = React.useState<Task[]>([]);
+  const [data, setData] = React.useState<Task[]>(tasks);
   React.useEffect(() => {
     setData(tasks || []);
   }, [tasks]);
@@ -138,20 +107,12 @@ export function TasksDataTable() {
   const { t } = useI18n();
   const { toast } = useToast();
   
-  const [confirmationDialog, setConfirmationDialog] = React.useState<{
-    isOpen: boolean;
-    task?: Task;
-    onConfirm?: () => void;
-  }>({ isOpen: false });
-
   const [aiValidation, setAiValidation] = React.useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
   
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
 
   const statusOptions = React.useMemo(() => {
-    if (!statuses) return [];
-    
     const getIcon = (statusName: string) => {
         if (statusName === 'To Do') return Circle;
         if (statusName === 'Doing') return CircleDashed;
@@ -161,14 +122,14 @@ export function TasksDataTable() {
     };
 
     if (profile?.role === 'Employee') {
-        return statuses.filter(s => s.name !== 'Done').map(s => ({
+        return (statuses || []).filter(s => s.name !== 'Done').map(s => ({
             value: s.name,
             label: s.name,
             icon: getIcon(s.name),
         }));
     }
 
-    return statuses.map(s => ({
+    return (statuses || []).map(s => ({
         value: s.name,
         label: s.name,
         icon: getIcon(s.name),
@@ -182,8 +143,7 @@ export function TasksDataTable() {
   }));
   
   const brandOptions = React.useMemo(() => {
-    if (!brands) return [];
-    return brands.map((brand) => ({
+    return (brands || []).map((brand) => ({
       value: brand.id,
       label: brand.name,
       icon: Building2,
@@ -199,7 +159,6 @@ export function TasksDataTable() {
             .map(u => ({ value: u.id, label: u.name }));
     }
     
-    // For Employees and other roles
     return users
         .filter(u => u.role === 'Employee')
         .map(u => ({ value: u.id, label: u.name }));
@@ -292,7 +251,7 @@ export function TasksDataTable() {
   };
 
   const canCreateTasks = React.useMemo(() => {
-    if (session) return false; // Cannot create tasks in shared view
+    if (session) return false;
     if (arePermsLoading || !profile || !permissions) return false;
     if (profile.role === 'Super Admin') return true;
     if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
@@ -562,8 +521,7 @@ export function TasksDataTable() {
     },
   });
 
-  const isFiltered = table.getState().columnFilters.length > 0
-  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading;
+  const isFiltered = table.getState().columnFilters.length > 0;
 
   return (
     <>
@@ -650,16 +608,7 @@ export function TasksDataTable() {
               ))}
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <Loader2 className="h-6 w-6 animate-spin" />
-                      <span>Loading tasks...</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : table.getRowModel().rows?.length ? (
+              {table.getRowModel().rows?.length ? (
                 table.getRowModel().rows.map((row) => (
                   <TableRow
                     key={row.id}
@@ -740,20 +689,6 @@ export function TasksDataTable() {
           </div>
         </div>
       </div>
-      <AlertDialog open={confirmationDialog.isOpen} onOpenChange={(isOpen) => setConfirmationDialog({ ...confirmationDialog, isOpen })}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Do you want to mark the task "{confirmationDialog.task?.title}" as Done?
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={confirmationDialog.onConfirm}>Continue</AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -819,4 +754,3 @@ export function TasksDataTable() {
     </>
   );
 }
-
