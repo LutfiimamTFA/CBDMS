@@ -10,7 +10,7 @@ import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { useSharedSession } from '@/context/shared-session-provider';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
 import { collection, query, where, orderBy } from 'firebase/firestore';
-import { Loader2, Link as LinkIcon } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Calendar } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getBrandColor, priorityInfo } from '@/lib/utils';
 import { parseISO, format } from 'date-fns';
@@ -66,7 +66,7 @@ export default function SchedulePage() {
         return {
           id: task.id,
           title: task.title,
-          start: eventDate,
+          start: task.startDate ? parseISO(task.startDate) : eventDate,
           end: eventDate,
           allDay: true,
           extendedProps: {
@@ -117,15 +117,32 @@ export default function SchedulePage() {
                 {task.description && <p className="text-sm text-muted-foreground line-clamp-2">{task.description}</p>}
             </div>
 
-            <div className="text-sm grid grid-cols-2 gap-2">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: status?.color }}></div>
-                <span>{task.status}</span>
+            <div className="text-sm grid grid-cols-2 gap-x-4 gap-y-2">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span>Start Date</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="font-medium">
+                {task.startDate ? format(parseISO(task.startDate), 'MMM d, yyyy') : 'N/A'}
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                <span>Due Date</span>
+              </div>
+              <div className="font-medium">
+                {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'N/A'}
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: status?.color }}></div>
+                <span>Status</span>
+              </div>
+              <div className="font-medium">{task.status}</div>
+
+              <div className="flex items-center gap-2 text-muted-foreground">
                 <priority.icon className={`h-4 w-4 ${priority.color}`} />
-                <span>{task.priority}</span>
+                <span>Priority</span>
               </div>
+              <div className="font-medium">{task.priority}</div>
             </div>
 
             {assignees.length > 0 && (
