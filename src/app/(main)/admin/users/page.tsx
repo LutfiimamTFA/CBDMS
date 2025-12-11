@@ -468,7 +468,7 @@ export default function UsersPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                       {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                                      <SelectItem value="Manager">Manager</SelectItem>
+                                      {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
                                       <SelectItem value="Employee">Employee</SelectItem>
                                       <SelectItem value="Client">Client</SelectItem>
                                     </SelectContent>
@@ -827,5 +827,6 @@ export default function UsersPage() {
     
 
     
+
 
 
