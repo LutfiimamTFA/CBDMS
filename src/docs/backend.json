@@ -38,6 +38,11 @@
             "type": "string",
             "description": "The ID of the User (with Manager role) who is the direct supervisor of this user. Empty for Managers and Super Admins."
         },
+        "brandIds": {
+            "type": "array",
+            "description": "For Managers, an array of Brand IDs they are responsible for. This defines their scope of work.",
+            "items": { "type": "string" }
+        },
         "createdAt": {
           "type": "string",
           "description": "The timestamp when the user was created.",
@@ -609,3 +614,5 @@
     ]
   }
 }
+
+    

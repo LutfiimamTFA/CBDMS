@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     const db = getFirestore(app);
 
     const data = await req.json();
-    const { name, email, password, role, companyId, managerId } = data;
+    const { name, email, password, role, companyId, managerId, brandIds } = data;
 
     if (!email || !password || !name || !role) {
       return new Response(JSON.stringify({ message: 'Name, email, password, and role are required.' }), { status: 400 });
@@ -49,8 +49,12 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString()
     };
 
-    if (managerId && role === 'Employee') {
+    if (role === 'Employee' && managerId) {
       userData.managerId = managerId;
+    }
+
+    if (role === 'Manager' && Array.isArray(brandIds)) {
+        userData.brandIds = brandIds;
     }
 
     // Simpan data user di Firestore
@@ -74,3 +78,5 @@ export async function POST(req: Request) {
     });
   }
 }
+
+    

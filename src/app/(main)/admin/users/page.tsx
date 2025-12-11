@@ -53,13 +53,14 @@ import * as z from 'zod';
 import { MoreHorizontal, Plus, Trash2, Edit, Loader2, KeyRound, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { User } from '@/lib/types';
-import { collection, doc } from 'firebase/firestore';
+import type { User, Brand } from '@/lib/types';
+import { collection, doc, query, where, orderBy } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { usePermissions } from '@/context/permissions-provider';
 import { Header } from '@/components/layout/header';
-import { setDoc } from 'firebase/firestore';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
@@ -67,6 +68,7 @@ const userSchema = z.object({
   role: z.enum(['Super Admin', 'Manager', 'Employee', 'Client']),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
   managerId: z.string().optional(),
+  brandIds: z.array(z.string()).optional(),
 });
 
 const editUserSchema = userSchema.omit({ password: true, email: true });
@@ -93,12 +95,22 @@ export default function UsersPage() {
   );
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersCollectionRef);
   
+  const brandsQuery = useMemo(
+    () => (firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null),
+    [firestore]
+  );
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+
   const managers = useMemo(() => (users || []).filter(u => u.role === 'Manager'), [users]);
+  
+  const brandOptions = useMemo(() => {
+    return (brands || []).map(b => ({ value: b.id, label: b.name }));
+  }, [brands]);
+
 
   const sortedAndGroupedUsers = useMemo(() => {
     if (!users || !currentUserProfile) return [];
 
-    // Filter users based on manager role
     const filteredUsers = currentUserProfile.role === 'Manager'
       ? users.filter(user => user.role === 'Employee' || user.role === 'Client' || user.id === currentUserProfile.id)
       : users;
@@ -111,15 +123,12 @@ export default function UsersPage() {
     };
 
     return [...filteredUsers].sort((a, b) => {
-        // Current user always on top
         if (a.id === currentUserProfile?.id) return -1;
         if (b.id === currentUserProfile?.id) return 1;
         
-        // Sort by role order
         const roleComparison = roleOrder[a.role] - roleOrder[b.role];
         if (roleComparison !== 0) return roleComparison;
 
-        // Then sort by name
         return a.name.localeCompare(b.name);
     });
   }, [users, currentUserProfile]);
@@ -133,6 +142,7 @@ export default function UsersPage() {
       role: 'Employee',
       password: '',
       managerId: '',
+      brandIds: [],
     },
   });
 
@@ -168,6 +178,7 @@ export default function UsersPage() {
         name: selectedUser.name,
         role: selectedUser.role,
         managerId: selectedUser.managerId || '',
+        brandIds: selectedUser.brandIds || [],
       });
     }
   }, [selectedUser, editForm]);
@@ -307,76 +318,97 @@ export default function UsersPage() {
                         <Plus className="mr-2" /> Add User
                     </Button>
                     </DialogTrigger>
-                    <DialogContent>
+                    <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Add New User</DialogTitle>
                         <DialogDescription>
                         Fill in the details to create a new user account.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={createForm.handleSubmit(handleCreateUser)} className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="name-create">Full Name</Label>
-                          <Input id="name-create" {...createForm.register('name')} />
-                          {createForm.formState.errors.name && <p className="text-sm text-destructive">{createForm.formState.errors.name.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="email-create">Email Address</Label>
-                          <Input id="email-create" type="email" {...createForm.register('email')} />
-                          {createForm.formState.errors.email && <p className="text-sm text-destructive">{createForm.formState.errors.email.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="password-create">Password</Label>
-                          <Input id="password-create" type="password" {...createForm.register('password')} />
-                          {createForm.formState.errors.password && <p className="text-sm text-destructive">{createForm.formState.errors.password.message}</p>}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="role-create">Role</Label>
-                          <Controller
-                            control={createForm.control}
-                            name="role"
-                            render={({ field }) => (
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <SelectTrigger id="role-create">
-                                <SelectValue placeholder="Select a role" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                                  {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
-                                  <SelectItem value="Employee">Employee</SelectItem>
-                                  <SelectItem value="Client">Client</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            )}
-                          />
-                        </div>
-                         {createFormRole === 'Employee' && (
+                    <ScrollArea className="max-h-[70vh] -mx-6 px-6">
+                      <div className="py-4">
+                        <form onSubmit={createForm.handleSubmit(handleCreateUser)} className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="manager-create">Assign Manager</Label>
+                              <Label htmlFor="name-create">Full Name</Label>
+                              <Input id="name-create" {...createForm.register('name')} />
+                              {createForm.formState.errors.name && <p className="text-sm text-destructive">{createForm.formState.errors.name.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="email-create">Email Address</Label>
+                              <Input id="email-create" type="email" {...createForm.register('email')} />
+                              {createForm.formState.errors.email && <p className="text-sm text-destructive">{createForm.formState.errors.email.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="password-create">Password</Label>
+                              <Input id="password-create" type="password" {...createForm.register('password')} />
+                              {createForm.formState.errors.password && <p className="text-sm text-destructive">{createForm.formState.errors.password.message}</p>}
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="role-create">Role</Label>
+                              <Controller
+                                control={createForm.control}
+                                name="role"
+                                render={({ field }) => (
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                    <SelectTrigger id="role-create">
+                                    <SelectValue placeholder="Select a role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
+                                      {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
+                                      <SelectItem value="Employee">Employee</SelectItem>
+                                      <SelectItem value="Client">Client</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                )}
+                              />
+                            </div>
+                             {createFormRole === 'Manager' && (
                                 <Controller
                                     control={createForm.control}
-                                    name="managerId"
+                                    name="brandIds"
                                     render={({ field }) => (
-                                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                        <SelectTrigger id="manager-create">
-                                        <SelectValue placeholder="Select a manager" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                        {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
+                                      <div className="space-y-2">
+                                        <Label>Managed Brands</Label>
+                                        <MultiSelect
+                                          options={brandOptions}
+                                          onValueChange={field.onChange}
+                                          defaultValue={field.value || []}
+                                          placeholder="Select brands..."
+                                        />
+                                      </div>
                                     )}
                                 />
-                            </div>
-                         )}
-                        <DialogFooter>
-                        <Button type="button" variant="ghost" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-                        <Button type="submit" disabled={isLoading}>
-                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            Create User
-                        </Button>
-                        </DialogFooter>
-                    </form>
+                             )}
+                             {createFormRole === 'Employee' && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="manager-create">Assign Manager</Label>
+                                    <Controller
+                                        control={createForm.control}
+                                        name="managerId"
+                                        render={({ field }) => (
+                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                            <SelectTrigger id="manager-create">
+                                            <SelectValue placeholder="Select a manager" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                            {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                        )}
+                                    />
+                                </div>
+                             )}
+                            <DialogFooter className="pt-4">
+                              <Button type="button" variant="ghost" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+                              <Button type="submit" disabled={isLoading}>
+                                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                                  Create User
+                              </Button>
+                            </DialogFooter>
+                        </form>
+                      </div>
+                    </ScrollArea>
                     </DialogContent>
                 </Dialog>
             )}
@@ -476,70 +508,91 @@ export default function UsersPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Edit User: {selectedUser?.name}</DialogTitle>
             <DialogDescription>
               Update the user's details below.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={editForm.handleSubmit(handleUpdateUser)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name-edit">Full Name</Label>
-              <Input id="name-edit" {...editForm.register('name')} />
-              {editForm.formState.errors.name && <p className="text-sm text-destructive">{editForm.formState.errors.name.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email-edit">Email Address</Label>
-              <Input id="email-edit" type="email" value={selectedUser?.email || ''} readOnly />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role-edit">Role</Label>
-               <Controller
-                    control={editForm.control}
-                    name="role"
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value} disabled={currentUserProfile?.role !== 'Super Admin'}>
-                        <SelectTrigger id="role-edit">
-                          <SelectValue placeholder="Select a role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                          {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
-                          <SelectItem value="Employee">Employee</SelectItem>
-                          <SelectItem value="Client">Client</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-            </div>
-            {editFormRole === 'Employee' && (
-                <div className="space-y-2">
-                    <Label htmlFor="manager-edit">Assign Manager</Label>
-                    <Controller
-                        control={editForm.control}
-                        name="managerId"
-                        render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger id="manager-edit">
-                            <SelectValue placeholder="Select a manager" />
-                            </SelectTrigger>
-                            <SelectContent>
-                            {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                        )}
-                    />
-                </div>
-            )}
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={isLoading}>
-                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </form>
+          <ScrollArea className="max-h-[70vh] -mx-6 px-6">
+            <div className="py-4">
+                <form onSubmit={editForm.handleSubmit(handleUpdateUser)} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name-edit">Full Name</Label>
+                    <Input id="name-edit" {...editForm.register('name')} />
+                    {editForm.formState.errors.name && <p className="text-sm text-destructive">{editForm.formState.errors.name.message}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email-edit">Email Address</Label>
+                    <Input id="email-edit" type="email" value={selectedUser?.email || ''} readOnly />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role-edit">Role</Label>
+                     <Controller
+                          control={editForm.control}
+                          name="role"
+                          render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value} disabled={currentUserProfile?.role !== 'Super Admin'}>
+                              <SelectTrigger id="role-edit">
+                                <SelectValue placeholder="Select a role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
+                                {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
+                                <SelectItem value="Employee">Employee</SelectItem>
+                                <SelectItem value="Client">Client</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          )}
+                        />
+                  </div>
+                  {editFormRole === 'Manager' && (
+                       <Controller
+                          control={editForm.control}
+                          name="brandIds"
+                          render={({ field }) => (
+                            <div className="space-y-2">
+                              <Label>Managed Brands</Label>
+                              <MultiSelect
+                                options={brandOptions}
+                                onValueChange={field.onChange}
+                                defaultValue={field.value || []}
+                                placeholder="Select brands..."
+                              />
+                            </div>
+                          )}
+                      />
+                  )}
+                  {editFormRole === 'Employee' && (
+                      <div className="space-y-2">
+                          <Label htmlFor="manager-edit">Assign Manager</Label>
+                          <Controller
+                              control={editForm.control}
+                              name="managerId"
+                              render={({ field }) => (
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                  <SelectTrigger id="manager-edit">
+                                  <SelectValue placeholder="Select a manager" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                  {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                                  </SelectContent>
+                              </Select>
+                              )}
+                          />
+                      </div>
+                  )}
+                  <DialogFooter className="pt-4">
+                    <Button type="button" variant="ghost" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+                    <Button type="submit" disabled={isLoading}>
+                       {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                      Save Changes
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </div>
+          </ScrollArea>
         </DialogContent>
       </Dialog>
 
@@ -565,3 +618,5 @@ export default function UsersPage() {
     </div>
   );
 }
+
+    

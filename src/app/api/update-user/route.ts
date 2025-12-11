@@ -19,7 +19,7 @@ function initializeAdminApp(): App {
 export async function POST(request: Request) {
   try {
     const app = initializeAdminApp();
-    const { uid, name, role, managerId } = await request.json();
+    const { uid, name, role, managerId, brandIds } = await request.json();
 
     if (!uid || !name || !role) {
       return NextResponse.json({ message: 'Missing required fields (uid, name, role).' }, { status: 400 });
@@ -36,8 +36,13 @@ export async function POST(request: Request) {
     if (role === 'Employee' && managerId) {
       userDataToUpdate.managerId = managerId;
     } else {
-      // Ensure managerId is removed if role is not Employee or if it's not provided
       userDataToUpdate.managerId = null; 
+    }
+
+    if (role === 'Manager' && Array.isArray(brandIds)) {
+        userDataToUpdate.brandIds = brandIds;
+    } else {
+        userDataToUpdate.brandIds = null;
     }
 
     // Update Firestore document
@@ -67,3 +72,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: errorMessage, error: error.message }, { status: statusCode });
   }
 }
+
+    
