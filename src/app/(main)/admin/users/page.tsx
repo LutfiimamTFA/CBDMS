@@ -108,10 +108,15 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdatingEmergencyStatus, setIsUpdatingEmergencyStatus] = useState<string | null>(null);
 
-  const usersCollectionRef = useMemo(
-    () => (firestore ? collection(firestore, 'users') : null),
-    [firestore]
-  );
+  const usersCollectionRef = useMemo(() => {
+    if (!firestore || !currentUserProfile) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
+    // If the user is a manager, only fetch their direct reports (employees).
+    if (currentUserProfile.role === 'Manager') {
+        q = query(q, where('managerId', '==', currentUserProfile.id));
+    }
+    return q;
+  }, [firestore, currentUserProfile]);
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersCollectionRef);
   
   const brandsQuery = useMemo(
@@ -137,9 +142,12 @@ export default function UsersPage() {
   const sortedAndGroupedUsers = useMemo(() => {
     if (!users || !currentUserProfile) return [];
 
-    const filteredUsers = currentUserProfile.role === 'Manager'
-      ? users.filter(user => user.role === 'Employee' || user.role === 'Client' || user.id === currentUserProfile.id)
-      : users;
+    let usersToShow = users;
+
+    // For managers, we also want to show themself in the list.
+    if (currentUserProfile.role === 'Manager') {
+        usersToShow = [currentUserProfile as User, ...users.filter(u => u.id !== currentUserProfile.id)];
+    }
     
     const roleOrder: Record<User['role'], number> = {
         'Super Admin': 0,
@@ -148,7 +156,7 @@ export default function UsersPage() {
         'Client': 3,
     };
 
-    return [...filteredUsers].sort((a, b) => {
+    return [...usersToShow].sort((a, b) => {
         if (a.id === currentUserProfile?.id) return -1;
         if (b.id === currentUserProfile?.id) return 1;
         
@@ -817,3 +825,4 @@ export default function UsersPage() {
     
 
     
+

@@ -24,9 +24,20 @@ export default function TasksPage() {
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !activeCompanyId || !profile) return null;
 
-    // Managers and Super Admins see all tasks within the company.
-    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
+    if (profile.role === 'Super Admin') {
       return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+    }
+    
+    // Managers see tasks only from their assigned brands
+    if (profile.role === 'Manager') {
+      if (!profile.brandIds || profile.brandIds.length === 0) {
+        return null; // Manager has no brands, so they see no tasks.
+      }
+      return query(
+        collection(firestore, 'tasks'), 
+        where('companyId', '==', activeCompanyId),
+        where('brandId', 'in', profile.brandIds)
+      );
     }
     
     // Employees only see tasks assigned to them.
@@ -35,7 +46,7 @@ export default function TasksPage() {
     }
 
     return null;
-  }, [firestore, activeCompanyId, profile, session]);
+  }, [firestore, activeCompanyId, profile]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
@@ -45,16 +56,29 @@ export default function TasksPage() {
   );
   const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
-  const brandsQuery = React.useMemo(() =>
-    firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null,
-    [firestore]
-  );
+  const brandsQuery = React.useMemo(() => {
+    if (!firestore || !profile) return null;
+
+    let q = query(collection(firestore, 'brands'), orderBy('name'));
+
+    // If Manager, only fetch the brands they are assigned to
+    if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
+      q = query(q, where('__name__', 'in', profile.brandIds));
+    }
+    return q;
+  }, [firestore, profile]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   
   const usersQuery = React.useMemo(() => {
     if (!firestore || !activeCompanyId) return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
-  }, [firestore, activeCompanyId]);
+    let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+
+    if (profile?.role === 'Manager') {
+      q = query(q, where('managerId', '==', profile.id));
+    }
+
+    return q;
+  }, [firestore, activeCompanyId, profile]);
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
 
   const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading;

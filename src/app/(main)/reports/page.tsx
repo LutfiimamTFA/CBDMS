@@ -355,35 +355,41 @@ export default function ReportsPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const { session, isLoading: isSessionLoading } = useSharedSession();
   
-  // Determine if we are in a shared context
   const activeCompanyId = session ? session.companyId : companyId;
 
   const isSuperAdminOrManager = useMemo(() => {
     if (session) {
-      // In shared view, reports might be restricted. For now, assume managers can see.
       return true;
     }
     return profile?.role === 'Super Admin' || profile?.role === 'Manager';
   }, [profile, session]);
 
-  // Kueri untuk semua tugas di perusahaan
   const tasksQuery = useMemo(() => {
-    if (!firestore || !activeCompanyId) return null;
+    if (!firestore || !activeCompanyId || !profile) return null;
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
 
-    // In a normal session, employees only see their own tasks
-    if (!session && profile?.role === 'Employee') {
+    if (profile.role === 'Manager') {
+        if (!profile.brandIds || profile.brandIds.length === 0) {
+            return null; // Manager with no brands sees no tasks
+        }
+        q = query(q, where('brandId', 'in', profile.brandIds));
+    } else if (profile.role === 'Employee') {
         q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
     return q;
-  }, [firestore, activeCompanyId, profile, session]);
+  }, [firestore, activeCompanyId, profile]);
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
-  // Kueri untuk semua pengguna di perusahaan (hanya untuk Admin/Manager)
   const usersQuery = useMemo(() => {
-      if (!firestore || !activeCompanyId || !isSuperAdminOrManager) return null;
-      return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
-  }, [firestore, activeCompanyId, isSuperAdminOrManager]);
+      if (!firestore || !activeCompanyId || !profile) return null;
+      let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+
+      // Manager can only see their direct reports in the dropdown
+      if (profile.role === 'Manager') {
+        q = query(q, where('managerId', '==', profile.id));
+      }
+      return q;
+  }, [firestore, activeCompanyId, profile]);
   const { data: allUsers, isLoading: isAdminUsersLoading } = useCollection<User>(usersQuery);
 
   const isLoading = isProfileLoading || isTasksLoading || (isSuperAdminOrManager && isAdminUsersLoading) || isSessionLoading;
@@ -409,5 +415,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    

@@ -32,9 +32,20 @@ export default function DashboardPage() {
   const tasksQuery = useMemo(() => {
     if (!firestore || !activeCompanyId || !profile) return null;
 
-    // Managers and Super Admins see all tasks within the company.
-    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
+    if (profile.role === 'Super Admin') {
       return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+    }
+    
+    // Managers see tasks only from their assigned brands
+    if (profile.role === 'Manager') {
+      if (!profile.brandIds || profile.brandIds.length === 0) {
+        return null; // Manager has no brands, so they see no tasks.
+      }
+      return query(
+        collection(firestore, 'tasks'), 
+        where('companyId', '==', activeCompanyId),
+        where('brandId', 'in', profile.brandIds)
+      );
     }
     
     // Employees only see tasks assigned to them.
@@ -43,7 +54,7 @@ export default function DashboardPage() {
     }
 
     return null; // Fallback for other roles or scenarios
-  }, [firestore, activeCompanyId, profile, session]);
+  }, [firestore, activeCompanyId, profile]);
   
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
