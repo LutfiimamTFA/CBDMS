@@ -80,6 +80,18 @@
         },
         "required": ["id", "name"]
     },
+    "CompanySettings": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CompanySettings",
+      "type": "object",
+      "description": "Stores company-wide settings, including the designated emergency admin.",
+      "properties": {
+        "emergencyAdminUserId": {
+          "type": ["string", "null"],
+          "description": "The ID of the User (Manager) who is currently designated as the emergency Super Admin. Null if no one is designated."
+        }
+      }
+    },
     "Brand": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Brand",
@@ -475,6 +487,17 @@
               "entityName": "Company",
               "schema": { "$ref": "#/backend/entities/Company" },
               "description": "Stores company-wide information like name and logo.",
+              "params": [
+                  { "name": "companyId", "description": "The unique identifier for the company." }
+              ]
+          }
+      },
+       {
+          "path": "/companySettings/{companyId}",
+          "definition": {
+              "entityName": "CompanySettings",
+              "schema": { "$ref": "#/backend/entities/CompanySettings" },
+              "description": "Stores company-wide settings, like the emergency admin.",
               "params": [
                   { "name": "companyId", "description": "The unique identifier for the company." }
               ]

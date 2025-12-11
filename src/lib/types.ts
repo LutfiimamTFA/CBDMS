@@ -12,6 +12,7 @@ export type User = {
   createdAt?: string;
   companyId: string;
   managerId?: string;
+  brandIds?: string[];
 };
 
 export type Company = {
@@ -19,6 +20,11 @@ export type Company = {
     name: string;
     logoUrl?: string;
 };
+
+export type CompanySettings = {
+    id: string;
+    emergencyAdminUserId?: string | null;
+}
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 
@@ -248,3 +254,5 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+    

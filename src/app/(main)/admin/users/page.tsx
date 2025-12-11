@@ -50,17 +50,19 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, KeyRound, Copy } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Edit, Loader2, KeyRound, Copy, Star } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { User, Brand } from '@/lib/types';
-import { collection, doc, query, where, orderBy } from 'firebase/firestore';
+import { useCollection, useFirestore, useUserProfile, useDoc } from '@/firebase';
+import type { User, Brand, CompanySettings } from '@/lib/types';
+import { collection, doc, query, where, orderBy, updateDoc, setDoc } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { usePermissions } from '@/context/permissions-provider';
 import { Header } from '@/components/layout/header';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
@@ -91,10 +93,10 @@ export default function UsersPage() {
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [isResetDialogOpen, setResetDialogOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUpdatingEmergencyStatus, setIsUpdatingEmergencyStatus] = useState<string | null>(null);
 
   const usersCollectionRef = useMemo(
     () => (firestore ? collection(firestore, 'users') : null),
@@ -107,6 +109,13 @@ export default function UsersPage() {
     [firestore]
   );
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+  
+  const companySettingsDocRef = useMemo(() => {
+    if (!firestore || !currentUserProfile?.companyId) return null;
+    return doc(firestore, 'companySettings', currentUserProfile.companyId);
+  }, [firestore, currentUserProfile?.companyId]);
+  
+  const { data: companySettings, isLoading: isCompanySettingsLoading } = useDoc<CompanySettings>(companySettingsDocRef);
 
   const managers = useMemo(() => (users || []).filter(u => u.role === 'Manager'), [users]);
   
@@ -186,7 +195,7 @@ export default function UsersPage() {
         email: selectedUser.email,
         role: selectedUser.role,
         managerId: selectedUser.managerId || '',
-        brandIds: (selectedUser as any).brandIds || [],
+        brandIds: selectedUser.brandIds || [],
       });
     }
   }, [selectedUser, editForm]);
@@ -291,36 +300,35 @@ export default function UsersPage() {
     }
   };
 
-  const handleSendPasswordReset = async () => {
-    if (!selectedUser) return;
-    setIsLoading(true);
+  const handleToggleEmergencyAdmin = async (manager: User) => {
+    if (!companySettingsDocRef) return;
+    setIsUpdatingEmergencyStatus(manager.id);
+    
     try {
-        const response = await fetch('/api/send-password-reset', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: selectedUser.email }),
-        });
+      const isCurrentlyEmergencyAdmin = companySettings?.emergencyAdminUserId === manager.id;
+      const newEmergencyAdminId = isCurrentlyEmergencyAdmin ? null : manager.id;
+      
+      // Use setDoc with merge to create the document if it doesn't exist, or update it if it does.
+      await setDoc(companySettingsDocRef, { emergencyAdminUserId: newEmergencyAdminId }, { merge: true });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.message || 'Failed to send reset email.');
-        }
+      toast({
+        title: 'Success!',
+        description: isCurrentlyEmergencyAdmin 
+          ? `Revoked emergency status from ${manager.name}.`
+          : `Granted emergency admin status to ${manager.name}.`,
+      });
 
-        toast({
-            title: 'Email Sent',
-            description: `A password reset email has been sent to ${selectedUser.name}.`,
-        });
-        setResetDialogOpen(false);
     } catch (error: any) {
-        toast({
-            variant: 'destructive',
-            title: 'Failed to Send Email',
-            description: error.message,
-        });
+      toast({
+        variant: 'destructive',
+        title: 'Operation Failed',
+        description: error.message || 'Could not update emergency admin status.',
+      });
     } finally {
-        setIsLoading(false);
+      setIsUpdatingEmergencyStatus(null);
     }
   };
+
 
   const openEditDialog = (user: User) => {
     setSelectedUser(user);
@@ -332,11 +340,6 @@ export default function UsersPage() {
     setDeleteDialogOpen(true);
   };
 
-  const openResetDialog = (user: User) => {
-    setSelectedUser(user);
-    setResetDialogOpen(true);
-  };
-  
   const roleColors: Record<User['role'], string> = {
     'Super Admin': 'bg-red-500 text-white',
     'Manager': 'bg-blue-500 text-white',
@@ -345,6 +348,8 @@ export default function UsersPage() {
   }
   
   let lastRole: string | null = null;
+  const emergencyAdminId = companySettings?.emergencyAdminUserId;
+
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -469,7 +474,7 @@ export default function UsersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isUsersLoading || permissionsLoading ? (
+              {isUsersLoading || permissionsLoading || isCompanySettingsLoading ? (
                 <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
                     <div className='flex items-center justify-center gap-2'>
@@ -483,9 +488,8 @@ export default function UsersPage() {
                   const showRoleHeader = user.role !== lastRole;
                   lastRole = user.role;
                   const isCurrentUser = user.id === currentUserProfile?.id;
-                  
                   const canEditThisUser = currentUserProfile?.role === 'Super Admin' || (currentUserProfile?.role === 'Manager' && user.role !== 'Manager' && user.role !== 'Super Admin');
-
+                  const isEmergencyAdmin = emergencyAdminId === user.id;
 
                   return (
                     <React.Fragment key={user.id}>
@@ -496,11 +500,21 @@ export default function UsersPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                      <TableRow data-state={isCurrentUser ? 'selected' : ''}>
+                      <TableRow data-state={isCurrentUser || isEmergencyAdmin ? 'selected' : ''}>
                         <TableCell className="font-medium">
                           <div className='flex items-center gap-2'>
                             <span>{user.name}</span>
                             {isCurrentUser && <Badge variant='outline'>(You)</Badge>}
+                             {isEmergencyAdmin && (
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <Badge variant='destructive' className='gap-1'><Star className='h-3 w-3'/> Emergency Admin</Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>{user.name} has temporary Super Admin privileges.</p></TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              )}
                           </div>
                           <div className='text-muted-foreground text-sm md:hidden'>{user.email}</div>
                         </TableCell>
@@ -526,11 +540,19 @@ export default function UsersPage() {
                                     <DropdownMenuItem onClick={() => openEditDialog(user)}>
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
-                                    {currentUserProfile?.role === 'Super Admin' && (
-                                      <DropdownMenuItem onClick={() => openResetDialog(user)}>
-                                          <KeyRound className="mr-2 h-4 w-4" /> Send Password Reset
-                                      </DropdownMenuItem>
-                                    )}
+                                     {currentUserProfile?.role === 'Super Admin' && user.role === 'Manager' && (
+                                        <DropdownMenuItem
+                                          disabled={isUpdatingEmergencyStatus !== null || (emergencyAdminId !== null && !isEmergencyAdmin)}
+                                          onClick={() => handleToggleEmergencyAdmin(user)}
+                                        >
+                                          {isUpdatingEmergencyStatus === user.id ? (
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
+                                          ) : (
+                                            <Star className="mr-2 h-4 w-4" />
+                                          )}
+                                          {isEmergencyAdmin ? 'Revoke Emergency Status' : 'Make Emergency Admin'}
+                                        </DropdownMenuItem>
+                                      )}
                                     {canDeleteUsers && <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
@@ -589,7 +611,7 @@ export default function UsersPage() {
                               </SelectTrigger>
                               <SelectContent>
                                 {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                                {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
+                                <SelectItem value="Manager">Manager</SelectItem>
                                 <SelectItem value="Employee">Employee</SelectItem>
                                 <SelectItem value="Client">Client</SelectItem>
                               </SelectContent>
@@ -665,25 +687,8 @@ export default function UsersPage() {
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
-      
-      {/* Password Reset Confirmation Dialog */}
-      <AlertDialog open={isResetDialogOpen} onOpenChange={setResetDialogOpen}>
-          <AlertDialogContent>
-              <AlertDialogHeader>
-                  <AlertDialogTitle>Confirm Password Reset</AlertDialogTitle>
-                  <AlertDialogDescription>
-                      Are you sure you want to send a password reset email to <span className="font-bold">{selectedUser?.name}</span> at <span className="font-mono">{selectedUser?.email}</span>?
-                  </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleSendPasswordReset} disabled={isLoading}>
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                    Send Email
-                  </AlertDialogAction>
-              </AlertDialogFooter>
-          </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
+
+    

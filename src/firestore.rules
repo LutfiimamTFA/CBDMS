@@ -9,16 +9,26 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isSuperAdmin() {
-      return isSignedIn() && request.auth.token.role == 'Super Admin';
-    }
-
     function getUserData(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data;
     }
     
     function getRequestingUserData() {
         return getUserData(request.auth.uid);
+    }
+    
+    function getCompanySettings(companyId) {
+        return get(/databases/$(database)/documents/companySettings/$(companyId)).data;
+    }
+
+    function isEmergencyAdmin(userId) {
+      // Check if a companySettings doc exists and if the user ID matches the emergency admin ID
+      return exists(/databases/$(database)/documents/companySettings/$(getRequestingUserData().companyId)) && 
+             getCompanySettings(getRequestingUserData().companyId).emergencyAdminUserId == userId;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (request.auth.token.role == 'Super Admin' || isEmergencyAdmin(request.auth.uid));
     }
 
     function getPermissions() {
@@ -43,6 +53,11 @@ service cloud.firestore {
     
     match /permissions/{docId} {
       allow read, write: if isSuperAdmin();
+    }
+    
+    match /companySettings/{companyId} {
+      allow read: if isSignedIn() && isSameCompanyAsRequestingUser(companyId);
+      allow write: if isSuperAdmin();
     }
 
     match /users/{userId} {
@@ -150,3 +165,5 @@ service cloud.firestore {
     }
   }
 }
+
+    
