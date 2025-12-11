@@ -114,7 +114,7 @@ export default function SocialMediaPage() {
           </CreatePostDialog>
         }
       />
-      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
+      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-2">
                 <Select value={String(currentDate.getFullYear())} onValueChange={handleYearChange}>
@@ -153,7 +153,7 @@ export default function SocialMediaPage() {
                 <Loader2 className="h-8 w-8 animate-spin" />
               </div>
             ) : (
-            <div className="grid grid-cols-7 grid-rows-6 flex-1">
+            <div className="grid grid-cols-7 grid-rows-6 flex-1 overflow-hidden">
               {calendarGrid.days.map((day, index) => {
                 const dayKey = format(day, 'yyyy-MM-dd');
                 const postsForDay = postsByDay.get(dayKey) || [];
@@ -161,7 +161,7 @@ export default function SocialMediaPage() {
                   <div 
                       key={day.toString()} 
                       className={cn(
-                          "p-2 border-r border-b relative flex flex-col gap-2",
+                          "relative flex flex-col border-r border-b",
                           !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50",
                           (index + 1) % 7 === 0 && "border-r-0", // Remove right border for last cell in a row
                           index >= 35 && "border-b-0" // Remove bottom border for last row
@@ -171,7 +171,7 @@ export default function SocialMediaPage() {
                           {format(day, 'd')}
                       </span>
                       <ScrollArea className="flex-1 mt-8">
-                        <div className="flex flex-col gap-1.5 pr-2">
+                        <div className="flex flex-col gap-1.5 p-1">
                           {postsForDay.map(post => (
                             <SocialPostCard key={post.id} post={post} />
                           ))}
