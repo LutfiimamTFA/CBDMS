@@ -71,7 +71,13 @@ const userSchema = z.object({
   brandIds: z.array(z.string()).optional(),
 });
 
-const editUserSchema = userSchema.omit({ password: true });
+const editUserSchema = z.object({
+  name: z.string().min(2, 'Name is required.'),
+  email: z.string().email('Invalid email address.'),
+  role: z.enum(['Super Admin', 'Manager', 'Employee', 'Client']),
+  managerId: z.string().optional(),
+  brandIds: z.array(z.string()).optional(),
+});
 
 type UserFormValues = z.infer<typeof userSchema>;
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -85,6 +91,7 @@ export default function UsersPage() {
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isResetDialogOpen, setResetDialogOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -179,7 +186,7 @@ export default function UsersPage() {
         email: selectedUser.email,
         role: selectedUser.role,
         managerId: selectedUser.managerId || '',
-        brandIds: selectedUser.brandIds || [],
+        brandIds: (selectedUser as any).brandIds || [],
       });
     }
   }, [selectedUser, editForm]);
@@ -284,6 +291,37 @@ export default function UsersPage() {
     }
   };
 
+  const handleSendPasswordReset = async () => {
+    if (!selectedUser) return;
+    setIsLoading(true);
+    try {
+        const response = await fetch('/api/send-password-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: selectedUser.email }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to send reset email.');
+        }
+
+        toast({
+            title: 'Email Sent',
+            description: `A password reset email has been sent to ${selectedUser.name}.`,
+        });
+        setResetDialogOpen(false);
+    } catch (error: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Failed to Send Email',
+            description: error.message,
+        });
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
   const openEditDialog = (user: User) => {
     setSelectedUser(user);
     setEditDialogOpen(true);
@@ -292,6 +330,11 @@ export default function UsersPage() {
   const openDeleteDialog = (user: User) => {
     setSelectedUser(user);
     setDeleteDialogOpen(true);
+  };
+
+  const openResetDialog = (user: User) => {
+    setSelectedUser(user);
+    setResetDialogOpen(true);
   };
   
   const roleColors: Record<User['role'], string> = {
@@ -483,6 +526,11 @@ export default function UsersPage() {
                                     <DropdownMenuItem onClick={() => openEditDialog(user)}>
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
+                                    {currentUserProfile?.role === 'Super Admin' && (
+                                      <DropdownMenuItem onClick={() => openResetDialog(user)}>
+                                          <KeyRound className="mr-2 h-4 w-4" /> Send Password Reset
+                                      </DropdownMenuItem>
+                                    )}
                                     {canDeleteUsers && <>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
@@ -613,6 +661,25 @@ export default function UsersPage() {
                   <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive hover:bg-destructive/90" disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                     Yes, delete user
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Password Reset Confirmation Dialog */}
+      <AlertDialog open={isResetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Password Reset</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      Are you sure you want to send a password reset email to <span className="font-bold">{selectedUser?.name}</span> at <span className="font-mono">{selectedUser?.email}</span>?
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleSendPasswordReset} disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    Send Email
                   </AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>
