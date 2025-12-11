@@ -10,6 +10,7 @@ import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
+import { KanbanColumn } from './kanban-column';
 
 interface KanbanBoardProps {
   tasks: Task[];
