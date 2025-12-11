@@ -1,12 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Toaster } from '@/components/ui/toaster';
-import { ThemeProvider } from '@/components/theme-provider';
-import { I18nProvider } from '@/context/i18n-provider';
-import { FirebaseClientProvider } from '@/firebase';
-import { PermissionsProvider } from '@/context/permissions-provider';
-import { CompanyProvider } from '@/context/company-provider';
-import { SharedSessionProvider } from '@/context/shared-session-provider';
+import { AppProviders } from '@/components/app-providers';
 
 export const metadata: Metadata = {
   title: 'WorkWise',
@@ -29,25 +23,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <I18nProvider>
-            <FirebaseClientProvider>
-              <SharedSessionProvider>
-                <CompanyProvider>
-                  <PermissionsProvider>
-                    {children}
-                  </PermissionsProvider>
-                </CompanyProvider>
-              </SharedSessionProvider>
-            </FirebaseClientProvider>
-            <Toaster />
-          </I18nProvider>
-        </ThemeProvider>
+        <AppProviders>
+          {children}
+        </AppProviders>
       </body>
     </html>
   );
