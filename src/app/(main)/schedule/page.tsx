@@ -203,7 +203,7 @@ export default function SchedulePage() {
                     eventDisplay="block"
                     dayHeaderClassNames="bg-muted"
                     viewClassNames="bg-card"
-                    eventClassNames="cursor-pointer border-none p-1 text-xs rounded-md font-medium"
+                    eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
                 />
                 <PopoverContentDetails />
             </Popover>
