@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -60,23 +59,33 @@ export default function DashboardPage() {
 
   // Query untuk semua pengguna di perusahaan (untuk filter)
   const usersQuery = useMemo(() => {
-    if (!firestore || !companyId) return null;
-    return query(
-        collection(firestore, 'users'), 
-        where('companyId', '==', companyId)
-    );
-  }, [firestore, companyId]);
+    if (!firestore || !activeCompanyId) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+    return q;
+  }, [firestore, activeCompanyId]);
 
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
-  // Opsi untuk filter MultiSelect
+  // Opsi untuk filter MultiSelect, disesuaikan untuk Manajer
   const userOptions = useMemo(() => {
-    if (!allUsers) return [];
-    return allUsers.map(user => ({
-      value: user.id,
-      label: user.name,
+    if (!allUsers || !profile) return [];
+    
+    if (profile.role === 'Manager') {
+      const team = allUsers.filter(u => u.managerId === profile.id);
+      const self = allUsers.find(u => u.id === profile.id);
+      const options = self ? [self, ...team] : team;
+      return options.map(user => ({ value: user.id, label: user.name }));
+    }
+    
+    // Super Admin sees all employees and managers
+    return allUsers
+      .filter(u => u.role === 'Employee' || u.role === 'Manager')
+      .map(user => ({
+        value: user.id,
+        label: user.name,
     }));
-  }, [allUsers]);
+
+  }, [allUsers, profile]);
 
   // Logika untuk memfilter tugas
   const filteredTasks = useMemo(() => {
