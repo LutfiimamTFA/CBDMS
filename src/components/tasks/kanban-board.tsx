@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
 import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
