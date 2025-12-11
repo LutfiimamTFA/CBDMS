@@ -84,18 +84,20 @@ export function TasksDataTable() {
 
 
   const tasksQuery = React.useMemo(() => {
-    if (!firestore || !companyId) return null;
+    if (!firestore || !profile || !companyId) return null;
 
-    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+    // Logic for query based on role
+    const isManagerOrAdmin = profile.role === 'Super Admin' || profile.role === 'Manager';
 
-    // Employees and Managers in a normal session only see tasks assigned to them on this page.
-    // Super Admins see all company tasks.
-    if ((profile?.role === 'Employee' || profile?.role === 'Manager') && !session) {
-        q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    if (isManagerOrAdmin) {
+      // Managers and Admins see all tasks within the company
+      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+    } else {
+      // Employees only see tasks assigned to them
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
     
-    return q;
-  }, [firestore, companyId, profile, session]);
+  }, [firestore, companyId, profile]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
@@ -817,3 +819,4 @@ export function TasksDataTable() {
     </>
   );
 }
+
