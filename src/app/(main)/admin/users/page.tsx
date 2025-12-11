@@ -111,9 +111,9 @@ export default function UsersPage() {
   const usersCollectionRef = useMemo(() => {
     if (!firestore || !currentUserProfile) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
-    // If the user is a manager, only fetch their direct reports (employees).
+    // For Managers, we fetch all employees and managers to filter on client side.
     if (currentUserProfile.role === 'Manager') {
-        q = query(q, where('managerId', '==', currentUserProfile.id));
+        q = query(q, where('role', 'in', ['Manager', 'Employee']));
     }
     return q;
   }, [firestore, currentUserProfile]);
@@ -143,10 +143,12 @@ export default function UsersPage() {
     if (!users || !currentUserProfile) return [];
 
     let usersToShow = users;
-
-    // For managers, we also want to show themself in the list.
+    
+    // For Managers, filter to only show their direct reports and themself
     if (currentUserProfile.role === 'Manager') {
-        usersToShow = [currentUserProfile as User, ...users.filter(u => u.id !== currentUserProfile.id)];
+      usersToShow = users.filter(user => 
+        user.id === currentUserProfile.id || user.managerId === currentUserProfile.id
+      );
     }
     
     const roleOrder: Record<User['role'], number> = {
@@ -599,7 +601,7 @@ export default function UsersPage() {
                             <Badge className={roleColors[user.role]}>{user.role}</Badge>
                         </TableCell>
                         <TableCell>
-                          {user.role === 'Manager' && managedBrands.length > 0 && (
+                          {user.role === 'Manager' && (
                             <div className="flex flex-wrap gap-1">
                               {managedBrands.map(brandName => <Badge key={brandName} variant="secondary">{brandName}</Badge>)}
                             </div>
@@ -825,4 +827,5 @@ export default function UsersPage() {
     
 
     
+
 
