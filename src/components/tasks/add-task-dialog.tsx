@@ -195,8 +195,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     // Manager can only see their own team (themselves + their employees).
     if (currentUserProfile.role === 'Manager') {
-      const theirTeam = (users || []).filter(u => u.id === currentUserProfile.id || u.managerId === currentUserProfile.id);
-      return { managers: [], employees: theirTeam, clients: [] }; // Put them all in 'employees' for a single list
+      const self = (users || []).find(u => u.id === currentUserProfile.id);
+      const myEmployees = (users || []).filter(u => u.managerId === currentUserProfile.id);
+      return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
     }
     
     // Employee can see other Employees.
@@ -955,6 +956,23 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                           </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
+                                        {currentUserProfile?.role === 'Manager' && groupedUsers.managers.length > 0 && (
+                                            <>
+                                                <DropdownMenuLabel>Manager</DropdownMenuLabel>
+                                                {groupedUsers.managers.map(user => (
+                                                    <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                                        <div className="flex w-full items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                                                <span>{user.name}</span>
+                                                            </div>
+                                                            <span className="text-xs text-muted-foreground">{userWorkload.get(user.id) || 0} tugas aktif</span>
+                                                        </div>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                                <DropdownMenuSeparator />
+                                            </>
+                                        )}
                                         {currentUserProfile?.role === 'Super Admin' && groupedUsers.managers.length > 0 && (
                                             <>
                                                 <DropdownMenuLabel>Managers</DropdownMenuLabel>
@@ -974,7 +992,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                         )}
                                         {groupedUsers.employees.length > 0 && (
                                             <>
-                                                <DropdownMenuLabel>{currentUserProfile?.role === 'Manager' ? 'My Team' : 'Employees'}</DropdownMenuLabel>
+                                                <DropdownMenuLabel>{currentUserProfile?.role === 'Manager' ? 'My Employees' : 'Employees'}</DropdownMenuLabel>
                                                 {groupedUsers.employees.map(user => (
                                                     <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
                                                         <div className="flex w-full items-center justify-between">
