@@ -21,6 +21,11 @@ const createActivity = (user: User, action: string): Activity => {
   };
 };
 
+interface KanbanBoardProps {
+  tasks: Task[];
+  permissions?: SharedLink['permissions'] | null;
+}
+
 export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
@@ -109,29 +114,24 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       
       batch.update(taskRef, updates);
 
-      // --- START: Improved Notification Logic ---
       const notificationTitle = `Status Changed: ${task.title}`;
       const notificationMessage = `${profile.name} changed the status of "${task.title.substring(0, 30)}..." to ${newStatus}.`;
-      
+
       task.assigneeIds.forEach(assigneeId => {
-        // Don't notify the person who made the change
-        if (assigneeId === profile.id) return;
-
-        const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
-        const newNotification: Omit<Notification, 'id'> = {
-            userId: assigneeId,
-            title: notificationTitle,
-            message: notificationMessage,
-            taskId: task.id, 
-            taskTitle: task.title,
-            isRead: false,
-            createdAt: serverTimestamp() as any,
-            createdBy: newActivity.user,
-        };
-        batch.set(notifRef, newNotification);
+          if (assigneeId === profile.id) return;
+          const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+          const newNotification: Omit<Notification, 'id'> = {
+              userId: assigneeId,
+              title: notificationTitle,
+              message: notificationMessage,
+              taskId: task.id,
+              taskTitle: task.title,
+              isRead: false,
+              createdAt: serverTimestamp() as any,
+              createdBy: newActivity.user,
+          };
+          batch.set(notifRef, newNotification);
       });
-      // --- END: Improved Notification Logic ---
-
 
       try {
         await batch.commit();
