@@ -19,10 +19,10 @@ function initializeAdminApp(): App {
 export async function POST(request: Request) {
   try {
     const app = initializeAdminApp();
-    const { uid, name, role, managerId, brandIds } = await request.json();
+    const { uid, name, email, role, managerId, brandIds } = await request.json();
 
-    if (!uid || !name || !role) {
-      return NextResponse.json({ message: 'Missing required fields (uid, name, role).' }, { status: 400 });
+    if (!uid || !name || !role || !email) {
+      return NextResponse.json({ message: 'Missing required fields (uid, name, email, role).' }, { status: 400 });
     }
 
     const auth = getAuth(app);
@@ -30,6 +30,7 @@ export async function POST(request: Request) {
     
     const userDataToUpdate: any = {
       name,
+      email,
       role,
     };
     
@@ -48,9 +49,10 @@ export async function POST(request: Request) {
     // Update Firestore document
     await firestore.collection('users').doc(uid).update(userDataToUpdate);
     
-    // Update Auth display name
+    // Update Auth display name and email
     await auth.updateUser(uid, {
-        displayName: name
+        displayName: name,
+        email: email,
     });
 
     // Set custom claims for role-based access
@@ -66,11 +68,12 @@ export async function POST(request: Request) {
     if (error.code === 'auth/user-not-found') {
         errorMessage = 'User not found.';
         statusCode = 404;
+    } else if (error.code === 'auth/email-already-exists') {
+        errorMessage = 'The new email address is already in use by another account.';
+        statusCode = 400;
     } else if (error.message?.includes('FIREBASE_SERVICE_ACCOUNT_KEY') || error.code === 'app/invalid-credential') {
         errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials in environment variables.';
     }
     return NextResponse.json({ message: errorMessage, error: error.message }, { status: statusCode });
   }
 }
-
-    

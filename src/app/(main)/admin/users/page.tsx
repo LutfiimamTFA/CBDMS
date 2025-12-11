@@ -71,7 +71,7 @@ const userSchema = z.object({
   brandIds: z.array(z.string()).optional(),
 });
 
-const editUserSchema = userSchema.omit({ password: true, email: true });
+const editUserSchema = userSchema.omit({ password: true });
 
 type UserFormValues = z.infer<typeof userSchema>;
 type EditUserFormValues = z.infer<typeof editUserSchema>;
@@ -176,6 +176,7 @@ export default function UsersPage() {
     if (selectedUser) {
       editForm.reset({
         name: selectedUser.name,
+        email: selectedUser.email,
         role: selectedUser.role,
         managerId: selectedUser.managerId || '',
         brandIds: selectedUser.brandIds || [],
@@ -525,7 +526,8 @@ export default function UsersPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="email-edit">Email Address</Label>
-                    <Input id="email-edit" type="email" value={selectedUser?.email || ''} readOnly />
+                    <Input id="email-edit" type="email" {...editForm.register('email')} />
+                    {editForm.formState.errors.email && <p className="text-sm text-destructive">{editForm.formState.errors.email.message}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role-edit">Role</Label>
@@ -618,5 +620,3 @@ export default function UsersPage() {
     </div>
   );
 }
-
-    
