@@ -67,7 +67,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { Switch } from '../ui/switch';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, serverTimestamp, writeBatch, doc, query, orderBy } from 'firebase/firestore';
+import { collection, serverTimestamp, writeBatch, doc, query, orderBy, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Calendar as CalendarComponent } from '../ui/calendar';
 import { cn } from '@/lib/utils';
@@ -138,29 +138,31 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const firestore = useFirestore();
   const storage = useStorage();
 
-  const usersCollectionRef = React.useMemo(() => 
-    firestore ? collection(firestore, 'users') : null, 
-  [firestore]);
-  const { data: users } = useCollection<UserType>(usersCollectionRef);
-
   const { user, profile: currentUserProfile } = useUserProfile();
 
+  const usersCollectionRef = React.useMemo(() => {
+    if (!firestore || !currentUserProfile) return null;
+    return query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
+  }, [firestore, currentUserProfile]);
+  const { data: users } = useCollection<UserType>(usersCollectionRef);
+  
   const tasksCollectionRef = React.useMemo(() => {
     if (!firestore) return null;
     return collection(firestore, 'tasks');
   }, [firestore]);
 
   const { data: allTasks } = useCollection<Task>(tasksCollectionRef);
-
-  const statusesQuery = React.useMemo(() => 
-    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
-  const brandsQuery = React.useMemo(() =>
-    firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null,
-  [firestore]);
+  const brandsQuery = React.useMemo(() => {
+    if (!firestore || !currentUserProfile) return null;
+    let q = query(collection(firestore, 'brands'), orderBy('name'));
+    
+    // For Managers, filter to only the brands they manage.
+    if (currentUserProfile.role === 'Manager' && currentUserProfile.brandIds && currentUserProfile.brandIds.length > 0) {
+        q = query(q, where('__name__', 'in', currentUserProfile.brandIds));
+    }
+    return q;
+  }, [firestore, currentUserProfile]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
   const userWorkload = useMemo(() => {
@@ -185,7 +187,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const groupedUsers = useMemo(() => {
     if (!users || !currentUserProfile) return { managers: [], employees: [], clients: [] };
     
-    // Super Admin can see everyone, grouped.
     if (currentUserProfile.role === 'Super Admin') {
       const managers = (users || []).filter(u => u.role === 'Manager');
       const employees = (users || []).filter(u => u.role === 'Employee');
@@ -193,14 +194,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       return { managers, employees, clients };
     }
     
-    // Manager can only see their own team (themselves + their employees).
     if (currentUserProfile.role === 'Manager') {
       const self = (users || []).find(u => u.id === currentUserProfile.id);
       const myEmployees = (users || []).filter(u => u.managerId === currentUserProfile.id);
       return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
     }
     
-    // Employee can see other Employees.
     if (currentUserProfile.role === 'Employee') {
       const employees = (users || []).filter(u => u.role === 'Employee');
       return { managers: [], employees, clients: [] };
@@ -956,23 +955,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                           </Button>
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent className="w-[--radix-dropdown-menu-trigger-width]">
-                                        {currentUserProfile?.role === 'Manager' && groupedUsers.managers.length > 0 && (
-                                            <>
-                                                <DropdownMenuLabel>Manager</DropdownMenuLabel>
-                                                {groupedUsers.managers.map(user => (
-                                                    <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                        <div className="flex w-full items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                                                <span>{user.name}</span>
-                                                            </div>
-                                                            <span className="text-xs text-muted-foreground">{userWorkload.get(user.id) || 0} tugas aktif</span>
-                                                        </div>
-                                                    </DropdownMenuItem>
-                                                ))}
-                                                <DropdownMenuSeparator />
-                                            </>
-                                        )}
                                         {currentUserProfile?.role === 'Super Admin' && groupedUsers.managers.length > 0 && (
                                             <>
                                                 <DropdownMenuLabel>Managers</DropdownMenuLabel>
@@ -994,6 +976,23 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                             <>
                                                 <DropdownMenuLabel>{currentUserProfile?.role === 'Manager' ? 'My Employees' : 'Employees'}</DropdownMenuLabel>
                                                 {groupedUsers.employees.map(user => (
+                                                    <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
+                                                        <div className="flex w-full items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                                                <span>{user.name}</span>
+                                                            </div>
+                                                            <span className="text-xs text-muted-foreground">{userWorkload.get(user.id) || 0} tugas aktif</span>
+                                                        </div>
+                                                    </DropdownMenuItem>
+                                                ))}
+                                            </>
+                                        )}
+                                        {currentUserProfile?.role === 'Manager' && groupedUsers.managers.length > 0 && (
+                                            <>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuLabel>Other Managers</DropdownMenuLabel>
+                                                {groupedUsers.managers.filter(m => m.id !== currentUserProfile?.id).map(user => (
                                                     <DropdownMenuItem key={user.id} onSelect={() => handleSelectUser(user)}>
                                                         <div className="flex w-full items-center justify-between">
                                                             <div className="flex items-center gap-2">
