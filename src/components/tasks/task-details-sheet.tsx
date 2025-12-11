@@ -483,6 +483,7 @@ export function TaskDetailsSheet({
                 title: notificationTitle,
                 message: notificationMessage,
                 taskId: initialTask.id,
+                taskTitle: initialTask.title,
                 isRead: false,
                 createdAt: serverTimestamp() as any,
                 createdBy: newActivity.user,

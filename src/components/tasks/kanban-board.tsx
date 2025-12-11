@@ -123,6 +123,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
             title: notificationTitle,
             message: notificationMessage,
             taskId: task.id, 
+            taskTitle: task.title,
             isRead: false,
             createdAt: serverTimestamp() as any,
             createdBy: newActivity.user,

@@ -183,8 +183,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             userId: userDoc.id,
                             title: 'Content for Approval',
                             message: `${profile.name} submitted a new social media post for approval.`,
-                            taskId: postRef.id, // Using post ID as task ID for notifications
-                            taskTitle: postData.caption.substring(0, 50),
+                            taskId: postRef.id,
                             isRead: false,
                             createdAt: serverTimestamp(),
                             createdBy: {
@@ -266,7 +265,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             title: notificationTitle,
             message: notificationMessage,
             taskId: post.id,
-            taskTitle: post.caption.substring(0, 50),
             isRead: false,
             createdAt: serverTimestamp(),
             createdBy: {
