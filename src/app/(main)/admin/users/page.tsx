@@ -495,7 +495,19 @@ export default function UsersPage() {
                                             <SelectValue placeholder="Select a manager" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                            {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                                            {managers.map(m => {
+                                                const managedBrands = m.brandIds?.map(id => brands?.find(b => b.id === id)?.name).filter(Boolean) || [];
+                                                return (
+                                                    <SelectItem key={m.id} value={m.id}>
+                                                        <div className="flex flex-col">
+                                                            <span>{m.name}</span>
+                                                            {managedBrands.length > 0 && 
+                                                                <span className="text-xs text-muted-foreground">{managedBrands.join(', ')}</span>
+                                                            }
+                                                        </div>
+                                                    </SelectItem>
+                                                )
+                                            })}
                                             </SelectContent>
                                         </Select>
                                         )}
@@ -717,7 +729,19 @@ export default function UsersPage() {
                                   <SelectValue placeholder="Select a manager" />
                                   </SelectTrigger>
                                   <SelectContent>
-                                  {managers.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                                  {managers.map(m => {
+                                      const managedBrands = m.brandIds?.map(id => brands?.find(b => b.id === id)?.name).filter(Boolean) || [];
+                                      return (
+                                          <SelectItem key={m.id} value={m.id}>
+                                              <div className="flex flex-col">
+                                                  <span>{m.name}</span>
+                                                  {managedBrands.length > 0 && 
+                                                      <span className="text-xs text-muted-foreground">{managedBrands.join(', ')}</span>
+                                                  }
+                                              </div>
+                                          </SelectItem>
+                                      )
+                                  })}
                                   </SelectContent>
                               </Select>
                               )}
