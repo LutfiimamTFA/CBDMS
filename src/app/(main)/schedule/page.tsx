@@ -66,7 +66,7 @@ export default function SchedulePage() {
         return {
           id: task.id,
           title: task.title,
-          start: task.startDate ? parseISO(task.startDate) : eventDate,
+          start: eventDate,
           end: eventDate,
           allDay: true,
           extendedProps: {
