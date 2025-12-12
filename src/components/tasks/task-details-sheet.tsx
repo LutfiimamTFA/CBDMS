@@ -137,6 +137,10 @@ export function TaskDetailsSheet({
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<User | null>(null);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  
+  // State for rejection dialog
+  const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -148,7 +152,7 @@ export function TaskDetailsSheet({
   
   const { user: authUser, profile: currentUser } = useUserProfile();
   
-  const usersQuery = useMemo(() => {
+ const usersQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
     
@@ -172,26 +176,27 @@ export function TaskDetailsSheet({
   [firestore]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
-  const groupedUsers = useMemo(() => {
+ const groupedUsers = useMemo(() => {
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
+    const self = allUsers.find(u => u.id === currentUser.id);
+
     if (currentUser.role === 'Super Admin') {
-      const managers = (allUsers || []).filter(u => u.role === 'Manager');
-      const employees = (allUsers || []).filter(u => u.role === 'Employee');
-      const clients = (allUsers || []).filter(u => u.role === 'Client');
+      const managers = allUsers.filter(u => u.role === 'Manager');
+      const employees = allUsers.filter(u => u.role === 'Employee');
+      const clients = allUsers.filter(u => u.role === 'Client');
       return { managers, employees, clients };
     }
     
     if (currentUser.role === 'Manager') {
-        const self = (allUsers || []).find(u => u.id === currentUser.id);
-        const myEmployees = (allUsers || []).filter(u => u.managerId === currentUser.id && u.id !== currentUser.id);
+        const myEmployees = allUsers.filter(u => u.managerId === currentUser.id && u.id !== currentUser.id);
         return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
     }
     
     if (currentUser.role === 'Employee') {
-      // Employee sees their own team.
-      const myTeam = (allUsers || []).filter(u => u.managerId === currentUser.managerId);
       const manager = allUsers.find(u => u.id === currentUser.managerId);
+      // Team is everyone with the same manager, including self.
+      const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
       return { managers: manager ? [manager] : [], employees: myTeam, clients: [] };
     }
 
@@ -831,7 +836,77 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
   
+  const handleRequestRevisions = () => {
+      setRejectionDialogOpen(true);
+  };
   
+  const handleConfirmRejection = async () => {
+      if (!rejectionReason.trim() || !currentUser || !firestore) return;
+      
+      setRejectionDialogOpen(false);
+      setIsSaving(true);
+
+      const oldStatus = form.getValues('status');
+      const newStatus = 'Doing';
+      const taskRef = doc(firestore, 'tasks', initialTask.id);
+      
+      try {
+          const batch = writeBatch(firestore);
+
+          // 1. Add rejection reason as a comment
+          const newComment: Comment = {
+              id: `c-${crypto.randomUUID()}`,
+              user: currentUser,
+              text: `**Revision Request:** ${rejectionReason}`,
+              timestamp: new Date().toISOString(),
+              replies: [],
+          };
+          const newComments = [...(initialTask.comments || []), newComment];
+          
+          // 2. Create activity log
+          const newActivity = createActivity(currentUser, `requested revisions and moved task from "${oldStatus}" to "${newStatus}"`);
+          const updatedActivities = [...(initialTask.activities || []), newActivity];
+
+          // 3. Update task document
+          batch.update(taskRef, {
+              status: newStatus,
+              comments: newComments,
+              activities: updatedActivities,
+              lastActivity: newActivity,
+              updatedAt: serverTimestamp(),
+          });
+
+          // 4. Notify assignees
+           const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}...". See comments for details.`;
+           initialTask.assigneeIds.forEach(assigneeId => {
+                if (assigneeId !== currentUser.id) {
+                     const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+                     const newNotification: Omit<Notification, 'id'> = {
+                        userId: assigneeId,
+                        title: 'Revisions Required',
+                        message: notificationMessage,
+                        taskId: initialTask.id,
+                        isRead: false,
+                        createdAt: serverTimestamp() as any,
+                        createdBy: newActivity.user,
+                    };
+                    batch.set(notifRef, newNotification);
+                }
+           });
+           
+           await batch.commit();
+
+           form.setValue('status', newStatus);
+           setRejectionReason('');
+           toast({ title: 'Revisions Requested', description: 'The task has been sent back to "Doing".' });
+      } catch (error) {
+          console.error("Failed to request revisions:", error);
+          toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision.' });
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
     const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
@@ -869,8 +944,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
     
     if (currentUser.role === 'Manager') {
-        const myTeamAndSelf = allUsers.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
-        const otherMembers = myTeamAndSelf.filter(u => !mainAssignees.some(a => a.id === u.id));
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.id);
+        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
         return {
             ...createGroup("Task Assignees", mainAssignees),
             ...createGroup("My Team", otherMembers),
@@ -1130,7 +1205,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
+                    {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && initialTask.status !== 'Preview' &&(
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -1147,7 +1222,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleStatusChange('Done')} disabled={isSaving}>
                               <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                            </Button>
-                           <Button variant="outline" className="w-full" onClick={() => handleStatusChange('Doing')} disabled={isSaving}>
+                           <Button variant="outline" className="w-full" onClick={handleRequestRevisions} disabled={isSaving}>
                               <RefreshCcw className="mr-2 h-4 w-4" />Request Revisions
                            </Button>
                         </div>
@@ -1449,6 +1524,31 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               )}
             </div>
           </ScrollArea>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reason for Revision</DialogTitle>
+            <DialogDescription>
+              Please provide feedback for the assignee on why this task needs revisions. This will be added as a comment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Textarea
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="e.g., The final design is missing the client's new logo."
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || !rejectionReason.trim()}>
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Request Revisions
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

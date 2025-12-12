@@ -90,7 +90,12 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       const batch = writeBatch(firestore);
       const taskRef = doc(firestore, 'tasks', taskId);
       
-      const newActivity = createActivity(profile, `moved task from "${task.status}" to "${newStatus}"`);
+      let actionText = `moved task from "${task.status}" to "${newStatus}"`;
+      if(task.status === 'Preview' && newStatus === 'Doing') {
+        actionText = `returned the task for revisions`;
+      }
+      
+      const newActivity = createActivity(profile, actionText);
       const updatedActivities = [...(task.activities || []), newActivity];
 
       const updates: Partial<Task> = {
@@ -114,8 +119,13 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       
       batch.update(taskRef, updates);
 
-      const notificationTitle = `Status Changed: ${task.title}`;
-      const notificationMessage = `${profile.name} changed the status of "${task.title.substring(0, 30)}..." to ${newStatus}.`;
+      let notificationTitle = `Status Changed: ${task.title}`;
+      let notificationMessage = `${profile.name} changed the status of "${task.title.substring(0, 30)}..." to ${newStatus}.`;
+
+      if (task.status === 'Preview' && newStatus === 'Doing') {
+        notificationTitle = `Revisions Required: ${task.title}`;
+        notificationMessage = `${profile.name} returned your task for revision. Please check for new comments.`;
+      }
 
       const notifiedUserIds = new Set<string>();
 
@@ -138,7 +148,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
               title: notificationTitle,
               message: notificationMessage,
               taskId: task.id,
-              taskTitle: task.title,
               isRead: false,
               createdAt: serverTimestamp() as any,
               createdBy: newActivity.user,
