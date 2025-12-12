@@ -55,6 +55,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 
 const taskDetailsSchema = z.object({
@@ -1078,12 +1079,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           )}
                         </div>
 
-                         <Tabs defaultValue="subtasks" className="w-full">
-                            <TabsList>
-                                <TabsTrigger value="subtasks">Subtasks</TabsTrigger>
-                                <TabsTrigger value="comments">Comments</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="subtasks" className="mt-4 space-y-4">
+                        <Accordion type="single" collapsible defaultValue="subtasks">
+                          <AccordionItem value="subtasks">
+                            <AccordionTrigger className="font-semibold text-sm">Subtasks</AccordionTrigger>
+                            <AccordionContent className="mt-4 space-y-4">
                                 <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                     {subtasks.map((subtask) => (
@@ -1162,55 +1161,56 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                     <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
                                   </div>
                                 )}
-                            </TabsContent>
-                            <TabsContent value="comments" className="mt-4">
-                                <div className="space-y-6">
-                                    {(initialTask.comments || []).map(comment => (
-                                        <div key={comment.id} className="flex gap-3">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
-                                                <div className="text-sm bg-secondary p-3 rounded-lg mt-1 space-y-2">
-                                                  <p>{comment.text}</p>
-                                                  {comment.attachment && (
-                                                    <a href={comment.attachment.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                                                      <Paperclip className="h-4 w-4" />
-                                                      <span>{comment.attachment.name}</span>
-                                                    </a>
-                                                  )}
-                                                </div>
-                                            </div>
+                            </AccordionContent>
+                          </AccordionItem>
+                        </Accordion>
+                        
+                        <div className="space-y-4">
+                           <h3 className="font-semibold text-sm">Comments</h3>
+                            {(initialTask.comments || []).map(comment => (
+                                <div key={comment.id} className="flex gap-3">
+                                    <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
+                                        <div className="text-sm bg-secondary p-3 rounded-lg mt-1 space-y-2">
+                                          <p>{comment.text}</p>
+                                          {comment.attachment && (
+                                            <a href={comment.attachment.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
+                                              <Paperclip className="h-4 w-4" />
+                                              <span>{comment.attachment.name}</span>
+                                            </a>
+                                          )}
                                         </div>
-                                    ))}
-                                    {canComment && (
-                                        <div className="flex gap-3 pt-4 border-t">
-                                            <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                                            <div className="flex-1 relative">
-                                                <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-24" />
-                                                {commentAttachment && (
-                                                  <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
-                                                    <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="truncate">{commentAttachment.name}</span>
-                                                    <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setCommentAttachment(null)}>
-                                                      <X className="h-4 w-4" />
-                                                    </Button>
-                                                  </div>
-                                                )}
-                                                <div className="absolute top-2 right-2 flex items-center gap-1">
-                                                    <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
-                                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
-                                                        <Paperclip className="h-4 w-4"/>
-                                                    </Button>
-                                                    <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
-                                                        {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
+                                    </div>
                                 </div>
-                            </TabsContent>
-                        </Tabs>
+                            ))}
+                            {canComment && (
+                                <div className="flex gap-3 pt-4 border-t">
+                                    <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
+                                    <div className="flex-1 relative">
+                                        <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-24" />
+                                        {commentAttachment && (
+                                          <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
+                                            <Paperclip className="h-4 w-4 text-muted-foreground" />
+                                            <span className="truncate">{commentAttachment.name}</span>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setCommentAttachment(null)}>
+                                              <X className="h-4 w-4" />
+                                            </Button>
+                                          </div>
+                                        )}
+                                        <div className="absolute top-2 right-2 flex items-center gap-1">
+                                            <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
+                                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
+                                                <Paperclip className="h-4 w-4"/>
+                                            </Button>
+                                            <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
+                                                {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </ScrollArea>
 
