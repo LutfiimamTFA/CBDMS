@@ -25,7 +25,7 @@ export function initializeFirebase() {
   auth = getAuth(firebaseApp);
   firestore = getFirestore(firebaseApp);
   // Ensure storage is initialized with the correct bucket.
-  storage = getStorage(firebaseApp, firebaseConfig.storageBucket);
+  storage = getStorage(firebaseApp);
 
 
   return { firebaseApp, auth, firestore, storage };

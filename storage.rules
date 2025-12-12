@@ -15,6 +15,12 @@ service firebase.storage {
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
 
+    // Logos can be read by anyone, but only authenticated users can write.
+    match /logos/{companyId} {
+        allow read;
+        allow write: if isSignedIn();
+    }
+
     // Attachments can only be written by authenticated users.
     // We assume that the read access will be handled by the application logic
     // which only shows task details (and thus attachment links) to authorized users.
@@ -23,9 +29,15 @@ service firebase.storage {
       allow write: if isSignedIn();
     }
     
+    // Social media uploads can be written by authenticated users.
+    match /social-media/{companyId}/{mediaId} {
+      allow read;
+      allow write: if isSignedIn();
+    }
+    
     // Deny all other writes by default for security.
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow write: if false;
     }
   }
 }
