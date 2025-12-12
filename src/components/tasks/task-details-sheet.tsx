@@ -835,15 +835,41 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     });
   };
 
-  const subtaskAssigneeOptions = useMemo(() => {
-    if (currentAssignees.length > 0) {
-        return {
-            "Task Assignees": currentAssignees,
-            "Other Team Members": allUsers?.filter(u => u.companyId === currentUser?.companyId && !currentAssignees.some(a => a.id === u.id)) || []
+  const handleReopenTask = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Doing');
+  }
+
+ const subtaskAssigneeOptions = useMemo(() => {
+    if (!allUsers || !currentUser) return {};
+
+    const myTeam = allUsers.filter(u => u.managerId === currentUser.id);
+    const taskAssignees = currentAssignees.filter(u => u.id !== currentUser.id);
+    
+    const relevantUsers: User[] = [];
+    if (currentUser.role === 'Manager') {
+        relevantUsers.push(currentUser); // The manager themself
+        myTeam.forEach(u => relevantUsers.push(u)); // Their team
+    } else if (currentUser.role === 'Super Admin') {
+        return { "All Team Members": allUsers.filter(u => u.role === 'Manager' || u.role === 'Employee') };
+    } else { // Employee
+        relevantUsers.push(currentUser);
+        if (currentUser.managerId) {
+            const manager = allUsers.find(u => u.id === currentUser.managerId);
+            if (manager) relevantUsers.push(manager);
         }
     }
-    return { "All Team Members": allUsers?.filter(u => u.companyId === currentUser?.companyId) || [] };
-  }, [currentAssignees, allUsers, currentUser]);
+    
+    const mainAssignees = currentAssignees;
+    const otherRelevant = relevantUsers.filter(u => !mainAssignees.some(a => a.id === u.id));
+
+    const result: Record<string, User[]> = {};
+    if (mainAssignees.length > 0) result["Task Assignees"] = mainAssignees;
+    if (otherRelevant.length > 0) result["Other Team Members"] = otherRelevant;
+    
+    return result;
+
+}, [currentAssignees, allUsers, currentUser]);
 
   return (
     <>
@@ -874,7 +900,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {isAssignee && !isSharedView && initialTask.status !== 'Done' && (
+                        {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
@@ -1080,7 +1106,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {isAssignee && !isSharedView && initialTask.status !== 'Done' && (
+                    {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
