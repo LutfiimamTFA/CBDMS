@@ -46,7 +46,8 @@ const defaultStatuses: Omit<WorkflowStatus, 'id' | 'companyId'>[] = [
     { name: 'To Do', order: 0, color: '#808080' },
     { name: 'Doing', order: 1, color: '#3b82f6' },
     { name: 'Preview', order: 2, color: '#a855f7' },
-    { name: 'Done', order: 3, color: '#22c55e' },
+    { name: 'Revisi', order: 3, color: '#f97316' }, // Added Revisi status
+    { name: 'Done', order: 4, color: '#22c55e' },
 ];
 
 export default function WorkflowSettingsPage() {
@@ -329,5 +330,6 @@ export default function WorkflowSettingsPage() {
     </div>
   );
 }
-
     
+
+      
