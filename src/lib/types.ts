@@ -146,6 +146,11 @@ export type SharedLink = {
   updatedAt?: any;
 };
 
+export type RevisionItem = {
+    id: string;
+    text: string;
+    completed: boolean;
+}
 
 export type Task = {
   id: string;
@@ -167,6 +172,7 @@ export type Task = {
   timeLogs?: TimeLog[];
   dependencies?: string[];
   subtasks?: Subtask[];
+  revisionItems?: RevisionItem[];
   recurring?: string;
   isMandatory?: boolean;
   tags?: Tag[];

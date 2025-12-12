@@ -3,17 +3,18 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification, RevisionItem } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Textarea } from '../ui/textarea';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
 
 const createActivity = (user: User, action: string): Activity => {
   return {
@@ -32,7 +33,8 @@ interface KanbanBoardProps {
 interface RevisionState {
   isOpen: boolean;
   task: Task | null;
-  reason: string;
+  items: Omit<RevisionItem, 'id' | 'completed'>[];
+  currentItemText: string;
 }
 
 export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanBoardProps) {
@@ -41,7 +43,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
   const { profile } = useUserProfile();
   const { toast } = useToast();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
-  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, reason: '' });
+  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -94,10 +96,9 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         return;
       }
       
-      // If moving to 'Revisi', open the mandatory feedback dialog
-      if (newStatus === 'Revisi' && task.status === 'Preview') {
-        setRevisionState({ isOpen: true, task, reason: '' });
-        return; // Stop the drop process, let the dialog handle it.
+      if (newStatus === 'Revisi' && (task.status === 'Preview' || task.status === 'Done')) {
+        setRevisionState({ isOpen: true, task, items: [], currentItemText: '' });
+        return; 
       }
 
       setTasks(currentTasks => 
@@ -147,14 +148,12 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
 
       const notifiedUserIds = new Set<string>();
 
-      // Notify all assignees (except the person making the change)
       task.assigneeIds.forEach(assigneeId => {
           if (assigneeId !== profile.id) {
               notifiedUserIds.add(assigneeId);
           }
       });
       
-      // Notify the creator of the task (if they are not the one making the change)
       if (task.createdBy.id !== profile.id) {
           notifiedUserIds.add(task.createdBy.id);
       }
@@ -194,37 +193,36 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
   };
   
   const handleConfirmRejection = async () => {
-    if (!revisionState.task || !revisionState.reason.trim() || !firestore || !profile) return;
+    if (!revisionState.task || revisionState.items.length === 0 || !firestore || !profile) return;
     setIsSaving(true);
     
     const task = revisionState.task;
     const taskRef = doc(firestore, 'tasks', task.id);
     const newStatus = 'Revisi';
+    
+    const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({
+        id: crypto.randomUUID(),
+        text: item.text,
+        completed: false,
+    }));
 
     try {
         const batch = writeBatch(firestore);
-
-        const newComment = {
-            id: `c-${crypto.randomUUID()}`,
-            user: profile,
-            text: `**Revision Request:** ${revisionState.reason}`,
-            timestamp: new Date().toISOString(),
-            replies: [],
-        };
-        const newComments = [...(task.comments || []), newComment];
         
         const newActivity = createActivity(profile, `requested revisions and moved task to "${newStatus}"`);
         const updatedActivities = [...(task.activities || []), newActivity];
 
         batch.update(taskRef, {
             status: newStatus,
-            comments: newComments,
+            revisionItems: newRevisionItems,
             activities: updatedActivities,
             lastActivity: newActivity,
             updatedAt: serverTimestamp(),
+            // Ensure we clear the completion date if a done task is sent for revision
+            actualCompletionDate: deleteField(),
         });
         
-        const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...". See comments for details.`;
+        const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...". See task for revision checklist.`;
         task.assigneeIds.forEach(assigneeId => {
             if (assigneeId !== profile.id) {
                 const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
@@ -244,7 +242,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         await batch.commit();
 
         setTasks(currentTasks => 
-            currentTasks.map(t => t.id === task.id ? { ...t, status: newStatus, comments: newComments } : t)
+            currentTasks.map(t => t.id === task.id ? { ...t, status: newStatus, revisionItems: newRevisionItems } : t)
         );
         toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
 
@@ -253,9 +251,19 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision.' });
     } finally {
         setIsSaving(false);
-        setRevisionState({ isOpen: false, task: null, reason: '' });
+        setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
     }
   }
+  
+  const handleAddRevisionItem = () => {
+    if (revisionState.currentItemText.trim()) {
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
+    }
+  };
 
 
   if (areStatusesLoading) {
@@ -287,27 +295,40 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       <ScrollBar orientation="horizontal" />
     </ScrollArea>
     
-    <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, reason: '' })}>
+    <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Reason for Revision</DialogTitle>
+                <DialogTitle>Create Revision Checklist</DialogTitle>
                 <DialogDescription>
-                  Please provide feedback for the assignee on why this task needs revisions. This will be added as a comment.
+                  Add specific points the assignee needs to fix. Each point will become a checkable item.
                 </DialogDescription>
             </DialogHeader>
-            <div className="py-4">
-                <Textarea
-                    value={revisionState.reason}
-                    onChange={(e) => setRevisionState(prev => ({...prev, reason: e.target.value}))}
-                    placeholder="e.g., The final design is missing the client's new logo."
-                    rows={4}
-                />
+            <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                    {revisionState.items.map((item, index) => (
+                        <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                            <span className="flex-1 text-sm">{item.text}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
+                        </div>
+                    ))}
+                </div>
+                 <div className="flex items-center gap-2">
+                    <Input 
+                        value={revisionState.currentItemText}
+                        onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                        placeholder="e.g., Fix the logo placement"
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
+                    />
+                    <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                        <Plus className="mr-2 h-4 w-4"/> Add
+                    </Button>
+                </div>
             </div>
             <DialogFooter>
-                <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, reason: '' })}>Cancel</Button>
-                <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || !revisionState.reason.trim()}>
+                <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
+                <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Request Revisions
+                    Confirm Revisions
                 </Button>
             </DialogFooter>
         </DialogContent>
