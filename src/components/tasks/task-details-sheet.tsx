@@ -198,7 +198,6 @@ export function TaskDetailsSheet({
   const canManageSubtasks = isSharedView ? (permissions.canEditContent || false) : !!currentUser;
   
   const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
-  const isEmployee = currentUser?.role === 'Employee';
   const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
 
   const form = useForm<TaskDetailsFormValues>({
@@ -1062,7 +1061,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {isEmployee && initialTask.status === 'Doing' && !isSharedView && (
+                    {isAssignee && initialTask.status !== 'Done' && !isSharedView && (
                          <div className="space-y-2">
                            <Button className="w-full" onClick={() => handleSubmitForReview()} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
