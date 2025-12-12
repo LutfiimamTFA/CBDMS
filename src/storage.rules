@@ -1,0 +1,37 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if a user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Avatars can be read by anyone, but only the user themselves can write.
+    match /avatars/{userId} {
+      allow read;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Logos can be read by anyone, but only authenticated users can write.
+    match /logos/{companyId} {
+        allow read;
+        allow write: if isSignedIn();
+    }
+
+    // Attachments can only be written by authenticated users.
+    // We assume that the read access will be handled by the application logic
+    // which only shows task details (and thus attachment links) to authorized users.
+    match /attachments/{taskId}/{attachmentId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+    
+    // Deny all other writes by default for security.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
