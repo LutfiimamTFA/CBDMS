@@ -94,6 +94,7 @@ export default function UsersPage() {
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isResetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -321,23 +322,22 @@ export default function UsersPage() {
    const handleForcePasswordReset = async () => {
         if (!selectedUser) return;
         setIsLoading(true);
+        setResetConfirmOpen(false);
         try {
-            const response = await fetch('/api/send-password-reset', {
+            const response = await fetch('/api/admin-reset-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: selectedUser.email }),
+                body: JSON.stringify({ uid: selectedUser.id }),
             });
 
+            const data = await response.json();
+
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to force password reset.');
+                throw new Error(data.message || 'Failed to reset password.');
             }
             
-            toast({
-                title: 'Reset Forced!',
-                description: `${selectedUser.name} will be required to change their password on next login.`,
-            });
-            setResetConfirmOpen(false);
+            setGeneratedPassword(data.temporaryPassword);
+            
         } catch (error: any) {
             toast({
                 variant: 'destructive',
@@ -391,6 +391,14 @@ export default function UsersPage() {
   const openResetConfirmDialog = (user: User) => {
       setSelectedUser(user);
       setResetConfirmOpen(true);
+  }
+  
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+        title: "Copied to Clipboard",
+        description: "The temporary password has been copied."
+    });
   }
 
   const roleColors: Record<User['role'], string> = {
@@ -617,7 +625,7 @@ export default function UsersPage() {
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
                                      <DropdownMenuItem onClick={() => openResetConfirmDialog(user)}>
-                                        <KeyRound className="mr-2 h-4 w-4" /> Force Password Reset
+                                        <KeyRound className="mr-2 h-4 w-4" /> Reset Password
                                     </DropdownMenuItem>
                                      {currentUserProfile?.role === 'Super Admin' && user.role === 'Manager' && (
                                         <DropdownMenuItem
@@ -759,26 +767,46 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
       
-        <AlertDialog open={isResetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+      <AlertDialog open={isResetConfirmOpen} onOpenChange={setResetConfirmOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Force Password Reset?</AlertDialogTitle>
+                <AlertDialogTitle>Reset Password for {selectedUser?.name}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    This will flag the user <strong className='text-foreground'>{selectedUser?.name}</strong>.
-                    On their next login, they will be required to set a new password. They will not receive an email.
+                    This will generate a new temporary password and mark the user's account to require a password change on their next login.
                     <br/><br/>
-                    Are you sure you want to proceed?
+                    You will be shown the temporary password to provide to the user. Are you sure you want to proceed?
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleForcePasswordReset} disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Yes, Force Reset
+                    Yes, Reset Password
                 </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!generatedPassword} onOpenChange={(open) => !open && setGeneratedPassword(null)}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Temporary Password Generated</DialogTitle>
+                  <DialogDescription>
+                    Please provide the following temporary password to <strong className='text-foreground'>{selectedUser?.name}</strong>. They will be required to change it upon login.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className='py-4'>
+                <div className='flex items-center gap-2'>
+                    <Input readOnly value={generatedPassword || ''} className="font-mono text-lg" />
+                    <Button size="icon" onClick={() => copyToClipboard(generatedPassword || '')}><Copy className='h-4 w-4'/></Button>
+                </div>
+              </div>
+              <DialogFooter>
+                  <Button onClick={() => setGeneratedPassword(null)}>Done</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -802,3 +830,4 @@ export default function UsersPage() {
     </div>
   );
 }
+

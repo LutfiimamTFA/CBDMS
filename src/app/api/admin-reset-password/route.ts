@@ -14,6 +14,16 @@ function initializeAdminApp(): App {
   });
 }
 
+// Function to generate a random, memorable password
+function generateTemporaryPassword(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let password = '';
+    for (let i = 0; i < 8; i++) {
+        password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `Temp-${password}!`;
+}
+
 export async function POST(request: Request) {
   try {
     const app = initializeAdminApp();
@@ -24,21 +34,27 @@ export async function POST(request: Request) {
     }
     
     const auth = getAuth(app);
+    
+    const temporaryPassword = generateTemporaryPassword();
+
+    // 1. Update user password in Auth
+    await auth.updateUser(uid, {
+        password: temporaryPassword
+    });
+
+    // 2. Set custom claim to force password change on next login
     const user = await auth.getUser(uid);
     const currentClaims = user.customClaims || {};
-
-    // Set a custom claim to force password change on next login
     await auth.setCustomUserClaims(uid, { ...currentClaims, mustChangePassword: true });
     
-    // Revoke refresh tokens to ensure the new claim is applied on next login
-    await auth.revokeRefreshTokens(uid);
-    
+    // 3. Return the temporary password to the admin
     return NextResponse.json({ 
-        message: 'User account has been marked for password change on next login.'
+        message: 'User password has been reset. Please provide the temporary password to the user.',
+        temporaryPassword: temporaryPassword 
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error('Error in send-password-reset:', error);
+    console.error('Error resetting user password:', error);
     let errorMessage = 'An unexpected error occurred.';
     let statusCode = 500;
     
