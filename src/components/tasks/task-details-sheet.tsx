@@ -44,7 +44,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
@@ -575,11 +575,11 @@ export function TaskDetailsSheet({
   const handleAddSubtask = () => {
     if (!newSubtask.trim()) return;
     
-    let assignedUser = newSubtaskAssignee;
+    let assignedUser: User | null = newSubtaskAssignee;
     // Auto-assign if only one person is on the main task
     if (!assignedUser && currentAssignees.length === 1) {
         assignedUser = currentAssignees[0];
-    } else if (!assignedUser && !isManagerOrAdmin) {
+    } else if (!assignedUser && !isManagerOrAdmin && currentUser) {
         // Auto-assign to self if employee
         assignedUser = currentUser;
     }
@@ -953,13 +953,18 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
     
     if (currentUser.role === 'Employee') {
-        const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
         const manager = allUsers.find(u => u.id === currentUser.managerId);
         
-        const myTeamAndManager = [...myTeam];
-        if (manager) myTeamAndManager.push(manager);
+        // Team is everyone with the same manager, including self.
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
+        
+        // Make sure manager is in the list if they exist
+        const teamWithManager = [...myTeam];
+        if (manager && !teamWithManager.some(u => u.id === manager.id)) {
+            teamWithManager.push(manager);
+        }
 
-        const otherTeamMembers = myTeamAndManager.filter(u => !mainAssignees.some(a => a.id === u.id));
+        const otherTeamMembers = teamWithManager.filter(u => !mainAssignees.some(a => a.id === u.id));
 
         return {
             ...createGroup("Task Assignees", mainAssignees),
@@ -999,7 +1004,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
+                        {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && initialTask.status !== 'Preview' &&(
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
