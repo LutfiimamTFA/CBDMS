@@ -144,46 +144,30 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const usersQuery = React.useMemo(() => {
     if (!firestore || !currentUserProfile) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
-     // For Managers, fetch themselves and their direct reports
-    if (currentUserProfile.role === 'Manager') {
-        const relevantIds = [currentUserProfile.id];
-        q = query(q, where('managerId', '==', currentUserProfile.id));
-    }
     return q;
   }, [firestore, currentUserProfile]);
-
-  const { data: usersData, isLoading: areUsersLoading } = useCollection<UserType>(usersQuery);
+  const { data: allUsers, isLoading: areUsersLoading } = useCollection<UserType>(usersQuery);
   
-  // For SuperAdmins, fetch all users. For Managers, we combine their team with themselves.
-  const users = useMemo(() => {
-    if (!usersData) return [];
-    if (currentUserProfile?.role === 'Manager') {
-        const managerSelf = {
-            id: currentUserProfile.id,
-            name: currentUserProfile.name,
-            email: currentUserProfile.email,
-            avatarUrl: currentUserProfile.avatarUrl || '',
-            role: currentUserProfile.role,
-            companyId: currentUserProfile.companyId,
-            brandIds: currentUserProfile.brandIds,
-            createdAt: currentUserProfile.createdAt,
-        };
-        return [managerSelf, ...usersData];
-    }
-    return usersData;
-  }, [usersData, currentUserProfile]);
-
-
   const userOptions = useMemo(() => {
-    if (!users) return [];
-    if (currentUserProfile?.role === 'Manager') {
-        return users.map(user => ({ value: user.id, label: user.name }));
+    if (!allUsers || !currentUserProfile) return [];
+
+    if (currentUserProfile.role === 'Manager') {
+      const team = allUsers.filter(u => u.managerId === currentUserProfile.id);
+      const self = allUsers.find(u => u.id === currentUserProfile.id);
+      const options = self ? [self, ...team] : team;
+      return options.map(user => ({ value: user.id, label: user.name }));
     }
-    // Super Admins see all
-    return users
+    
+    // Super Admin sees all employees and managers
+    return allUsers
       .filter(u => u.role === 'Manager' || u.role === 'Employee')
-      .map(user => ({ value: user.id, label: user.name }));
-  }, [users, currentUserProfile]);
+      .map(user => ({
+        value: user.id,
+        label: user.name,
+    }));
+
+  }, [allUsers, currentUserProfile]);
+
   
   const tasksCollectionRef = React.useMemo(() => {
     if (!firestore) return null;
@@ -206,9 +190,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const userWorkload = useMemo(() => {
     const workloadMap = new Map<string, number>();
-    if (!allTasks || !users) return workloadMap;
+    if (!allTasks || !allUsers) return workloadMap;
 
-    users.forEach(u => workloadMap.set(u.id, 0));
+    allUsers.forEach(u => workloadMap.set(u.id, 0));
 
     allTasks.forEach(task => {
         if (task.status !== 'Done') {
@@ -221,31 +205,31 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     });
 
     return workloadMap;
-  }, [allTasks, users]);
+  }, [allTasks, allUsers]);
 
   const groupedUsers = useMemo(() => {
-    if (!users || !currentUserProfile) return { managers: [], employees: [], clients: [] };
+    if (!allUsers || !currentUserProfile) return { managers: [], employees: [], clients: [] };
     
     if (currentUserProfile.role === 'Super Admin') {
-      const managers = (users || []).filter(u => u.role === 'Manager');
-      const employees = (users || []).filter(u => u.role === 'Employee');
-      const clients = (users || []).filter(u => u.role === 'Client');
+      const managers = (allUsers || []).filter(u => u.role === 'Manager');
+      const employees = (allUsers || []).filter(u => u.role === 'Employee');
+      const clients = (allUsers || []).filter(u => u.role === 'Client');
       return { managers, employees, clients };
     }
     
     if (currentUserProfile.role === 'Manager') {
-        const self = (users || []).find(u => u.id === currentUserProfile.id);
-        const myEmployees = (users || []).filter(u => u.managerId === currentUserProfile.id && u.id !== currentUserProfile.id);
+        const self = (allUsers || []).find(u => u.id === currentUserProfile.id);
+        const myEmployees = (allUsers || []).filter(u => u.managerId === currentUserProfile.id && u.id !== currentUserProfile.id);
         return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
     }
     
     if (currentUserProfile.role === 'Employee') {
-      const employees = (users || []).filter(u => u.role === 'Employee');
-      return { managers: [], employees: [], clients: [] };
+      const self = (allUsers || []).find(u => u.id === currentUserProfile.id);
+      return { managers: [], employees: self ? [self] : [], clients: [] };
     }
 
     return { managers: [], employees: [], clients: [] };
-  }, [users, currentUserProfile]);
+  }, [allUsers, currentUserProfile]);
 
 
   const quickDateOptions = [
@@ -344,7 +328,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             title: 'New Task Assigned',
             message: `${currentUserProfile.name} assigned you a new task: "${data.title}"`,
             taskId: newTaskRef.id,
-            taskTitle: data.title,
             isRead: false,
             createdAt: new Date().toISOString(),
             createdBy: {
@@ -359,7 +342,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     comments.forEach(comment => {
         const mentionedUsernames = comment.text.match(/@(\w+)/g)?.map(m => m.substring(1));
         if (mentionedUsernames) {
-            const mentionedUsers = (users || []).filter(u => mentionedUsernames.includes(u.name.split(' ')[0]));
+            const mentionedUsers = (allUsers || []).filter(u => mentionedUsernames.includes(u.name.split(' ')[0]));
             mentionedUsers.forEach(mentionedUser => {
                 if (mentionedUser.id === currentUserProfile.id) return;
                 
@@ -369,7 +352,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     title: 'You were mentioned',
                     message: `${comment.user.name} mentioned you in a comment on task: "${data.title}"`,
                     taskId: newTaskRef.id,
-                    taskTitle: data.title,
                     isRead: false,
                     createdAt: new Date().toISOString(),
                     createdBy: {
@@ -653,7 +635,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     const mentionMatch = text.match(/@(\w*)$/);
     if (mentionMatch) {
       setIsMentioning(true);
-      setMentionSuggestions((users || []).filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+      setMentionSuggestions((allUsers || []).filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
     } else {
       setIsMentioning(false);
     }
@@ -972,7 +954,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                               onValueChange={(value) => {
                                 form.setValue('assigneeIds', value);
                                 setSelectedUsers(
-                                  users?.filter((u) => value.includes(u.id)) || []
+                                  allUsers?.filter((u) => value.includes(u.id)) || []
                                 );
                               }}
                               defaultValue={field.value || []}
@@ -1006,7 +988,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                       <PopoverContent className="w-60 p-1">
                                         <div className="space-y-1">
                                           <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
-                                          {(users || []).map(user => (
+                                          {(allUsers || []).map(user => (
                                             <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
                                               <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
                                               <span className="truncate">{user.name}</span>
@@ -1035,7 +1017,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                               <PopoverContent className="w-60 p-1">
                                 <div className="space-y-1">
                                   <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                  {(users || []).map(user => (
+                                  {(allUsers || []).map(user => (
                                     <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
                                       <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
                                       <span className="truncate">{user.name}</span>
