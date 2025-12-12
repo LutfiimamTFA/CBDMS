@@ -117,11 +117,24 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       const notificationTitle = `Status Changed: ${task.title}`;
       const notificationMessage = `${profile.name} changed the status of "${task.title.substring(0, 30)}..." to ${newStatus}.`;
 
+      const notifiedUserIds = new Set<string>();
+
+      // Notify all assignees (except the person making the change)
       task.assigneeIds.forEach(assigneeId => {
-          if (assigneeId === profile.id) return;
-          const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+          if (assigneeId !== profile.id) {
+              notifiedUserIds.add(assigneeId);
+          }
+      });
+      
+      // Notify the creator of the task (if they are not the one making the change)
+      if (task.createdBy.id !== profile.id) {
+          notifiedUserIds.add(task.createdBy.id);
+      }
+
+      notifiedUserIds.forEach(userId => {
+          const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
           const newNotification: Omit<Notification, 'id'> = {
-              userId: assigneeId,
+              userId,
               title: notificationTitle,
               message: notificationMessage,
               taskId: task.id,

@@ -297,15 +297,29 @@ export function TaskDetailsSheet({
 
         const notificationTitle = `Status Changed: ${initialTask.title}`;
         const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
+        
+        const notifiedUserIds = new Set<string>();
 
+        // Notify all assignees (except the person making the change)
         initialTask.assigneeIds.forEach(assigneeId => {
-            if (assigneeId === currentUser.id) return;
-            const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+            if (assigneeId !== currentUser.id) {
+                notifiedUserIds.add(assigneeId);
+            }
+        });
+
+        // Notify the creator of the task (if they are not the one making the change)
+        if (initialTask.createdBy.id !== currentUser.id) {
+            notifiedUserIds.add(initialTask.createdBy.id);
+        }
+
+        notifiedUserIds.forEach(userId => {
+            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
             const newNotification: Omit<Notification, 'id'> = {
-                userId: assigneeId,
+                userId,
                 title: notificationTitle,
                 message: notificationMessage,
                 taskId: initialTask.id,
+                taskTitle: initialTask.title,
                 isRead: false,
                 createdAt: serverTimestamp() as any,
                 createdBy: newActivity.user,
@@ -459,12 +473,17 @@ export function TaskDetailsSheet({
 
         const notifiedUserIds = new Set<string>();
 
-        // Notify all assignees
+        // Notify all assignees (except the person making the change)
         initialTask.assigneeIds.forEach(assigneeId => {
             if (assigneeId !== currentUser.id) {
                 notifiedUserIds.add(assigneeId);
             }
         });
+        
+        // Notify the creator of the task (if they are not the one making the change)
+        if (initialTask.createdBy.id !== currentUser.id) {
+            notifiedUserIds.add(initialTask.createdBy.id);
+        }
 
         // Notify mentioned users
         const mentionedUsers = newComment.match(/@(\w+)/g)?.map(m => m.substring(1)) || [];
