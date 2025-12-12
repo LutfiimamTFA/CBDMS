@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ export function LanguageSwitcher() {
       height={15}
       alt={countryCode}
       className="rounded-sm"
+      style={{ height: 'auto' }}
     />
   );
 
