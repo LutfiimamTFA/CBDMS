@@ -300,7 +300,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
             <DialogHeader>
                 <DialogTitle>Create Revision Checklist</DialogTitle>
                 <DialogDescription>
-                  Add specific points the assignee needs to fix. Each point will become a checkable item.
+                  Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
                 </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
