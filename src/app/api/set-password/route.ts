@@ -9,6 +9,7 @@ function initializeAdminApp(): App {
   if (getApps().length > 0) {
     return getApps()[0];
   }
+
   return initializeApp({
     credential: cert(serviceAccount),
   });
@@ -17,28 +18,31 @@ function initializeAdminApp(): App {
 export async function POST(request: Request) {
   try {
     const app = initializeAdminApp();
-    const { email } = await request.json();
+    const { uid, password } = await request.json();
 
-    if (!email) {
-      return NextResponse.json({ message: 'User email is required.' }, { status: 400 });
+    if (!uid || !password) {
+      return NextResponse.json({ message: 'User ID (uid) and password are required.' }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+        return NextResponse.json({ message: 'Password must be at least 6 characters long.' }, { status: 400 });
     }
     
     const auth = getAuth(app);
+
+    // Update user password in Auth
+    await auth.updateUser(uid, {
+        password: password
+    });
     
-    // Generate the password reset link
-    await auth.generatePasswordResetLink(email);
-    
-    // While the link is generated, Firebase's email handler (if enabled)
-    // will send the email automatically.
-    
-    return NextResponse.json({ message: 'Password reset email sent successfully.' }, { status: 200 });
+    return NextResponse.json({ message: 'Password updated successfully' }, { status: 200 });
   } catch (error: any) {
-    console.error('Error sending password reset email:', error);
+    console.error('Error setting password:', error);
     let errorMessage = 'An unexpected error occurred.';
     let statusCode = 500;
     
     if (error.code === 'auth/user-not-found') {
-        errorMessage = "User not found with that email address.";
+        errorMessage = "User not found.";
         statusCode = 404;
     } else if (error.message?.includes('FIREBASE_SERVICE_ACCOUNT_KEY') || error.code === 'app/invalid-credential') {
         errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials in environment variables.';

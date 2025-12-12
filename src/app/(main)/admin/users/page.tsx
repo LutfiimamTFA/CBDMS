@@ -50,7 +50,7 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2, KeyRound, Copy, Star } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, Edit, Loader2, KeyRound, Copy, Star, Mail } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile, useDoc } from '@/firebase';
 import type { User, Brand, CompanySettings } from '@/lib/types';
@@ -81,17 +81,8 @@ const editUserSchema = z.object({
   brandIds: z.array(z.string()).optional(),
 });
 
-const setPasswordSchema = z.object({
-    newPassword: z.string().min(6, 'Password must be at least 6 characters long.'),
-    confirmPassword: z.string(),
-}).refine(data => data.newPassword === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ["confirmPassword"],
-});
-
 type UserFormValues = z.infer<typeof userSchema>;
 type EditUserFormValues = z.infer<typeof editUserSchema>;
-type SetPasswordFormValues = z.infer<typeof setPasswordSchema>;
 
 export default function UsersPage() {
   const { toast } = useToast();
@@ -102,7 +93,7 @@ export default function UsersPage() {
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [isPasswordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [isResetConfirmOpen, setResetConfirmOpen] = useState(false);
   
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -184,14 +175,6 @@ export default function UsersPage() {
 
   const editForm = useForm<EditUserFormValues>({
     resolver: zodResolver(editUserSchema),
-  });
-
-  const passwordForm = useForm<SetPasswordFormValues>({
-      resolver: zodResolver(setPasswordSchema),
-      defaultValues: {
-          newPassword: '',
-          confirmPassword: '',
-      }
   });
   
   const createFormRole = createForm.watch('role');
@@ -335,27 +318,26 @@ export default function UsersPage() {
     }
   };
 
-   const handleSetPassword = async (data: SetPasswordFormValues) => {
+   const handleSendPasswordReset = async () => {
         if (!selectedUser) return;
         setIsLoading(true);
         try {
-            const response = await fetch('/api/set-password', {
+            const response = await fetch('/api/send-password-reset', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uid: selectedUser.id, password: data.newPassword }),
+                body: JSON.stringify({ email: selectedUser.email }),
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to set password.');
+                throw new Error(errorData.message || 'Failed to send password reset email.');
             }
             
             toast({
-                title: 'Password Updated',
-                description: `Password for ${selectedUser.name} has been changed.`,
+                title: 'Email Sent!',
+                description: `A password reset link has been sent to ${selectedUser.email}.`,
             });
-            passwordForm.reset();
-            setPasswordDialogOpen(false);
+            setResetConfirmOpen(false);
         } catch (error: any) {
             toast({
                 variant: 'destructive',
@@ -406,9 +388,9 @@ export default function UsersPage() {
     setDeleteDialogOpen(true);
   };
 
-  const openPasswordDialog = (user: User) => {
+  const openResetConfirmDialog = (user: User) => {
       setSelectedUser(user);
-      setPasswordDialogOpen(true);
+      setResetConfirmOpen(true);
   }
 
   const roleColors: Record<User['role'], string> = {
@@ -634,8 +616,8 @@ export default function UsersPage() {
                                     <DropdownMenuItem onClick={() => openEditDialog(user)}>
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
-                                     <DropdownMenuItem onClick={() => openPasswordDialog(user)}>
-                                        <KeyRound className="mr-2 h-4 w-4" /> Set Password
+                                     <DropdownMenuItem onClick={() => openResetConfirmDialog(user)}>
+                                        <Mail className="mr-2 h-4 w-4" /> Send Password Reset
                                     </DropdownMenuItem>
                                      {currentUserProfile?.role === 'Super Admin' && user.role === 'Manager' && (
                                         <DropdownMenuItem
@@ -777,35 +759,25 @@ export default function UsersPage() {
         </DialogContent>
       </Dialog>
       
-        <Dialog open={isPasswordDialogOpen} onOpenChange={setPasswordDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-                <DialogTitle>Set New Password for {selectedUser?.name}</DialogTitle>
-                <DialogDescription>
-                    Enter and confirm the new password for this user. They will be able to log in with this new password immediately.
-                </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={passwordForm.handleSubmit(handleSetPassword)} className="space-y-4 pt-4">
-                <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input id="newPassword" type="password" {...passwordForm.register('newPassword')} />
-                    {passwordForm.formState.errors.newPassword && <p className="text-sm text-destructive">{passwordForm.formState.errors.newPassword.message}</p>}
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                    <Input id="confirmPassword" type="password" {...passwordForm.register('confirmPassword')} />
-                    {passwordForm.formState.errors.confirmPassword && <p className="text-sm text-destructive">{passwordForm.formState.errors.confirmPassword.message}</p>}
-                </div>
-                <DialogFooter>
-                    <Button type="button" variant="ghost" onClick={() => setPasswordDialogOpen(false)}>Cancel</Button>
-                    <Button type="submit" disabled={isLoading}>
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Set Password
-                    </Button>
-                </DialogFooter>
-            </form>
-          </DialogContent>
-      </Dialog>
+        <AlertDialog open={isResetConfirmOpen} onOpenChange={setResetConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Send Password Reset?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will send a password reset link to <strong className='text-foreground'>{selectedUser?.email}</strong>. The user will be able to set their own new password.
+                    <br/><br/>
+                    Are you sure you want to proceed?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSendPasswordReset} disabled={isLoading}>
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Yes, Send Email
+                </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
