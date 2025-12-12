@@ -301,12 +301,12 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
                 <DialogTitle>Create Revision Checklist</DialogTitle>
                 <DialogDescription>
                   Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
-                  {revisionState.task?.description && (
-                      <div className="text-xs text-muted-foreground mt-1 border-l-2 pl-2 italic">
-                          {revisionState.task.description}
-                      </div>
-                  )}
                 </DialogDescription>
+                {revisionState.task?.description && (
+                    <p className="text-xs text-muted-foreground pt-1 border-l-2 pl-2 italic">
+                        {revisionState.task.description}
+                    </p>
+                )}
             </DialogHeader>
             <div className="py-4 space-y-4">
                 <div className="space-y-2">
