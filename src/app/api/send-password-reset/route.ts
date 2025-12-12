@@ -30,12 +30,12 @@ export async function POST(request: Request) {
     const currentClaims = user.customClaims || {};
     await auth.setCustomUserClaims(user.uid, { ...currentClaims, mustChangePassword: true });
     
-    // Generate the password reset link which Firebase sends automatically
-    await auth.generatePasswordResetLink(email);
+    // IMPORTANT: We are NOT sending an email anymore.
+    // The user will be prompted to change password upon their next successful login with their OLD password.
     
-    return NextResponse.json({ message: 'Password reset email sent and user flagged for password change.' }, { status: 200 });
+    return NextResponse.json({ message: 'User flagged for password change on next login.' }, { status: 200 });
   } catch (error: any) {
-    console.error('Error sending password reset email:', error);
+    console.error('Error flagging user for password reset:', error);
     let errorMessage = 'An unexpected error occurred.';
     let statusCode = 500;
     

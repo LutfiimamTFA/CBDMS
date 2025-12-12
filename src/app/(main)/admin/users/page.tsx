@@ -318,7 +318,7 @@ export default function UsersPage() {
     }
   };
 
-   const handleSendPasswordReset = async () => {
+   const handleForcePasswordReset = async () => {
         if (!selectedUser) return;
         setIsLoading(true);
         try {
@@ -330,12 +330,12 @@ export default function UsersPage() {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to send password reset email.');
+                throw new Error(errorData.message || 'Failed to force password reset.');
             }
             
             toast({
-                title: 'Email Sent!',
-                description: `A password reset link has been sent to ${selectedUser.email}.`,
+                title: 'Reset Forced!',
+                description: `${selectedUser.name} will be required to change their password on next login.`,
             });
             setResetConfirmOpen(false);
         } catch (error: any) {
@@ -617,7 +617,7 @@ export default function UsersPage() {
                                         <Edit className="mr-2 h-4 w-4" /> Edit
                                     </DropdownMenuItem>
                                      <DropdownMenuItem onClick={() => openResetConfirmDialog(user)}>
-                                        <Mail className="mr-2 h-4 w-4" /> Send Password Reset
+                                        <KeyRound className="mr-2 h-4 w-4" /> Force Password Reset
                                     </DropdownMenuItem>
                                      {currentUserProfile?.role === 'Super Admin' && user.role === 'Manager' && (
                                         <DropdownMenuItem
@@ -762,18 +762,19 @@ export default function UsersPage() {
         <AlertDialog open={isResetConfirmOpen} onOpenChange={setResetConfirmOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Send Password Reset?</AlertDialogTitle>
+                <AlertDialogTitle>Force Password Reset?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    This will send a password reset link to <strong className='text-foreground'>{selectedUser?.email}</strong>. The user will be able to set their own new password.
+                    This will flag the user <strong className='text-foreground'>{selectedUser?.name}</strong>.
+                    On their next login, they will be required to set a new password. They will not receive an email.
                     <br/><br/>
                     Are you sure you want to proceed?
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleSendPasswordReset} disabled={isLoading}>
+                <AlertDialogAction onClick={handleForcePasswordReset} disabled={isLoading}>
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Yes, Send Email
+                    Yes, Force Reset
                 </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
