@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef } from 'react';
@@ -28,13 +29,24 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile } from 'firebase/auth';
+import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
 });
 
+const passwordSchema = z.object({
+  currentPassword: z.string().min(6, 'Current password is required.'),
+  newPassword: z.string().min(6, 'New password must be at least 6 characters.'),
+  confirmPassword: z.string().min(6, 'Please confirm your new password.'),
+}).refine(data => data.newPassword === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+});
+
+
 type ProfileFormValues = z.infer<typeof profileSchema>;
+type PasswordFormValues = z.infer<typeof passwordSchema>;
 
 export default function SettingsPage() {
   const { user, profile, isLoading: isProfileLoading } = useUserProfile();
@@ -45,6 +57,7 @@ export default function SettingsPage() {
   
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +66,15 @@ export default function SettingsPage() {
     values: {
       name: profile?.name || '',
     },
+  });
+
+  const passwordForm = useForm<PasswordFormValues>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: {
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+    }
   });
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,11 +87,9 @@ export default function SettingsPage() {
       await uploadBytes(storageRef, file);
       const photoURL = await getDownloadURL(storageRef);
 
-      // Update Firestore - useUserProfile hook will react to this change
       const userDocRef = doc(firestore, 'users', user.uid);
       await updateDoc(userDocRef, { avatarUrl: photoURL });
       
-      // Also update Auth profile if you need it synced elsewhere in Firebase
       if (auth?.currentUser) {
         await updateProfile(auth.currentUser, { photoURL });
       }
@@ -116,6 +136,44 @@ export default function SettingsPage() {
       setIsSavingProfile(false);
     }
   };
+
+  const onChangePasswordSubmit = async (data: PasswordFormValues) => {
+    if (!auth?.currentUser || !auth.currentUser.email) {
+        toast({ variant: 'destructive', title: 'Error', description: 'User not found.' });
+        return;
+    }
+    setIsChangingPassword(true);
+
+    try {
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, data.currentPassword);
+        
+        await reauthenticateWithCredential(auth.currentUser, credential);
+        
+        await updatePassword(auth.currentUser, data.newPassword);
+
+        toast({
+            title: 'Password Changed',
+            description: 'Your password has been successfully updated.',
+        });
+        passwordForm.reset();
+
+    } catch (error: any) {
+        let description = 'An unexpected error occurred.';
+        if (error.code === 'auth/wrong-password') {
+            description = 'The current password you entered is incorrect.';
+        } else if (error.code === 'auth/too-many-requests') {
+            description = 'Too many attempts. Please try again later.';
+        }
+        toast({
+            variant: 'destructive',
+            title: 'Password Change Failed',
+            description: description,
+        });
+    } finally {
+        setIsChangingPassword(false);
+    }
+  };
+
 
   const getInitials = (name?: string | null) => {
     if (!name) return 'A';
@@ -207,6 +265,58 @@ export default function SettingsPage() {
                   </Button>
                 </form>
               </Form>
+            </CardContent>
+          </Card>
+
+           <Card>
+            <CardHeader>
+              <CardTitle>Change Password</CardTitle>
+              <CardDescription>
+                Update your password. Make sure it's a strong one!
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Form {...passwordForm}>
+                    <form onSubmit={passwordForm.handleSubmit(onChangePasswordSubmit)} className="space-y-4">
+                        <FormField
+                            control={passwordForm.control}
+                            name="currentPassword"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Current Password</FormLabel>
+                                <FormControl><Input type="password" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={passwordForm.control}
+                            name="newPassword"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>New Password</FormLabel>
+                                <FormControl><Input type="password" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                         <FormField
+                            control={passwordForm.control}
+                            name="confirmPassword"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Confirm New Password</FormLabel>
+                                <FormControl><Input type="password" {...field} /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                         <Button type="submit" disabled={isChangingPassword}>
+                            {isChangingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Change Password
+                        </Button>
+                    </form>
+                </Form>
             </CardContent>
           </Card>
         </div>
