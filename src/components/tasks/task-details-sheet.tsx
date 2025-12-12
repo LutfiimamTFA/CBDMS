@@ -47,7 +47,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp } from 'firebase/firestore';
+import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -191,7 +191,7 @@ export function TaskDetailsSheet({
     if (currentUser.role === 'Employee') {
       // Employee sees their own team.
       const myTeam = (allUsers || []).filter(u => u.managerId === currentUser.managerId);
-      const manager = (allUsers || []).find(u => u.id === currentUser.managerId);
+      const manager = allUsers.find(u => u.id === currentUser.managerId);
       return { managers: manager ? [manager] : [], employees: myTeam, clients: [] };
     }
 
@@ -924,7 +924,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {isAssignee && !isSharedView && initialTask.status !== 'Done' && (
+                        {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
@@ -1130,7 +1130,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {(isAssignee) && !isSharedView && initialTask.status !== 'Done' && (
+                    {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -1153,7 +1153,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         </div>
                     )}
 
-                    {isAssignee && initialTask.status === 'Done' && !isSharedView && (
+                    {(isAssignee || isCreator) && initialTask.status === 'Done' && !isSharedView && (
                          <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                              <RefreshCcw className="mr-2 h-4 w-4" />

@@ -172,7 +172,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
     
     if (currentUserProfile.role === 'Employee') {
-      return allUsers.map(user => ({ value: user.id, label: user.name }));
+        const teamAndManager = [...allUsers];
+        const manager = allUsers.find(u => u.id === currentUserProfile.managerId);
+        if(manager && !teamAndManager.some(u => u.id === manager.id)) {
+            // this is a potential issue, the query for employees should maybe include the manager
+        }
+       return teamAndManager.map(user => ({ value: user.id, label: user.name }));
     }
 
     return [];
