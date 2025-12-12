@@ -176,14 +176,14 @@ export function TaskDetailsSheet({
     }
     
     if (currentUser.role === 'Manager') {
-      const managers = (allUsers || []).filter(u => u.role === 'Manager');
-      const employees = (allUsers || []).filter(u => u.role === 'Employee');
-      return { managers, employees, clients: [] };
+      const self = (allUsers || []).find(u => u.id === currentUser.id);
+      const myEmployees = (allUsers || []).filter(u => u.managerId === currentUser.id);
+      return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
     }
     
     if (currentUser.role === 'Employee') {
-      const employees = (allUsers || []).filter(u => u.role === 'Employee');
-      return { managers: [], employees, clients: [] };
+      const self = (allUsers || []).find(u => u.id === currentUser.id);
+      return { managers: [], employees: self ? [self] : [], clients: [] };
     }
 
     return { managers: [], employees, clients: [] };
@@ -825,7 +825,14 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   const handleSubmitForReview = async () => {
-    await handleStatusChange('Preview');
+      if (!currentUser) return;
+      
+      // If the user is a manager or admin, they can directly mark it as done.
+      if (currentUser.role === 'Manager' || currentUser.role === 'Super Admin') {
+          await handleStatusChange('Done');
+      } else { // Employees submit for review.
+          await handleStatusChange('Preview');
+      }
   };
   
   
@@ -962,15 +969,35 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                                 </Button>
                                               </PopoverTrigger>
                                               <PopoverContent className="w-60 p-1">
-                                                <div className="space-y-1">
-                                                  <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
-                                                  {(allUsers || []).map(user => (
-                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
-                                                      <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                      <span className="truncate">{user.name}</span>
-                                                    </Button>
-                                                  ))}
-                                                </div>
+                                                <ScrollArea className="max-h-60">
+                                                  <div className="space-y-1">
+                                                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
+                                                    <Separator />
+                                                    {groupedUsers.managers.length > 0 && (
+                                                        <>
+                                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
+                                                            {groupedUsers.managers.map(user => (
+                                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                                                                <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                                <span className="truncate">{user.name}</span>
+                                                              </Button>
+                                                            ))}
+                                                        </>
+                                                    )}
+                                                     {groupedUsers.employees.length > 0 && (
+                                                          <>
+                                                            <Separator />
+                                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
+                                                            {groupedUsers.employees.map(user => (
+                                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                                                                <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                                <span className="truncate">{user.name}</span>
+                                                              </Button>
+                                                            ))}
+                                                        </>
+                                                    )}
+                                                  </div>
+                                                </ScrollArea>
                                               </PopoverContent>
                                             </Popover>
 
@@ -992,15 +1019,35 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                         </Button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-60 p-1">
-                                        <div className="space-y-1">
-                                          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                          {(allUsers || []).map(user => (
-                                            <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                              <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                              <span className="truncate">{user.name}</span>
-                                            </Button>
-                                          ))}
-                                        </div>
+                                        <ScrollArea className="max-h-60">
+                                            <div className="space-y-1">
+                                                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                                 <Separator />
+                                                 {groupedUsers.managers.length > 0 && (
+                                                    <>
+                                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
+                                                        {groupedUsers.managers.map(user => (
+                                                        <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                            <span className="truncate">{user.name}</span>
+                                                        </Button>
+                                                        ))}
+                                                    </>
+                                                )}
+                                                {groupedUsers.employees.length > 0 && (
+                                                    <>
+                                                        <Separator />
+                                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
+                                                        {groupedUsers.employees.map(user => (
+                                                        <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                            <span className="truncate">{user.name}</span>
+                                                        </Button>
+                                                        ))}
+                                                    </>
+                                                )}
+                                            </div>
+                                        </ScrollArea>
                                       </PopoverContent>
                                     </Popover>
                                     <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
@@ -1061,11 +1108,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {isAssignee && initialTask.status !== 'Done' && !isSharedView && (
+                    {isAssignee && !isSharedView && initialTask.status !== 'Done' && (
                          <div className="space-y-2">
-                           <Button className="w-full" onClick={() => handleSubmitForReview()} disabled={!allSubtasksCompleted || isSaving}>
+                           <Button className="w-full" onClick={handleSubmitForReview} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                               Submit for Review
+                               { currentUser?.role === 'Employee' ? 'Submit for Review' : 'Mark as Complete' }
                            </Button>
                            {!allSubtasksCompleted && (
                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
@@ -1224,31 +1271,33 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                       <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
                                   </PopoverTrigger>
                                   <PopoverContent className="w-60 p-1">
-                                      <div className="space-y-1">
-                                        {groupedUsers.managers.length > 0 && (
-                                            <>
-                                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
-                                                {groupedUsers.managers.map(user => (
-                                                  <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
-                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                    <span className="truncate">{user.name}</span>
-                                                  </Button>
-                                                ))}
-                                                <Separator/>
-                                            </>
-                                        )}
-                                        {groupedUsers.employees.length > 0 && (
-                                            <>
-                                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
-                                                {groupedUsers.employees.map(user => (
-                                                  <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
-                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                    <span className="truncate">{user.name}</span>
-                                                  </Button>
-                                                ))}
-                                            </>
-                                        )}
-                                      </div>
+                                      <ScrollArea className="max-h-60">
+                                          <div className="space-y-1">
+                                            {groupedUsers.managers.length > 0 && (
+                                                <>
+                                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
+                                                    {groupedUsers.managers.map(user => (
+                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
+                                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                        <span className="truncate">{user.name}</span>
+                                                    </Button>
+                                                    ))}
+                                                    <Separator/>
+                                                </>
+                                            )}
+                                            {groupedUsers.employees.length > 0 && (
+                                                <>
+                                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
+                                                    {groupedUsers.employees.map(user => (
+                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
+                                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                        <span className="truncate">{user.name}</span>
+                                                    </Button>
+                                                    ))}
+                                                </>
+                                            )}
+                                          </div>
+                                      </ScrollArea>
                                   </PopoverContent>
                               </Popover>
                           )}
@@ -1383,3 +1432,4 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
