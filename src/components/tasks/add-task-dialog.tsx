@@ -144,12 +144,25 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const usersQuery = React.useMemo(() => {
     if (!firestore || !currentUserProfile) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
+    
+    // For Employees, fetch only users with the same managerId.
+    if (currentUserProfile.role === 'Employee' && currentUserProfile.managerId) {
+      q = query(q, where('managerId', '==', currentUserProfile.managerId));
+    }
+    
     return q;
   }, [firestore, currentUserProfile]);
+
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<UserType>(usersQuery);
   
   const userOptions = useMemo(() => {
     if (!allUsers || !currentUserProfile) return [];
+
+    if (currentUserProfile.role === 'Super Admin') {
+        return allUsers
+            .filter(u => u.role === 'Manager' || u.role === 'Employee')
+            .map(user => ({ value: user.id, label: user.name }));
+    }
 
     if (currentUserProfile.role === 'Manager') {
       const team = allUsers.filter(u => u.managerId === currentUserProfile.id);
@@ -158,13 +171,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       return options.map(user => ({ value: user.id, label: user.name }));
     }
     
-    // Super Admin sees all employees and managers
-    return allUsers
-      .filter(u => u.role === 'Manager' || u.role === 'Employee')
-      .map(user => ({
-        value: user.id,
-        label: user.name,
-    }));
+    if (currentUserProfile.role === 'Employee') {
+      return allUsers.map(user => ({ value: user.id, label: user.name }));
+    }
+
+    return [];
 
   }, [allUsers, currentUserProfile]);
 
@@ -224,8 +235,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
     
     if (currentUserProfile.role === 'Employee') {
-      const self = (allUsers || []).find(u => u.id === currentUserProfile.id);
-      return { managers: [], employees: self ? [self] : [], clients: [] };
+      // Employee should only see their team
+      const myTeam = (allUsers || []).filter(u => u.managerId === currentUserProfile.managerId);
+      return { managers: [], employees: myTeam, clients: [] };
     }
 
     return { managers: [], employees: [], clients: [] };

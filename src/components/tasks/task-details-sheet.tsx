@@ -146,11 +146,20 @@ export function TaskDetailsSheet({
   const firestore = useFirestore();
   const storage = useStorage();
   
-  const usersCollectionRef = useMemo(() => {
-    if (!firestore) return null;
-    return collection(firestore, 'users');
-  }, [firestore]);
-  const { data: allUsers } = useCollection<User>(usersCollectionRef);
+  const { user: authUser, profile: currentUser } = useUserProfile();
+  
+  const usersQuery = useMemo(() => {
+    if (!firestore || !currentUser) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
+    
+    // For Employees, fetch only users with the same managerId + their manager.
+    if (currentUser.role === 'Employee' && currentUser.managerId) {
+      q = query(q, where('managerId', '==', currentUser.managerId));
+    }
+    return q;
+  }, [firestore, currentUser]);
+
+  const { data: allUsers } = useCollection<User>(usersQuery);
   
   const statusesQuery = useMemo(() => 
     firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
@@ -163,8 +172,6 @@ export function TaskDetailsSheet({
   [firestore]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
-  const { user: authUser, profile: currentUser } = useUserProfile();
-
   const groupedUsers = useMemo(() => {
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
@@ -176,14 +183,16 @@ export function TaskDetailsSheet({
     }
     
     if (currentUser.role === 'Manager') {
-      const self = (allUsers || []).find(u => u.id === currentUser.id);
-      const myEmployees = (allUsers || []).filter(u => u.managerId === currentUser.id);
-      return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
+        const self = (allUsers || []).find(u => u.id === currentUser.id);
+        const myEmployees = (allUsers || []).filter(u => u.managerId === currentUser.id && u.id !== currentUser.id);
+        return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
     }
     
     if (currentUser.role === 'Employee') {
-      const self = (allUsers || []).find(u => u.id === currentUser.id);
-      return { managers: [], employees: self ? [self] : [], clients: [] };
+      // Employee sees their own team.
+      const myTeam = (allUsers || []).filter(u => u.managerId === currentUser.managerId);
+      const manager = (allUsers || []).find(u => u.id === currentUser.managerId);
+      return { managers: manager ? [manager] : [], employees: myTeam, clients: [] };
     }
 
     return { managers: [], employees: [], clients: [] };
@@ -565,7 +574,11 @@ export function TaskDetailsSheet({
     // Auto-assign if only one person is on the main task
     if (!assignedUser && currentAssignees.length === 1) {
         assignedUser = currentAssignees[0];
+    } else if (!assignedUser && !isManagerOrAdmin) {
+        // Auto-assign to self if employee
+        assignedUser = currentUser;
     }
+
 
     const subtask: Subtask = {
       id: `st-${crypto.randomUUID()}`,
@@ -843,32 +856,43 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
  const subtaskAssigneeOptions = useMemo(() => {
     if (!allUsers || !currentUser) return {};
 
-    const myTeam = allUsers.filter(u => u.managerId === currentUser.id);
-    const taskAssignees = currentAssignees.filter(u => u.id !== currentUser.id);
-    
-    const relevantUsers: User[] = [];
-    if (currentUser.role === 'Manager') {
-        relevantUsers.push(currentUser); // The manager themself
-        myTeam.forEach(u => relevantUsers.push(u)); // Their team
-    } else if (currentUser.role === 'Super Admin') {
-        return { "All Team Members": allUsers.filter(u => u.role === 'Manager' || u.role === 'Employee') };
-    } else { // Employee
-        relevantUsers.push(currentUser);
-        if (currentUser.managerId) {
-            const manager = allUsers.find(u => u.id === currentUser.managerId);
-            if (manager) relevantUsers.push(manager);
-        }
+    const createGroup = (title: string, users: User[]) => users.length > 0 ? { [title]: users } : {};
+
+    const mainAssignees = currentAssignees;
+
+    if (currentUser.role === 'Super Admin') {
+        const otherUsers = allUsers.filter(u => u.role !== 'Client' && !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("Other Members", otherUsers),
+        };
     }
     
-    const mainAssignees = currentAssignees;
-    const otherRelevant = relevantUsers.filter(u => !mainAssignees.some(a => a.id === u.id));
-
-    const result: Record<string, User[]> = {};
-    if (mainAssignees.length > 0) result["Task Assignees"] = mainAssignees;
-    if (otherRelevant.length > 0) result["Other Team Members"] = otherRelevant;
+    if (currentUser.role === 'Manager') {
+        const myTeamAndSelf = allUsers.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
+        const otherMembers = myTeamAndSelf.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherMembers),
+        };
+    }
     
-    return result;
+    if (currentUser.role === 'Employee') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
+        const manager = allUsers.find(u => u.id === currentUser.managerId);
+        
+        const myTeamAndManager = [...myTeam];
+        if (manager) myTeamAndManager.push(manager);
 
+        const otherTeamMembers = myTeamAndManager.filter(u => !mainAssignees.some(a => a.id === u.id));
+
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherTeamMembers),
+        };
+    }
+
+    return {};
 }, [currentAssignees, allUsers, currentUser]);
 
   return (
@@ -900,7 +924,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
+                        {isAssignee && !isSharedView && initialTask.status !== 'Done' && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
@@ -1106,7 +1130,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && (
+                    {(isAssignee) && !isSharedView && initialTask.status !== 'Done' && (
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
