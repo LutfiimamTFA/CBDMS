@@ -1,10 +1,11 @@
+
 'use client';
 import { useMemo } from 'react';
 import type { Task } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '../ui/progress';
@@ -53,16 +54,30 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
           <div className="font-medium cursor-pointer pr-2">
             <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
           </div>
-          <TooltipProvider>
-              <Tooltip>
-                  <TooltipTrigger asChild>
-                      <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                      <p>{t(priorityTranslationKey)}</p>
-                  </TooltipContent>
-              </Tooltip>
-          </TooltipProvider>
+          <div className="flex items-center gap-2">
+            {task.isUnderRevision && (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                           <RefreshCcw className="h-4 w-4 text-orange-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                           <p>Task is under revision</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            )}
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>{t(priorityTranslationKey)}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
       
       {(task.timeTracked !== undefined && task.timeEstimate !== undefined) && (

@@ -161,6 +161,7 @@ export type Task = {
   actualStartDate?: string;
   actualCompletionDate?: string;
   currentSessionStartTime?: string; // New field for session tracking
+  isUnderRevision?: boolean; // New field to track revision status
   timeEstimate?: number; // in hours
   timeTracked?: number; // in hours
   timeLogs?: TimeLog[];

@@ -318,6 +318,13 @@ export function TaskDetailsSheet({
             lastActivity: newActivity,
             updatedAt: serverTimestamp() as Timestamp,
         };
+        
+        if (oldStatus === 'Revisi' && newStatus === 'Doing') {
+            updates.isUnderRevision = true;
+        }
+        if (newStatus !== 'Doing' && initialTask.isUnderRevision) {
+            updates.isUnderRevision = deleteField() as any;
+        }
 
         const notificationTitle = `Status Changed: ${initialTask.title}`;
         const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
@@ -847,7 +854,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       setIsSaving(true);
 
       const oldStatus = form.getValues('status');
-      const newStatus = 'Doing';
+      const newStatus = 'Revisi';
       const taskRef = doc(firestore, 'tasks', initialTask.id);
       
       try {
@@ -864,7 +871,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           const newComments = [...(initialTask.comments || []), newComment];
           
           // 2. Create activity log
-          const newActivity = createActivity(currentUser, `requested revisions and moved task from "${oldStatus}" to "${newStatus}"`);
+          const newActivity = createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`);
           const updatedActivities = [...(initialTask.activities || []), newActivity];
 
           // 3. Update task document
@@ -898,7 +905,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
            form.setValue('status', newStatus);
            setRejectionReason('');
-           toast({ title: 'Revisions Requested', description: 'The task has been sent back to "Doing".' });
+           toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
       } catch (error) {
           console.error("Failed to request revisions:", error);
           toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision.' });
