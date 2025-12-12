@@ -241,11 +241,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     if (currentUserProfile.role === 'Employee') {
       const employees = (users || []).filter(u => u.role === 'Employee');
-      return { managers: [], employees, clients: [] };
+      return { managers: [], employees: [], clients: [] };
     }
 
     return { managers: [], employees: [], clients: [] };
-
   }, [users, currentUserProfile]);
 
 
@@ -960,95 +959,29 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   {/* Right Column */}
                   <div className="space-y-6">
                     <FormField
-                        control={form.control}
-                        name="assigneeIds"
-                        render={({ field }) => (
+                      control={form.control}
+                      name="assigneeIds"
+                      render={({ field }) => (
                         <FormItem>
-                            <FormLabel>{t('addtask.form.teammembers')}</FormLabel>
-                            {areUsersLoading ? <Loader2 className="animate-spin h-5 w-5" /> : (
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                  <Button variant="outline" className="w-full justify-start text-left font-normal min-h-10 h-auto flex-wrap">
-                                      {selectedUsers.length > 0 ? (
-                                          <div className="flex flex-wrap gap-2 items-center">
-                                              {selectedUsers.map(user => (
-                                                  <Badge key={user.id} variant="secondary" className="gap-2">
-                                                      <Avatar className="h-5 w-5"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                      {user.name}
-                                                      <button type="button" onClick={(e) => { e.stopPropagation(); handleRemoveUser(user.id); }}><X className="h-3 w-3"/></button>
-                                                  </Badge>
-                                              ))}
-                                          </div>
-                                      ) : (
-                                          <span>Select team members...</span>
-                                      )}
-                                  </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-[300px] p-0">
-                                <Command>
-                                  <CommandInput placeholder="Search users..." />
-                                  <CommandList>
-                                    <CommandEmpty>No users found.</CommandEmpty>
-                                    {currentUserProfile?.role === 'Super Admin' && (
-                                      <>
-                                        {groupedUsers.managers.length > 0 && (
-                                            <CommandGroup heading="Managers">
-                                                {groupedUsers.managers.map(user => (
-                                                    <CommandItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                        <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", selectedUsers.some(u => u.id === user.id) ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}><Check className="h-4 w-4"/></div>
-                                                        <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                        <span>{user.name}</span>
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        )}
-                                        {groupedUsers.employees.length > 0 && <CommandSeparator />}
-                                      </>
-                                    )}
-                                    
-                                     {currentUserProfile?.role === 'Manager' && (
-                                        <>
-                                            <CommandGroup heading="Manager">
-                                                {groupedUsers.managers.map(user => (
-                                                    <CommandItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                        <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", selectedUsers.some(u => u.id === user.id) ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}><Check className="h-4 w-4"/></div>
-                                                        <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                        <span>{user.name}</span>
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                            <CommandSeparator />
-                                            <CommandGroup heading="My Employees">
-                                                {groupedUsers.employees.map(user => (
-                                                    <CommandItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                        <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", selectedUsers.some(u => u.id === user.id) ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}><Check className="h-4 w-4"/></div>
-                                                        <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                        <span>{user.name}</span>
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </>
-                                    )}
-
-                                    {currentUserProfile?.role !== 'Manager' && groupedUsers.employees.length > 0 && (
-                                        <CommandGroup heading="Employees">
-                                            {groupedUsers.employees.map(user => (
-                                                <CommandItem key={user.id} onSelect={() => handleSelectUser(user)}>
-                                                    <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", selectedUsers.some(u => u.id === user.id) ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}><Check className="h-4 w-4"/></div>
-                                                    <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                    <span>{user.name}</span>
-                                                </CommandItem>
-                                            ))}
-                                        </CommandGroup>
-                                    )}
-                                  </CommandList>
-                                </Command>
-                              </PopoverContent>
-                            </Popover>
-                            )}
-                            <FormMessage />
+                          <FormLabel>Assign To</FormLabel>
+                          {areUsersLoading ? (
+                            <Loader2 className="animate-spin h-5 w-5" />
+                          ) : (
+                            <MultiSelect
+                              options={userOptions}
+                              onValueChange={(value) => {
+                                form.setValue('assigneeIds', value);
+                                setSelectedUsers(
+                                  users?.filter((u) => value.includes(u.id)) || []
+                                );
+                              }}
+                              defaultValue={field.value || []}
+                              placeholder="Select team members..."
+                            />
+                          )}
+                          <FormMessage />
                         </FormItem>
-                        )}
+                      )}
                     />
                      <Tabs defaultValue="subtasks" className="w-full">
                       <TabsList className="grid w-full grid-cols-3">
