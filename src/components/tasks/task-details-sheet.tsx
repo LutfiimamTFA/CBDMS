@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -124,7 +124,6 @@ export function TaskDetailsSheet({
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   
-  // Local state for comments is removed. We will use initialTask.comments directly.
   const [newComment, setNewComment] = useState('');
   const [commentAttachment, setCommentAttachment] = useState<File | null>(null);
   const [isUploadingCommentAttachment, setIsUploadingCommentAttachment] = useState(false);
@@ -142,6 +141,9 @@ export function TaskDetailsSheet({
   // State for rejection dialog
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  
+  const [revisionItems, setRevisionItems] = useState<RevisionItem[]>([]);
+
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -157,7 +159,6 @@ export function TaskDetailsSheet({
     if (!firestore || !currentUser) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
     
-    // For Employees, fetch only users with the same managerId + their manager.
     if (currentUser.role === 'Employee' && currentUser.managerId) {
       q = query(q, where('managerId', '==', currentUser.managerId));
     }
@@ -196,9 +197,14 @@ export function TaskDetailsSheet({
     
     if (currentUser.role === 'Employee') {
       const manager = allUsers.find(u => u.id === currentUser.managerId);
-      // Team is everyone with the same manager, including self.
       const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
-      return { managers: manager ? [manager] : [], employees: myTeam, clients: [] };
+      
+      const teamWithManager = [...myTeam];
+      if (manager && !teamWithManager.some(u => u.id === manager.id)) {
+          teamWithManager.push(manager);
+      }
+
+      return { managers: manager ? [manager] : [], employees: teamWithManager, clients: [] };
     }
 
     return { managers: [], employees: [], clients: [] };
@@ -243,13 +249,12 @@ export function TaskDetailsSheet({
             dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
         });
         
-        // Always reset state from the single source of truth (initialTask)
         setSubtasks(initialTask.subtasks || []);
         setCurrentAssignees(initialTask.assignees || []);
         setCurrentTags(initialTask.tags || []);
         setAttachments(initialTask.attachments || []);
+        setRevisionItems(initialTask.revisionItems || []);
         
-        // Reset comment form state
         setNewComment('');
         setCommentAttachment(null);
         setNewSubtaskAssignee(null);
@@ -332,14 +337,12 @@ export function TaskDetailsSheet({
         
         const notifiedUserIds = new Set<string>();
 
-        // Notify all assignees (except the person making the change)
         initialTask.assigneeIds.forEach(assigneeId => {
             if (assigneeId !== currentUser.id) {
                 notifiedUserIds.add(assigneeId);
             }
         });
 
-        // Notify the creator of the task (if they are not the one making the change)
         if (initialTask.createdBy.id !== currentUser.id) {
             notifiedUserIds.add(initialTask.createdBy.id);
         }
@@ -365,7 +368,7 @@ export function TaskDetailsSheet({
         toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
     } catch (error) {
         console.error('Failed to update status:', error);
-        form.setValue('status', oldStatus); // Revert on error
+        form.setValue('status', oldStatus); 
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task status.' });
     }
   };
@@ -392,7 +395,7 @@ export function TaskDetailsSheet({
             toast({ title: 'Priority Updated', description: `Task priority set to ${priority}.` });
         } catch (error) {
             console.error('Failed to update priority:', error);
-            form.setValue('priority', currentPriority); // Revert on error
+            form.setValue('priority', currentPriority); 
             toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task priority.' });
         }
     };
@@ -498,25 +501,21 @@ export function TaskDetailsSheet({
             activities: [...(initialTask.activities || []), newActivity]
         });
 
-        // --- START: Improved Notification Logic for Comments ---
         const notificationTitle = `New Comment: ${initialTask.title}`;
         const notificationMessage = `${currentUser.name} commented on "${initialTask.title.substring(0, 30)}..."`;
 
         const notifiedUserIds = new Set<string>();
 
-        // Notify all assignees (except the person making the change)
         initialTask.assigneeIds.forEach(assigneeId => {
             if (assigneeId !== currentUser.id) {
                 notifiedUserIds.add(assigneeId);
             }
         });
         
-        // Notify the creator of the task (if they are not the one making the change)
         if (initialTask.createdBy.id !== currentUser.id) {
             notifiedUserIds.add(initialTask.createdBy.id);
         }
 
-        // Notify mentioned users
         const mentionedUsers = newComment.match(/@(\w+)/g)?.map(m => m.substring(1)) || [];
         if (allUsers && mentionedUsers.length > 0) {
             allUsers.forEach(user => {
@@ -539,7 +538,6 @@ export function TaskDetailsSheet({
             };
             batch.set(notifRef, newNotification);
         });
-        // --- END: Improved Notification Logic for Comments ---
 
         await batch.commit();
 
@@ -579,16 +577,32 @@ export function TaskDetailsSheet({
         setSubtasks(subtasks);
     }
   };
+  
+  const handleToggleRevisionItem = async (itemId: string) => {
+    if (!firestore) return;
+    const newItems = revisionItems.map(item =>
+        item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    setRevisionItems(newItems);
+    
+    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+    try {
+        await updateDoc(taskDocRef, { revisionItems: newItems });
+    } catch (error) {
+        console.error("Failed to update revision item:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not save revision status.' });
+        setRevisionItems(revisionItems); // Revert on failure
+    }
+  };
+
 
   const handleAddSubtask = () => {
     if (!newSubtask.trim()) return;
     
     let assignedUser: User | null = newSubtaskAssignee;
-    // Auto-assign if only one person is on the main task
     if (!assignedUser && currentAssignees.length === 1) {
         assignedUser = currentAssignees[0];
     } else if (!assignedUser && !isManagerOrAdmin && currentUser) {
-        // Auto-assign to self if employee
         assignedUser = currentUser;
     }
 
@@ -725,7 +739,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         assigneeIds: currentAssignees.map((a) => a.id),
         tags: currentTags,
         subtasks: subtasks,
-        comments: initialTask.comments, // Comments are updated separately
+        comments: initialTask.comments,
         attachments: attachments,
         ...activityData,
         updatedAt: serverTimestamp() as any,
@@ -834,6 +848,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   }
   
   const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
+  const allRevisionsCompleted = useMemo(() => revisionItems.every(item => item.completed), [revisionItems]);
+  const canSubmit = allSubtasksCompleted && allRevisionsCompleted;
   
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
@@ -861,7 +877,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       try {
           const batch = writeBatch(firestore);
 
-          // 1. Add rejection reason as a comment
           const newComment: Comment = {
               id: `c-${crypto.randomUUID()}`,
               user: currentUser,
@@ -871,11 +886,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           };
           const newComments = [...(initialTask.comments || []), newComment];
           
-          // 2. Create activity log
           const newActivity = createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`);
           const updatedActivities = [...(initialTask.activities || []), newActivity];
 
-          // 3. Update task document
           batch.update(taskRef, {
               status: newStatus,
               comments: newComments,
@@ -884,7 +897,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               updatedAt: serverTimestamp(),
           });
 
-          // 4. Notify assignees
            const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}...". See comments for details.`;
            initialTask.assigneeIds.forEach(assigneeId => {
                 if (assigneeId !== currentUser.id) {
@@ -962,11 +974,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     
     if (currentUser.role === 'Employee') {
         const manager = allUsers.find(u => u.id === currentUser.managerId);
-        
-        // Team is everyone with the same manager, including self.
         const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
         
-        // Make sure manager is in the list if they exist
         const teamWithManager = [...myTeam];
         if (manager && !teamWithManager.some(u => u.id === manager.id)) {
             teamWithManager.push(manager);
@@ -1008,7 +1017,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           
           <Form {...form}>
             <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-3 h-full overflow-hidden">
-                {/* Main Content */}
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
@@ -1046,6 +1054,27 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
+                        {revisionItems && revisionItems.length > 0 && (
+                            <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                                <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
+                                <div className="space-y-2">
+                                    {revisionItems.map(item => (
+                                        <div key={item.id} className="flex items-center gap-3">
+                                            <Checkbox
+                                                id={`rev-${item.id}`}
+                                                checked={item.completed}
+                                                onCheckedChange={() => handleToggleRevisionItem(item.id)}
+                                                disabled={isSharedView}
+                                            />
+                                            <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                                {item.text}
+                                            </label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                           <h3 className="font-semibold text-sm">Description</h3>
                           <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} readOnly={!canEditContent} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
@@ -1078,7 +1107,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             </div>
                           )}
                         </div>
-
+                        
                         <Accordion type="single" collapsible defaultValue="subtasks">
                           <AccordionItem value="subtasks">
                             <AccordionTrigger className="font-semibold text-sm">Subtasks</AccordionTrigger>
@@ -1214,17 +1243,16 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     </div>
                 </ScrollArea>
 
-                {/* Sidebar */}
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
                     {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && initialTask.status !== 'Preview' &&(
                          <div className="space-y-2">
-                           <Button className="w-full" onClick={handleSubmitForReview} disabled={!allSubtasksCompleted || isSaving}>
+                           <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                { isManagerOrAdmin ? 'Mark as Complete' : 'Submit for Review' }
                            </Button>
-                           {!allSubtasksCompleted && (
-                               <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
+                           {!canSubmit && (
+                               <p className="text-xs text-center text-destructive">Selesaikan semua sub-tugas dan poin revisi untuk melanjutkan.</p>
                            )}
                          </div>
                     )}
@@ -1377,7 +1405,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           {canAssignUsers && (
                               <Popover>
                                   <PopoverTrigger asChild>
-                                      <Button variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
+                                      <Button type="button" variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
                                   </PopoverTrigger>
                                   <PopoverContent className="w-60 p-1">
                                       <ScrollArea className="max-h-60">
@@ -1504,7 +1532,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           <ScrollArea className="max-h-[60vh] -mx-6 px-6">
             <div className="space-y-6 py-4">
               {initialTask.activities && initialTask.activities.length > 0 ? (
-                // FIX: Sanitize the activities array to ensure all keys are unique before rendering.
                 getUniqueActivities(initialTask.activities)
                   .slice()
                   .sort((a, b) => {
