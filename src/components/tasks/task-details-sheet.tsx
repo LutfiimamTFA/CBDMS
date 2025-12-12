@@ -329,7 +329,6 @@ export function TaskDetailsSheet({
                 title: notificationTitle,
                 message: notificationMessage,
                 taskId: initialTask.id,
-                taskTitle: initialTask.title,
                 isRead: false,
                 createdAt: serverTimestamp() as any,
                 createdBy: newActivity.user,
@@ -512,7 +511,6 @@ export function TaskDetailsSheet({
                 title: notificationTitle,
                 message: notificationMessage,
                 taskId: initialTask.id,
-                taskTitle: initialTask.title,
                 isRead: false,
                 createdAt: serverTimestamp() as any,
                 createdBy: newActivity.user,
@@ -562,11 +560,18 @@ export function TaskDetailsSheet({
 
   const handleAddSubtask = () => {
     if (!newSubtask.trim()) return;
+    
+    let assignedUser = newSubtaskAssignee;
+    // Auto-assign if only one person is on the main task
+    if (!assignedUser && currentAssignees.length === 1) {
+        assignedUser = currentAssignees[0];
+    }
+
     const subtask: Subtask = {
       id: `st-${crypto.randomUUID()}`,
       title: newSubtask,
       completed: false,
-      ...(newSubtaskAssignee && { assignee: { id: newSubtaskAssignee.id, name: newSubtaskAssignee.name, avatarUrl: newSubtaskAssignee.avatarUrl || '' } }),
+      ...(assignedUser && { assignee: { id: assignedUser.id, name: assignedUser.name, avatarUrl: assignedUser.avatarUrl || '' } }),
     };
     setSubtasks([...subtasks, subtask]);
     setNewSubtask('');
@@ -804,46 +809,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
   const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
   
-  const handleReopenTask = async () => {
-    if (!currentUser || !firestore) return;
-    setIsSaving(true);
-    
-    const taskRef = doc(firestore, "tasks", initialTask.id);
-    const newActivity: Activity = createActivity(currentUser, 'reopened the task');
-
-    try {
-        await updateDoc(taskRef, {
-            status: 'Doing',
-            actualCompletionDate: deleteField(),
-            lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity],
-        });
-        
-        toast({
-            title: 'Task Reopened',
-            description: 'You can continue working on this task.',
-        });
-    } catch (error: any) {
-        console.error('Failed to reopen task:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Update Failed',
-            description: error.message || 'Could not reopen the task.',
-        });
-    } finally {
-        setIsSaving(false);
-    }
-  };
-
   const handleSubmitForReview = async () => {
-      if (!currentUser) return;
-      
-      // If the user is a manager or admin, they can directly mark it as done.
-      if (isManagerOrAdmin) {
-          await handleStatusChange('Done');
-      } else { // Employees submit for review.
-          await handleStatusChange('Preview');
-      }
+    if (!currentUser) return;
+    if (isManagerOrAdmin) {
+        await handleStatusChange('Done');
+    } else {
+        await handleStatusChange('Preview');
+    }
   };
   
   
@@ -853,7 +825,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     return isLate ? 'Late' : 'On Time';
   }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
   
-  // This function sanitizes the activities array before rendering to prevent duplicate key errors.
   const getUniqueActivities = (activities: Activity[]): Activity[] => {
     if (!activities) return [];
     const seen = new Set();
@@ -863,6 +834,16 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         return !duplicate;
     });
   };
+
+  const subtaskAssigneeOptions = useMemo(() => {
+    if (currentAssignees.length > 0) {
+        return {
+            "Task Assignees": currentAssignees,
+            "Other Team Members": allUsers?.filter(u => u.companyId === currentUser?.companyId && !currentAssignees.some(a => a.id === u.id)) || []
+        }
+    }
+    return { "All Team Members": allUsers?.filter(u => u.companyId === currentUser?.companyId) || [] };
+  }, [currentAssignees, allUsers, currentUser]);
 
   return (
     <>
@@ -980,35 +961,25 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                                 </Button>
                                               </PopoverTrigger>
                                               <PopoverContent className="w-60 p-1">
-                                                <ScrollArea className="max-h-60">
-                                                  <div className="space-y-1">
-                                                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
-                                                    <Separator />
-                                                    {groupedUsers.managers.length > 0 && (
-                                                        <>
-                                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
-                                                            {groupedUsers.managers.map(user => (
-                                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
-                                                                <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                                <span className="truncate">{user.name}</span>
-                                                              </Button>
-                                                            ))}
-                                                        </>
-                                                    )}
-                                                     {groupedUsers.employees.length > 0 && (
-                                                          <>
-                                                            <Separator />
-                                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
-                                                            {groupedUsers.employees.map(user => (
-                                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
-                                                                <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                                <span className="truncate">{user.name}</span>
-                                                              </Button>
-                                                            ))}
-                                                        </>
-                                                    )}
-                                                  </div>
-                                                </ScrollArea>
+                                                  <ScrollArea className="max-h-60">
+                                                      <div className="space-y-1">
+                                                          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
+                                                          {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                                            users.length > 0 && (
+                                                              <React.Fragment key={group}>
+                                                                  <Separator />
+                                                                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                                  {users.map(user => (
+                                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                                                                      <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                                      <span className="truncate">{user.name}</span>
+                                                                    </Button>
+                                                                  ))}
+                                                              </React.Fragment>
+                                                            )
+                                                          ))}
+                                                      </div>
+                                                  </ScrollArea>
                                               </PopoverContent>
                                             </Popover>
 
@@ -1033,30 +1004,20 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                         <ScrollArea className="max-h-60">
                                             <div className="space-y-1">
                                                 <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                                 <Separator />
-                                                 {groupedUsers.managers.length > 0 && (
-                                                    <>
-                                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
-                                                        {groupedUsers.managers.map(user => (
-                                                        <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                            <span className="truncate">{user.name}</span>
-                                                        </Button>
-                                                        ))}
-                                                    </>
-                                                )}
-                                                {groupedUsers.employees.length > 0 && (
-                                                    <>
-                                                        <Separator />
-                                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
-                                                        {groupedUsers.employees.map(user => (
-                                                        <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                            <span className="truncate">{user.name}</span>
-                                                        </Button>
-                                                        ))}
-                                                    </>
-                                                )}
+                                                 {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                                    users.length > 0 && (
+                                                        <React.Fragment key={group}>
+                                                            <Separator />
+                                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                            {users.map(user => (
+                                                                <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                                    <span className="truncate">{user.name}</span>
+                                                                </Button>
+                                                            ))}
+                                                        </React.Fragment>
+                                                    )
+                                                ))}
                                             </div>
                                         </ScrollArea>
                                       </PopoverContent>
