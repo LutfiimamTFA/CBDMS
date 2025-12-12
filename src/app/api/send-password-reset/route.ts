@@ -1,4 +1,4 @@
-
+'use server';
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -24,14 +24,16 @@ export async function POST(request: Request) {
     }
     
     const auth = getAuth(app);
+    const user = await auth.getUserByEmail(email);
+
+    // Set custom claim to force password change on next login
+    const currentClaims = user.customClaims || {};
+    await auth.setCustomUserClaims(user.uid, { ...currentClaims, mustChangePassword: true });
     
-    // Generate the password reset link
+    // Generate the password reset link which Firebase sends automatically
     await auth.generatePasswordResetLink(email);
     
-    // While the link is generated, Firebase's email handler (if enabled)
-    // will send the email automatically.
-    
-    return NextResponse.json({ message: 'Password reset email sent successfully.' }, { status: 200 });
+    return NextResponse.json({ message: 'Password reset email sent and user flagged for password change.' }, { status: 200 });
   } catch (error: any) {
     console.error('Error sending password reset email:', error);
     let errorMessage = 'An unexpected error occurred.';

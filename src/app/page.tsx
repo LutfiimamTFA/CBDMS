@@ -13,37 +13,30 @@ export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // Wait until the initial user loading state is resolved.
     if (isUserLoading) {
       return;
     }
 
     if (!user) {
-      // If no user, redirect to login.
       router.replace('/login');
       return;
     }
 
-    // If there is a user, check their token for custom claims.
     if (auth?.currentUser) {
-      // Force a token refresh to get the latest claims.
-      // The `true` argument is critical here.
-      getIdTokenResult(auth.currentUser, true)
+      getIdTokenResult(auth.currentUser, true) // Force refresh token
         .then((idTokenResult) => {
-          if (idTokenResult.claims.mustAcknowledgeTasks) {
-            // If recurring tasks claim exists, redirect to acknowledgment page.
+          if (idTokenResult.claims.mustChangePassword) {
+            router.replace('/force-password-change');
+          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
             router.replace('/force-acknowledge-tasks');
           } else {
-            // Otherwise, proceed to the "My Work" page.
             router.replace('/my-work');
           }
         })
         .catch(() => {
-          // If token check fails, fall back to login.
           router.replace('/login');
         });
     } else {
-      // Fallback for edge cases where user object exists but currentUser doesn't.
       router.replace('/login');
     }
   }, [user, isUserLoading, auth, router]);

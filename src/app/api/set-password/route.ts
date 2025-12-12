@@ -34,8 +34,16 @@ export async function POST(request: Request) {
     await auth.updateUser(uid, {
         password: password
     });
+
+    // Remove the custom claim after successful password change
+    const user = await auth.getUser(uid);
+    const { mustChangePassword, ...currentClaims } = user.customClaims || {};
+    await auth.setCustomUserClaims(uid, currentClaims);
     
-    return NextResponse.json({ message: 'Password updated successfully' }, { status: 200 });
+    // Revoke refresh tokens to force re-authentication with new claims
+    await auth.revokeRefreshTokens(uid);
+    
+    return NextResponse.json({ message: 'Password updated successfully. Please log in again.' }, { status: 200 });
   } catch (error: any) {
     console.error('Error setting password:', error);
     let errorMessage = 'An unexpected error occurred.';
