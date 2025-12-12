@@ -186,12 +186,23 @@ export function TaskDetailsSheet({
       return { managers: [], employees: self ? [self] : [], clients: [] };
     }
 
-    return { managers: [], employees, clients: [] };
+    return { managers: [], employees: [], clients: [] };
 
   }, [allUsers, currentUser]);
 
   const isSharedView = !!permissions;
-  const canEditContent = isSharedView ? (permissions.canEditContent || false) : (currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Manager'));
+  
+  const isCreator = currentUser?.id === initialTask.createdBy.id;
+  const isManagerOfBrand = currentUser?.role === 'Manager' && initialTask.brandId && currentUser.brandIds?.includes(initialTask.brandId);
+
+  const canEditContent = isSharedView 
+    ? (permissions.canEditContent || false) 
+    : (currentUser && (
+        currentUser.role === 'Super Admin' || 
+        isManagerOfBrand ||
+        isCreator 
+      ));
+
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
   const canChangeStatus = isSharedView ? (permissions.canChangeStatus || false) : !!currentUser;
   const canAssignUsers = isSharedView ? (permissions.canAssignUsers || false) : canEditContent;
@@ -828,7 +839,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       if (!currentUser) return;
       
       // If the user is a manager or admin, they can directly mark it as done.
-      if (currentUser.role === 'Manager' || currentUser.role === 'Super Admin') {
+      if (isManagerOrAdmin) {
           await handleStatusChange('Done');
       } else { // Employees submit for review.
           await handleStatusChange('Preview');
@@ -1112,7 +1123,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!allSubtasksCompleted || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                               { currentUser?.role === 'Employee' ? 'Submit for Review' : 'Mark as Complete' }
+                               { isManagerOrAdmin ? 'Mark as Complete' : 'Submit for Review' }
                            </Button>
                            {!allSubtasksCompleted && (
                                <p className="text-xs text-center text-destructive">Selesaikan semua subtask untuk dapat mengirim tugas untuk direview.</p>
@@ -1432,4 +1443,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
