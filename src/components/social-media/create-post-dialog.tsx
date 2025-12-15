@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -69,8 +68,9 @@ const postSchema = z.object({
   scheduledAtDate: z.date({ required_error: 'A date is required.'}),
   scheduledAtTime: z.string().min(1, 'A time is required.'),
   media: z.any().optional(),
-  postType: z.enum(['Post', 'Reels']).default('Post'),
   objectPosition: z.number().min(0).max(100).default(50),
+  assignedTo: z.string().optional(),
+  postType: z.enum(['Post', 'Reels']).default('Post'),
 });
 
 type PostFormValues = z.infer<typeof postSchema>;
@@ -93,7 +93,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
@@ -138,14 +137,20 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     return q;
   }, [firestore, profile, managerProfile, isManagerLoading]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+  
+  const teamUsersQuery = useMemo(() => {
+    if (!firestore || !profile || profile.role !== 'Manager') return null;
+    return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+  }, [firestore, profile]);
+  const { data: teamUsers, isLoading: areTeamUsersLoading } = useCollection<UserType>(teamUsersQuery);
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
   });
   
   const caption = form.watch('caption');
-  const postType = form.watch('postType');
   const objectPosition = form.watch('objectPosition');
+  const postType = form.watch('postType');
 
   useEffect(() => {
     if (mode === 'edit' && post) {
@@ -156,16 +161,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             scheduledAtDate: scheduledDate,
             scheduledAtTime: format(scheduledDate, 'HH:mm'),
             brandId: post.brandId,
-            postType: post.postType || 'Post',
             objectPosition: post.objectPosition || 50,
+            assignedTo: post.createdBy,
+            postType: post.postType || 'Post',
         });
         setImagePreview(post.mediaUrl || null);
         setRevisionItems(post.revisionItems || []);
-        if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
-            setMediaType('video');
-        } else {
-            setMediaType('image');
-        }
     } else {
         form.reset({
             platform: 'Instagram',
@@ -174,19 +175,19 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             scheduledAtDate: new Date(),
             scheduledAtTime: format(new Date(), 'HH:mm'),
             media: undefined,
-            postType: 'Post',
             objectPosition: 50,
+            assignedTo: user?.uid,
+            postType: 'Post',
         });
         setImagePreview(null);
         setRevisionItems([]);
     }
-  }, [post, mode, form, open]);
+  }, [post, mode, form, open, user]);
 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setMediaType(file.type.startsWith('video') ? 'video' : 'image');
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -213,6 +214,11 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         const [hour, minute] = data.scheduledAtTime.split(':').map(Number);
         const scheduledAt = new Date(data.scheduledAtDate);
         scheduledAt.setHours(hour, minute);
+        
+        const creatorId = profile.role === 'Manager' ? (data.assignedTo || profile.id) : profile.id;
+        const creatorProfile = await getDocs(query(collection(firestore, 'users'), where('id', '==', creatorId)));
+        const creatorData = creatorProfile.docs[0]?.data() as UserType;
+
 
         const postData: Partial<SocialMediaPost> = {
             platform: data.platform,
@@ -222,11 +228,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             companyId: profile.companyId,
             status: status,
             brandId: data.brandId,
-            postType: data.postType,
             objectPosition: data.objectPosition,
+            postType: data.postType,
+            createdBy: creatorId, // The person responsible for the post
             creator: {
-                name: profile.name,
-                avatarUrl: profile.avatarUrl || ''
+                name: creatorData?.name || 'Unknown',
+                avatarUrl: creatorData?.avatarUrl || ''
             }
         };
         
@@ -238,7 +245,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             const postRef = doc(collection(firestore, 'socialMediaPosts'));
             batch.set(postRef, {
                 ...postData,
-                createdBy: profile.id,
                 createdAt: serverTimestamp(),
             });
 
@@ -270,6 +276,20 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             toast({ title: `Post ${status === 'Draft' ? 'Draft Saved' : 'Submitted'}!`, description: `Your post for ${data.platform} has been saved.` });
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
+            
+            // Logic for re-submitting: Keep revision history, but clear current items as they are "done"
+            if (status === 'Needs Approval' && post.status === 'Draft' && post.revisionItems) {
+                const completedCycle: RevisionCycle = {
+                    cycleNumber: post.revisionHistory ? post.revisionHistory.length + 1 : 1,
+                    requestedAt: post.updatedAt || serverTimestamp(), // Placeholder, should be the rejection time
+                    requestedBy: { id: '', name: 'Manager', avatarUrl: ''}, // Placeholder, needs actual rejector info
+                    items: post.revisionItems,
+                };
+                
+                postData.revisionHistory = [...(post.revisionHistory || []), completedCycle];
+                postData.revisionItems = deleteField() as any;
+            }
+
 
             batch.update(postRef, {
                 ...postData,
@@ -313,7 +333,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         notificationTitle = 'Post Approved';
         notificationMessage = `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`;
         // Clear revision items on approval
-        updateData.revisionItems = deleteField();
+        if (post.revisionItems) {
+            updateData.revisionItems = deleteField() as any;
+        }
     } else { // Rejected, status becomes 'Draft'
         notificationTitle = 'Post Needs Revision';
         notificationMessage = `${profile.name} requested revisions for your post: "${post.caption.substring(0, 30)}...". See the checklist for details.`;
@@ -392,7 +414,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   };
   
   const handleToggleRevisionItem = async (itemId: string) => {
-    if (!firestore || !post) return;
+    if (!firestore || !post || !post.revisionItems) return;
     
     const newItems = revisionItems.map(item =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
@@ -423,8 +445,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const isEditable = mode === 'create' || isCreatorEditView;
   
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
-
-  const rejectionComment = post?.comments?.slice().reverse().find(c => c.text.startsWith('**Rejection Feedback:**'));
   
   const handleAddRejectionItem = () => {
     if (currentRejectionItem.trim()) {
@@ -441,357 +461,375 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
 
   return (
     <>
-    <Dialog open={open} onOpenChange={setOpen}>
-      {mode === 'create' && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent className="max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
-        <DialogHeader className="p-6 pb-4">
-          <DialogTitle>{mode === 'create' ? 'Create Social Media Post' : 'Review & Edit Post'}</DialogTitle>
-          <DialogDescription>
-            {mode === 'create' ? 'Prepare your content and submit it for approval.' : 'Review, edit, or approve this post.'}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid md:grid-cols-2 h-full overflow-hidden">
-          <ScrollArea className="md:border-r h-full">
-            <div className="p-6 space-y-6">
-                {isCreatorEditView && revisionItems && revisionItems.length > 0 && (
-                  <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
-                      <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revisions Requested</h3>
-                      <div className="space-y-2">
-                          {revisionItems.map(item => (
-                              <div key={item.id} className="flex items-center gap-3">
-                                  <Checkbox
-                                      id={`rev-${item.id}`}
-                                      checked={item.completed}
-                                      onCheckedChange={() => handleToggleRevisionItem(item.id)}
-                                  />
-                                  <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
-                                      {item.text}
-                                  </label>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-                )}
-                <Form {...form}>
-                <form id="create-post-form" className="space-y-6">
-                    <FormField
-                        control={form.control}
-                        name="media"
-                        render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Media</FormLabel>
-                            <FormControl>
-                                <div 
-                                    className={cn(
-                                      "w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center",
-                                      isEditable && "cursor-pointer hover:bg-muted/50"
-                                    )}
-                                    onClick={() => isEditable && fileInputRef.current?.click()}
-                                >
-                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
-                                    {imagePreview ? (
-                                        mediaType === 'image' ? (
-                                            <Image src={imagePreview} alt="Preview" width={192} height={192} className="max-h-full w-auto object-contain rounded-md" />
-                                        ) : (
-                                            <video src={imagePreview} controls className="max-h-full w-auto object-contain rounded-md" />
-                                        )
-                                    ) : (
-                                        <div className="text-center text-muted-foreground">
-                                            <UploadCloud className="mx-auto h-8 w-8" />
-                                            <p>Click to upload image or video</p>
-                                            <p className="text-xs">PNG, JPG, MP4 up to 10MB</p>
-                                        </div>
-                                    )}
+      <Dialog open={open} onOpenChange={setOpen}>
+        {mode === 'create' && <DialogTrigger asChild>{children}</DialogTrigger>}
+        <DialogContent className="max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle>{mode === 'create' ? 'Create Social Media Post' : 'Review & Edit Post'}</DialogTitle>
+            <DialogDescription>
+              {mode === 'create' ? 'Prepare your content and submit it for approval.' : 'Review, edit, or approve this post.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid md:grid-cols-2 h-full overflow-hidden">
+            <ScrollArea className="md:border-r h-full">
+              <div className="p-6 space-y-6">
+                  {isCreatorEditView && revisionItems && revisionItems.length > 0 && (
+                    <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                        <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revisions Requested</h3>
+                        <div className="space-y-2">
+                            {revisionItems.map(item => (
+                                <div key={item.id} className="flex items-center gap-3">
+                                    <Checkbox
+                                        id={`rev-${item.id}`}
+                                        checked={item.completed}
+                                        onCheckedChange={() => handleToggleRevisionItem(item.id)}
+                                    />
+                                    <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                        {item.text}
+                                    </label>
                                 </div>
-                            </FormControl>
-                            <FormMessage />
-                            {isEditable && mediaType === 'image' && imagePreview && (
-                              <FormField
-                                control={form.control}
-                                name="objectPosition"
-                                render={({ field: { onChange, value } }) => (
-                                  <FormItem>
-                                    <FormLabel>Image Focus</FormLabel>
-                                    <FormControl>
-                                      <Slider
-                                        min={0}
-                                        max={100}
-                                        step={1}
-                                        value={[value]}
-                                        onValueChange={(vals) => onChange(vals[0])}
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
-                            )}
-                        </FormItem>
-                        )}
-                    />
-                    <FormField
-                    control={form.control}
-                    name="caption"
-                    render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Caption</FormLabel>
-                        <FormControl>
-                            <Textarea placeholder="Write your caption here..." {...field} rows={6} readOnly={!isEditable} />
-                        </FormControl>
-                        <FormMessage />
-                        </FormItem>
-                    )}
-                    />
+                            ))}
+                        </div>
+                    </div>
+                  )}
+                  <Form {...form}>
+                  <form id="create-post-form" className="space-y-6">
+                      <FormField
+                          control={form.control}
+                          name="media"
+                          render={({ field }) => (
+                          <FormItem>
+                              <FormLabel>Media</FormLabel>
+                              <FormControl>
+                                  <div 
+                                      className={cn(
+                                        "w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center",
+                                        isEditable && "cursor-pointer hover:bg-muted/50"
+                                      )}
+                                      onClick={() => isEditable && fileInputRef.current?.click()}
+                                  >
+                                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
+                                      {imagePreview ? (
+                                          <Image src={imagePreview} alt="Preview" width={192} height={192} style={{ objectPosition: `center ${objectPosition}%`}} className="max-h-full w-auto object-cover rounded-md" />
+                                      ) : (
+                                          <div className="text-center text-muted-foreground">
+                                              <UploadCloud className="mx-auto h-8 w-8" />
+                                              <p>Click to upload image or video</p>
+                                              <p className="text-xs">PNG, JPG, MP4 up to 10MB</p>
+                                          </div>
+                                      )}
+                                  </div>
+                              </FormControl>
+                              <FormMessage />
+                              {isEditable && imagePreview && (
+                                <FormField
+                                  control={form.control}
+                                  name="objectPosition"
+                                  render={({ field: { onChange, value } }) => (
+                                    <FormItem>
+                                      <FormLabel>Image Focus</FormLabel>
+                                      <FormControl>
+                                        <Slider
+                                          min={0}
+                                          max={100}
+                                          step={1}
+                                          value={[value]}
+                                          onValueChange={(vals) => onChange(vals[0])}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              )}
+                          </FormItem>
+                          )}
+                      />
+                      <FormField
+                      control={form.control}
+                      name="caption"
+                      render={({ field }) => (
+                          <FormItem>
+                          <FormLabel>Caption</FormLabel>
+                          <FormControl>
+                              <Textarea placeholder="Write your caption here..." {...field} rows={6} readOnly={!isEditable} />
+                          </FormControl>
+                          <FormMessage />
+                          </FormItem>
+                      )}
+                      />
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <FormField
+                      {isManager && mode === 'create' && (
+                         <FormField
                             control={form.control}
-                            name="platform"
+                            name="assignedTo"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Platform</FormLabel>
+                                <FormLabel>Assign To</FormLabel>
                                 <Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}>
                                     <FormControl>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select a platform" />
+                                        <SelectValue placeholder="Select an employee to create this post" />
                                     </SelectTrigger>
                                     </FormControl>
                                     <SelectContent>
-                                        <SelectItem value="Instagram">Instagram</SelectItem>
-                                        <SelectItem value="Facebook" disabled>Facebook (coming soon)</SelectItem>
-                                        <SelectItem value="Twitter" disabled>Twitter (coming soon)</SelectItem>
+                                        {areTeamUsersLoading ? <SelectItem value="loading" disabled>Loading team...</SelectItem> : 
+                                        (teamUsers || []).map(member => <SelectItem key={member.id} value={member.id}><div className="flex items-center gap-2"><User className='h-4 w-4'/>{member.name}</div></SelectItem>)}
                                     </SelectContent>
                                 </Select>
                                 <FormMessage />
                                 </FormItem>
                             )}
-                        />
-                         <FormField
-                            control={form.control}
-                            name="postType"
-                            render={({ field }) => (
-                                <FormItem>
-                                <FormLabel>Post Type</FormLabel>
-                                  <ToggleGroup type="single" variant="outline" className="w-full grid grid-cols-2" value={field.value} onValueChange={field.onChange} disabled={!isEditable}>
-                                    <ToggleGroupItem value="Post" aria-label="Post type">
-                                        <Layers className="mr-2 h-4 w-4"/> Post
-                                    </ToggleGroupItem>
-                                    <ToggleGroupItem value="Reels" aria-label="Reels type">
-                                        <Clapperboard className="mr-2 h-4 w-4"/> Reels
-                                    </ToggleGroupItem>
-                                  </ToggleGroup>
-                                <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                     <div className="grid grid-cols-2 gap-4 items-end">
-                         <FormField
-                            control={form.control}
-                            name="scheduledAtDate"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Schedule Date</FormLabel>
-                                <Popover>
-                                <PopoverTrigger asChild>
-                                    <FormControl>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                                        disabled={!isEditable}
-                                    >
-                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                    </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !isEditable}
-                                    initialFocus
-                                    />
-                                </PopoverContent>
-                                </Popover>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="scheduledAtTime"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Schedule Time</FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            type="time"
-                                            className="w-full"
-                                            {...field}
-                                            readOnly={!isEditable}
-                                        />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                    </div>
-                     <FormField
+                          />
+                      )}
+
+                      <FormField
                         control={form.control}
-                        name="brandId"
+                        name="postType"
                         render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Brand</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}>
+                                <FormLabel>Post Type</FormLabel>
                                 <FormControl>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select a brand for this post" />
-                                </SelectTrigger>
+                                    <ToggleGroup type="single" className="w-full" value={field.value} onValueChange={field.onChange} disabled={!isEditable}>
+                                        <ToggleGroupItem value="Post" className="w-full"><Layers className="mr-2 h-4 w-4"/>Post</ToggleGroupItem>
+                                        <ToggleGroupItem value="Reels" className="w-full"><Clapperboard className="mr-2 h-4 w-4"/>Reels</ToggleGroupItem>
+                                    </ToggleGroup>
                                 </FormControl>
-                                <SelectContent>
-                                    {areBrandsLoading ? <SelectItem value="loading" disabled>Loading...</SelectItem> : 
-                                    brands?.map(brand => <SelectItem key={brand.id} value={brand.id}><div className="flex items-center gap-2"><Building2 className='h-4 w-4'/>{brand.name}</div></SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                            <FormMessage />
+                                <FormMessage />
                             </FormItem>
                         )}
                         />
-                </form>
-                </Form>
-            </div>
-          </ScrollArea>
-          <ScrollArea className="h-full">
-            <div className="p-6 bg-secondary/50 flex flex-col items-center justify-center h-full gap-4">
-                <InstagramPostPreview 
-                    profileName={post?.creator?.name || profile?.name || 'Username'}
-                    profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
-                    mediaUrl={imagePreview}
-                    mediaType={mediaType}
-                    caption={caption}
-                    postType={postType}
-                    objectPosition={objectPosition}
-                />
-            </div>
-          </ScrollArea>
-        </div>
-        <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
-            <div>
-              {canDelete && (
-                <Button variant="destructive" onClick={() => setDeleteConfirmOpen(true)} disabled={isSaving || isDeleting}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </Button>
-              )}
-            </div>
-          
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-             {isApproverView ? (
-                <>
-                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRejectionDialogOpen(true)} disabled={isSaving}>
-                      {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
-                      Reject
-                  </Button>
-                  <Button variant="default" className='bg-green-600 hover:bg-green-700' onClick={() => handleUpdateStatus('Scheduled')} disabled={isSaving}>
-                      {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle className="mr-2 h-4 w-4" />}
-                      Approve & Schedule
-                  </Button>
-                </>
-            ) : mode === 'create' ? (
-                isManager ? (
-                    <>
-                        <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
-                        </Button>
-                        <Button type="button" onClick={() => onFormSubmit('Scheduled')} disabled={isSaving}>
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Schedule Directly
-                        </Button>
-                    </>
-                ) : ( 
-                    <>
-                        <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
-                        </Button>
-                        <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit for Approval
-                        </Button>
-                    </>
-                )
-            ) : isCreatorEditView ? (
-                <>
-                    <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Changes
-                    </Button>
-                    <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving || !allRevisionsCompleted}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Re-submit for Approval
-                    </Button>
-                </>
-            ) : null }
-          </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    
-    <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Reason for Rejection</DialogTitle>
-          <DialogDescription>
-            Provide a clear list of revision points for the creator. This will be added as a comment.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4 space-y-4">
-          <div className="space-y-2">
-            {rejectionItems.map((item, index) => (
-              <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
-                <span className="flex-1 text-sm">{item}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRejectionItems(prev => prev.filter((_, i) => i !== index))}>
-                  <XCircle className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <Input
-              value={currentRejectionItem}
-              onChange={(e) => setCurrentRejectionItem(e.target.value)}
-              placeholder="e.g., Fix the logo placement"
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRejectionItem())}
-            />
-            <Button onClick={handleAddRejectionItem} disabled={!currentRejectionItem.trim()}>
-              <Plus className="mr-2 h-4 w-4" /> Add
-            </Button>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
-          <Button variant="destructive" onClick={() => handleUpdateStatus('Draft', rejectionItems)} disabled={rejectionItems.length === 0 || isSaving}>
-            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Confirm Rejection
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
 
-    <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete the social media post.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeletePost} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
-                  {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Yes, delete post
-                </AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-    </AlertDialog>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <FormField
+                              control={form.control}
+                              name="platform"
+                              render={({ field }) => (
+                                  <FormItem>
+                                  <FormLabel>Platform</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}>
+                                      <FormControl>
+                                      <SelectTrigger>
+                                          <SelectValue placeholder="Select a platform" />
+                                      </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                          <SelectItem value="Instagram">Instagram</SelectItem>
+                                          <SelectItem value="Facebook" disabled>Facebook (coming soon)</SelectItem>
+                                          <SelectItem value="Twitter" disabled>Twitter (coming soon)</SelectItem>
+                                      </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                           <FormField
+                            control={form.control}
+                            name="brandId"
+                            render={({ field }) => (
+                                <FormItem>
+                                <FormLabel>Brand</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}>
+                                    <FormControl>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select a brand for this post" />
+                                    </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                        {areBrandsLoading ? <SelectItem value="loading" disabled>Loading...</SelectItem> : 
+                                        brands?.map(brand => <SelectItem key={brand.id} value={brand.id}><div className="flex items-center gap-2"><Building2 className='h-4 w-4'/>{brand.name}</div></SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                            />
+                      </div>
+                       <div className="grid grid-cols-2 gap-4 items-end">
+                           <FormField
+                              control={form.control}
+                              name="scheduledAtDate"
+                              render={({ field }) => (
+                              <FormItem>
+                                  <FormLabel>Schedule Date</FormLabel>
+                                  <Popover>
+                                  <PopoverTrigger asChild>
+                                      <FormControl>
+                                      <Button
+                                          variant={"outline"}
+                                          className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                                          disabled={!isEditable}
+                                      >
+                                          {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                      </Button>
+                                      </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-auto p-0" align="start">
+                                      <Calendar
+                                      mode="single"
+                                      selected={field.value}
+                                      onSelect={field.onChange}
+                                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !isEditable}
+                                      initialFocus
+                                      />
+                                  </PopoverContent>
+                                  </Popover>
+                                  <FormMessage />
+                              </FormItem>
+                              )}
+                          />
+                          <FormField
+                              control={form.control}
+                              name="scheduledAtTime"
+                              render={({ field }) => (
+                                  <FormItem>
+                                      <FormLabel>Schedule Time</FormLabel>
+                                      <FormControl>
+                                          <Input
+                                              type="time"
+                                              className="w-full"
+                                              {...field}
+                                              readOnly={!isEditable}
+                                          />
+                                      </FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}
+                          />
+                      </div>
+                  </form>
+                  </Form>
+              </div>
+            </ScrollArea>
+            <ScrollArea className="h-full">
+              <div className="p-6 bg-secondary/50 flex flex-col items-center justify-center h-full gap-4">
+                  <InstagramPostPreview 
+                      profileName={post?.creator?.name || profile?.name || 'Username'}
+                      profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
+                      mediaUrl={imagePreview}
+                      caption={caption}
+                      objectPosition={objectPosition}
+                      postType={postType}
+                  />
+              </div>
+            </ScrollArea>
+          </div>
+          <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
+              <div>
+                {canDelete && (
+                  <Button variant="destructive" onClick={() => setDeleteConfirmOpen(true)} disabled={isSaving || isDeleting}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                )}
+              </div>
+            
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+               {isApproverView ? (
+                  <>
+                    <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRejectionDialogOpen(true)} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <XCircle className="mr-2 h-4 w-4" />}
+                        Reject
+                    </Button>
+                    <Button variant="default" className='bg-green-600 hover:bg-green-700' onClick={() => handleUpdateStatus('Scheduled')} disabled={isSaving}>
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <CheckCircle className="mr-2 h-4 w-4" />}
+                        Approve & Schedule
+                    </Button>
+                  </>
+              ) : mode === 'create' ? (
+                  isManager ? (
+                      <>
+                          <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
+                          </Button>
+                          <Button type="button" onClick={() => onFormSubmit('Scheduled')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Schedule Directly
+                          </Button>
+                      </>
+                  ) : ( 
+                      <>
+                          <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
+                          </Button>
+                          <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
+                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit for Approval
+                          </Button>
+                      </>
+                  )
+              ) : isCreatorEditView ? (
+                  <>
+                      <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
+                          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Changes
+                      </Button>
+                      <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving || !allRevisionsCompleted}>
+                          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Re-submit for Approval
+                      </Button>
+                  </>
+              ) : null }
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reason for Rejection</DialogTitle>
+            <DialogDescription>
+              Provide a clear list of revision points for the creator. This will be added as a comment.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              {rejectionItems.map((item, index) => (
+                <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                  <span className="flex-1 text-sm">{item}</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRejectionItems(prev => prev.filter((_, i) => i !== index))}>
+                    <XCircle className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                value={currentRejectionItem}
+                onChange={(e) => setCurrentRejectionItem(e.target.value)}
+                placeholder="e.g., Fix the logo placement"
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRejectionItem())}
+              />
+              <Button onClick={handleAddRejectionItem} disabled={!currentRejectionItem.trim()}>
+                <Plus className="mr-2 h-4 w-4" /> Add
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => handleUpdateStatus('Draft', rejectionItems)} disabled={rejectionItems.length === 0 || isSaving}>
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm Rejection
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete the social media post.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeletePost} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Yes, delete post
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
