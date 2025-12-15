@@ -258,7 +258,6 @@ export function TaskDetailsSheet({
         setCurrentTags(initialTask.tags || []);
         setAttachments(initialTask.attachments || []);
         
-        const lastRevision = initialTask.revisionHistory?.[initialTask.revisionHistory.length - 1];
         setRevisionItems(initialTask.revisionItems || []);
         
         setNewComment('');
@@ -395,6 +394,12 @@ export function TaskDetailsSheet({
   const handlePriorityChange = async (newPriority: Priority) => {
     const currentPriority = form.getValues('priority');
     if (currentPriority === newPriority) return;
+
+    if (!canChangePriority) {
+        toast({ variant: "destructive", title: "Permission Denied", description: "You are not authorized to change the task priority." });
+        form.setValue('priority', currentPriority);
+        return;
+    }
 
     const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
 
