@@ -20,9 +20,12 @@ import { useI18n } from '@/context/i18n-provider';
 import { notFound } from 'next/navigation';
 
 
-// --- Komponen untuk Laporan Karyawan ---
-function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading: boolean }) {
+// --- Komponen untuk Laporan Personal (Karyawan & Manajer) ---
+function PersonalReport({ tasks, isLoading, role }: { tasks: Task[] | null; isLoading: boolean; role: string }) {
   const { t } = useI18n();
+  const title = role === 'Manager' ? 'Laporan Kinerja Manajer' : t('reports.employee.title');
+  const description = role === 'Manager' ? 'Ringkasan aktivitas dan kontribusi personal Anda.' : t('reports.employee.description');
+
 
   if (isLoading) {
     return (
@@ -68,8 +71,8 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
   return (
     <>
       <div className="mb-4">
-          <h2 className="text-2xl font-bold">{t('reports.employee.title')}</h2>
-          <p className="text-muted-foreground">{t('reports.employee.description')}</p>
+          <h2 className="text-2xl font-bold">{title}</h2>
+          <p className="text-muted-foreground">{description}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
@@ -140,7 +143,7 @@ function EmployeeReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
   );
 }
 
-// --- Komponen untuk Dasbor Admin/Manager ---
+// --- Komponen untuk Dasbor Analisis Admin ---
 function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
   const { t } = useI18n();
   const [selectedUserId, setSelectedUserId] = useState('all');
@@ -358,42 +361,27 @@ export default function ReportsPage() {
   
   const activeCompanyId = session ? session.companyId : companyId;
 
-  const isSuperAdminOrManager = useMemo(() => {
-    if (session) {
-      return true;
-    }
-    return profile?.role === 'Super Admin' || profile?.role === 'Manager';
-  }, [profile, session]);
+  const isSuperAdmin = profile?.role === 'Super Admin';
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !activeCompanyId || !profile) return null;
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
 
-    if (profile.role === 'Manager') {
-        if (!profile.brandIds || profile.brandIds.length === 0) {
-            return null; // Manager with no brands sees no tasks
-        }
-        q = query(q, where('brandId', 'in', profile.brandIds));
-    } else if (profile.role === 'Employee') {
+    if (profile.role === 'Manager' || profile.role === 'Employee') {
         q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
+    
     return q;
   }, [firestore, activeCompanyId, profile]);
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
-  const usersQuery = useMemo(() => {
-      if (!firestore || !activeCompanyId || !profile) return null;
-      let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+  const allCompanyUsersQuery = useMemo(() => {
+      if (!firestore || !activeCompanyId || !isSuperAdmin) return null;
+      return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+  }, [firestore, activeCompanyId, isSuperAdmin]);
+  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allCompanyUsersQuery);
 
-      // Manager can only see their direct reports in the dropdown
-      if (profile.role === 'Manager') {
-        q = query(q, where('managerId', '==', profile.id));
-      }
-      return q;
-  }, [firestore, activeCompanyId, profile]);
-  const { data: allUsers, isLoading: isAdminUsersLoading } = useCollection<User>(usersQuery);
-
-  const isLoading = isProfileLoading || isTasksLoading || (isSuperAdminOrManager && isAdminUsersLoading) || isSessionLoading;
+  const isLoading = isProfileLoading || isTasksLoading || (isSuperAdmin && isAllUsersLoading) || isSessionLoading;
 
   if (session && !session.allowedNavItems.includes('nav_performance_analysis')) {
     return notFound();
@@ -407,10 +395,10 @@ export default function ReportsPage() {
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
-        ) : isSuperAdminOrManager ? (
+        ) : isSuperAdmin ? (
           <AdminAnalysisDashboard allTasks={tasks} allUsers={allUsers} isLoading={isLoading} />
         ) : (
-          <EmployeeReport tasks={tasks} isLoading={isLoading} />
+          <PersonalReport tasks={tasks} isLoading={isLoading} role={profile?.role || 'Employee'} />
         )}
       </main>
     </div>
