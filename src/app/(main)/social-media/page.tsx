@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -22,8 +23,8 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
-import type { SocialMediaPost } from '@/lib/types';
+import { collection, query, where, orderBy } from 'firebase/firestore';
+import type { SocialMediaPost, Brand } from '@/lib/types';
 import { SocialPostCard } from '@/components/social-media/social-post-card';
 import { parseISO } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -162,50 +163,46 @@ export default function SocialMediaPage() {
                 </div>
             </div>
         </div>
-
-        <div className="flex flex-col flex-1 border rounded-lg">
-            <div className="grid grid-cols-7">
-                {daysOfWeek.map(day => (
-                    <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-r last:border-r-0">
-                        {day}
-                    </div>
-                ))}
-            </div>
-            {postsLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <Loader2 className="h-8 w-8 animate-spin" />
-              </div>
-            ) : (
-            <div className="grid grid-cols-7 grid-rows-6 flex-1 overflow-hidden">
-              {calendarGrid.days.map((day, index) => {
-                const dayKey = format(day, 'yyyy-MM-dd');
-                const postsForDay = postsByDay.get(dayKey) || [];
-                return (
-                  <div 
-                      key={day.toString()} 
-                      className={cn(
-                          "relative flex flex-col border-r border-b",
-                          !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50",
-                          (index + 1) % 7 === 0 && "border-r-0", // Remove right border for last cell in a row
-                          index >= 35 && "border-b-0" // Remove bottom border for last row
-                      )}
-                  >
-                      <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-sm", isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground")}>
-                          {format(day, 'd')}
-                      </span>
-                      <ScrollArea className="flex-1 mt-8">
-                        <div className="flex flex-col gap-1.5 p-1">
-                          {postsForDay.map(post => (
-                            <SocialPostCard key={post.id} post={post} />
-                          ))}
-                        </div>
-                      </ScrollArea>
-                  </div>
-                )
-              })}
-            </div>
-            )}
+        
+        <div className="grid grid-cols-7 flex-shrink-0 border-t border-l border-r rounded-t-lg">
+            {daysOfWeek.map(day => (
+                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-b border-r last:border-r-0">
+                    {day}
+                </div>
+            ))}
         </div>
+        <ScrollArea className="flex-1 border-b border-x rounded-b-lg">
+        {postsLoading ? (
+          <div className="flex items-center justify-center h-full min-h-[50vh]">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
+        <div className="grid grid-cols-7 auto-rows-fr">
+          {calendarGrid.days.map((day) => {
+            const dayKey = format(day, 'yyyy-MM-dd');
+            const postsForDay = postsByDay.get(dayKey) || [];
+            return (
+              <div 
+                  key={day.toString()} 
+                  className={cn(
+                      "relative flex flex-col border-r border-t min-h-[120px]",
+                      !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50"
+                  )}
+              >
+                  <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-xs", isSameDay(day, new Date()) && "flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground")}>
+                      {format(day, 'd')}
+                  </span>
+                    <div className="flex flex-col gap-1.5 p-1 pt-8">
+                      {postsForDay.map(post => (
+                        <SocialPostCard key={post.id} post={post} />
+                      ))}
+                    </div>
+              </div>
+            )
+          })}
+        </div>
+        )}
+        </ScrollArea>
       </main>
     </div>
   );
