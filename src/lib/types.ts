@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -211,12 +212,15 @@ export type SocialMediaPost = {
   createdBy: string;
   companyId: string;
   comments?: Comment[];
-  brandId?: string; 
+  brandId?: string;
   creator?: {
     name: string;
     avatarUrl: string;
   };
   postType?: 'Post' | 'Reels';
+  objectPosition?: number;
+  revisionItems?: RevisionItem[];
+  revisionHistory?: RevisionCycle[];
 };
 
 

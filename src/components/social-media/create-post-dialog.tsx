@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -44,20 +45,21 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useStorage, useCollection, useDoc } from '@/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc, query, where, orderBy } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc, query, where, orderBy, deleteField } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus, RefreshCcw } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
-import type { SocialMediaPost, Notification, Comment, User as UserType, Brand } from '@/lib/types';
+import type { SocialMediaPost, Notification, Comment, User as UserType, Brand, RevisionItem } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { InstagramPostPreview } from './instagram-post-preview';
 import { Label } from '../ui/label';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { Slider } from '../ui/slider';
+import { Checkbox } from '../ui/checkbox';
 
 
 const postSchema = z.object({
@@ -97,6 +99,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionItems, setRejectionItems] = useState<string[]>([]);
   const [currentRejectionItem, setCurrentRejectionItem] = useState('');
+  const [revisionItems, setRevisionItems] = useState<RevisionItem[]>([]);
 
   const firestore = useFirestore();
   const storage = useStorage();
@@ -157,6 +160,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             objectPosition: post.objectPosition || 50,
         });
         setImagePreview(post.mediaUrl || null);
+        setRevisionItems(post.revisionItems || []);
         if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
             setMediaType('video');
         } else {
@@ -174,6 +178,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             objectPosition: 50,
         });
         setImagePreview(null);
+        setRevisionItems([]);
     }
   }, [post, mode, form, open]);
 
@@ -265,6 +270,11 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             toast({ title: `Post ${status === 'Draft' ? 'Draft Saved' : 'Submitted'}!`, description: `Your post for ${data.platform} has been saved.` });
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
+            if (status === 'Needs Approval' && post.status === 'Draft') {
+                // When re-submitting, clear old revision items
+                (postData as any).revisionItems = deleteField();
+            }
+
             batch.update(postRef, {
                 ...postData,
                 updatedAt: serverTimestamp(),
@@ -295,10 +305,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     const postRef = doc(firestore, 'socialMediaPosts', post.id);
     const batch = writeBatch(firestore);
 
-    batch.update(postRef, {
+    const updateData: any = {
         status: newStatus,
         updatedAt: serverTimestamp(),
-    });
+    };
 
     let notificationMessage: string;
     let notificationTitle: string;
@@ -306,23 +316,22 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     if (newStatus === 'Scheduled') {
         notificationTitle = 'Post Approved';
         notificationMessage = `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`;
+        // Clear revision items on approval
+        updateData.revisionItems = deleteField();
     } else { // Rejected, status becomes 'Draft'
         notificationTitle = 'Post Needs Revision';
-        notificationMessage = `${profile.name} requested revisions for your post: "${post.caption.substring(0, 30)}...". See comments for details.`;
+        notificationMessage = `${profile.name} requested revisions for your post: "${post.caption.substring(0, 30)}...". See the checklist for details.`;
         
         if (reasonItems && reasonItems.length > 0) {
-            const formattedReason = reasonItems.map(item => `- ${item}`).join('\n');
-            const newComment: Comment = {
-                id: `c-${Date.now()}`,
-                user: profile as UserType, 
-                text: `**Rejection Feedback:**\n${formattedReason}`,
-                timestamp: new Date().toISOString(),
-                replies: [],
-            };
-            const existingComments = post.comments || [];
-            batch.update(postRef, { comments: [...existingComments, newComment] });
+            updateData.revisionItems = reasonItems.map(item => ({
+                id: crypto.randomUUID(),
+                text: item,
+                completed: false,
+            }));
         }
     }
+    
+    batch.update(postRef, updateData);
 
     if (post.createdBy !== profile.id) {
         const notifRef = doc(collection(firestore, `users/${post.createdBy}/notifications`));
@@ -330,7 +339,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             userId: post.createdBy,
             title: notificationTitle,
             message: notificationMessage,
-            taskId: post.id, // Using taskId field to link to the post
+            taskId: post.id,
             isRead: false,
             createdAt: serverTimestamp(),
             createdBy: {
@@ -385,6 +394,25 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         setIsDeleting(false);
     }
   };
+  
+  const handleToggleRevisionItem = async (itemId: string) => {
+    if (!firestore || !post) return;
+    
+    const newItems = revisionItems.map(item =>
+        item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    setRevisionItems(newItems);
+    
+    const postRef = doc(firestore, 'socialMediaPosts', post.id);
+    try {
+        await updateDoc(postRef, { revisionItems: newItems });
+    } catch (e) {
+        console.error("Failed to update revision item", e);
+        setRevisionItems(post.revisionItems || []); // Revert on failure
+        toast({ variant: 'destructive', title: 'Update Failed' });
+    }
+};
+
 
   const onFormSubmit = (status: SocialMediaPost['status']) => {
     form.handleSubmit((data) => handleSubmit(data, status))();
@@ -408,6 +436,11 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         setCurrentRejectionItem('');
     }
   };
+  
+  const allRevisionsCompleted = useMemo(() => {
+    if (!revisionItems || revisionItems.length === 0) return true;
+    return revisionItems.every(item => item.completed);
+  }, [revisionItems]);
 
 
   return (
@@ -424,25 +457,24 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         <div className="grid md:grid-cols-2 h-full overflow-hidden">
           <ScrollArea className="md:border-r h-full">
             <div className="p-6 space-y-6">
-                {rejectionComment && (
-                  <Alert variant="destructive" className="mb-4">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertTitle>Revisions Requested</AlertTitle>
-                      <AlertDescriptionUI>
-                        <div className="flex items-start gap-3 mt-2">
-                           <Avatar className="h-8 w-8">
-                                <AvatarImage src={rejectionComment.user.avatarUrl} alt={rejectionComment.user.name} />
-                                <AvatarFallback>{rejectionComment.user.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div className="text-sm">
-                                <p className="font-semibold">{rejectionComment.user.name} <span className="font-normal text-muted-foreground">requested changes:</span></p>
-                                <blockquote className="mt-1 italic border-l-2 pl-3 border-destructive/50 whitespace-pre-wrap">
-                                {rejectionComment.text.replace('**Rejection Feedback:**', '').trim()}
-                                </blockquote>
-                            </div>
-                        </div>
-                      </AlertDescriptionUI>
-                  </Alert>
+                {isCreatorEditView && revisionItems && revisionItems.length > 0 && (
+                  <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                      <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revisions Requested</h3>
+                      <div className="space-y-2">
+                          {revisionItems.map(item => (
+                              <div key={item.id} className="flex items-center gap-3">
+                                  <Checkbox
+                                      id={`rev-${item.id}`}
+                                      checked={item.completed}
+                                      onCheckedChange={() => handleToggleRevisionItem(item.id)}
+                                  />
+                                  <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                      {item.text}
+                                  </label>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
                 )}
                 <Form {...form}>
                 <form id="create-post-form" className="space-y-6">
@@ -696,8 +728,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Changes
                     </Button>
-                    <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Submit for Approval
+                    <Button type="button" onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving || !allRevisionsCompleted}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Re-submit for Approval
                     </Button>
                 </>
             ) : null }
