@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle, Clapperboard } from 'lucide-react';
 import type { SocialMediaPost } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 interface InstagramPostPreviewProps {
     profileName?: string;
@@ -13,6 +14,7 @@ interface InstagramPostPreviewProps {
     mediaType?: 'image' | 'video';
     caption?: string;
     postType?: 'Post' | 'Reels';
+    objectPosition?: number;
 }
 
 export function InstagramPostPreview({ 
@@ -22,6 +24,7 @@ export function InstagramPostPreview({
     mediaType = 'image',
     caption,
     postType = 'Post',
+    objectPosition = 50,
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -40,7 +43,8 @@ export function InstagramPostPreview({
   };
   
   const mediaStyle: React.CSSProperties = {
-      objectFit: 'contain'
+      objectFit: 'cover',
+      objectPosition: `center ${objectPosition}%`,
   };
 
   return (
@@ -56,13 +60,16 @@ export function InstagramPostPreview({
       </div>
 
       {/* Media */}
-      <div className="relative aspect-square w-full bg-zinc-200 dark:bg-zinc-800">
+      <div className={cn(
+          "relative w-full bg-zinc-200 dark:bg-zinc-800",
+          postType === 'Reels' ? 'aspect-[9/16]' : 'aspect-square'
+      )}>
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" alt="Post preview" style={{ objectFit: 'contain' }} />
+            <Image src={mediaUrl} layout="fill" alt="Post preview" style={mediaStyle} />
           ) : (
             <>
-              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-contain" />
+              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" />
             </>
           )
         ) : (

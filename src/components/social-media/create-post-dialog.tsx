@@ -57,6 +57,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { InstagramPostPreview } from './instagram-post-preview';
 import { Label } from '../ui/label';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
+import { Slider } from '../ui/slider';
 
 
 const postSchema = z.object({
@@ -67,6 +68,7 @@ const postSchema = z.object({
   scheduledAtTime: z.string().min(1, 'A time is required.'),
   media: z.any().optional(),
   postType: z.enum(['Post', 'Reels']).default('Post'),
+  objectPosition: z.number().min(0).max(100).default(50),
 });
 
 type PostFormValues = z.infer<typeof postSchema>;
@@ -116,6 +118,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   
   const caption = form.watch('caption');
   const postType = form.watch('postType');
+  const objectPosition = form.watch('objectPosition');
 
   useEffect(() => {
     if (mode === 'edit' && post) {
@@ -127,6 +130,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             scheduledAtTime: format(scheduledDate, 'HH:mm'),
             brandId: post.brandId,
             postType: post.postType || 'Post',
+            objectPosition: post.objectPosition || 50,
         });
         setImagePreview(post.mediaUrl || null);
         if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
@@ -143,6 +147,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             scheduledAtTime: format(new Date(), 'HH:mm'),
             media: undefined,
             postType: 'Post',
+            objectPosition: 50,
         });
         setImagePreview(null);
     }
@@ -189,6 +194,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             status: status,
             brandId: data.brandId,
             postType: data.postType,
+            objectPosition: data.objectPosition,
             creator: {
                 name: profile.name,
                 avatarUrl: profile.avatarUrl || ''
@@ -437,6 +443,26 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                                 </div>
                             </FormControl>
                             <FormMessage />
+                             {isEditable && mediaType === 'image' && imagePreview && (
+                                <FormField
+                                    control={form.control}
+                                    name="objectPosition"
+                                    render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Image Focus</FormLabel>
+                                        <FormControl>
+                                            <Slider
+                                                min={0}
+                                                max={100}
+                                                step={1}
+                                                value={[field.value]}
+                                                onValueChange={(vals) => field.onChange(vals[0])}
+                                            />
+                                        </FormControl>
+                                    </FormItem>
+                                    )}
+                                />
+                            )}
                         </FormItem>
                         )}
                     />
@@ -583,6 +609,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     mediaType={mediaType}
                     caption={caption}
                     postType={postType}
+                    objectPosition={objectPosition}
                 />
             </div>
           </ScrollArea>
