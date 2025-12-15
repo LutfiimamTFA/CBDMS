@@ -212,7 +212,6 @@ export type SocialMediaPost = {
   companyId: string;
   comments?: Comment[];
   brandId?: string; 
-  objectPosition?: number;
   creator?: {
     name: string;
     avatarUrl: string;

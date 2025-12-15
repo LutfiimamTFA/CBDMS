@@ -88,7 +88,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
-  const [objectPosition, setObjectPosition] = useState<number>(50);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
@@ -126,7 +125,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             brandId: post.brandId,
         });
         setImagePreview(post.mediaUrl || null);
-        setObjectPosition(post.objectPosition || 50);
         if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
             setMediaType('video');
         } else {
@@ -142,7 +140,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             media: undefined,
         });
         setImagePreview(null);
-        setObjectPosition(50);
     }
   }, [post, mode, form, open]);
 
@@ -186,7 +183,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             companyId: profile.companyId,
             status: status,
             brandId: data.brandId,
-            objectPosition: objectPosition,
             creator: {
                 name: profile.name,
                 avatarUrl: profile.avatarUrl || ''
@@ -561,23 +557,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     mediaUrl={imagePreview}
                     mediaType={mediaType}
                     caption={caption}
-                    objectPosition={objectPosition}
                 />
-                {isEditable && mediaType === 'image' && imagePreview && (
-                    <div className='space-y-2 text-center w-full max-w-[320px]'>
-                        <Label>Edit Angle</Label>
-                        <div className="flex items-center gap-4">
-                            <span className="text-xs text-muted-foreground">Top</span>
-                            <Slider
-                                value={[objectPosition]}
-                                max={100}
-                                step={1}
-                                onValueChange={(value) => setObjectPosition(value[0])}
-                            />
-                            <span className="text-xs text-muted-foreground">Bottom</span>
-                        </div>
-                    </div>
-                )}
             </div>
           </ScrollArea>
         </div>

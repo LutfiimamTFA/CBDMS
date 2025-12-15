@@ -12,7 +12,6 @@ interface InstagramPostPreviewProps {
     mediaUrl?: string | null;
     mediaType?: 'image' | 'video';
     caption?: string;
-    objectPosition?: number;
 }
 
 export function InstagramPostPreview({ 
@@ -21,7 +20,6 @@ export function InstagramPostPreview({
     mediaUrl, 
     mediaType = 'image',
     caption,
-    objectPosition = 50,
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -39,9 +37,8 @@ export function InstagramPostPreview({
     return formattedText;
   };
   
-  const imageStyle: React.CSSProperties = {
-      objectPosition: `50% ${objectPosition}%`,
-      objectFit: 'cover'
+  const mediaStyle: React.CSSProperties = {
+      objectFit: 'contain'
   };
 
   return (
@@ -60,10 +57,10 @@ export function InstagramPostPreview({
       <div className="relative aspect-square w-full bg-zinc-200 dark:bg-zinc-800">
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" alt="Post preview" style={imageStyle} />
+            <Image src={mediaUrl} layout="fill" alt="Post preview" style={mediaStyle} />
           ) : (
             <>
-              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" style={imageStyle} />
+              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-contain" style={mediaStyle} />
               <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                 <PlayCircle className="h-12 w-12 text-white/80" />
               </div>
