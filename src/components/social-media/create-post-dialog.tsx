@@ -366,8 +366,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             {mode === 'create' ? 'Prepare your content and submit it for approval.' : 'Review, edit, or approve this post.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid grid-cols-1 md:grid-cols-2 h-full overflow-hidden">
-        <ScrollArea className="md:border-r">
+        <div className="grid md:grid-cols-2 h-full overflow-hidden">
+          <ScrollArea className="md:border-r">
             <div className="p-6 space-y-6">
                 {rejectionComment && (
                   <Alert variant="destructive" className="mb-4">
@@ -533,7 +533,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 </form>
                 </Form>
             </div>
-        </ScrollArea>
+          </ScrollArea>
         <div className="p-6 bg-secondary/50 flex items-center justify-center">
             <InstagramPostPreview 
                 profileName={post?.creator?.name || profile?.name || 'Username'}
