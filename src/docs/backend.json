@@ -610,13 +610,7 @@
       {
         "path": "/api/run-scheduler",
         "definition": {
-          "description": "An API endpoint that, when called, runs the scheduler to generate recurring tasks."
-        }
-      },
-      {
-        "path": "/api/run-social-poster",
-        "definition": {
-          "description": "An API endpoint that, when called, runs a job to post scheduled social media content."
+          "description": "An API endpoint that, when called, runs all scheduled jobs like generating recurring tasks and posting social media content."
         }
       },
       {

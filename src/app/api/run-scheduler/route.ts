@@ -4,7 +4,7 @@ import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { serviceAccount } from '@/firebase/service-account';
-import type { RecurringTaskTemplate, Task } from '@/lib/types';
+import type { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types';
 
 // Initialize Firebase Admin
 function initializeAdminApp(): App {
@@ -16,7 +16,7 @@ function initializeAdminApp(): App {
   });
 }
 
-// Helper to check if a task should be generated today
+// Helper to check if a recurring task should be generated today
 function shouldGenerateTask(template: RecurringTaskTemplate): boolean {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -44,21 +44,38 @@ function shouldGenerateTask(template: RecurringTaskTemplate): boolean {
   }
 }
 
-export async function GET(request: Request) {
-  // Optional: Add a secret key to prevent unauthorized runs
-  // const { searchParams } = new URL(request.url);
-  // if (searchParams.get('secret') !== process.env.SCHEDULER_SECRET) {
-  //   return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-  // }
+async function runSocialMediaPoster(firestore: FirebaseFirestore.Firestore) {
+    const now = new Date().toISOString();
+    const postsToPublishSnapshot = await firestore
+      .collection('socialMediaPosts')
+      .where('status', '==', 'Scheduled')
+      .where('scheduledAt', '<=', now)
+      .get();
 
-  try {
-    const app = initializeAdminApp();
-    const firestore = getFirestore(app);
-    const auth = getAuth(app);
+    if (postsToPublishSnapshot.empty) {
+      return 0; // No posts published
+    }
 
+    const batch = firestore.batch();
+    let postsPublishedCount = 0;
+
+    postsToPublishSnapshot.forEach(doc => {
+      const postRef = doc.ref;
+      batch.update(postRef, {
+        status: 'Posted',
+        postedAt: Timestamp.now(),
+      });
+      postsPublishedCount++;
+    });
+
+    await batch.commit();
+    return postsPublishedCount;
+}
+
+async function runRecurringTaskGenerator(firestore: FirebaseFirestore.Firestore, auth: any) {
     const templatesSnapshot = await firestore.collection('recurringTaskTemplates').get();
     if (templatesSnapshot.empty) {
-      return NextResponse.json({ message: 'No recurring task templates found.' }, { status: 200 });
+      return { created: 0, flagged: 0 };
     }
 
     const tasksToCreate: Omit<Task, 'id'>[] = [];
@@ -73,17 +90,14 @@ export async function GET(request: Request) {
           title: template.title,
           description: template.description || '',
           brandId: template.defaultBrandId,
-          status: 'To Do', // Always start as 'To Do'
+          status: 'To Do',
           priority: template.defaultPriority,
           assigneeIds: template.defaultAssigneeIds,
-          // We can't resolve assignees object here, it will be done on client
           assignees: [], 
           companyId: template.companyId,
-          isMandatory: template.isMandatory || false, // CRITICAL FIX: Ensure isMandatory is carried over
+          isMandatory: template.isMandatory || false,
           createdBy: { id: 'system', name: 'Scheduler', avatarUrl: '' },
-          // Fields from Task that are not in template
           startDate: new Date().toISOString(),
-          // Optional: Add logic for due date based on creation
         };
         tasksToCreate.push(newTask);
 
@@ -98,19 +112,16 @@ export async function GET(request: Request) {
     });
 
     if (tasksToCreate.length === 0) {
-      return NextResponse.json({ message: 'No tasks to generate today.' }, { status: 200 });
+      return { created: 0, flagged: 0 };
     }
 
-    // Use a batch to write all changes atomically
     const batch = firestore.batch();
 
-    // Create new tasks
     tasksToCreate.forEach(taskData => {
       const taskRef = firestore.collection('tasks').doc();
       batch.set(taskRef, { ...taskData, createdAt: Timestamp.now() });
     });
 
-    // Update lastGeneratedAt for templates
     templatesToUpdate.forEach(update => {
       const templateRef = firestore.collection('recurringTaskTemplates').doc(update.id);
       batch.update(templateRef, { lastGeneratedAt: update.lastGeneratedAt });
@@ -118,7 +129,6 @@ export async function GET(request: Request) {
     
     await batch.commit();
 
-    // Set custom claims for mandatory tasks
     for (const userId of Object.keys(usersToFlag)) {
       try {
         const user = await auth.getUser(userId);
@@ -129,15 +139,50 @@ export async function GET(request: Request) {
       }
     }
 
+    return { created: tasksToCreate.length, flagged: Object.keys(usersToFlag).length };
+}
+
+
+export async function GET(request: Request) {
+  // This single endpoint now runs all scheduled jobs.
+  // Optional: Add a secret key check for security
+  // const { searchParams } = new URL(request.url);
+  // if (searchParams.get('secret') !== process.env.SCHEDULER_SECRET) {
+  //   return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  // }
+  
+  try {
+    const app = initializeAdminApp();
+    const firestore = getFirestore(app);
+    const auth = getAuth(app);
+
+    const [socialResult, taskResult] = await Promise.all([
+      runSocialMediaPoster(firestore),
+      runRecurringTaskGenerator(firestore, auth)
+    ]);
+
+    const messages = [];
+    if (socialResult > 0) {
+      messages.push(`Published ${socialResult} social media post(s).`);
+    } else {
+      messages.push('No social media posts to publish.');
+    }
+    if (taskResult.created > 0) {
+      messages.push(`Generated ${taskResult.created} recurring task(s) and flagged ${taskResult.flagged} user(s).`);
+    } else {
+      messages.push('No recurring tasks to generate.');
+    }
+
     return NextResponse.json(
       {
-        message: `Successfully generated ${tasksToCreate.length} tasks and flagged ${Object.keys(usersToFlag).length} users.`,
+        message: `Scheduler finished. ${messages.join(' ')}`,
       },
       { status: 200 }
     );
+
   } catch (error: any) {
-    console.error('Error in scheduler:', error);
-    let errorMessage = 'An unexpected error occurred.';
+    console.error('Error in main scheduler:', error);
+    let errorMessage = 'An unexpected error occurred during scheduled job execution.';
      if (error.message?.includes('FIREBASE_SERVICE_ACCOUNT_KEY') || error.code === 'app/invalid-credential') {
         errorMessage = 'Firebase Admin SDK initialization failed. Check server credentials.';
     }
