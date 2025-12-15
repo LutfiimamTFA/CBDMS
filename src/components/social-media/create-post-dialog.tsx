@@ -85,6 +85,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
@@ -97,11 +98,11 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
 
   const brandsQuery = useMemo(() => {
     if (!firestore || !profile) return null;
-    let q = collection(firestore, 'brands');
+    let q = query(collection(firestore, 'brands'), orderBy('name'));
     if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
         q = query(q, where('__name__', 'in', profile.brandIds));
     }
-    return query(q, orderBy('name'));
+    return q;
   }, [firestore, profile]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
@@ -122,6 +123,11 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             brandId: post.brandId,
         });
         setImagePreview(post.mediaUrl || null);
+        if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
+            setMediaType('video');
+        } else {
+            setMediaType('image');
+        }
     } else {
         form.reset({
             platform: 'Instagram',
@@ -139,6 +145,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setMediaType(file.type.startsWith('video') ? 'video' : 'image');
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -407,12 +414,16 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                                 >
                                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
                                     {imagePreview ? (
-                                        <Image src={imagePreview} alt="Preview" width={192} height={192} className="max-h-full w-auto object-contain rounded-md" />
+                                        mediaType === 'image' ? (
+                                            <Image src={imagePreview} alt="Preview" width={192} height={192} className="max-h-full w-auto object-contain rounded-md" />
+                                        ) : (
+                                            <video src={imagePreview} controls className="max-h-full w-auto object-contain rounded-md" />
+                                        )
                                     ) : (
                                         <div className="text-center text-muted-foreground">
                                             <UploadCloud className="mx-auto h-8 w-8" />
                                             <p>Click to upload image or video</p>
-                                            <p className="text-xs">PNG, JPG, GIF up to 10MB</p>
+                                            <p className="text-xs">PNG, JPG, MP4 up to 10MB</p>
                                         </div>
                                     )}
                                 </div>
@@ -461,7 +472,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             control={form.control}
                             name="scheduledAtDate"
                             render={({ field }) => (
-                            <FormItem className="flex flex-col">
+                            <FormItem className="space-y-2">
                                 <FormLabel>Schedule Date</FormLabel>
                                 <Popover>
                                 <PopoverTrigger asChild>
@@ -494,7 +505,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             control={form.control}
                             name="scheduledAtTime"
                             render={({ field }) => (
-                                <FormItem>
+                                <FormItem className="space-y-2">
                                     <FormLabel>Schedule Time</FormLabel>
                                     <FormControl>
                                         <Input
@@ -540,6 +551,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     profileName={post?.creator?.name || profile?.name || 'Username'}
                     profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
                     mediaUrl={imagePreview}
+                    mediaType={mediaType}
                     caption={caption}
                 />
             </div>

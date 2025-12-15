@@ -1,15 +1,15 @@
-
 'use client';
 
 import React from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle } from 'lucide-react';
 
 interface InstagramPostPreviewProps {
     profileName?: string;
     profileImageUrl?: string;
     mediaUrl?: string | null;
+    mediaType?: 'image' | 'video';
     caption?: string;
 }
 
@@ -17,6 +17,7 @@ export function InstagramPostPreview({
     profileName = 'Username', 
     profileImageUrl, 
     mediaUrl, 
+    mediaType = 'image',
     caption 
 }: InstagramPostPreviewProps) {
   
@@ -50,7 +51,16 @@ export function InstagramPostPreview({
       {/* Media */}
       <div className="relative aspect-square w-full bg-zinc-200 dark:bg-zinc-800">
         {mediaUrl ? (
-          <Image src={mediaUrl} layout="fill" objectFit="cover" alt="Post preview" />
+          mediaType === 'image' ? (
+            <Image src={mediaUrl} layout="fill" objectFit="cover" alt="Post preview" />
+          ) : (
+            <>
+              <video src={mediaUrl} className="w-full h-full object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                <PlayCircle className="h-12 w-12 text-white/80" />
+              </div>
+            </>
+          )
         ) : (
             <div className="flex items-center justify-center h-full">
                 <FileText className="h-16 w-16 text-zinc-400 dark:text-zinc-600" />
