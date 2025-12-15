@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -125,6 +125,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
+  const [gdriveLink, setGdriveLink] = useState('');
+  const [gdriveName, setGdriveName] = useState('');
 
   const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = React.useState('');
@@ -172,12 +175,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
     
     if (currentUserProfile.role === 'Employee') {
-        const teamAndManager = [...allUsers];
-        const manager = allUsers.find(u => u.id === currentUserProfile.managerId);
-        if(manager && !teamAndManager.some(u => u.id === manager.id)) {
-            // this is a potential issue, the query for employees should maybe include the manager
-        }
-       return teamAndManager.map(user => ({ value: user.id, label: user.name }));
+        const myTeam = (allUsers || []).filter(u => u.managerId === currentUserProfile.managerId);
+        return myTeam.map(user => ({ value: user.id, label: user.name }));
     }
 
     return [];
@@ -278,23 +277,17 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (open && currentUserProfile && user) {
         if (currentUserProfile.role === 'Employee') {
-            const selfUser = {
-                id: user.uid,
-                name: currentUserProfile.name,
-                email: currentUserProfile.email,
-                avatarUrl: currentUserProfile.avatarUrl || '',
-                role: currentUserProfile.role,
-                companyId: currentUserProfile.companyId,
-                createdAt: currentUserProfile.createdAt,
-            };
-            setSelectedUsers([selfUser]);
-            form.setValue('assigneeIds', [selfUser.id]);
+            const selfUser = allUsers?.find(u => u.id === user.uid);
+            if (selfUser) {
+                setSelectedUsers([selfUser]);
+                form.setValue('assigneeIds', [selfUser.id]);
+            }
         } else {
              setSelectedUsers([]);
             form.setValue('assigneeIds', []);
         }
     }
-}, [open, currentUserProfile, user, form]);
+}, [open, currentUserProfile, user, form, allUsers]);
 
 
   const onSubmit = async (data: TaskFormValues) => {
@@ -444,18 +437,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setLogNote('');
   };
 
-  const handleSelectUser = (user: UserType) => {
-      const newSelectedUsers = [...selectedUsers, user];
-      setSelectedUsers(newSelectedUsers);
-      form.setValue('assigneeIds', newSelectedUsers.map(u => u.id));
-  };
-
-  const handleRemoveUser = (userId: string) => {
-    const newSelectedUsers = selectedUsers.filter((u) => u.id !== userId);
-    setSelectedUsers(newSelectedUsers);
-    form.setValue('assigneeIds', newSelectedUsers.map(u => u.id));
-  };
-  
   const handleSelectTag = (tag: TagType) => {
     if (!selectedTags.find(t => t.label === tag.label)) {
       const newTags = [...selectedTags, tag];
@@ -535,17 +516,20 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const handleAddGdriveLink = () => {
-    const url = prompt('Please enter the Google Drive file link:');
-    if (url) {
-      const name = prompt('Please enter a name for this link:', 'Google Drive File');
+  const handleConfirmGdriveLink = () => {
+    if (gdriveLink && gdriveName) {
       const newAttachment: Attachment = {
         id: `gdrive-${Date.now()}`,
-        name: name || 'Google Drive File',
+        name: gdriveName,
         type: 'gdrive',
-        url: url,
+        url: gdriveLink,
       };
       setAttachments(prev => [...prev, newAttachment]);
+      setIsGdriveDialogOpen(false);
+      setGdriveLink('');
+      setGdriveName('');
+    } else {
+        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
     }
   };
 
@@ -743,6 +727,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
@@ -1032,6 +1017,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-60 p-1">
+                                <ScrollArea className="max-h-60">
                                 <div className="space-y-1">
                                   <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
                                   {(allUsers || []).map(user => (
@@ -1041,6 +1027,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                     </Button>
                                   ))}
                                 </div>
+                                </ScrollArea>
                               </PopoverContent>
                             </Popover>
                             <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
@@ -1111,7 +1098,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
                     <div className="space-y-4 rounded-lg border p-4">
                         <h3 className="text-sm font-medium flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h3>
-                        <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
+                        <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
                         {attachments.length > 0 && (<div className="space-y-2"><Label>Attached Files</Label><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{attachments.map(att => (<a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm hover:bg-secondary"><div className="flex items-center gap-2 truncate">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></div><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.preventDefault(); handleRemoveAttachment(att.id);}}><X className="h-4 w-4" /></Button></a>))}</div></div>)}
                     </div>
                     
@@ -1128,5 +1115,30 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+     <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Link Google Drive File</DialogTitle>
+                <DialogDescription>
+                    Paste the shareable link to your Google Drive file below.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                    <Label htmlFor="gdrive-name">File Name</Label>
+                    <Input id="gdrive-name" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" />
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="gdrive-link">File Link</Label>
+                    <Input id="gdrive-link" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleConfirmGdriveLink}>Add Link</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    </>
   );
 }

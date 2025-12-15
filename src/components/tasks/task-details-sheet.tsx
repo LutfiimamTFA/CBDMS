@@ -142,6 +142,9 @@ export function TaskDetailsSheet({
   const [rejectionReason, setRejectionReason] = useState('');
   
   const [revisionItems, setRevisionItems] = useState<RevisionItem[]>([]);
+  const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
+  const [gdriveLink, setGdriveLink] = useState('');
+  const [gdriveName, setGdriveName] = useState('');
 
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -506,15 +509,7 @@ export function TaskDetailsSheet({
 
         const comment: Comment = {
           id: `c-${crypto.randomUUID()}`,
-          user: {
-            id: currentUser.id,
-            name: currentUser.name,
-            email: currentUser.email,
-            avatarUrl: currentUser.avatarUrl || '',
-            role: currentUser.role,
-            companyId: currentUser.companyId,
-            createdAt: currentUser.createdAt
-          },
+          user: currentUser,
           text: newComment,
           timestamp: new Date().toISOString(),
           replies: [],
@@ -704,17 +699,20 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
 };
 
-  const handleAddGdriveLink = () => {
-    const url = prompt('Please enter the Google Drive file link:');
-    if (url) {
-      const name = prompt('Please enter a name for this link:', 'Google Drive File');
+  const handleConfirmGdriveLink = () => {
+    if (gdriveLink && gdriveName) {
       const newAttachment: Attachment = {
         id: `gdrive-${Date.now()}`,
-        name: name || 'Google Drive File',
+        name: gdriveName,
         type: 'gdrive',
-        url: url
+        url: gdriveLink,
       };
       setAttachments(prev => [...prev, newAttachment]);
+      setIsGdriveDialogOpen(false);
+      setGdriveLink('');
+      setGdriveName('');
+    } else {
+        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
     }
   };
 
@@ -1139,7 +1137,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <div className="grid grid-cols-2 gap-4">
                               <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
                               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                              <Button type="button" variant="outline" onClick={handleAddGdriveLink}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
+                              <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
                             </div>
                           )}
                         </div>
@@ -1560,7 +1558,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Task Activity Log</DialogTitle>
+            <DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle>
             <DialogDescription>
               A complete history of all changes made to this task.
             </DialogDescription>
@@ -1626,6 +1624,30 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+        <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Link Google Drive File</DialogTitle>
+                    <DialogDescription>
+                        Paste the shareable link to your Google Drive file below.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                        <Label htmlFor="gdrive-name-details">File Name</Label>
+                        <Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="gdrive-link-details">File Link</Label>
+                        <Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={handleConfirmGdriveLink}>Add Link</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </>
   );
 }
