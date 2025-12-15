@@ -29,25 +29,31 @@ interface AssignedSubtask {
 
 export function ActionItems() {
     const firestore = useFirestore();
-    const { user, isLoading: userLoading } = useUserProfile();
+    const { user, profile, isLoading: userLoading } = useUserProfile();
     const router = useRouter();
 
     const tasksQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'tasks'));
-    }, [firestore]);
+        if (!firestore || !user) return null;
+        // This query fetches tasks where the user is an assignee OR is mentioned.
+        // It's a bit broad but necessary to catch all relevant items.
+        // A more complex backend solution could optimize this.
+        return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
+    }, [firestore, user]);
     const { data: allTasks, isLoading: tasksLoading } = useCollection<Task>(tasksQuery);
     
     const { mentions, assignedSubtasks } = useMemo(() => {
         const mentions: Mention[] = [];
         const assignedSubtasks: AssignedSubtask[] = [];
         
-        if (!allTasks || !user) return { mentions, assignedSubtasks };
+        if (!allTasks || !user || !profile) return { mentions, assignedSubtasks };
 
-        const userFirstName = user.displayName?.split(' ')[0].toLowerCase();
+        const userFirstName = profile.name?.split(' ')[0].toLowerCase();
+        if (!userFirstName) return { mentions, assignedSubtasks };
+        
         const mentionRegex = new RegExp(`@${userFirstName}\\b`, 'i');
         
         allTasks.forEach(task => {
+            // Check for mentions in comments
             if (task.comments) {
                 task.comments.forEach(comment => {
                     if (mentionRegex.test(comment.text)) {
@@ -55,6 +61,7 @@ export function ActionItems() {
                     }
                 });
             }
+            // Check for assigned subtasks
             if (task.subtasks) {
                 task.subtasks.forEach(subtask => {
                     if (subtask.assignee?.id === user.uid && !subtask.completed) {
@@ -69,7 +76,7 @@ export function ActionItems() {
 
         return { mentions, assignedSubtasks };
 
-    }, [allTasks, user]);
+    }, [allTasks, user, profile]);
     
     const isLoading = userLoading || tasksLoading;
 

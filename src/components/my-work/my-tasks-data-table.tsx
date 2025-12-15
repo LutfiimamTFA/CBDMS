@@ -96,6 +96,11 @@ export function MyTasksDataTable() {
   const [sorting, setSorting] = React.useState<SortingState>([ { id: 'priority', desc: true } ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
 
+  const teamMemberIds = React.useMemo(() => {
+    if (profile?.role !== 'Manager' || !teamUsers) return [];
+    return teamUsers.map(u => u.id);
+  }, [profile, teamUsers]);
+
   const usersQuery = React.useMemo(() => {
     if (!firestore || !profile || profile.role !== 'Manager') return null;
     return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
@@ -106,9 +111,8 @@ export function MyTasksDataTable() {
     if (!firestore || !profile) return null;
 
     if (profile.role === 'Manager') {
-      const teamMemberIds = (teamUsers || []).map(u => u.id);
-      const allRelevantIds = [...teamMemberIds, profile.id];
-      if (allRelevantIds.length === 0) return null;
+      const allRelevantIds = Array.from(new Set([profile.id, ...teamMemberIds]));
+      if (allRelevantIds.length === 0) return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
       return query(
         collection(firestore, 'tasks'),
         where('assigneeIds', 'array-contains-any', allRelevantIds)
@@ -120,7 +124,7 @@ export function MyTasksDataTable() {
       collection(firestore, 'tasks'),
       where('assigneeIds', 'array-contains', profile.id)
     );
-  }, [firestore, profile, teamUsers]);
+  }, [firestore, profile, teamMemberIds]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
@@ -233,5 +237,3 @@ export function MyTasksDataTable() {
     </div>
   );
 }
-
-

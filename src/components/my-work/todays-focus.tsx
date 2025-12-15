@@ -15,28 +15,33 @@ export function TodaysFocus() {
     const { user, profile, isLoading: userLoading } = useUserProfile();
     const router = useRouter();
 
-    const usersQuery = React.useMemo(() => {
+    const teamMemberIds = useMemo(() => {
+        if (profile?.role !== 'Manager' || !allUsers) return [];
+        return allUsers.filter(u => u.managerId === profile.id).map(u => u.id);
+    }, [profile, allUsers]);
+
+    const usersQuery = useMemo(() => {
         if (!firestore || !profile || profile.role !== 'Manager') return null;
         return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
     }, [firestore, profile]);
-    const { data: teamUsers, isLoading: isTeamLoading } = useCollection<User>(usersQuery);
+    const { data: allUsers, isLoading: isTeamLoading } = useCollection<User>(usersQuery);
 
     const tasksQuery = useMemo(() => {
         if (!firestore || !user || !profile) return null;
 
         if (profile.role === 'Manager') {
-          const teamMemberIds = (teamUsers || []).map(u => u.id);
-          const allRelevantIds = [...teamMemberIds, profile.id];
-          if (allRelevantIds.length === 0) return null; 
-          return query(
-            collection(firestore, 'tasks'),
-            where('assigneeIds', 'array-contains-any', allRelevantIds)
-          );
+            const allRelevantIds = Array.from(new Set([profile.id, ...teamMemberIds]));
+            if (allRelevantIds.length === 0) return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+            return query(
+                collection(firestore, 'tasks'),
+                where('assigneeIds', 'array-contains-any', allRelevantIds)
+            );
         }
-
-        // For Employee
+        
+        // For Employee or other roles
         return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', user.uid));
-    }, [firestore, user, profile, teamUsers]);
+
+    }, [firestore, user, profile, teamMemberIds]);
     
     const { data: allTasks, isLoading: tasksLoading } = useCollection<Task>(tasksQuery);
     
@@ -46,7 +51,7 @@ export function TodaysFocus() {
             if (task.status === 'Done') return false;
 
             const isDueToday = task.dueDate && isToday(parseISO(task.dueDate));
-            const isOverdue = task.dueDate && isPast(parseISO(task.dueDate)) && !isToday(parseISO(task.dueDate));
+            const isOverdue = task.dueDate && !isToday(parseISO(task.dueDate)) && isPast(parseISO(task.dueDate));
             const isInProgress = task.status === 'Doing';
             
             return isDueToday || isOverdue || isInProgress;
@@ -90,4 +95,3 @@ export function TodaysFocus() {
         </div>
     );
 }
-
