@@ -41,6 +41,7 @@ export function InstagramPostPreview({
   
   const imageStyle: React.CSSProperties = {
       objectPosition: `50% ${objectPosition}%`,
+      objectFit: 'cover'
   };
 
   return (
@@ -59,7 +60,7 @@ export function InstagramPostPreview({
       <div className="relative aspect-square w-full bg-zinc-200 dark:bg-zinc-800">
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" objectFit="cover" alt="Post preview" style={imageStyle} />
+            <Image src={mediaUrl} layout="fill" alt="Post preview" style={imageStyle} />
           ) : (
             <>
               <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" style={imageStyle} />
