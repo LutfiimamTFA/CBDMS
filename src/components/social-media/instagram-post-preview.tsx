@@ -52,11 +52,11 @@ export function InstagramPostPreview({
       <div className="relative aspect-square w-full bg-zinc-200 dark:bg-zinc-800">
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" objectFit="cover" alt="Post preview" />
+            <Image src={mediaUrl} layout="fill" objectFit="contain" alt="Post preview" />
           ) : (
             <>
-              <video src={mediaUrl} className="w-full h-full object-cover" />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+              <video src={mediaUrl} controls className="w-full h-full object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20 pointer-events-none">
                 <PlayCircle className="h-12 w-12 text-white/80" />
               </div>
             </>
