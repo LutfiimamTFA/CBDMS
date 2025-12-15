@@ -270,10 +270,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             toast({ title: `Post ${status === 'Draft' ? 'Draft Saved' : 'Submitted'}!`, description: `Your post for ${data.platform} has been saved.` });
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
-            if (status === 'Needs Approval' && post.status === 'Draft') {
-                // When re-submitting, clear old revision items
-                (postData as any).revisionItems = deleteField();
-            }
 
             batch.update(postRef, {
                 ...postData,
