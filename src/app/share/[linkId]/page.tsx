@@ -62,28 +62,22 @@ export default function SharedLinkPage() {
 
     useEffect(() => {
         if (isAuthenticated && sharedLink && allNavItems) {
-            const firstAllowedPathId = sharedLink.allowedNavItems[0];
-            const navItem = allNavItems.find(item => item.id === firstAllowedPathId);
-            
-            // The path must exist and not be an empty string (which we use for folders).
-            if (navItem && navItem.path) {
-                router.replace(`/share/${linkId}${navItem.path}`);
-            } else {
-                // If the first item has no path (it's a folder) or doesn't exist,
-                // find the first valid path from the allowed items.
-                const firstValidNavItem = sharedLink.allowedNavItems
-                    .map(id => allNavItems.find(item => item.id === id))
-                    .find(item => item && item.path);
+            // Find the first valid navigation item that has a path.
+            const firstValidNavItem = sharedLink.allowedNavItems
+                .map(id => allNavItems.find(item => item.id === id))
+                .find(item => item && item.path);
 
-                if (firstValidNavItem) {
-                    router.replace(`/share/${linkId}${firstValidNavItem.path}`);
-                } else {
-                    // As a final fallback, redirect to a default known page if no valid path is found.
-                    router.replace(`/share/${linkId}/dashboard`);
-                }
+            if (firstValidNavItem) {
+                router.replace(`/share/${linkId}${firstValidNavItem.path}`);
+            } else {
+                // As a final fallback, if no valid path is found in the allowed items,
+                // redirect to a default known page to prevent errors.
+                // We'll use '/dashboard' as a safe default.
+                router.replace(`/share/${linkId}/dashboard`);
             }
         }
     }, [isAuthenticated, sharedLink, allNavItems, linkId, router]);
+
 
     if (isLinkLoading || isNavItemsLoading) {
         return (
