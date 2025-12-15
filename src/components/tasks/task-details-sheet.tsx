@@ -254,7 +254,7 @@ export function TaskDetailsSheet({
         setAttachments(initialTask.attachments || []);
         
         const lastRevision = initialTask.revisionHistory?.[initialTask.revisionHistory.length - 1];
-        setRevisionItems(lastRevision?.items || []);
+        setRevisionItems(initialTask.revisionItems || []);
         
         setNewComment('');
         setCommentAttachment(null);
@@ -594,27 +594,20 @@ export function TaskDetailsSheet({
   const handleToggleRevisionItem = async (itemId: string) => {
     if (!firestore || !isAssignee) return;
 
-    const currentCycleIndex = initialTask.revisionHistory ? initialTask.revisionHistory.length - 1 : -1;
-    if (currentCycleIndex === -1) return;
-
-    const newRevisionHistory = JSON.parse(JSON.stringify(initialTask.revisionHistory));
-    const newItems = newRevisionHistory[currentCycleIndex].items.map((item: RevisionItem) =>
+    const newItems = revisionItems.map(item =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
     );
-    newRevisionHistory[currentCycleIndex].items = newItems;
-
-    setRevisionItems(newItems); // Optimistic UI update
-
+    setRevisionItems(newItems);
+    
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
     try {
-        await updateDoc(taskDocRef, { revisionHistory: newRevisionHistory });
-    } catch (error) {
-        console.error("Failed to update revision item:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not save revision status.' });
-        const lastRevision = initialTask.revisionHistory?.[initialTask.revisionHistory.length - 1];
-        setRevisionItems(lastRevision?.items || []); // Revert on failure
+        await updateDoc(taskDocRef, { revisionItems: newItems });
+    } catch (e) {
+        console.error("Failed to update revision item", e);
+        setRevisionItems(initialTask.revisionItems || []); // Revert on failure
+        toast({ variant: 'destructive', title: 'Update Failed' });
     }
-  };
+};
 
 
   const handleAddSubtask = () => {
@@ -1013,6 +1006,14 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     return {};
 }, [currentAssignees, allUsers, currentUser]);
 
+  const formatDate = (date: any): string => {
+    if (!date) return 'N/A';
+    // Firestore Timestamps have a toDate() method, ISO strings do not.
+    const dateObj = typeof date.toDate === 'function' ? date.toDate() : parseISO(date);
+    return format(dateObj, 'PP, p');
+  };
+
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1075,7 +1076,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
-                        {revisionItems && revisionItems.length > 0 && initialTask.status === 'Revisi' && (
+                        {revisionItems && revisionItems.length > 0 && (
                             <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
                                 <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
                                 <div className="space-y-2">
@@ -1229,7 +1230,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                               Revision #{cycle.cycleNumber} - Requested by {cycle.requestedBy.name}
                                           </p>
                                           <p className="text-xs text-muted-foreground">
-                                              {format(cycle.requestedAt.toDate(), 'PP, p')}
+                                              {formatDate(cycle.requestedAt)}
                                           </p>
                                       </div>
                                   </div>
@@ -1652,4 +1653,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   );
 }
 
-    
