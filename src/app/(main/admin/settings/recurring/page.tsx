@@ -132,9 +132,10 @@ export default function RecurringTasksPage() {
     let q = query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
     
     if (profile.role === 'Manager') {
-      q = query(q, where('managerId', '==', profile.id));
+      // For Managers, fetch only users they directly manage.
+      q = query(q, where('managerId', '==', profile.id), where('role', '==', 'Employee'));
     } else {
-      // For Super Admin, we might still want to filter to just employees for this form.
+      // For Super Admin, fetch all employees.
       q = query(q, where('role', '==', 'Employee'));
     }
     
@@ -144,16 +145,19 @@ export default function RecurringTasksPage() {
 
   const brandsQuery = useMemo(() => {
     if (!firestore || !profile) return null;
-    let q = query(collection(firestore, 'brands'), orderBy('name'));
-
+    
     if (profile.role === 'Manager') {
-      if (!profile.brandIds || profile.brandIds.length === 0) {
-        return null;
-      }
-      q = query(q, where('__name__', 'in', profile.brandIds));
+        // If manager has no brands assigned, they can't create templates.
+        if (!profile.brandIds || profile.brandIds.length === 0) {
+            return null;
+        }
+        // Fetch only brands the manager is assigned to.
+        return query(collection(firestore, 'brands'), where('__name__', 'in', profile.brandIds), orderBy('name'));
     }
-    // For Super Admin, this will fetch all brands which is correct.
-    return q;
+
+    // Super Admin sees all brands.
+    return query(collection(firestore, 'brands'), orderBy('name'));
+
   }, [firestore, profile]);
   const { data: brands, isLoading: brandsLoading } =
     useCollection<Brand>(brandsQuery);
