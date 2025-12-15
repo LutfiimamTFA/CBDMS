@@ -569,7 +569,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         <div className="flex items-center gap-4">
                             <span className="text-xs text-muted-foreground">Top</span>
                             <Slider
-                                defaultValue={[objectPosition]}
+                                value={[objectPosition]}
                                 max={100}
                                 step={1}
                                 onValueChange={(value) => setObjectPosition(value[0])}

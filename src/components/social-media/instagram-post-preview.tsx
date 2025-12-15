@@ -64,6 +64,9 @@ export function InstagramPostPreview({
           ) : (
             <>
               <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" style={imageStyle} />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                <PlayCircle className="h-12 w-12 text-white/80" />
+              </div>
             </>
           )
         ) : (
