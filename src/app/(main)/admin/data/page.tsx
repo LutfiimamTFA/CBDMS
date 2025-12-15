@@ -154,16 +154,16 @@ export default function DataManagementPage() {
         });
     };
 
-    const runSocialPosterJob = async () => {
+    const runSchedulerJob = async () => {
         setIsJobRunning(true);
         try {
-            const response = await fetch('/api/run-social-poster');
+            const response = await fetch('/api/run-scheduler');
             const data = await response.json();
             if (!response.ok) {
                 throw new Error(data.message || 'Failed to run the job.');
             }
             toast({
-                title: 'Social Poster Job Executed',
+                title: 'Scheduler Job Executed',
                 description: data.message,
             });
         } catch (error: any) {
@@ -182,7 +182,7 @@ export default function DataManagementPage() {
       
       const confirmAction = async () => {
           // Collections for "Smart Reset". Users and Permissions are intentionally excluded.
-          const collectionsToDelete = ['tasks', 'brands', 'statuses', 'navigationItems'];
+          const collectionsToDelete = ['tasks', 'brands', 'statuses', 'navigationItems', 'socialMediaPosts', 'sharedLinks'];
           try {
             const batch = writeBatch(firestore);
             
@@ -258,9 +258,9 @@ export default function DataManagementPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className='flex flex-wrap gap-4'>
-                    <Button onClick={runSocialPosterJob} variant="outline" disabled={isJobRunning}>
+                    <Button onClick={runSchedulerJob} variant="outline" disabled={isJobRunning}>
                         <Send className="mr-2 h-4 w-4" />
-                        Run Social Poster
+                        Run All Scheduled Jobs
                     </Button>
                 </CardContent>
             </Card>

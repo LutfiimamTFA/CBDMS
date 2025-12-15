@@ -3,7 +3,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { Header } from '@/components/layout/header';
-import { useCollection, useFirestore, useUserProfile, useSharedSession } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { useSharedSession } from '@/context/shared-session-provider';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
 import { collection, query, orderBy, where } from 'firebase/firestore';
 import {
@@ -94,11 +95,20 @@ export default function CalendarPage() {
 
   const brandsQuery = useMemo(() => {
     if (!firestore || !activeCompanyId) return null;
-    let q = query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId), orderBy('name'));
+    let q = query(collection(firestore, 'brands'), orderBy('name'));
 
+    // If Manager, only fetch the brands they are assigned to, if any
     if (currentUser?.role === 'Manager' && currentUser.brandIds && currentUser.brandIds.length > 0) {
       q = query(q, where('__name__', 'in', currentUser.brandIds));
+    } else if (currentUser?.role === 'Manager') {
+        return null; // Manager with no brands sees no brands.
     }
+    
+    // For other roles, fetch all brands for the company
+    if (currentUser?.role !== 'Manager') {
+      q = query(q, where('companyId', '==', activeCompanyId));
+    }
+
     return q;
   }, [firestore, activeCompanyId, currentUser]);
   const { data: allBrands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);

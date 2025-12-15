@@ -2,7 +2,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useUserProfile, useCollection, useFirestore, useSharedSession } from '@/firebase';
+import { useUserProfile, useCollection, useFirestore } from '@/firebase';
+import { useSharedSession } from '@/context/shared-session-provider';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
 import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp, Timer, Ban } from 'lucide-react';
@@ -415,5 +416,3 @@ export default function ReportsPage() {
     </div>
   );
 }
-
-    

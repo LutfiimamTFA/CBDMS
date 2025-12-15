@@ -15,6 +15,8 @@ interface UserProfile {
   companyId: string;
   avatarUrl?: string;
   createdAt: string;
+  managerId?: string;
+  brandIds?: string[];
 }
 
 // Define the return type of the hook
