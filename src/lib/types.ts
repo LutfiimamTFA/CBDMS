@@ -216,6 +216,7 @@ export type SocialMediaPost = {
     name: string;
     avatarUrl: string;
   };
+  postType?: 'Post' | 'Reels';
 };
 
 

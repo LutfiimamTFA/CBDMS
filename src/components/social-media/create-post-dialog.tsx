@@ -48,7 +48,7 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User as UserType, Brand } from '@/lib/types';
@@ -56,7 +56,8 @@ import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { InstagramPostPreview } from './instagram-post-preview';
 import { Label } from '../ui/label';
-import { Slider } from '../ui/slider';
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
+
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
@@ -65,6 +66,7 @@ const postSchema = z.object({
   scheduledAtDate: z.date({ required_error: 'A date is required.'}),
   scheduledAtTime: z.string().min(1, 'A time is required.'),
   media: z.any().optional(),
+  postType: z.enum(['Post', 'Reels']).default('Post'),
 });
 
 type PostFormValues = z.infer<typeof postSchema>;
@@ -113,6 +115,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   });
   
   const caption = form.watch('caption');
+  const postType = form.watch('postType');
 
   useEffect(() => {
     if (mode === 'edit' && post) {
@@ -123,6 +126,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             scheduledAtDate: scheduledDate,
             scheduledAtTime: format(scheduledDate, 'HH:mm'),
             brandId: post.brandId,
+            postType: post.postType || 'Post',
         });
         setImagePreview(post.mediaUrl || null);
         if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
@@ -138,6 +142,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             scheduledAtDate: new Date(),
             scheduledAtTime: format(new Date(), 'HH:mm'),
             media: undefined,
+            postType: 'Post',
         });
         setImagePreview(null);
     }
@@ -183,6 +188,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             companyId: profile.companyId,
             status: status,
             brandId: data.brandId,
+            postType: data.postType,
             creator: {
                 name: profile.name,
                 avatarUrl: profile.avatarUrl || ''
@@ -447,7 +453,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         </FormItem>
                     )}
                     />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <FormField
                             control={form.control}
                             name="platform"
@@ -470,59 +477,77 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                                 </FormItem>
                             )}
                         />
-                        <div className="grid grid-cols-2 gap-2">
-                             <FormField
-                                control={form.control}
-                                name="scheduledAtDate"
-                                render={({ field }) => (
+                         <FormField
+                            control={form.control}
+                            name="postType"
+                            render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Schedule Date</FormLabel>
-                                    <Popover>
-                                    <PopoverTrigger asChild>
-                                        <FormControl>
-                                        <Button
-                                            variant={"outline"}
-                                            className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                                            disabled={!isEditable}
-                                        >
-                                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                        </Button>
-                                        </FormControl>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar
-                                        mode="single"
-                                        selected={field.value}
-                                        onSelect={field.onChange}
-                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !isEditable}
-                                        initialFocus
+                                <FormLabel>Post Type</FormLabel>
+                                  <ToggleGroup type="single" variant="outline" className="w-full grid grid-cols-2" value={field.value} onValueChange={field.onChange} disabled={!isEditable}>
+                                    <ToggleGroupItem value="Post" aria-label="Post type">
+                                        <Layers className="mr-2 h-4 w-4"/> Post
+                                    </ToggleGroupItem>
+                                    <ToggleGroupItem value="Reels" aria-label="Reels type">
+                                        <Clapperboard className="mr-2 h-4 w-4"/> Reels
+                                    </ToggleGroupItem>
+                                  </ToggleGroup>
+                                <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                    </div>
+                     <div className="grid grid-cols-2 gap-4 items-end">
+                         <FormField
+                            control={form.control}
+                            name="scheduledAtDate"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Schedule Date</FormLabel>
+                                <Popover>
+                                <PopoverTrigger asChild>
+                                    <FormControl>
+                                    <Button
+                                        variant={"outline"}
+                                        className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                                        disabled={!isEditable}
+                                    >
+                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                    </Button>
+                                    </FormControl>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                    mode="single"
+                                    selected={field.value}
+                                    onSelect={field.onChange}
+                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !isEditable}
+                                    initialFocus
+                                    />
+                                </PopoverContent>
+                                </Popover>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="scheduledAtTime"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Schedule Time</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            type="time"
+                                            className="w-full"
+                                            {...field}
+                                            readOnly={!isEditable}
                                         />
-                                    </PopoverContent>
-                                    </Popover>
+                                    </FormControl>
                                     <FormMessage />
                                 </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="scheduledAtTime"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Schedule Time</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                type="time"
-                                                className="w-full"
-                                                {...field}
-                                                readOnly={!isEditable}
-                                            />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
+                            )}
+                        />
                     </div>
                      <FormField
                         control={form.control}
@@ -557,6 +582,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     mediaUrl={imagePreview}
                     mediaType={mediaType}
                     caption={caption}
+                    postType={postType}
                 />
             </div>
           </ScrollArea>

@@ -420,7 +420,7 @@
         "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
         "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
         "companyId": { "type": "string", "description": "The ID of the company this post belongs to." },
-        "objectPosition": { "type": "string", "enum": ["top", "center", "bottom"], "description": "CSS object-position property for the media." }
+        "postType": { "type": "string", "enum": ["Post", "Reels"], "description": "The type of post, e.g., a standard post or a Reel." }
       },
       "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
     },

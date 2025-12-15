@@ -3,7 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle, Clapperboard } from 'lucide-react';
 import type { SocialMediaPost } from '@/lib/types';
 
 interface InstagramPostPreviewProps {
@@ -12,6 +12,7 @@ interface InstagramPostPreviewProps {
     mediaUrl?: string | null;
     mediaType?: 'image' | 'video';
     caption?: string;
+    postType?: 'Post' | 'Reels';
 }
 
 export function InstagramPostPreview({ 
@@ -20,6 +21,7 @@ export function InstagramPostPreview({
     mediaUrl, 
     mediaType = 'image',
     caption,
+    postType = 'Post',
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -57,19 +59,19 @@ export function InstagramPostPreview({
       <div className="relative aspect-square w-full bg-zinc-200 dark:bg-zinc-800">
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" alt="Post preview" style={mediaStyle} />
+            <Image src={mediaUrl} layout="fill" alt="Post preview" style={{ objectFit: 'contain' }} />
           ) : (
             <>
-              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-contain" style={mediaStyle} />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                <PlayCircle className="h-12 w-12 text-white/80" />
-              </div>
+              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-contain" />
             </>
           )
         ) : (
             <div className="flex items-center justify-center h-full">
                 <FileText className="h-16 w-16 text-zinc-400 dark:text-zinc-600" />
             </div>
+        )}
+        {postType === 'Reels' && (
+             <Clapperboard className="absolute top-2 right-2 h-5 w-5 text-white bg-black/30 p-1 rounded" />
         )}
       </div>
 

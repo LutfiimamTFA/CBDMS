@@ -1,10 +1,9 @@
-
 'use client';
 import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { Instagram, FileText } from 'lucide-react';
+import { Instagram, FileText, Clapperboard } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CreatePostDialog } from './create-post-dialog';
@@ -49,6 +48,11 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
 
                 <div className="absolute inset-0 bg-black/10 group-hover:bg-black/30 transition-colors duration-300"></div>
                 <div className="absolute top-2 right-2 flex items-center gap-2">
+                    {post.postType === 'Reels' && (
+                         <Badge variant="secondary" className="bg-black/50 text-white backdrop-blur-sm">
+                            <Clapperboard className="h-3 w-3" />
+                         </Badge>
+                    )}
                     {PlatformIcon && (
                         <Badge variant="secondary" className="bg-background/70 backdrop-blur-sm">
                             <PlatformIcon className="h-4 w-4" />
@@ -78,4 +82,3 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
     </>
   );
 }
-
