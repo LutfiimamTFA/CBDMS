@@ -332,6 +332,18 @@ export function TaskDetailsSheet({
         if (newStatus !== 'Doing' && initialTask.isUnderRevision) {
             updates.isUnderRevision = deleteField() as any;
         }
+        
+        if (oldStatus === 'To Do' && newStatus !== 'To Do' && !initialTask.actualStartDate) {
+            updates.actualStartDate = new Date().toISOString();
+        }
+        
+        if (newStatus === 'Done' && oldStatus !== 'Done') {
+            updates.actualCompletionDate = new Date().toISOString();
+        }
+
+        if (newStatus !== 'Done' && oldStatus === 'Done') {
+            updates.actualCompletionDate = deleteField() as any;
+        }
 
         const notificationTitle = `Status Changed: ${initialTask.title}`;
         const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
