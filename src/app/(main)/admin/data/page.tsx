@@ -3,7 +3,7 @@
 import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, AlertTriangle, Database, Trash2, Upload } from 'lucide-react';
+import { Download, AlertTriangle, Database, Trash2, Upload, Send } from 'lucide-react';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, writeBatch, getDocs, query, orderBy } from 'firebase/firestore';
 import type { Task, User, Brand, WorkflowStatus } from '@/lib/types';
@@ -43,6 +43,7 @@ export default function DataManagementPage() {
       onConfirm: () => {},
     });
     const [confirmationInput, setConfirmationInput] = useState('');
+    const [isJobRunning, setIsJobRunning] = useState(false);
 
     const escapeCSVCell = (cellData: any) => {
         if (cellData === null || cellData === undefined) {
@@ -153,6 +154,29 @@ export default function DataManagementPage() {
         });
     };
 
+    const runSocialPosterJob = async () => {
+        setIsJobRunning(true);
+        try {
+            const response = await fetch('/api/run-social-poster');
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to run the job.');
+            }
+            toast({
+                title: 'Social Poster Job Executed',
+                description: data.message,
+            });
+        } catch (error: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Job Execution Failed',
+                description: error.message,
+            });
+        } finally {
+            setIsJobRunning(false);
+        }
+    }
+
     const openDeleteDialog = () => {
       if (!firestore) return;
       
@@ -222,6 +246,21 @@ export default function DataManagementPage() {
                     </Button>
                      <Button onClick={handleExportWorkflow} variant="outline">
                         Export Workflow (CSV)
+                    </Button>
+                </CardContent>
+            </Card>
+
+             <Card>
+                <CardHeader>
+                    <CardTitle>Manual Job Triggers</CardTitle>
+                    <CardDescription>
+                        Run scheduled background jobs manually. This is useful for testing or immediate execution.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className='flex flex-wrap gap-4'>
+                    <Button onClick={runSocialPosterJob} variant="outline" disabled={isJobRunning}>
+                        <Send className="mr-2 h-4 w-4" />
+                        Run Social Poster
                     </Button>
                 </CardContent>
             </Card>
