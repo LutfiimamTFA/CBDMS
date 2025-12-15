@@ -367,7 +367,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           </DialogDescription>
         </DialogHeader>
         <div className="grid md:grid-cols-2 h-full overflow-hidden">
-          <ScrollArea className="md:border-r">
+          <ScrollArea className="md:border-r h-full">
             <div className="p-6 space-y-6">
                 {rejectionComment && (
                   <Alert variant="destructive" className="mb-4">
@@ -534,14 +534,16 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 </Form>
             </div>
           </ScrollArea>
-        <div className="p-6 bg-secondary/50 flex items-center justify-center">
-            <InstagramPostPreview 
-                profileName={post?.creator?.name || profile?.name || 'Username'}
-                profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
-                mediaUrl={imagePreview}
-                caption={caption}
-            />
-        </div>
+          <ScrollArea className="h-full">
+            <div className="p-6 bg-secondary/50 flex items-center justify-center h-full">
+                <InstagramPostPreview 
+                    profileName={post?.creator?.name || profile?.name || 'Username'}
+                    profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
+                    mediaUrl={imagePreview}
+                    caption={caption}
+                />
+            </div>
+          </ScrollArea>
         </div>
         <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
             <div>
