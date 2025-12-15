@@ -28,12 +28,14 @@ import type { SocialMediaPost } from '@/lib/types';
 import { SocialPostCard } from '@/components/social-media/social-post-card';
 import { parseISO } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { usePermissions } from '@/context/permissions-provider';
 
 
 export default function SocialMediaPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const firestore = useFirestore();
   const { profile } = useUserProfile();
+  const { permissions } = usePermissions();
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -44,22 +46,17 @@ export default function SocialMediaPage() {
         collection(firestore, 'socialMediaPosts'),
         where('companyId', '==', profile.companyId)
     );
-    if(profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
-        // This part is tricky because Firestore doesn't support 'in' queries on brands via posts.
-        // We'll filter on the client side for managers.
-    }
+    // For managers, we fetch all and filter client-side based on their brands
+    // For employees, they see everything to know what's happening
     return q;
   }, [firestore, profile]);
+  
   const { data: allPosts, isLoading: postsLoading } = useCollection<SocialMediaPost>(postsQuery);
 
   const posts = useMemo(() => {
     if (!allPosts || !profile) return [];
-    if (profile.role === 'Manager' && profile.brandIds) {
-        // Client-side filtering for managers based on brands. This is not ideal for large datasets.
-        // A better long-term solution would be to denormalize brandId into the socialMediaPost document.
-        // For now, this will work for small-to-medium scale.
-        console.warn("Client-side filtering for social media posts by brand. This may impact performance at scale.");
-        return allPosts; // As we don't have brandId in SocialMediaPost, we return all for now.
+    if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
+        return allPosts.filter(post => post.brandId && profile.brandIds?.includes(post.brandId));
     }
     return allPosts;
   }, [allPosts, profile]);
@@ -91,7 +88,7 @@ export default function SocialMediaPage() {
     posts.forEach(post => {
       if (post.scheduledAt) {
         const postDate = parseISO(post.scheduledAt);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
           const dayKey = format(postDate, 'yyyy-MM-dd');
           if (!map.has(dayKey)) {
             map.set(dayKey, []);
@@ -120,16 +117,26 @@ export default function SocialMediaPage() {
     setCurrentDate(new Date(parseInt(year, 10), currentDate.getMonth()));
   };
 
+  const canCreate = useMemo(() => {
+    if (!profile || !permissions) return false;
+    if (profile.role === 'Super Admin' || profile.role === 'Manager') return true;
+    // Assume a new permission might be added for social media creation for employees
+    return false; // By default, employees can't create
+  }, [profile, permissions]);
+
+
   return (
     <div className="flex h-svh flex-col bg-background">
       <Header
         title="Social Media Center"
         actions={
-          <CreatePostDialog>
-            <Button size="sm">
-              <Plus className="mr-2" /> Create Post
-            </Button>
-          </CreatePostDialog>
+          canCreate ? (
+            <CreatePostDialog>
+              <Button size="sm">
+                <Plus className="mr-2" /> Create Post
+              </Button>
+            </CreatePostDialog>
+          ) : null
         }
       />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">

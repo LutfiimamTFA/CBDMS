@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -29,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -43,20 +44,22 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useUserProfile, useStorage } from '@/firebase';
+import { useFirestore, useUserProfile, useStorage, useCollection } from '@/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, FileText, Trash2, Save, Edit, AlertCircle } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
-import type { SocialMediaPost, Notification, Comment, User } from '@/lib/types';
+import type { SocialMediaPost, Notification, Comment, User as UserType, Brand } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { InstagramPostPreview } from './instagram-post-preview';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
+  brandId: z.string().optional(),
   caption: z.string().min(1, 'Caption is required'),
   scheduledAtDate: z.date({ required_error: 'A date is required.'}),
   scheduledAtTime: z.string().min(1, 'A time is required.'),
@@ -85,7 +88,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // State for rejection dialog
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
@@ -94,10 +96,22 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const { profile, user } = useUserProfile();
   const { toast } = useToast();
 
+  const brandsQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    let q = collection(firestore, 'brands');
+    if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
+        q = query(q, where('__name__', 'in', profile.brandIds));
+    }
+    return query(q, orderBy('name'));
+  }, [firestore, profile]);
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
   });
   
+  const caption = form.watch('caption');
+
   useEffect(() => {
     if (mode === 'edit' && post) {
         const scheduledDate = parseISO(post.scheduledAt);
@@ -106,12 +120,14 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             caption: post.caption,
             scheduledAtDate: scheduledDate,
             scheduledAtTime: format(scheduledDate, 'HH:mm'),
+            brandId: post.brandId,
         });
         setImagePreview(post.mediaUrl || null);
     } else {
         form.reset({
             platform: 'Instagram',
             caption: '',
+            brandId: '',
             scheduledAtDate: new Date(),
             scheduledAtTime: format(new Date(), 'HH:mm'),
             media: undefined,
@@ -151,13 +167,18 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         const scheduledAt = new Date(data.scheduledAtDate);
         scheduledAt.setHours(hour, minute);
 
-        const postData = {
+        const postData: Partial<SocialMediaPost> = {
             platform: data.platform,
             caption: data.caption,
             mediaUrl: mediaUrl,
             scheduledAt: scheduledAt.toISOString(),
             companyId: profile.companyId,
             status: status,
+            brandId: data.brandId,
+            creator: {
+                name: profile.name,
+                avatarUrl: profile.avatarUrl || ''
+            }
         };
         
         const batch = writeBatch(firestore);
@@ -172,12 +193,13 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 createdAt: serverTimestamp(),
             });
 
-            // Notify managers/admins if submitting for approval
             if (status === 'Needs Approval') {
                 const usersSnapshot = await getDocs(collection(firestore, 'users'));
                 usersSnapshot.forEach(userDoc => {
                     const userData = userDoc.data();
-                    if ((userData.role === 'Manager' || userData.role === 'Super Admin') && userData.companyId === profile.companyId) {
+                    const isManagerForBrand = userData.role === 'Manager' && data.brandId && userData.brandIds?.includes(data.brandId);
+
+                    if ((userData.role === 'Super Admin' || isManagerForBrand) && userData.companyId === profile.companyId) {
                         const notifRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
                         const newNotification: Omit<Notification, 'id'> = {
                             userId: userDoc.id,
@@ -244,11 +266,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         notificationTitle = 'Post Needs Revision';
         notificationMessage = `${profile.name} requested revisions for your post: "${post.caption.substring(0, 30)}...". See comments for details.`;
         
-        // Add rejection reason as a comment
         if (reason) {
             const newComment: Comment = {
                 id: `c-${Date.now()}`,
-                user: profile as User, 
+                user: profile as UserType, 
                 text: `**Rejection Feedback:** ${reason}`,
                 timestamp: new Date().toISOString(),
                 replies: [],
@@ -326,11 +347,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const isManager = profile?.role === 'Manager' || profile?.role === 'Super Admin';
   const isCreator = profile?.id === post?.createdBy;
 
-  // --- Logic for what to show ---
   const isApproverView = mode === 'edit' && isManager && post?.status === 'Needs Approval';
-  const isCreatorEditView = mode === 'edit' && isCreator && post?.status === 'Draft';
+  const isCreatorEditView = mode === 'edit' && isCreator && (post?.status === 'Draft' || post?.status === 'Error');
   
-  // Fields are editable if creating new, or if it's a creator editing their own draft.
   const isEditable = mode === 'create' || isCreatorEditView;
   
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
@@ -341,15 +360,16 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     <>
     <Dialog open={open} onOpenChange={setOpen}>
       {mode === 'create' && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent className="sm:max-w-2xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+      <DialogContent className="max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle>{mode === 'create' ? 'Create Social Media Post' : 'Review & Edit Post'}</DialogTitle>
           <DialogDescription>
             {mode === 'create' ? 'Prepare your content and submit it for approval.' : 'Review, edit, or approve this post.'}
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className='-mt-4'>
-            <div className="px-6 py-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 h-full overflow-hidden">
+        <ScrollArea className='md:border-r'>
+            <div className="p-6">
                 {rejectionComment && (
                   <Alert variant="destructive" className="mb-4">
                       <AlertCircle className="h-4 w-4" />
@@ -462,7 +482,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                                     mode="single"
                                     selected={field.value}
                                     onSelect={field.onChange}
-                                    disabled={(date) => date < new Date() || !isEditable}
+                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !isEditable}
                                     initialFocus
                                     />
                                 </PopoverContent>
@@ -490,10 +510,40 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             )}
                         />
                     </div>
+                     <FormField
+                        control={form.control}
+                        name="brandId"
+                        render={({ field }) => (
+                            <FormItem>
+                            <FormLabel>Brand</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}>
+                                <FormControl>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select a brand for this post" />
+                                </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {areBrandsLoading ? <SelectItem value="loading" disabled>Loading...</SelectItem> : 
+                                    brands?.map(brand => <SelectItem key={brand.id} value={brand.id}><div className="flex items-center gap-2"><Building2 className='h-4 w-4'/>{brand.name}</div></SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <FormMessage />
+                            </FormItem>
+                        )}
+                        />
                 </form>
                 </Form>
             </div>
         </ScrollArea>
+        <div className="p-6 bg-secondary/50 flex items-center justify-center">
+            <InstagramPostPreview 
+                profileName={post?.creator?.name || profile?.name || 'Username'}
+                profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
+                mediaUrl={imagePreview}
+                caption={caption}
+            />
+        </div>
+        </div>
         <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
             <div>
               {canDelete && (
@@ -518,7 +568,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                   </Button>
                 </>
             ) : mode === 'create' ? (
-                isManager ? ( // Manager creating
+                isManager ? (
                     <>
                         <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
@@ -527,7 +577,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Schedule Directly
                         </Button>
                     </>
-                ) : ( // Employee creating
+                ) : ( 
                     <>
                         <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save as Draft
@@ -538,7 +588,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     </>
                 )
             ) : isCreatorEditView ? (
-                // Creator editing their own draft
                 <>
                     <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Save Changes
@@ -597,3 +646,4 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     </>
   );
 }
+

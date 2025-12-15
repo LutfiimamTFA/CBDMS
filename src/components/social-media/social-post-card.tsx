@@ -1,3 +1,4 @@
+
 'use client';
 import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
@@ -18,11 +19,11 @@ const platformIcons: Record<string, React.ElementType> = {
 };
 
 const statusColors: Record<string, string> = {
-    Draft: 'bg-gray-400 border-gray-400',
+    Draft: 'bg-gray-400 border-gray-400 text-white',
     'Needs Approval': 'bg-yellow-400 border-yellow-400 text-yellow-900',
-    Scheduled: 'bg-blue-500 border-blue-500',
-    Posted: 'bg-green-500 border-green-500',
-    Error: 'bg-red-500 border-red-500',
+    Scheduled: 'bg-blue-500 border-blue-500 text-white',
+    Posted: 'bg-green-500 border-green-500 text-white',
+    Error: 'bg-red-500 border-red-500 text-white',
 };
 
 export function SocialPostCard({ post }: SocialPostCardProps) {
@@ -71,10 +72,10 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
         <CreatePostDialog 
             open={isDialogOpen} 
             onOpenChange={setIsDialogOpen}
-            mode="edit"
             post={post}
         />
       )}
     </>
   );
 }
+

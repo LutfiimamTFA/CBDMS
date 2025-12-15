@@ -205,13 +205,18 @@ export type SocialMediaPost = {
   id: string;
   platform: string;
   caption: string;
-  mediaUrl?: string; // Now optional
+  mediaUrl?: string;
   status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
   scheduledAt: string;
   postedAt?: string;
   createdBy: string;
   companyId: string;
   comments?: Comment[];
+  brandId?: string; 
+  creator?: {
+    name: string;
+    avatarUrl: string;
+  };
 };
 
 
