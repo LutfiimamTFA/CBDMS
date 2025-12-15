@@ -56,7 +56,7 @@ export default function SocialMediaPage() {
   const posts = useMemo(() => {
     if (!allPosts || !profile) return [];
     if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
-        return allPosts.filter(post => post.brandId && profile.brandIds?.includes(post.brandId));
+        return allPosts.filter(post => !post.brandId || profile.brandIds?.includes(post.brandId));
     }
     return allPosts;
   }, [allPosts, profile]);
@@ -88,7 +88,7 @@ export default function SocialMediaPage() {
     posts.forEach(post => {
       if (post.scheduledAt) {
         const postDate = parseISO(post.scheduledAt);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
+         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
           const dayKey = format(postDate, 'yyyy-MM-dd');
           if (!map.has(dayKey)) {
             map.set(dayKey, []);
@@ -119,9 +119,8 @@ export default function SocialMediaPage() {
 
   const canCreate = useMemo(() => {
     if (!profile || !permissions) return false;
-    if (profile.role === 'Super Admin' || profile.role === 'Manager') return true;
-    // Assume a new permission might be added for social media creation for employees
-    return false; // By default, employees can't create
+    if (profile.role === 'Super Admin' || profile.role === 'Manager' || profile.role === 'Employee') return true;
+    return false;
   }, [profile, permissions]);
 
 
@@ -212,5 +211,3 @@ export default function SocialMediaPage() {
     </div>
   );
 }
-
-    
