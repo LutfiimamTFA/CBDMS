@@ -64,7 +64,7 @@ export const defaultNavItems: NavigationItem[] = [
     path: '/social-media',
     icon: 'Share2',
     order: 6,
-    roles: ['Super Admin', 'Manager'],
+    roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
   },
   {
@@ -185,3 +185,5 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: 'nav_settings',
   },
 ];
+
+    

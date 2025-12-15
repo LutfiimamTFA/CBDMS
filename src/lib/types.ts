@@ -152,6 +152,17 @@ export type RevisionItem = {
     completed: boolean;
 }
 
+export type RevisionCycle = {
+    cycleNumber: number;
+    requestedAt: any; // Timestamp
+    requestedBy: {
+        id: string;
+        name: string;
+        avatarUrl: string;
+    };
+    items: RevisionItem[];
+}
+
 export type Task = {
   id: string;
   title: string;
@@ -173,6 +184,7 @@ export type Task = {
   dependencies?: string[];
   subtasks?: Subtask[];
   revisionItems?: RevisionItem[];
+  revisionHistory?: RevisionCycle[];
   recurring?: string;
   isMandatory?: boolean;
   tags?: Tag[];
@@ -261,3 +273,5 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+    

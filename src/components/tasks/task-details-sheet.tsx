@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -138,7 +138,6 @@ export function TaskDetailsSheet({
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
-  // State for rejection dialog
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   
@@ -253,7 +252,9 @@ export function TaskDetailsSheet({
         setCurrentAssignees(initialTask.assignees || []);
         setCurrentTags(initialTask.tags || []);
         setAttachments(initialTask.attachments || []);
-        setRevisionItems(initialTask.revisionItems || []);
+        
+        const lastRevision = initialTask.revisionHistory?.[initialTask.revisionHistory.length - 1];
+        setRevisionItems(lastRevision?.items || []);
         
         setNewComment('');
         setCommentAttachment(null);
@@ -579,19 +580,27 @@ export function TaskDetailsSheet({
   };
   
   const handleToggleRevisionItem = async (itemId: string) => {
-    if (!firestore) return;
-    const newItems = revisionItems.map(item =>
+    if (!firestore || !isAssignee) return;
+
+    const currentCycleIndex = initialTask.revisionHistory ? initialTask.revisionHistory.length - 1 : -1;
+    if (currentCycleIndex === -1) return;
+
+    const newRevisionHistory = JSON.parse(JSON.stringify(initialTask.revisionHistory));
+    const newItems = newRevisionHistory[currentCycleIndex].items.map((item: RevisionItem) =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
     );
-    setRevisionItems(newItems);
-    
+    newRevisionHistory[currentCycleIndex].items = newItems;
+
+    setRevisionItems(newItems); // Optimistic UI update
+
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
     try {
-        await updateDoc(taskDocRef, { revisionItems: newItems });
+        await updateDoc(taskDocRef, { revisionHistory: newRevisionHistory });
     } catch (error) {
         console.error("Failed to update revision item:", error);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not save revision status.' });
-        setRevisionItems(revisionItems); // Revert on failure
+        const lastRevision = initialTask.revisionHistory?.[initialTask.revisionHistory.length - 1];
+        setRevisionItems(lastRevision?.items || []); // Revert on failure
     }
   };
 
@@ -848,7 +857,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   }
   
   const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
-  const allRevisionsCompleted = useMemo(() => revisionItems.every(item => item.completed), [revisionItems]);
+  const allRevisionsCompleted = useMemo(() => revisionItems.length === 0 || revisionItems.every(item => item.completed), [revisionItems]);
   const canSubmit = allSubtasksCompleted && allRevisionsCompleted;
   
   const handleSubmitForReview = async () => {
@@ -1054,7 +1063,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
-                        {revisionItems && revisionItems.length > 0 && (
+                        {revisionItems && revisionItems.length > 0 && initialTask.status === 'Revisi' && (
                             <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
                                 <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
                                 <div className="space-y-2">
@@ -1064,7 +1073,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                                 id={`rev-${item.id}`}
                                                 checked={item.completed}
                                                 onCheckedChange={() => handleToggleRevisionItem(item.id)}
-                                                disabled={isSharedView}
+                                                disabled={!isAssignee || isSharedView}
                                             />
                                             <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
                                                 {item.text}
@@ -1192,6 +1201,43 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 )}
                             </AccordionContent>
                           </AccordionItem>
+                          
+                          <AccordionItem value="revision-history">
+                            <AccordionTrigger className="font-semibold text-sm">Revision History</AccordionTrigger>
+                            <AccordionContent className="space-y-4 pt-4">
+                              {(initialTask.revisionHistory || []).slice().reverse().map((cycle, index) => (
+                                <div key={cycle.cycleNumber}>
+                                  <div className="flex items-center gap-3">
+                                      <Avatar className="h-8 w-8">
+                                          <AvatarImage src={cycle.requestedBy.avatarUrl} alt={cycle.requestedBy.name} />
+                                          <AvatarFallback>{cycle.requestedBy.name.charAt(0)}</AvatarFallback>
+                                      </Avatar>
+                                      <div>
+                                          <p className="text-sm font-semibold">
+                                              Revision #{cycle.cycleNumber} - Requested by {cycle.requestedBy.name}
+                                          </p>
+                                          <p className="text-xs text-muted-foreground">
+                                              {format(cycle.requestedAt.toDate(), 'PP, p')}
+                                          </p>
+                                      </div>
+                                  </div>
+                                  <div className="mt-3 space-y-2 pl-11">
+                                      {cycle.items.map((item, itemIndex) => (
+                                          <div key={item.id} className="flex items-center gap-3 text-sm text-muted-foreground">
+                                              <Checkbox id={`hist-${cycle.cycleNumber}-${item.id}`} checked={item.completed} disabled/>
+                                              <label htmlFor={`hist-${cycle.cycleNumber}-${item.id}`} className={item.completed ? 'line-through' : ''}>{item.text}</label>
+                                          </div>
+                                      ))}
+                                  </div>
+                                  {index < (initialTask.revisionHistory || []).length - 1 && <Separator className="my-4"/>}
+                                </div>
+                              ))}
+                              {(initialTask.revisionHistory || []).length === 0 && (
+                                <p className="text-sm text-muted-foreground text-center py-4">No revision history for this task.</p>
+                              )}
+                            </AccordionContent>
+                          </AccordionItem>
+
                         </Accordion>
                         
                         <div className="space-y-4">
@@ -1593,3 +1639,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
