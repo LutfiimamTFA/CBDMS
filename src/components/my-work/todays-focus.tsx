@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -15,16 +14,16 @@ export function TodaysFocus() {
     const { user, profile, isLoading: userLoading } = useUserProfile();
     const router = useRouter();
 
-    const teamMemberIds = useMemo(() => {
-        if (profile?.role !== 'Manager' || !allUsers) return [];
-        return allUsers.filter(u => u.managerId === profile.id).map(u => u.id);
-    }, [profile, allUsers]);
-
     const usersQuery = useMemo(() => {
         if (!firestore || !profile || profile.role !== 'Manager') return null;
         return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
     }, [firestore, profile]);
     const { data: allUsers, isLoading: isTeamLoading } = useCollection<User>(usersQuery);
+    
+    const teamMemberIds = useMemo(() => {
+        if (profile?.role !== 'Manager' || !allUsers) return [];
+        return allUsers.filter(u => u.managerId === profile.id).map(u => u.id);
+    }, [profile, allUsers]);
 
     const tasksQuery = useMemo(() => {
         if (!firestore || !user || !profile) return null;
