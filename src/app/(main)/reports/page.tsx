@@ -20,12 +20,9 @@ import { useI18n } from '@/context/i18n-provider';
 import { notFound } from 'next/navigation';
 
 
-// --- Komponen untuk Laporan Personal (Karyawan & Manajer) ---
-function PersonalReport({ tasks, isLoading, role }: { tasks: Task[] | null; isLoading: boolean; role: string }) {
+// --- Komponen untuk Laporan Personal (Hanya untuk Karyawan) ---
+function PersonalReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading: boolean }) {
   const { t } = useI18n();
-  const title = role === 'Manager' ? 'Laporan Kinerja Manajer' : t('reports.employee.title');
-  const description = role === 'Manager' ? 'Ringkasan aktivitas dan kontribusi personal Anda.' : t('reports.employee.description');
-
 
   if (isLoading) {
     return (
@@ -71,8 +68,8 @@ function PersonalReport({ tasks, isLoading, role }: { tasks: Task[] | null; isLo
   return (
     <>
       <div className="mb-4">
-          <h2 className="text-2xl font-bold">{title}</h2>
-          <p className="text-muted-foreground">{description}</p>
+          <h2 className="text-2xl font-bold">{t('reports.employee.title')}</h2>
+          <p className="text-muted-foreground">{t('reports.employee.description')}</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
@@ -143,11 +140,14 @@ function PersonalReport({ tasks, isLoading, role }: { tasks: Task[] | null; isLo
   );
 }
 
-// --- Komponen untuk Dasbor Analisis Admin ---
-function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean }) {
+// --- Komponen untuk Dasbor Analisis (Super Admin & Manajer) ---
+function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean; role: 'Super Admin' | 'Manager' }) {
   const { t } = useI18n();
   const [selectedUserId, setSelectedUserId] = useState('all');
   const [selectedPeriod, setSelectedPeriod] = useState('all');
+  
+  const title = role === 'Super Admin' ? t('reports.admin.title') : 'Laporan Kinerja Tim';
+  const description = role === 'Super Admin' ? t('reports.admin.description') : 'Analisis data operasional untuk tim yang Anda pimpin.';
 
   const filteredTasks = useMemo(() => {
     if (!allTasks) return [];
@@ -214,8 +214,8 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
   return (
     <>
       <div className="mb-6">
-          <h2 className="text-2xl font-bold tracking-tight">{t('reports.admin.title')}</h2>
-          <p className="text-muted-foreground">{t('reports.admin.description')}</p>
+          <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
+          <p className="text-muted-foreground">{description}</p>
       </div>
 
        <div className="mb-6 p-4 border rounded-lg bg-card">
@@ -228,7 +228,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">{t('reports.filter.employee.all')}</SelectItem>
-                        {allUsers?.filter(user => user.role === 'Employee').map(user => (
+                        {allUsers?.map(user => (
                             <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
                         ))}
                     </SelectContent>
@@ -353,6 +353,7 @@ function AdminAnalysisDashboard({ allTasks, allUsers, isLoading }: { allTasks: T
   );
 }
 
+
 // --- Komponen Utama Halaman Laporan ---
 export default function ReportsPage() {
   const firestore = useFirestore();
@@ -361,46 +362,84 @@ export default function ReportsPage() {
   
   const activeCompanyId = session ? session.companyId : companyId;
 
-  const isSuperAdmin = profile?.role === 'Super Admin';
-
-  const tasksQuery = useMemo(() => {
+  // --- Data Fetching Logic ---
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(useMemo(() => {
     if (!firestore || !activeCompanyId || !profile) return null;
-    let q = query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
-
-    if (profile.role === 'Manager' || profile.role === 'Employee') {
-        q = query(q, where('assigneeIds', 'array-contains', profile.id));
-    }
     
-    return q;
-  }, [firestore, activeCompanyId, profile]);
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
-  
-  const allCompanyUsersQuery = useMemo(() => {
-      if (!firestore || !activeCompanyId || !isSuperAdmin) return null;
-      return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
-  }, [firestore, activeCompanyId, isSuperAdmin]);
-  const { data: allUsers, isLoading: isAllUsersLoading } = useCollection<User>(allCompanyUsersQuery);
+    // Super Admin: Fetch all tasks for the company
+    if (profile.role === 'Super Admin') {
+      return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+    }
+    // Employee: Fetch only tasks assigned to them
+    if (profile.role === 'Employee') {
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+    }
+    // Manager: Fetch tasks of all their direct reports + their own
+    if (profile.role === 'Manager') {
+      // Note: This requires a separate query for users first, so we handle it below
+      return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+    }
+    return null;
+  }, [firestore, activeCompanyId, profile]));
 
-  const isLoading = isProfileLoading || isTasksLoading || (isSuperAdmin && isAllUsersLoading) || isSessionLoading;
+  const { data: users, isLoading: isUsersLoading } = useCollection<User>(useMemo(() => {
+    if (!firestore || !activeCompanyId || !profile) return null;
+
+    if (profile.role === 'Super Admin') {
+        return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+    }
+    if (profile.role === 'Manager') {
+        return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+    }
+    return null; // Employees don't need to fetch other users for their report
+  }, [firestore, activeCompanyId, profile]));
+  
+  const teamTasks = useMemo(() => {
+    if (profile?.role !== 'Manager' || !tasks || !users) return null;
+    const teamMemberIds = users.map(u => u.id);
+    return tasks.filter(task => task.assigneeIds.some(id => teamMemberIds.includes(id)));
+  }, [tasks, users, profile]);
+
+  const isLoading = isProfileLoading || isTasksLoading || isUsersLoading || isSessionLoading;
 
   if (session && !session.allowedNavItems.includes('nav_performance_analysis')) {
     return notFound();
   }
   
+  const renderContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+
+    switch (profile?.role) {
+      case 'Super Admin':
+        return <TeamAnalysisDashboard allTasks={tasks} allUsers={users} isLoading={isLoading} role="Super Admin" />;
+      case 'Manager':
+        return <TeamAnalysisDashboard allTasks={teamTasks} allUsers={users} isLoading={isLoading} role="Manager" />;
+      case 'Employee':
+        return <PersonalReport tasks={tasks} isLoading={isLoading} />;
+      default:
+        return (
+             <div className="flex h-full items-center justify-center">
+              <Ban className="h-8 w-8 text-destructive" />
+              <p className="ml-4 text-muted-foreground">You do not have permission to view reports.</p>
+            </div>
+        );
+    }
+  };
+
   return (
     <div className="flex h-svh flex-col bg-background">
       <Header title="Performance Analysis" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
-        {isLoading ? (
-          <div className="flex h-full items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : isSuperAdmin ? (
-          <AdminAnalysisDashboard allTasks={tasks} allUsers={allUsers} isLoading={isLoading} />
-        ) : (
-          <PersonalReport tasks={tasks} isLoading={isLoading} role={profile?.role || 'Employee'} />
-        )}
+        {renderContent()}
       </main>
     </div>
   );
 }
+
+    
