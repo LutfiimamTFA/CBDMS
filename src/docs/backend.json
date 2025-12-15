@@ -420,7 +420,7 @@
         "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
         "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
         "companyId": { "type": "string", "description": "The ID of the company this post belongs to." },
-        "postType": { "type": "string", "enum": ["Post", "Reels"], "description": "The type of post, e.g., a standard post or a Reel." }
+        "objectPosition": { "type": "number", "description": "CSS object-position percentage for the media (0-100)." }
       },
       "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
     },
@@ -611,6 +611,12 @@
         "path": "/api/run-scheduler",
         "definition": {
           "description": "An API endpoint that, when called, runs the scheduler to generate recurring tasks."
+        }
+      },
+      {
+        "path": "/api/run-social-poster",
+        "definition": {
+          "description": "An API endpoint that, when called, runs a job to post scheduled social media content."
         }
       },
       {
