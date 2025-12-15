@@ -44,7 +44,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useUserProfile, useStorage, useCollection } from '@/firebase';
+import { useFirestore, useUserProfile, useStorage, useCollection, useDoc } from '@/firebase';
 import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc, query, where, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
@@ -103,14 +103,37 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const { profile, user } = useUserProfile();
   const { toast } = useToast();
 
-  const brandsQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
-    let q = query(collection(firestore, 'brands'), orderBy('name'));
-    if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
-        q = query(q, where('__name__', 'in', profile.brandIds));
+  const managerDocRef = useMemo(() => {
+    if (!firestore || !profile || profile.role !== 'Employee' || !profile.managerId) {
+        return null;
     }
-    return q;
+    return doc(firestore, 'users', profile.managerId);
   }, [firestore, profile]);
+  const { data: managerProfile, isLoading: isManagerLoading } = useDoc<UserType>(managerDocRef);
+
+  const brandsQuery = useMemo(() => {
+    if (!firestore || !profile || (profile.role === 'Employee' && isManagerLoading)) return null;
+
+    let brandIdsToQuery: string[] | undefined = undefined;
+
+    if (profile.role === 'Manager') {
+        brandIdsToQuery = profile.brandIds;
+    } else if (profile.role === 'Employee' && managerProfile) {
+        brandIdsToQuery = managerProfile.brandIds;
+    }
+
+    if (brandIdsToQuery && brandIdsToQuery.length === 0) {
+        return null;
+    }
+    
+    let q = query(collection(firestore, 'brands'), orderBy('name'));
+
+    if (brandIdsToQuery && brandIdsToQuery.length > 0) {
+      q = query(q, where('__name__', 'in', brandIdsToQuery));
+    }
+    
+    return q;
+  }, [firestore, profile, managerProfile, isManagerLoading]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
   const form = useForm<PostFormValues>({
