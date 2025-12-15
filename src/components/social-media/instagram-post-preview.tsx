@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -13,7 +12,7 @@ interface InstagramPostPreviewProps {
     mediaUrl?: string | null;
     mediaType?: 'image' | 'video';
     caption?: string;
-    objectPosition?: SocialMediaPost['objectPosition'];
+    objectPosition?: number;
 }
 
 export function InstagramPostPreview({ 
@@ -22,7 +21,7 @@ export function InstagramPostPreview({
     mediaUrl, 
     mediaType = 'image',
     caption,
-    objectPosition = 'center',
+    objectPosition = 50,
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -41,7 +40,7 @@ export function InstagramPostPreview({
   };
   
   const imageStyle: React.CSSProperties = {
-      objectPosition: objectPosition,
+      objectPosition: `50% ${objectPosition}%`,
   };
 
   return (
@@ -63,7 +62,7 @@ export function InstagramPostPreview({
             <Image src={mediaUrl} layout="fill" objectFit="cover" alt="Post preview" style={imageStyle} />
           ) : (
             <>
-              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" />
+              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" style={imageStyle} />
             </>
           )
         ) : (

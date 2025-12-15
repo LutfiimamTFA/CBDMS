@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -33,6 +32,15 @@
         "companyId": {
             "type": "string",
             "description": "The ID of the company the user belongs to."
+        },
+        "managerId": {
+            "type": "string",
+            "description": "The ID of the User (with Manager role) who is the direct supervisor of this user. Empty for Managers and Super Admins."
+        },
+        "brandIds": {
+            "type": "array",
+            "description": "For Managers, an array of Brand IDs they are responsible for. This defines their scope of work.",
+            "items": { "type": "string" }
         },
         "createdAt": {
           "type": "string",
@@ -70,6 +78,18 @@
             }
         },
         "required": ["id", "name"]
+    },
+    "CompanySettings": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CompanySettings",
+      "type": "object",
+      "description": "Stores company-wide settings, including the designated emergency admin.",
+      "properties": {
+        "emergencyAdminUserId": {
+          "type": ["string", "null"],
+          "description": "The ID of the User (Manager) who is currently designated as the emergency Super Admin. Null if no one is designated."
+        }
+      }
     },
     "Brand": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -398,7 +418,8 @@
         "scheduledAt": { "type": "string", "format": "date-time", "description": "The specific date and time the post is scheduled to be published." },
         "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
         "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
-        "companyId": { "type": "string", "description": "The ID of the company this post belongs to." }
+        "companyId": { "type": "string", "description": "The ID of the company this post belongs to." },
+        "objectPosition": { "type": "number", "description": "CSS object-position percentage for the media (0-100)." }
       },
       "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
     },
@@ -466,6 +487,17 @@
               "entityName": "Company",
               "schema": { "$ref": "#/backend/entities/Company" },
               "description": "Stores company-wide information like name and logo.",
+              "params": [
+                  { "name": "companyId", "description": "The unique identifier for the company." }
+              ]
+          }
+      },
+       {
+          "path": "/companySettings/{companyId}",
+          "definition": {
+              "entityName": "CompanySettings",
+              "schema": { "$ref": "#/backend/entities/CompanySettings" },
+              "description": "Stores company-wide settings, like the emergency admin.",
               "params": [
                   { "name": "companyId", "description": "The unique identifier for the company." }
               ]

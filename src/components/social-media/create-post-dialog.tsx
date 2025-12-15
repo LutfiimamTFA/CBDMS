@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -56,8 +55,8 @@ import type { SocialMediaPost, Notification, Comment, User as UserType, Brand } 
 import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { InstagramPostPreview } from './instagram-post-preview';
-import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { Label } from '../ui/label';
+import { Slider } from '../ui/slider';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
@@ -89,7 +88,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
-  const [objectPosition, setObjectPosition] = useState<SocialMediaPost['objectPosition']>('center');
+  const [objectPosition, setObjectPosition] = useState<number>(50);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
@@ -127,7 +126,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             brandId: post.brandId,
         });
         setImagePreview(post.mediaUrl || null);
-        setObjectPosition(post.objectPosition || 'center');
+        setObjectPosition(post.objectPosition || 50);
         if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
             setMediaType('video');
         } else {
@@ -143,7 +142,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             media: undefined,
         });
         setImagePreview(null);
-        setObjectPosition('center');
+        setObjectPosition(50);
     }
   }, [post, mode, form, open]);
 
@@ -452,7 +451,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         </FormItem>
                     )}
                     />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
                         <FormField
                             control={form.control}
                             name="platform"
@@ -475,57 +474,59 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                                 </FormItem>
                             )}
                         />
-                        <FormField
-                            control={form.control}
-                            name="scheduledAtDate"
-                            render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Schedule Date</FormLabel>
-                                <Popover>
-                                <PopoverTrigger asChild>
-                                    <FormControl>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
-                                        disabled={!isEditable}
-                                    >
-                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                    </Button>
-                                    </FormControl>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
-                                    mode="single"
-                                    selected={field.value}
-                                    onSelect={field.onChange}
-                                    disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !isEditable}
-                                    initialFocus
-                                    />
-                                </PopoverContent>
-                                </Popover>
-                                <FormMessage />
-                            </FormItem>
-                            )}
-                        />
-                        <FormField
-                            control={form.control}
-                            name="scheduledAtTime"
-                            render={({ field }) => (
+                        <div className="grid grid-cols-2 gap-2">
+                             <FormField
+                                control={form.control}
+                                name="scheduledAtDate"
+                                render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Schedule Time</FormLabel>
-                                    <FormControl>
-                                        <Input
-                                            type="time"
-                                            className="w-full"
-                                            {...field}
-                                            readOnly={!isEditable}
+                                    <FormLabel>Schedule Date</FormLabel>
+                                    <Popover>
+                                    <PopoverTrigger asChild>
+                                        <FormControl>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}
+                                            disabled={!isEditable}
+                                        >
+                                            {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                        </Button>
+                                        </FormControl>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                        mode="single"
+                                        selected={field.value}
+                                        onSelect={field.onChange}
+                                        disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) || !isEditable}
+                                        initialFocus
                                         />
-                                    </FormControl>
+                                    </PopoverContent>
+                                    </Popover>
                                     <FormMessage />
                                 </FormItem>
-                            )}
-                        />
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="scheduledAtTime"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Schedule Time</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="time"
+                                                className="w-full"
+                                                {...field}
+                                                readOnly={!isEditable}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
                     </div>
                      <FormField
                         control={form.control}
@@ -563,13 +564,18 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     objectPosition={objectPosition}
                 />
                 {isEditable && mediaType === 'image' && imagePreview && (
-                    <div className='space-y-2 text-center'>
+                    <div className='space-y-2 text-center w-full max-w-[320px]'>
                         <Label>Edit Angle</Label>
-                        <ToggleGroup type="single" variant="outline" value={objectPosition} onValueChange={(value) => value && setObjectPosition(value as any)}>
-                            <ToggleGroupItem value="top" aria-label="Focus top">Top</ToggleGroupItem>
-                            <ToggleGroupItem value="center" aria-label="Focus center">Center</ToggleGroupItem>
-                            <ToggleGroupItem value="bottom" aria-label="Focus bottom">Bottom</ToggleGroupItem>
-                        </ToggleGroup>
+                        <div className="flex items-center gap-4">
+                            <span className="text-xs text-muted-foreground">Top</span>
+                            <Slider
+                                defaultValue={[objectPosition]}
+                                max={100}
+                                step={1}
+                                onValueChange={(value) => setObjectPosition(value[0])}
+                            />
+                            <span className="text-xs text-muted-foreground">Bottom</span>
+                        </div>
                     </div>
                 )}
             </div>
