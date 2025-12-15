@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -48,13 +49,14 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User as UserType, Brand } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { InstagramPostPreview } from './instagram-post-preview';
+import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
@@ -86,6 +88,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [objectPosition, setObjectPosition] = useState<SocialMediaPost['objectPosition']>('center');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
@@ -123,6 +126,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             brandId: post.brandId,
         });
         setImagePreview(post.mediaUrl || null);
+        setObjectPosition(post.objectPosition || 'center');
         if (post.mediaUrl?.includes('.mp4') || post.mediaUrl?.includes('video')) {
             setMediaType('video');
         } else {
@@ -138,6 +142,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             media: undefined,
         });
         setImagePreview(null);
+        setObjectPosition('center');
     }
   }, [post, mode, form, open]);
 
@@ -181,6 +186,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             companyId: profile.companyId,
             status: status,
             brandId: data.brandId,
+            objectPosition: objectPosition,
             creator: {
                 name: profile.name,
                 avatarUrl: profile.avatarUrl || ''
@@ -445,7 +451,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         </FormItem>
                     )}
                     />
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                         <FormField
                             control={form.control}
                             name="platform"
@@ -472,7 +478,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             control={form.control}
                             name="scheduledAtDate"
                             render={({ field }) => (
-                            <FormItem className="space-y-2">
+                            <FormItem>
                                 <FormLabel>Schedule Date</FormLabel>
                                 <Popover>
                                 <PopoverTrigger asChild>
@@ -505,7 +511,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             control={form.control}
                             name="scheduledAtTime"
                             render={({ field }) => (
-                                <FormItem className="space-y-2">
+                                <FormItem>
                                     <FormLabel>Schedule Time</FormLabel>
                                     <FormControl>
                                         <Input
@@ -546,14 +552,25 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             </div>
           </ScrollArea>
           <ScrollArea className="h-full">
-            <div className="p-6 bg-secondary/50 flex items-center justify-center h-full">
+            <div className="p-6 bg-secondary/50 flex flex-col items-center justify-center h-full gap-4">
                 <InstagramPostPreview 
                     profileName={post?.creator?.name || profile?.name || 'Username'}
                     profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
                     mediaUrl={imagePreview}
                     mediaType={mediaType}
                     caption={caption}
+                    objectPosition={objectPosition}
                 />
+                {isEditable && mediaType === 'image' && imagePreview && (
+                    <div className='space-y-2 text-center'>
+                        <Label>Edit Angle</Label>
+                        <ToggleGroup type="single" variant="outline" value={objectPosition} onValueChange={(value) => value && setObjectPosition(value as any)}>
+                            <ToggleGroupItem value="top" aria-label="Focus top">Top</ToggleGroupItem>
+                            <ToggleGroupItem value="center" aria-label="Focus center">Center</ToggleGroupItem>
+                            <ToggleGroupItem value="bottom" aria-label="Focus bottom">Bottom</ToggleGroupItem>
+                        </ToggleGroup>
+                    </div>
+                )}
             </div>
           </ScrollArea>
         </div>

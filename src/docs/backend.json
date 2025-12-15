@@ -419,7 +419,8 @@
         "scheduledAt": { "type": "string", "format": "date-time", "description": "The specific date and time the post is scheduled to be published." },
         "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
         "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
-        "companyId": { "type": "string", "description": "The ID of the company this post belongs to." }
+        "companyId": { "type": "string", "description": "The ID of the company this post belongs to." },
+        "objectPosition": { "type": "string", "enum": ["top", "center", "bottom"], "description": "CSS object-position property for the media." }
       },
       "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
     },
@@ -637,5 +638,3 @@
     ]
   }
 }
-
-    

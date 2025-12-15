@@ -1,9 +1,11 @@
+
 'use client';
 
 import React from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle } from 'lucide-react';
+import type { SocialMediaPost } from '@/lib/types';
 
 interface InstagramPostPreviewProps {
     profileName?: string;
@@ -11,6 +13,7 @@ interface InstagramPostPreviewProps {
     mediaUrl?: string | null;
     mediaType?: 'image' | 'video';
     caption?: string;
+    objectPosition?: SocialMediaPost['objectPosition'];
 }
 
 export function InstagramPostPreview({ 
@@ -18,7 +21,8 @@ export function InstagramPostPreview({
     profileImageUrl, 
     mediaUrl, 
     mediaType = 'image',
-    caption 
+    caption,
+    objectPosition = 'center',
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -34,6 +38,10 @@ export function InstagramPostPreview({
     });
 
     return formattedText;
+  };
+  
+  const imageStyle: React.CSSProperties = {
+      objectPosition: objectPosition,
   };
 
   return (
@@ -52,7 +60,7 @@ export function InstagramPostPreview({
       <div className="relative aspect-square w-full bg-zinc-200 dark:bg-zinc-800">
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" objectFit="cover" alt="Post preview" />
+            <Image src={mediaUrl} layout="fill" objectFit="cover" alt="Post preview" style={imageStyle} />
           ) : (
             <>
               <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" />

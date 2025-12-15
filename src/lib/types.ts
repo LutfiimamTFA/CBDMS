@@ -213,6 +213,7 @@ export type SocialMediaPost = {
   companyId: string;
   comments?: Comment[];
   brandId?: string; 
+  objectPosition?: 'top' | 'center' | 'bottom';
   creator?: {
     name: string;
     avatarUrl: string;
@@ -278,5 +279,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
-    
