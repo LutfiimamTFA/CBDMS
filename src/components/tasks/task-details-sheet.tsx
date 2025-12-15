@@ -1020,6 +1020,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const formatDate = (date: any): string => {
     if (!date) return 'N/A';
     // Firestore Timestamps have a toDate() method, ISO strings do not.
+    // This handles both cases.
     const dateObj = (date?.toDate) ? date.toDate() : parseISO(date);
     return format(dateObj, 'PP, p');
   };
@@ -1229,7 +1230,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <AccordionItem value="revision-history">
                             <AccordionTrigger className="font-semibold text-sm">Revision History</AccordionTrigger>
                             <AccordionContent className="space-y-4 pt-4">
-                              {(initialTask.revisionHistory || []).slice().reverse().map((cycle, index) => (
+                              {(initialTask.revisionHistory || []).slice().reverse().map((cycle) => (
                                 <React.Fragment key={cycle.cycleNumber}>
                                   <div className="flex items-center gap-3">
                                       <Avatar className="h-8 w-8">
@@ -1253,7 +1254,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                           </div>
                                       ))}
                                   </div>
-                                  {index < (initialTask.revisionHistory || []).length - 1 && <Separator className="my-4"/>}
+                                  {(initialTask.revisionHistory || []).indexOf(cycle) < (initialTask.revisionHistory || []).length - 1 && <Separator className="my-4"/>}
                                 </React.Fragment>
                               ))}
                               {(initialTask.revisionHistory || []).length === 0 && (
@@ -1663,3 +1664,4 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
