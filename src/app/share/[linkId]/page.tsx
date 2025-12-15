@@ -3,17 +3,14 @@
 
 import { notFound, useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import type { SharedLink, NavigationItem } from '@/lib/types';
 import { useMemo, useState, useEffect } from 'react';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MainLayout } from '@/components/share/main-layout';
 import { useCollection } from '@/firebase/firestore/use-collection';
-import { query, orderBy } from 'firebase/firestore';
-
 
 export default function SharedLinkPage() {
     const params = useParams();
@@ -42,7 +39,6 @@ export default function SharedLinkPage() {
 
     const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
 
-
     const handleAuth = () => {
         if (sharedLink?.password === password) {
             setIsAuthenticated(true);
@@ -53,10 +49,8 @@ export default function SharedLinkPage() {
     };
     
     useEffect(() => {
-        // Automatically authenticate if there's no password or if it's expired
         if (sharedLink) {
             if (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date()) {
-                // Link has expired, show not found.
                 notFound();
                 return;
             }
@@ -68,13 +62,25 @@ export default function SharedLinkPage() {
 
     useEffect(() => {
         if (isAuthenticated && sharedLink && allNavItems) {
-            const firstAllowedPathId = sharedLink.allowedNavItems[0] || '';
+            const firstAllowedPathId = sharedLink.allowedNavItems[0];
             const navItem = allNavItems.find(item => item.id === firstAllowedPathId);
-            if (navItem?.path) {
+            
+            // The path must exist and not be an empty string (which we use for folders).
+            if (navItem && navItem.path) {
                 router.replace(`/share/${linkId}${navItem.path}`);
             } else {
-                 // Fallback if no valid path is found
-                router.replace(`/share/${linkId}/dashboard`);
+                // If the first item has no path (it's a folder) or doesn't exist,
+                // find the first valid path from the allowed items.
+                const firstValidNavItem = sharedLink.allowedNavItems
+                    .map(id => allNavItems.find(item => item.id === id))
+                    .find(item => item && item.path);
+
+                if (firstValidNavItem) {
+                    router.replace(`/share/${linkId}${firstValidNavItem.path}`);
+                } else {
+                    // As a final fallback, redirect to a default known page if no valid path is found.
+                    router.replace(`/share/${linkId}/dashboard`);
+                }
             }
         }
     }, [isAuthenticated, sharedLink, allNavItems, linkId, router]);
@@ -114,7 +120,7 @@ export default function SharedLinkPage() {
         )
     }
 
-    // Render the main layout for the shared view, which will handle the redirect.
+    // Render a loading state while the redirect is processed by the useEffect hook
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <Loader2 className="h-8 w-8 animate-spin" />
