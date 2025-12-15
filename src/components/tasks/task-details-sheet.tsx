@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -1019,7 +1020,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const formatDate = (date: any): string => {
     if (!date) return 'N/A';
     // Firestore Timestamps have a toDate() method, ISO strings do not.
-    const dateObj = typeof date.toDate === 'function' ? date.toDate() : parseISO(date);
+    const dateObj = (date?.toDate) ? date.toDate() : parseISO(date);
     return format(dateObj, 'PP, p');
   };
 
@@ -1229,7 +1230,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <AccordionTrigger className="font-semibold text-sm">Revision History</AccordionTrigger>
                             <AccordionContent className="space-y-4 pt-4">
                               {(initialTask.revisionHistory || []).slice().reverse().map((cycle, index) => (
-                                <div key={cycle.cycleNumber}>
+                                <React.Fragment key={cycle.cycleNumber}>
                                   <div className="flex items-center gap-3">
                                       <Avatar className="h-8 w-8">
                                           <AvatarImage src={cycle.requestedBy.avatarUrl} alt={cycle.requestedBy.name} />
@@ -1245,7 +1246,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                       </div>
                                   </div>
                                   <div className="mt-3 space-y-2 pl-11">
-                                      {cycle.items.map((item, itemIndex) => (
+                                      {cycle.items.map((item) => (
                                           <div key={item.id} className="flex items-center gap-3 text-sm text-muted-foreground">
                                               <Checkbox id={`hist-${cycle.cycleNumber}-${item.id}`} checked={item.completed} disabled/>
                                               <label htmlFor={`hist-${cycle.cycleNumber}-${item.id}`} className={item.completed ? 'line-through' : ''}>{item.text}</label>
@@ -1253,7 +1254,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                       ))}
                                   </div>
                                   {index < (initialTask.revisionHistory || []).length - 1 && <Separator className="my-4"/>}
-                                </div>
+                                </React.Fragment>
                               ))}
                               {(initialTask.revisionHistory || []).length === 0 && (
                                 <p className="text-sm text-muted-foreground text-center py-4">No revision history for this task.</p>
