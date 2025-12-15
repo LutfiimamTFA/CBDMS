@@ -57,6 +57,7 @@ import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { InstagramPostPreview } from './instagram-post-preview';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
+import { Label } from '../ui/label';
 
 const postSchema = z.object({
   platform: z.string().min(1, 'Platform is required'),
