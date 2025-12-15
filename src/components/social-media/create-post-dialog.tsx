@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -205,7 +204,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             userId: userDoc.id,
                             title: 'Content for Approval',
                             message: `${profile.name} submitted a new social media post for approval.`,
-                            taskId: postRef.id,
+                            taskId: postRef.id, // Using taskId field to link to the post
                             isRead: false,
                             createdAt: serverTimestamp(),
                             createdBy: {
@@ -285,7 +284,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             userId: post.createdBy,
             title: notificationTitle,
             message: notificationMessage,
-            taskId: post.id,
+            taskId: post.id, // Using taskId field to link to the post
             isRead: false,
             createdAt: serverTimestamp(),
             createdBy: {
@@ -368,8 +367,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-1 md:grid-cols-2 h-full overflow-hidden">
-        <ScrollArea className='md:border-r'>
-            <div className="p-6">
+        <ScrollArea className="md:border-r">
+            <div className="p-6 space-y-6">
                 {rejectionComment && (
                   <Alert variant="destructive" className="mb-4">
                       <AlertCircle className="h-4 w-4" />
