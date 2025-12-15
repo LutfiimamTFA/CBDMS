@@ -92,7 +92,15 @@ export default function CalendarPage() {
   const usersQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId), orderBy('name')) : null), [firestore, activeCompanyId]);
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
-  const brandsQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId), orderBy('name')) : null), [firestore, activeCompanyId]);
+  const brandsQuery = useMemo(() => {
+    if (!firestore || !activeCompanyId) return null;
+    let q = query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId), orderBy('name'));
+
+    if (currentUser?.role === 'Manager' && currentUser.brandIds && currentUser.brandIds.length > 0) {
+      q = query(q, where('__name__', 'in', currentUser.brandIds));
+    }
+    return q;
+  }, [firestore, activeCompanyId, currentUser]);
   const { data: allBrands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   
   const statusesQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'statuses'), where('companyId', '==', activeCompanyId), orderBy('order')) : null), [firestore, activeCompanyId]);
@@ -394,5 +402,3 @@ export default function CalendarPage() {
 
     
 }
-
-    
