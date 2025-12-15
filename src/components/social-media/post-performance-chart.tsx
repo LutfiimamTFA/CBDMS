@@ -1,3 +1,4 @@
+
 'use client';
 import type { SocialMediaPost } from '@/lib/types';
 import {
@@ -13,17 +14,9 @@ import { eachDayOfInterval, format, parseISO, subDays } from 'date-fns';
 import { ChartLegendContent } from '../ui/chart';
 
 const chartConfig = {
-  metric1: {
-    label: "Impressions",
+  publishedPosts: {
+    label: "Published Posts",
     color: "hsl(var(--chart-1))",
-  },
-  metric2: {
-    label: "Engagements",
-    color: "hsl(var(--chart-2))",
-  },
-  metric3: {
-    label: "New Followers",
-    color: "hsl(var(--chart-5))",
   },
 } satisfies ChartConfig;
 
@@ -34,20 +27,27 @@ export function PostPerformanceChart({ posts }: { posts: SocialMediaPost[] }) {
     const start = subDays(end, 13);
     const interval = eachDayOfInterval({ start, end });
 
+    // Create a map to store the count of posts per day
     const postsByDay = posts.reduce((acc, post) => {
-        const day = format(parseISO(post.scheduledAt), 'yyyy-MM-dd');
-        acc[day] = (acc[day] || 0) + 1;
-        return acc;
+      // Ensure scheduledAt is valid before parsing
+      if (post.scheduledAt) {
+        try {
+          const day = format(parseISO(post.scheduledAt), 'yyyy-MM-dd');
+          acc[day] = (acc[day] || 0) + 1;
+        } catch (e) {
+          // Ignore posts with invalid date formats
+        }
+      }
+      return acc;
     }, {} as Record<string, number>);
 
+    // Map over the 14-day interval and create the chart data
     return interval.map(date => {
         const dayKey = format(date, 'yyyy-MM-dd');
         const postCount = postsByDay[dayKey] || 0;
         return {
             date: format(date, 'd MMM'),
-            metric1: Math.floor(Math.random() * 20) + 40 + postCount * 5, // Simulate Impressions
-            metric2: Math.floor(Math.random() * 15) + 20 + postCount * 3, // Simulate Engagements
-            metric3: Math.floor(Math.random() * 10) + 5 + postCount * 2,  // Simulate New Followers
+            publishedPosts: postCount,
         }
     });
 
@@ -56,8 +56,8 @@ export function PostPerformanceChart({ posts }: { posts: SocialMediaPost[] }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Post Performance</CardTitle>
-        <CardDescription>Simulated performance metrics over the last 14 days.</CardDescription>
+        <CardTitle>Team Output</CardTitle>
+        <CardDescription>Number of posts published over the last 14 days.</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="h-[250px] w-full">
@@ -81,27 +81,17 @@ export function PostPerformanceChart({ posts }: { posts: SocialMediaPost[] }) {
               tickLine={false}
               axisLine={false}
               tickMargin={8}
+              allowDecimals={false} // Ensure Y-axis shows whole numbers for post counts
             />
-            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+            <ChartTooltip
+              cursor={false}
+              content={<ChartTooltipContent indicator="dot" />}
+            />
              <Legend content={<ChartLegendContent />} />
             <Line
-              dataKey="metric1"
+              dataKey="publishedPosts"
               type="monotone"
-              stroke="var(--color-metric1)"
-              strokeWidth={2}
-              dot={true}
-            />
-            <Line
-              dataKey="metric2"
-              type="monotone"
-              stroke="var(--color-metric2)"
-              strokeWidth={2}
-              dot={true}
-            />
-            <Line
-              dataKey="metric3"
-              type="monotone"
-              stroke="var(--color-metric3)"
+              stroke="var(--color-publishedPosts)"
               strokeWidth={2}
               dot={true}
             />
