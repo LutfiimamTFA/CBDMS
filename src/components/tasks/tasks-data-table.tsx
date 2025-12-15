@@ -112,6 +112,12 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
   
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
 
+  const canChangePriority = React.useMemo(() => {
+      if (session) return false;
+      if (!profile) return false;
+      return profile.role === 'Super Admin' || profile.role === 'Manager';
+  }, [profile, session]);
+
   const statusOptions = React.useMemo(() => {
     const getIcon = (statusName: string) => {
         if (statusName === 'To Do') return Circle;
@@ -333,7 +339,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         const priority = priorityInfo[currentPriority];
         if (!priority) return null;
 
-        if (profile?.role === 'Employee' || session) {
+        if (!canChangePriority) {
             return (
               <Badge variant="outline" className='font-normal'>
                   <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
@@ -348,7 +354,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
             <Select
               value={currentPriority}
               onValueChange={(newPriority: Priority) => handlePriorityChange(task.id, newPriority)}
-              disabled={isChecking || profile?.role === 'Employee'}
+              disabled={isChecking}
             >
               <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
                  <div className="flex items-center gap-2">

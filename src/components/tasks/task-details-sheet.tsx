@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -222,6 +221,12 @@ export function TaskDetailsSheet({
         isManagerOfBrand ||
         isCreator 
       ));
+      
+  const canChangePriority = useMemo(() => {
+      if (isSharedView) return false;
+      if (!currentUser) return false;
+      return currentUser.role === 'Super Admin' || currentUser.role === 'Manager';
+  }, [currentUser, isSharedView]);
 
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
   const canChangeStatus = isSharedView ? (permissions.canChangeStatus || false) : !!currentUser;
@@ -1398,7 +1403,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            <FormItem className="grid grid-cols-3 items-center gap-2">
                               <FormLabel className="text-muted-foreground">Priority</FormLabel>
                               <div className="col-span-2 flex items-center gap-2">
-                                  { !(canChangeStatus) ? (
+                                  { !canChangePriority ? (
                                     <div className="flex items-center gap-2 text-sm font-medium">
                                       <priority.icon className={`h-4 w-4 ${priority.color}`} />
                                       {priority.label}
@@ -1609,7 +1614,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp ? format(new Date(activity.timestamp), 'PP, HH:mm') : 'just now'}
+                          {activity.timestamp ? formatDate(activity.timestamp) : 'just now'}
                         </p>
                       </div>
                     </div>
@@ -1652,4 +1657,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
