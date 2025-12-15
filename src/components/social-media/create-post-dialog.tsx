@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -49,7 +48,7 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User as UserType, Brand } from '@/lib/types';
@@ -96,7 +95,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionItems, setRejectionItems] = useState<string[]>([]);
+  const [currentRejectionItem, setCurrentRejectionItem] = useState('');
 
   const firestore = useFirestore();
   const storage = useStorage();
@@ -287,7 +287,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   };
   
-  const handleUpdateStatus = async (newStatus: SocialMediaPost['status'], reason?: string) => {
+  const handleUpdateStatus = async (newStatus: SocialMediaPost['status'], reasonItems?: string[]) => {
     if (!firestore || !post || !profile || !user) return;
     setIsSaving(true);
     setRejectionDialogOpen(false);
@@ -310,11 +310,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         notificationTitle = 'Post Needs Revision';
         notificationMessage = `${profile.name} requested revisions for your post: "${post.caption.substring(0, 30)}...". See comments for details.`;
         
-        if (reason) {
+        if (reasonItems && reasonItems.length > 0) {
+            const formattedReason = reasonItems.map(item => `- ${item}`).join('\n');
             const newComment: Comment = {
                 id: `c-${Date.now()}`,
                 user: profile as UserType, 
-                text: `**Rejection Feedback:** ${reason}`,
+                text: `**Rejection Feedback:**\n${formattedReason}`,
                 timestamp: new Date().toISOString(),
                 replies: [],
             };
@@ -356,7 +357,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       });
     } finally {
       setIsSaving(false);
-      setRejectionReason('');
+      setRejectionItems([]);
+      setCurrentRejectionItem('');
     }
   };
   
@@ -399,6 +401,14 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
 
   const rejectionComment = post?.comments?.slice().reverse().find(c => c.text.startsWith('**Rejection Feedback:**'));
+  
+  const handleAddRejectionItem = () => {
+    if (currentRejectionItem.trim()) {
+        setRejectionItems(prev => [...prev, currentRejectionItem]);
+        setCurrentRejectionItem('');
+    }
+  };
+
 
   return (
     <>
@@ -426,7 +436,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             </Avatar>
                             <div className="text-sm">
                                 <p className="font-semibold">{rejectionComment.user.name} <span className="font-normal text-muted-foreground">requested changes:</span></p>
-                                <blockquote className="mt-1 italic border-l-2 pl-3 border-destructive/50">
+                                <blockquote className="mt-1 italic border-l-2 pl-3 border-destructive/50 whitespace-pre-wrap">
                                 {rejectionComment.text.replace('**Rejection Feedback:**', '').trim()}
                                 </blockquote>
                             </div>
@@ -467,25 +477,25 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                                 </div>
                             </FormControl>
                             <FormMessage />
-                             {isEditable && mediaType === 'image' && imagePreview && (
-                                <FormField
-                                    control={form.control}
-                                    name="objectPosition"
-                                    render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Image Focus</FormLabel>
-                                        <FormControl>
-                                            <Slider
-                                                min={0}
-                                                max={100}
-                                                step={1}
-                                                value={[field.value]}
-                                                onValueChange={(vals) => field.onChange(vals[0])}
-                                            />
-                                        </FormControl>
-                                    </FormItem>
-                                    )}
-                                />
+                            {isEditable && mediaType === 'image' && imagePreview && (
+                              <FormField
+                                control={form.control}
+                                name="objectPosition"
+                                render={({ field: { onChange, value } }) => (
+                                  <FormItem>
+                                    <FormLabel>Image Focus</FormLabel>
+                                    <FormControl>
+                                      <Slider
+                                        min={0}
+                                        max={100}
+                                        step={1}
+                                        value={[value]}
+                                        onValueChange={(vals) => onChange(vals[0])}
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
                             )}
                         </FormItem>
                         )}
@@ -697,27 +707,44 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     </Dialog>
     
     <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Reason for Rejection</DialogTitle>
-                <DialogDescription>
-                    Please provide feedback for the creator on why this post is being rejected. This will be added as a comment.
-                </DialogDescription>
-            </DialogHeader>
-            <Textarea 
-                placeholder="e.g., The caption needs to be more engaging, please revise the image..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                rows={4}
-            />
-            <DialogFooter>
-                <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
-                <Button variant="destructive" onClick={() => handleUpdateStatus('Draft', rejectionReason)} disabled={!rejectionReason.trim() || isSaving}>
-                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirm Rejection
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Reason for Rejection</DialogTitle>
+          <DialogDescription>
+            Provide a clear list of revision points for the creator. This will be added as a comment.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-4 space-y-4">
+          <div className="space-y-2">
+            {rejectionItems.map((item, index) => (
+              <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                <span className="flex-1 text-sm">{item}</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRejectionItems(prev => prev.filter((_, i) => i !== index))}>
+                  <XCircle className="h-4 w-4" />
                 </Button>
-            </DialogFooter>
-        </DialogContent>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              value={currentRejectionItem}
+              onChange={(e) => setCurrentRejectionItem(e.target.value)}
+              placeholder="e.g., Fix the logo placement"
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRejectionItem())}
+            />
+            <Button onClick={handleAddRejectionItem} disabled={!currentRejectionItem.trim()}>
+              <Plus className="mr-2 h-4 w-4" /> Add
+            </Button>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
+          <Button variant="destructive" onClick={() => handleUpdateStatus('Draft', rejectionItems)} disabled={rejectionItems.length === 0 || isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Confirm Rejection
+          </Button>
+        </DialogFooter>
+      </DialogContent>
     </Dialog>
 
     <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
