@@ -61,11 +61,29 @@ export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_social_media',
     label: 'nav.social_media',
-    path: '/social-media',
+    path: '', // This is now a folder
     icon: 'Share2',
     order: 6,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
+  },
+  {
+    id: 'nav_social_media_calendar',
+    label: 'Calendar',
+    path: '/social-media',
+    icon: 'CalendarDays',
+    order: 6.1,
+    roles: ['Super Admin', 'Manager', 'Employee'],
+    parentId: 'nav_social_media',
+  },
+   {
+    id: 'nav_social_media_analytics',
+    label: 'Analytics',
+    path: '/social-media/analytics',
+    icon: 'BarChart2',
+    order: 6.2,
+    roles: ['Super Admin', 'Manager'],
+    parentId: 'nav_social_media',
   },
   {
     id: 'nav_performance_analysis',
@@ -185,5 +203,3 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: 'nav_settings',
   },
 ];
-
-    

@@ -79,8 +79,12 @@ export default function MainLayout({
     const childMap = new Map<string, NavigationItem[]>();
 
     items.forEach(item => {
-      const parentId = item.path.startsWith('/admin/settings') ? 'nav_settings' : item.path.startsWith('/admin') ? 'nav_admin' : null;
-      if (parentId) {
+      let parentId: string | null = null;
+      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
+      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
+      else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
+
+      if (parentId && item.id !== parentId) {
         if (!childMap.has(parentId)) {
           childMap.set(parentId, []);
         }
@@ -88,9 +92,9 @@ export default function MainLayout({
       }
     });
     
-    // Add top-level items that are folders
     if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin'], parentId: null });
+    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
+    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
     
     return { navItems: Array.from(itemMap.values()), itemMap, childMap };
   }, [navItemsFromDB, t]);
@@ -98,11 +102,9 @@ export default function MainLayout({
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     const sections: Record<string, boolean> = {};
-    if (pathname.startsWith('/admin/settings')) {
-      sections.nav_settings = true;
-    } else if (pathname.startsWith('/admin')) {
-      sections.nav_admin = true;
-    }
+    if (pathname.startsWith('/admin/settings')) sections.nav_settings = true;
+    else if (pathname.startsWith('/admin')) sections.nav_admin = true;
+    else if (pathname.startsWith('/social-media')) sections.nav_social_media = true;
     return sections;
   });
 
@@ -122,7 +124,6 @@ export default function MainLayout({
     return navItems.filter(item => item.roles.includes(currentRole));
   }, [currentRole, navItems, session]);
 
-  // Security Gatekeeper for Shared Views
   const currentNavItemId = useMemo(() => {
     if (!navItemsFromDB) return null;
     const item = navItemsFromDB.find(item => item.path === pathname && item.path !== '');
@@ -146,7 +147,11 @@ export default function MainLayout({
     (items: NavigationItem[], parentId: string | null = null) => {
       return items
         .filter((item) => {
-           const itemParentId = item.path.startsWith('/admin/settings') ? 'nav_settings' : item.path.startsWith('/admin') ? 'nav_admin' : null;
+           let itemParentId: string | null = null;
+           if (item.path.startsWith('/admin/settings') && item.id !== 'nav_settings') itemParentId = 'nav_settings';
+           else if (item.path.startsWith('/admin') && item.id !== 'nav_admin') itemParentId = 'nav_admin';
+           else if (item.path.startsWith('/social-media') && item.id !== 'nav_social_media') itemParentId = 'nav_social_media';
+
            return (parentId === null && itemParentId === null && !childMap.has(item.id)) || itemParentId === parentId;
         })
         .sort((a, b) => a.order - b.order)
@@ -249,5 +254,3 @@ export default function MainLayout({
     </SidebarProvider>
   );
 }
-
-    
