@@ -226,7 +226,11 @@ export function TaskDetailsSheet({
   const canChangePriority = useMemo(() => {
       if (isSharedView) return false;
       if (!currentUser) return false;
-      return currentUser.role === 'Super Admin' || currentUser.role === 'Manager';
+      if (currentUser.role === 'Super Admin') return true;
+      if (currentUser.role === 'Manager') {
+        return true;
+      }
+      return false;
   }, [currentUser, isSharedView]);
 
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
@@ -1019,9 +1023,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const formatDate = (date: any): string => {
     if (!date) return 'N/A';
-    // Firestore Timestamps have a toDate() method, ISO strings do not.
-    // This handles both cases.
-    const dateObj = (date?.toDate) ? date.toDate() : parseISO(date);
+    const dateObj = date.toDate ? date.toDate() : parseISO(date);
     return format(dateObj, 'PP, p');
   };
 
@@ -1226,43 +1228,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                 )}
                             </AccordionContent>
                           </AccordionItem>
-                          
-                          <AccordionItem value="revision-history">
-                            <AccordionTrigger className="font-semibold text-sm">Revision History</AccordionTrigger>
-                            <AccordionContent className="space-y-4 pt-4">
-                              {(initialTask.revisionHistory || []).slice().reverse().map((cycle) => (
-                                <React.Fragment key={cycle.cycleNumber}>
-                                  <div className="flex items-center gap-3">
-                                      <Avatar className="h-8 w-8">
-                                          <AvatarImage src={cycle.requestedBy.avatarUrl} alt={cycle.requestedBy.name} />
-                                          <AvatarFallback>{cycle.requestedBy.name.charAt(0)}</AvatarFallback>
-                                      </Avatar>
-                                      <div>
-                                          <p className="text-sm font-semibold">
-                                              Revision #{cycle.cycleNumber} - Requested by {cycle.requestedBy.name}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                              {formatDate(cycle.requestedAt)}
-                                          </p>
-                                      </div>
-                                  </div>
-                                  <div className="mt-3 space-y-2 pl-11">
-                                      {cycle.items.map((item) => (
-                                          <div key={item.id} className="flex items-center gap-3 text-sm text-muted-foreground">
-                                              <Checkbox id={`hist-${cycle.cycleNumber}-${item.id}`} checked={item.completed} disabled/>
-                                              <label htmlFor={`hist-${cycle.cycleNumber}-${item.id}`} className={item.completed ? 'line-through' : ''}>{item.text}</label>
-                                          </div>
-                                      ))}
-                                  </div>
-                                  {(initialTask.revisionHistory || []).indexOf(cycle) < (initialTask.revisionHistory || []).length - 1 && <Separator className="my-4"/>}
-                                </React.Fragment>
-                              ))}
-                              {(initialTask.revisionHistory || []).length === 0 && (
-                                <p className="text-sm text-muted-foreground text-center py-4">No revision history for this task.</p>
-                              )}
-                            </AccordionContent>
-                          </AccordionItem>
-
                         </Accordion>
                         
                         <div className="space-y-4">
@@ -1664,4 +1629,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-

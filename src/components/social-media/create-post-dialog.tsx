@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -51,7 +52,7 @@ import { cn } from '@/lib/utils';
 import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus, RefreshCcw } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
-import type { SocialMediaPost, Notification, Comment, User as UserType, Brand, RevisionItem } from '@/lib/types';
+import type { SocialMediaPost, Notification, Comment, User as UserType, Brand, RevisionItem, RevisionCycle } from '@/lib/types';
 import { Alert, AlertTitle, AlertDescription as AlertDescriptionUI } from '../ui/alert';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { InstagramPostPreview } from './instagram-post-preview';
@@ -277,16 +278,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
             
-            // Logic for re-submitting: Keep revision history, but clear current items as they are "done"
+            // Logic for re-submitting: clear current revision items as they are "done"
             if (status === 'Needs Approval' && post.status === 'Draft' && post.revisionItems) {
-                const completedCycle: RevisionCycle = {
-                    cycleNumber: post.revisionHistory ? post.revisionHistory.length + 1 : 1,
-                    requestedAt: post.updatedAt || serverTimestamp(), // Placeholder, should be the rejection time
-                    requestedBy: { id: '', name: 'Manager', avatarUrl: ''}, // Placeholder, needs actual rejector info
-                    items: post.revisionItems,
-                };
-                
-                postData.revisionHistory = [...(post.revisionHistory || []), completedCycle];
                 postData.revisionItems = deleteField() as any;
             }
 
@@ -777,7 +770,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           <DialogHeader>
             <DialogTitle>Reason for Rejection</DialogTitle>
             <DialogDescription>
-              Provide a clear list of revision points for the creator. This will be added as a comment.
+              Provide a clear list of revision points for the creator. This will be added as a checklist to the post.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-4">
