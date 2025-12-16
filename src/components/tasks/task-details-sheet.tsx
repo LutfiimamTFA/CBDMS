@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListChecks, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -183,9 +183,17 @@ export function TaskDetailsSheet({
   );
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
 
-  const brandsQuery = useMemo(() =>
-    firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null,
-  [firestore]);
+  const brandsQuery = useMemo(() => {
+    if (!firestore || !currentUser) return null;
+    if (currentUser.role === 'Super Admin') {
+        return query(collection(firestore, 'brands'), orderBy('name'));
+    }
+    if (currentUser.role === 'Manager') {
+        if (!currentUser.brandIds || currentUser.brandIds.length === 0) return null;
+        return query(collection(firestore, 'brands'), where('__name__', 'in', currentUser.brandIds), orderBy('name'));
+    }
+    return query(collection(firestore, 'brands'), orderBy('name'));
+  }, [firestore, currentUser]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
  const groupedUsers = useMemo(() => {
@@ -248,7 +256,6 @@ export function TaskDetailsSheet({
 
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
   
-  // Enforce workflow: Status changes happen via explicit actions, not free selection.
   const canChangeStatus = false; 
   
   const canAssignUsers = isSharedView ? (permissions.canAssignUsers || false) : canEditContent;
@@ -257,14 +264,13 @@ export function TaskDetailsSheet({
     resolver: zodResolver(taskDetailsSchema),
   });
   
- const canManageSubtasks = useMemo(() => {
+  const canManageSubtasks = useMemo(() => {
     if (isSharedView) return permissions.canEditContent || false;
     if (!currentUser) return false;
-    
+
     const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
     
-    // An assignee can always add, OR a manager/admin can add for direction.
-    return isAssignee || isManagerOrAdmin;
+    return (isAssignee || isManagerOrAdmin) && isAllowedStatus;
   }, [isSharedView, permissions, currentUser, isAssignee, isManagerOrAdmin, form.watch('status')]);
   
   useEffect(() => {
@@ -1046,7 +1052,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   const showTimeTracker = isAssignee && !isSharedView && ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
-
 
   return (
     <>
