@@ -247,21 +247,24 @@ export function TaskDetailsSheet({
   }, [currentUser, isSharedView]);
 
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
-  const canChangeStatus = isSharedView ? (permissions.canChangeStatus || false) : !!currentUser;
+  
+  // Enforce workflow: Status changes happen via explicit actions, not free selection.
+  const canChangeStatus = false; 
+  
   const canAssignUsers = isSharedView ? (permissions.canAssignUsers || false) : canEditContent;
   
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
   });
   
-  const canManageSubtasks = useMemo(() => {
+ const canManageSubtasks = useMemo(() => {
     if (isSharedView) return permissions.canEditContent || false;
     if (!currentUser) return false;
     
     const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
     
-    // An assignee can always manage, or a manager/admin can manage in the right status
-    return isAssignee || (isManagerOrAdmin && isAllowedStatus);
+    // An assignee can always add, OR a manager/admin can add for direction.
+    return isAssignee || isManagerOrAdmin;
   }, [isSharedView, permissions, currentUser, isAssignee, isManagerOrAdmin, form.watch('status')]);
   
   useEffect(() => {
@@ -901,11 +904,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
-    if (isManagerOrAdmin) {
-        setFinalReviewState({ isOpen: true, task: initialTask });
-    } else {
-        await handleStatusChange('Preview');
-    }
+    await handleStatusChange('Preview');
   };
   
   const handleRequestRevisions = () => {
@@ -1046,7 +1045,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     return format(dateObj, 'PP, p');
   };
 
-  // Determine if the time tracker should be shown
   const showTimeTracker = isAssignee && !isSharedView && ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
 
 
@@ -1139,7 +1137,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         </div>
 
                         <div className="space-y-4">
-                          <h3 className="font-semibold flex items-center gap-2 text-sm"><Paperclip className='h-4 w-4'/> Attachments</h3>
+                          <h3 className="font-semibold flex items-center gap-2 text-sm"><Paperclip className='h-4 w-4'/> Attachments ({attachments.length})</h3>
                            {attachments.length > 0 && (
                             <div className="space-y-2">
                               {attachments.map((att) => (
@@ -1303,11 +1301,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {(isAssignee || isCreator) && !isSharedView && initialTask.status === 'Doing' && (
+                    {isAssignee && !isManagerOrAdmin && !isSharedView && initialTask.status === 'Doing' && (
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                               { isManagerOrAdmin ? 'Mark as Complete' : 'Submit for Review' }
+                               Submit for Review
                            </Button>
                            {!canSubmit && (
                                <p className="text-xs text-center text-destructive">Selesaikan semua sub-tugas dan poin revisi untuk melanjutkan.</p>
@@ -1374,21 +1372,19 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               <FormField control={form.control} name="status" render={({ field }) => (
-                                <Select onValueChange={(v) => handleStatusChange(v)} value={field.value} disabled={true}>
-                                    <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                    {allStatuses?.map(s => (
-                                        <SelectItem key={s.id} value={s.name}>
-                                            <div className="flex items-center gap-2">
-                                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: s.color }}></span>
-                                                {s.name}
-                                            </div>
-                                        </SelectItem>
-                                    ))}
-                                    </SelectContent>
-                                </Select>
-                                )}/>
+                               <FormField control={form.control} name="status" render={({ field }) => {
+                                 const statusDetails = allStatuses?.find(s => s.name === field.value);
+                                  return (
+                                     <Badge variant="outline" style={{
+                                          backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent',
+                                          borderColor: statusDetails?.color,
+                                          color: statusDetails?.color,
+                                          borderWidth: '1.5px'
+                                      }}>
+                                          {field.value}
+                                      </Badge>
+                                  );
+                               }}/>
                             </div>
                         </FormItem>
                        <FormField control={form.control} name="priority" render={({ field }) => {
