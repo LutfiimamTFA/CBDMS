@@ -8,7 +8,7 @@ import { SmartSuggestions } from '@/components/smart-suggestions/page';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
-import { Filter, Loader2, X } from 'lucide-react';
+import { Filter, Loader2, X, Archive } from 'lucide-react';
 import { useI18n } from '@/context/i18n-provider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
@@ -16,6 +16,8 @@ import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
 import { useSharedSession } from '@/context/shared-session-provider';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
@@ -129,6 +131,14 @@ export default function DashboardPage() {
                   {t('dashboard.role').replace('{role}', profile?.role || 'Guest')}
                 </p>
               </div>
+
+               <Alert>
+                  <Archive className="h-4 w-4" />
+                  <AlertTitle>Tampilan Terfilter</AlertTitle>
+                  <AlertDescription>
+                    Papan ini secara otomatis menampilkan tugas yang relevan untuk Anda. Untuk melihat semua tugas, termasuk yang sudah lama selesai atau yang akan datang, kunjungi halaman <Button variant="link" asChild className="p-0 h-auto"><Link href="/tasks">Daftar Tugas</Link></Button>.
+                  </AlertDescription>
+                </Alert>
 
               {isManagerOrAdmin && (
                 <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
