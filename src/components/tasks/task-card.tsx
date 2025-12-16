@@ -1,11 +1,11 @@
 
 'use client';
 import { useMemo } from 'react';
-import type { Task } from '@/lib/types';
+import type { Task, User } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw } from 'lucide-react';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star } from 'lucide-react';
 import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '../ui/progress';
@@ -39,6 +39,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   const brandColor = getBrandColor(task.brandId);
 
   const assignees = task.assignees || [];
+  const creatorId = task.createdBy.id;
 
   return (
     <Card
@@ -94,12 +95,31 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger className="flex items-center -space-x-2">
-                  {assignees.slice(0, 2).map(assignee => (
-                      <Avatar key={assignee.id} className="h-7 w-7 border-2 border-background">
-                        <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
-                        <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                  ))}
+                  {assignees.slice(0, 2).map(assignee => {
+                    const isCreator = assignee.id === creatorId;
+                    return (
+                      <div key={assignee.id} className="relative">
+                        <Avatar className="h-7 w-7 border-2 border-background">
+                          <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
+                          <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        {isCreator && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-0.5">
+                                            <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-400" />
+                                        </div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>{assignee.name} is the task creator.</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
+                      </div>
+                    )
+                  })}
                   {assignees.length > 2 && (
                      <Avatar className="h-7 w-7 border-2 border-background">
                        <AvatarFallback>+{assignees.length - 2}</AvatarFallback>
