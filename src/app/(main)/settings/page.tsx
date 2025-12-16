@@ -29,7 +29,7 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
+import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, updatePassword, verifyBeforeUpdateEmail } from 'firebase/auth';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -44,9 +44,16 @@ const passwordSchema = z.object({
     path: ["confirmPassword"],
 });
 
+const emailSchema = z.object({
+  currentPassword: z.string().min(1, "Password is required for security."),
+  newEmail: z.string().email("Please enter a valid email address."),
+});
+
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
+type EmailFormValues = z.infer<typeof emailSchema>;
+
 
 export default function SettingsPage() {
   const { user, profile, isLoading: isProfileLoading } = useUserProfile();
@@ -58,6 +65,7 @@ export default function SettingsPage() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -74,6 +82,14 @@ export default function SettingsPage() {
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
+    }
+  });
+
+  const emailForm = useForm<EmailFormValues>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: {
+        currentPassword: '',
+        newEmail: '',
     }
   });
 
@@ -134,6 +150,45 @@ export default function SettingsPage() {
       });
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+  
+  const onChangeEmailSubmit = async (data: EmailFormValues) => {
+    if (!auth?.currentUser || !auth.currentUser.email) {
+        toast({ variant: 'destructive', title: 'Error', description: 'User not authenticated properly.' });
+        return;
+    }
+    setIsChangingEmail(true);
+
+    try {
+        const credential = EmailAuthProvider.credential(auth.currentUser.email, data.currentPassword);
+        await reauthenticateWithCredential(auth.currentUser, credential);
+        
+        await verifyBeforeUpdateEmail(auth.currentUser, data.newEmail);
+
+        toast({
+            title: 'Verification Email Sent',
+            description: `A link to verify your new email address has been sent to ${data.newEmail}. Please check your inbox.`,
+            duration: 10000,
+        });
+        emailForm.reset();
+
+    } catch (error: any) {
+        let description = 'An unexpected error occurred.';
+        if (error.code === 'auth/wrong-password') {
+            description = 'The current password you entered is incorrect.';
+        } else if (error.code === 'auth/email-already-in-use') {
+            description = 'This email address is already in use by another account.';
+        } else if (error.code === 'auth/too-many-requests') {
+            description = 'Too many attempts. Please try again later.';
+        }
+        toast({
+            variant: 'destructive',
+            title: 'Email Change Failed',
+            description: description,
+        });
+    } finally {
+        setIsChangingEmail(false);
     }
   };
 
@@ -270,12 +325,45 @@ export default function SettingsPage() {
 
            <Card>
             <CardHeader>
-              <CardTitle>Change Password</CardTitle>
+              <CardTitle>Security</CardTitle>
               <CardDescription>
-                Update your password. Make sure it's a strong one!
+                Manage your account security settings.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-8">
+                 <Form {...emailForm}>
+                    <form onSubmit={emailForm.handleSubmit(onChangeEmailSubmit)} className="space-y-4">
+                       <FormField
+                            control={emailForm.control}
+                            name="newEmail"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Change Email Address</FormLabel>
+                                <FormControl><Input type="email" {...field} placeholder="Enter new email" /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={emailForm.control}
+                            name="currentPassword"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Current Password (to confirm)</FormLabel>
+                                <FormControl><Input type="password" {...field} placeholder="Enter your current password" /></FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                         <Button type="submit" disabled={isChangingEmail}>
+                            {isChangingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Change Email
+                        </Button>
+                    </form>
+                </Form>
+
+                <hr/>
+
                 <Form {...passwordForm}>
                     <form onSubmit={passwordForm.handleSubmit(onChangePasswordSubmit)} className="space-y-4">
                         <FormField
@@ -283,8 +371,8 @@ export default function SettingsPage() {
                             name="currentPassword"
                             render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Current Password</FormLabel>
-                                <FormControl><Input type="password" {...field} /></FormControl>
+                                <FormLabel>Change Password</FormLabel>
+                                <FormControl><Input type="password" {...field} placeholder="Current Password" /></FormControl>
                                 <FormMessage />
                             </FormItem>
                             )}
@@ -294,8 +382,7 @@ export default function SettingsPage() {
                             name="newPassword"
                             render={({ field }) => (
                             <FormItem>
-                                <FormLabel>New Password</FormLabel>
-                                <FormControl><Input type="password" {...field} /></FormControl>
+                                <FormControl><Input type="password" {...field} placeholder="New Password" /></FormControl>
                                 <FormMessage />
                             </FormItem>
                             )}
@@ -305,8 +392,7 @@ export default function SettingsPage() {
                             name="confirmPassword"
                             render={({ field }) => (
                             <FormItem>
-                                <FormLabel>Confirm New Password</FormLabel>
-                                <FormControl><Input type="password" {...field} /></FormControl>
+                                <FormControl><Input type="password" {...field} placeholder="Confirm New Password" /></FormControl>
                                 <FormMessage />
                             </FormItem>
                             )}
