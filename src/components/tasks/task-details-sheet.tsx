@@ -1038,6 +1038,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     return format(dateObj, 'PP, p');
   };
 
+  // Determine if the time tracker should be shown
+  const showTimeTracker = isAssignee && !isSharedView && initialTask.status !== 'Preview' && initialTask.status !== 'Done';
+
 
   return (
     <>
@@ -1067,7 +1070,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 <ScrollArea className="col-span-2 h-full">
                     <div className="p-6 space-y-6">
                         
-                        {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && initialTask.status !== 'Preview' &&(
+                        {showTimeTracker && (
                           <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                               <div className="flex items-center justify-between">
                                   <div className="space-y-1">
