@@ -538,34 +538,6 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
               }
               className="h-8 w-[150px] lg:w-[250px]"
             />
-            {table.getColumn("brandId") && (
-              <DataTableFacetedFilter
-                column={table.getColumn("brandId")}
-                title="Brand"
-                options={brandOptions}
-              />
-            )}
-             {table.getColumn("assigneeIds") && (
-              <DataTableFacetedFilter
-                column={table.getColumn("assigneeIds")}
-                title={t('tasks.column.assignees')}
-                options={assigneeOptions}
-              />
-            )}
-            {table.getColumn("status") && (
-              <DataTableFacetedFilter
-                column={table.getColumn("status")}
-                title={t('tasks.column.status')}
-                options={statusOptions}
-              />
-            )}
-            {table.getColumn("priority") && (
-              <DataTableFacetedFilter
-                column={table.getColumn("priority")}
-                title={t('tasks.column.priority')}
-                options={priorityOptions}
-              />
-            )}
             {isFiltered && (
               <Button
                 variant="ghost"
