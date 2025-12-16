@@ -3,11 +3,11 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification, RevisionItem } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification, RevisionItem, Subtask } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, Check, ListChecks } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
@@ -16,6 +16,8 @@ import { Textarea } from '../ui/textarea';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { isAfter, isBefore, startOfDay, addDays, subDays } from 'date-fns';
+import { Separator } from '../ui/separator';
+import { Checkbox } from '../ui/checkbox';
 
 const createActivity = (user: User, action: string): Activity => {
   return {
@@ -38,6 +40,11 @@ interface RevisionState {
   currentItemText: string;
 }
 
+interface FinalReviewState {
+  isOpen: boolean;
+  task: Task | null;
+}
+
 export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
@@ -45,6 +52,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
   const { toast } = useToast();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
+  const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -91,7 +99,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     });
   }, [tasks]);
 
-
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
     e.dataTransfer.setData('taskId', taskId);
@@ -102,6 +109,102 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     setDraggingTaskId(null);
   }
   
+  const completeTaskMovement = async (task: Task, newStatus: string) => {
+    if (!firestore || !profile) return;
+    
+    // Optimistic UI update
+    setTasks(currentTasks => 
+      currentTasks.map(t => t.id === task.id ? { ...t, status: newStatus } : t)
+    );
+
+    const batch = writeBatch(firestore);
+    const taskRef = doc(firestore, 'tasks', task.id);
+    
+    let actionText = `moved task from "${task.status}" to "${newStatus}"`;
+
+    const updates: Partial<Task> = {
+      status: newStatus,
+      updatedAt: serverTimestamp() as any,
+    };
+    
+    if (task.status === 'Revisi' && newStatus === 'Doing') {
+      updates.isUnderRevision = true;
+      actionText = 'started working on revisions';
+    }
+    
+    if (newStatus !== 'Doing' && task.isUnderRevision) {
+      updates.isUnderRevision = deleteField() as any;
+    }
+
+    if (task.status === 'To Do' && newStatus !== 'To Do' && !task.actualStartDate) {
+      updates.actualStartDate = new Date().toISOString();
+    }
+    
+    if (newStatus === 'Done' && task.status !== 'Done') {
+      updates.actualCompletionDate = new Date().toISOString();
+    }
+    
+    if (newStatus !== 'Done' && task.status === 'Done') {
+       updates.actualCompletionDate = deleteField() as any;
+    }
+
+    const newActivity = createActivity(profile, actionText);
+    const updatedActivities = [...(task.activities || []), newActivity];
+    updates.activities = updatedActivities;
+    updates.lastActivity = newActivity;
+    
+    batch.update(taskRef, updates);
+
+    let notificationTitle = `Status Changed: ${task.title}`;
+    let notificationMessage = `${profile.name} changed the status of "${task.title.substring(0, 30)}..." to ${newStatus}.`;
+
+    const notifiedUserIds = new Set<string>();
+
+    task.assigneeIds.forEach(assigneeId => {
+        if (assigneeId !== profile.id) {
+            notifiedUserIds.add(assigneeId);
+        }
+    });
+    
+    if (task.createdBy.id !== profile.id) {
+        notifiedUserIds.add(task.createdBy.id);
+    }
+
+    notifiedUserIds.forEach(userId => {
+        const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+        const newNotification: Omit<Notification, 'id'> = {
+            userId,
+            title: notificationTitle,
+            message: notificationMessage,
+            taskId: task.id,
+            isRead: false,
+            createdAt: serverTimestamp() as any,
+            createdBy: newActivity.user,
+        };
+        batch.set(notifRef, newNotification);
+    });
+
+    try {
+      await batch.commit();
+      toast({
+          title: "Task Updated",
+          description: `Task moved to "${newStatus}".`
+      });
+    } catch (error) {
+      console.error("Failed to update task status:", error);
+      // Revert optimistic UI update on failure
+      setTasks(currentTasks => 
+          currentTasks.map(t => t.id === task.id ? { ...t, status: task.status } : t)
+      );
+      toast({
+          variant: "destructive",
+          title: "Update Failed",
+          description: "Could not move the task. Please try again."
+      });
+    }
+  }
+
+
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag || !firestore || !profile) return;
     const taskId = e.dataTransfer.getData('taskId');
@@ -109,8 +212,8 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
 
     if (task && task.status !== newStatus) {
       
-      const isEmployee = profile.role === 'Employee';
-      if (isEmployee && newStatus === 'Done') {
+      const isEmployeeOrPIC = profile.role === 'Employee' || profile.role === 'PIC';
+      if (isEmployeeOrPIC && newStatus === 'Done') {
         toast({
             variant: "destructive",
             title: "Action Not Allowed",
@@ -118,100 +221,18 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         });
         return;
       }
+
+      if ((profile.role === 'Manager' || profile.role === 'Super Admin') && newStatus === 'Done') {
+          setFinalReviewState({ isOpen: true, task });
+          return;
+      }
       
       if (newStatus === 'Revisi' && (task.status === 'Preview' || task.status === 'Done')) {
         setRevisionState({ isOpen: true, task, items: [], currentItemText: '' });
         return; 
       }
-
-      setTasks(currentTasks => 
-        currentTasks.map(t => t.id === taskId ? { ...t, status: newStatus } : t)
-      );
       
-      const batch = writeBatch(firestore);
-      const taskRef = doc(firestore, 'tasks', taskId);
-      
-      let actionText = `moved task from "${task.status}" to "${newStatus}"`;
-
-      const updates: Partial<Task> = {
-        status: newStatus,
-        updatedAt: serverTimestamp() as any,
-      };
-      
-      if (task.status === 'Revisi' && newStatus === 'Doing') {
-        updates.isUnderRevision = true;
-        actionText = 'started working on revisions';
-      }
-      
-      if (newStatus !== 'Doing' && task.isUnderRevision) {
-        updates.isUnderRevision = deleteField() as any;
-      }
-
-      if (task.status === 'To Do' && newStatus !== 'To Do' && !task.actualStartDate) {
-        updates.actualStartDate = new Date().toISOString();
-      }
-      
-      if (newStatus === 'Done' && task.status !== 'Done') {
-        updates.actualCompletionDate = new Date().toISOString();
-      }
-      
-      if (newStatus !== 'Done' && task.status === 'Done') {
-         updates.actualCompletionDate = deleteField() as any;
-      }
-
-      const newActivity = createActivity(profile, actionText);
-      const updatedActivities = [...(task.activities || []), newActivity];
-      updates.activities = updatedActivities;
-      updates.lastActivity = newActivity;
-      
-      batch.update(taskRef, updates);
-
-      let notificationTitle = `Status Changed: ${task.title}`;
-      let notificationMessage = `${profile.name} changed the status of "${task.title.substring(0, 30)}..." to ${newStatus}.`;
-
-      const notifiedUserIds = new Set<string>();
-
-      task.assigneeIds.forEach(assigneeId => {
-          if (assigneeId !== profile.id) {
-              notifiedUserIds.add(assigneeId);
-          }
-      });
-      
-      if (task.createdBy.id !== profile.id) {
-          notifiedUserIds.add(task.createdBy.id);
-      }
-
-      notifiedUserIds.forEach(userId => {
-          const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-          const newNotification: Omit<Notification, 'id'> = {
-              userId,
-              title: notificationTitle,
-              message: notificationMessage,
-              taskId: task.id,
-              isRead: false,
-              createdAt: serverTimestamp() as any,
-              createdBy: newActivity.user,
-          };
-          batch.set(notifRef, newNotification);
-      });
-
-      try {
-        await batch.commit();
-        toast({
-            title: "Task Updated",
-            description: `Task moved to "${newStatus}".`
-        });
-      } catch (error) {
-        console.error("Failed to update task status:", error);
-        setTasks(currentTasks => 
-            currentTasks.map(t => t.id === taskId ? { ...t, status: task.status } : t)
-        );
-        toast({
-            variant: "destructive",
-            title: "Update Failed",
-            description: "Could not move the task. Please try again."
-        });
-      }
+      await completeTaskMovement(task, newStatus);
     }
   };
   
@@ -287,7 +308,12 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         }));
     }
   };
-
+  
+  const handleConfirmFinalReview = async () => {
+    if (!finalReviewState.task) return;
+    await completeTaskMovement(finalReviewState.task, 'Done');
+    setFinalReviewState({ isOpen: false, task: null });
+  }
 
   if (areStatusesLoading) {
     return (
@@ -361,8 +387,45 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
             </DialogFooter>
         </DialogContent>
     </Dialog>
+    
+     <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Final Review</DialogTitle>
+                <DialogDescription>
+                    You are about to mark this task as "Done". Please review the sub-tasks to ensure everything is complete.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+                <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
+                <Separator />
+                <div className="space-y-3">
+                    <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                        {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
+                             finalReviewState.task.subtasks.map(subtask => (
+                                <div key={subtask.id} className="flex items-center gap-3">
+                                    <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                        {subtask.title}
+                                    </label>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
+                <Button variant="default" onClick={handleConfirmFinalReview}>
+                    <Check className="mr-2 h-4 w-4" />
+                    Confirm & Complete
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }
-
-    
