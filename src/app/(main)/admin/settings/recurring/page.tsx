@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -129,20 +128,35 @@ export default function RecurringTasksPage() {
 
   const usersQuery = useMemo(() => {
     if (!firestore || !profile) return null;
-    return query(
-      collection(firestore, 'users'),
-      where('companyId', '==', profile.companyId),
-      where('role', '==', 'Employee')
-    );
+    let q = query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
+    
+    if (profile.role === 'Manager') {
+      // For Managers, fetch only users they directly manage.
+      q = query(q, where('managerId', '==', profile.id), where('role', '==', 'Employee'));
+    } else {
+      // For Super Admin, fetch all employees.
+      q = query(q, where('role', '==', 'Employee'));
+    }
+    
+    return q;
   }, [firestore, profile]);
   const { data: users, isLoading: usersLoading } = useCollection<User>(usersQuery);
 
   const brandsQuery = useMemo(() => {
     if (!firestore || !profile) return null;
-    return query(
-      collection(firestore, 'brands'),
-      orderBy('name')
-    );
+    
+    if (profile.role === 'Manager') {
+        // If manager has no brands assigned, they can't create templates.
+        if (!profile.brandIds || profile.brandIds.length === 0) {
+            return null;
+        }
+        // Fetch only brands the manager is assigned to.
+        return query(collection(firestore, 'brands'), where('__name__', 'in', profile.brandIds), orderBy('name'));
+    }
+
+    // Super Admin sees all brands.
+    return query(collection(firestore, 'brands'), orderBy('name'));
+
   }, [firestore, profile]);
   const { data: brands, isLoading: brandsLoading } =
     useCollection<Brand>(brandsQuery);
