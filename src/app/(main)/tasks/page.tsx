@@ -1,4 +1,3 @@
-
 'use client';
 import { Header } from '@/components/layout/header';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
@@ -70,12 +69,14 @@ export default function TasksPage() {
     if (!firestore || !profile || profile.role !== 'Manager') return null;
     return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
   }, [firestore, profile]);
-  const { data: teamUsers, isLoading: isTeamUsersLoading } = useCollection<User>(usersQuery);
+  const { data: teamUsers, isLoading: isTeamUsersLoading } = useCollection<User>(teamUsersQuery);
 
   const usersQuery = React.useMemo(() => {
     if (!firestore || !activeCompanyId) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
     if (profile?.role === 'Manager') {
+      // For managers, we fetch their own team to display in the assignee filter.
+      // This is simpler than fetching all users and filtering on the client.
       q = query(q, where('managerId', '==', profile.id));
     }
     return q;
