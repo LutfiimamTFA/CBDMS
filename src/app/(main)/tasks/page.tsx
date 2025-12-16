@@ -4,12 +4,13 @@ import { Header } from '@/components/layout/header';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import { useI18n } from '@/context/i18n-provider';
 import { useSharedSession } from '@/context/shared-session-provider';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { Task, WorkflowStatus, Brand, User } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { usePermissions } from '@/context/permissions-provider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function TasksPage() {
   const { t } = useI18n();
@@ -17,10 +18,11 @@ export default function TasksPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const { permissions, isLoading: arePermsLoading } = usePermissions();
   const { session } = useSharedSession();
+  const [activeTab, setActiveTab] = useState('all');
 
   const activeCompanyId = session ? session.companyId : companyId;
 
-  // --- Data Fetching Logic ---
+  // Base query: Fetches all tasks the user is allowed to see based on their role.
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !activeCompanyId || !profile) return null;
 
@@ -28,10 +30,9 @@ export default function TasksPage() {
       return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
     }
     
-    // Managers see tasks only from their assigned brands
     if (profile.role === 'Manager') {
       if (!profile.brandIds || profile.brandIds.length === 0) {
-        return null; // Manager has no brands, so they see no tasks.
+        return null;
       }
       return query(
         collection(firestore, 'tasks'), 
@@ -40,15 +41,14 @@ export default function TasksPage() {
       );
     }
     
-    // Employees only see tasks assigned to them.
-    if (profile.role === 'Employee') {
+    if (profile.role === 'Employee' || profile.role === 'PIC') {
       return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
 
     return null;
   }, [firestore, activeCompanyId, profile]);
 
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: allVisibleTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
   const statusesQuery = React.useMemo(() => 
     firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
@@ -58,10 +58,7 @@ export default function TasksPage() {
   
   const brandsQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
-
     let q = query(collection(firestore, 'brands'), orderBy('name'));
-
-    // If Manager, only fetch the brands they are assigned to
     if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
       q = query(q, where('__name__', 'in', profile.brandIds));
     }
@@ -69,19 +66,46 @@ export default function TasksPage() {
   }, [firestore, profile]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   
+  const teamUsersQuery = React.useMemo(() => {
+    if (!firestore || !profile || profile.role !== 'Manager') return null;
+    return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+  }, [firestore, profile]);
+  const { data: teamUsers, isLoading: isTeamUsersLoading } = useCollection<User>(usersQuery);
+
   const usersQuery = React.useMemo(() => {
     if (!firestore || !activeCompanyId) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
-
     if (profile?.role === 'Manager') {
       q = query(q, where('managerId', '==', profile.id));
     }
-
     return q;
   }, [firestore, activeCompanyId, profile]);
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
 
-  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading;
+  // Client-side filtering based on the active tab
+  const filteredTasks = useMemo(() => {
+    if (!allVisibleTasks || !profile) return [];
+
+    switch (activeTab) {
+      case 'my_tasks':
+        return allVisibleTasks.filter(task => task.assigneeIds.includes(profile.id));
+      case 'delegated':
+        return allVisibleTasks.filter(task => task.createdBy.id === profile.id && !task.assigneeIds.includes(profile.id));
+      case 'team_tasks':
+        if (profile.role !== 'Manager' || !teamUsers) return [];
+        const teamMemberIds = teamUsers.map(u => u.id);
+        return allVisibleTasks.filter(task => task.assigneeIds.some(id => teamMemberIds.includes(id)));
+      case 'all':
+      default:
+        return allVisibleTasks;
+    }
+  }, [allVisibleTasks, activeTab, profile, teamUsers]);
+
+
+  const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading || (profile?.role === 'Manager' && isTeamUsersLoading);
+  
+  const canDelegate = profile?.role === 'Super Admin' || profile?.role === 'Manager';
+
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -92,12 +116,22 @@ export default function TasksPage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <TasksDataTable 
-            tasks={tasks || []}
-            statuses={statuses || []}
-            brands={brands || []}
-            users={users || []}
-          />
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 md:w-fit">
+              <TabsTrigger value="all">All Tasks</TabsTrigger>
+              <TabsTrigger value="my_tasks">My Tasks</TabsTrigger>
+              {canDelegate && <TabsTrigger value="delegated">Delegated by Me</TabsTrigger>}
+              {profile?.role === 'Manager' && <TabsTrigger value="team_tasks">My Team's Tasks</TabsTrigger>}
+            </TabsList>
+            <div className="mt-4">
+               <TasksDataTable 
+                tasks={filteredTasks || []}
+                statuses={statuses || []}
+                brands={brands || []}
+                users={users || []}
+              />
+            </div>
+          </Tabs>
         )}
       </main>
     </div>
