@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -92,6 +92,11 @@ type AIValidationState = {
   onConfirm: () => void;
 };
 
+interface FinalReviewState {
+  isOpen: boolean;
+  task: Task | null;
+}
+
 interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
@@ -146,6 +151,8 @@ export function TaskDetailsSheet({
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
+
+  const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
 
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -879,10 +886,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const allRevisionsCompleted = useMemo(() => revisionItems.length === 0 || revisionItems.every(item => item.completed), [revisionItems]);
   const canSubmit = allSubtasksCompleted && allRevisionsCompleted;
   
+  const handleFinalReviewAndComplete = async () => {
+    await handleStatusChange('Done');
+    setFinalReviewState({ isOpen: false, task: null });
+  };
+  
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
     if (isManagerOrAdmin) {
-        await handleStatusChange('Done');
+        setFinalReviewState({ isOpen: true, task: initialTask });
     } else {
         await handleStatusChange('Preview');
     }
@@ -1294,7 +1306,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     
                     {isManagerOrAdmin && initialTask.status === 'Preview' && (
                         <div className="space-y-2">
-                           <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => handleStatusChange('Done')} disabled={isSaving}>
+                           <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}>
                               <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                            </Button>
                            <Button variant="outline" className="w-full" onClick={handleRequestRevisions} disabled={isSaving}>
@@ -1649,8 +1661,60 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+        
+        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Final Review</DialogTitle>
+                    <DialogDescription>
+                        You are about to mark this task as "Done". Please review the sub-tasks and attachments to ensure everything is complete.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-6">
+                    <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
+                    <Separator />
+                    <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
+                                finalReviewState.task.subtasks.map(subtask => (
+                                    <div key={subtask.id} className="flex items-center gap-3">
+                                        <Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled />
+                                        <label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>
+                                            {subtask.title}
+                                        </label>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p>
+                            )}
+                        </div>
+                    </div>
+                    <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h4>
+                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
+                                finalReviewState.task.attachments.map(att => (
+                                    <div key={att.id} className="flex items-center gap-2 text-sm">
+                                        <span>-</span>
+                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No attachments for this item.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
+                    <Button variant="default" onClick={handleFinalReviewAndComplete}>
+                        <Check className="mr-2 h-4 w-4" />
+                        Confirm & Complete
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </>
   );
 }
-
-    

@@ -3,11 +3,11 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification, RevisionItem, Subtask } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification, RevisionItem, Subtask, Attachment } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
-import { Loader2, Plus, Check, ListChecks } from 'lucide-react';
+import { Loader2, Plus, Check, ListChecks, Paperclip } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
@@ -393,15 +393,15 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
             <DialogHeader>
                 <DialogTitle>Final Review</DialogTitle>
                 <DialogDescription>
-                    You are about to mark this task as "Done". Please review the sub-tasks to ensure everything is complete.
+                    You are about to mark this task as "Done". Please review the sub-tasks and attachments to ensure everything is complete.
                 </DialogDescription>
             </DialogHeader>
-            <div className="py-4 space-y-4">
+            <div className="py-4 space-y-6">
                 <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
                 <Separator />
                 <div className="space-y-3">
                     <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
-                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                         {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
                              finalReviewState.task.subtasks.map(subtask => (
                                 <div key={subtask.id} className="flex items-center gap-3">
@@ -413,6 +413,21 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
                             ))
                         ) : (
                             <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p>
+                        )}
+                    </div>
+                </div>
+                 <div className="space-y-3">
+                    <h4 className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h4>
+                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                        {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
+                             finalReviewState.task.attachments.map(att => (
+                                <div key={att.id} className="flex items-center gap-2 text-sm">
+                                    <span>-</span>
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-sm text-muted-foreground">No attachments for this item.</p>
                         )}
                     </div>
                 </div>
