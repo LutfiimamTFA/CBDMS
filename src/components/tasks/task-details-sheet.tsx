@@ -225,6 +225,8 @@ export function TaskDetailsSheet({
   
   const isCreator = currentUser?.id === initialTask.createdBy.id;
   const isManagerOfBrand = currentUser?.role === 'Manager' && initialTask.brandId && currentUser.brandIds?.includes(initialTask.brandId);
+  const isAssignee = !!currentUser && initialTask.assigneeIds.includes(currentUser.id);
+  const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
 
   const canEditContent = isSharedView 
     ? (permissions.canEditContent || false) 
