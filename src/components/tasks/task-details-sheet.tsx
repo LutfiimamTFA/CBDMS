@@ -247,14 +247,17 @@ export function TaskDetailsSheet({
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
   const canChangeStatus = isSharedView ? (permissions.canChangeStatus || false) : !!currentUser;
   const canAssignUsers = isSharedView ? (permissions.canAssignUsers || false) : canEditContent;
-  const canManageSubtasks = isSharedView ? (permissions.canEditContent || false) : !!currentUser;
   
-  const isAssignee = currentUser && initialTask.assigneeIds.includes(currentUser.id);
-  const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
-
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
   });
+  
+  const canManageSubtasks = useMemo(() => {
+    if (isSharedView) return permissions.canEditContent || false;
+    if (!currentUser) return false;
+    // Allow adding/editing subtasks in To Do, Doing, and Revisi states
+    return ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
+  }, [isSharedView, permissions, currentUser, form.watch('status')]);
   
   useEffect(() => {
     if (initialTask && open) {
@@ -1039,7 +1042,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   // Determine if the time tracker should be shown
-  const showTimeTracker = isAssignee && !isSharedView && initialTask.status !== 'Preview' && initialTask.status !== 'Done';
+  const showTimeTracker = isAssignee && !isSharedView && ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
 
 
   return (
