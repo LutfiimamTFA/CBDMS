@@ -39,7 +39,6 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   const brandColor = getBrandColor(task.brandId);
 
   const assignees = task.assignees || [];
-  const firstAssignee = assignees[0];
 
   return (
     <Card
@@ -92,27 +91,29 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
-            {firstAssignee && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger className="flex items-center gap-2">
-                    <Avatar className="h-7 w-7 border-2 border-background">
-                      <AvatarImage src={firstAssignee.avatarUrl} alt={firstAssignee.name} />
-                      <AvatarFallback>{firstAssignee.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    {assignees.length === 1 && (
-                      <span className="font-medium text-foreground truncate">{firstAssignee.name.split(' ')[0]}</span>
-                    )}
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {assignees.map(a => <p key={a.id}>{a.name}</p>)}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            {assignees.length > 1 && (
-                <Badge variant="secondary" className="font-normal">+{assignees.length - 1}</Badge>
-            )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger className="flex items-center -space-x-2">
+                  {assignees.slice(0, 2).map(assignee => (
+                      <Avatar key={assignee.id} className="h-7 w-7 border-2 border-background">
+                        <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
+                        <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                  ))}
+                  {assignees.length > 2 && (
+                     <Avatar className="h-7 w-7 border-2 border-background">
+                       <AvatarFallback>+{assignees.length - 2}</AvatarFallback>
+                     </Avatar>
+                  )}
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="flex flex-col gap-1 p-1">
+                    <p className="font-semibold text-xs">Assigned to:</p>
+                    {assignees.map(a => <p key={a.id} className="text-sm">{a.name}</p>)}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           <div className="flex items-center gap-3">
               {completionStatus && (
