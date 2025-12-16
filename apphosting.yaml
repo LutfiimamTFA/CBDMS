@@ -5,3 +5,9 @@ runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+# Add a rewrite rule to handle all routes by the Next.js server.
+# This is crucial for dynamic routes like /share/[linkId] to work correctly.
+rewrites:
+  - source: /_**
+    run:
+      region: us-west1 # Specify a region if needed, or use your default
