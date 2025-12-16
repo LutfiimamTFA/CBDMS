@@ -10,7 +10,7 @@ import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { useSharedSession } from '@/context/shared-session-provider';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
 import { collection, query, where, orderBy } from 'firebase/firestore';
-import { Loader2, Link as LinkIcon, Calendar } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Calendar, Building2, User as UserIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getBrandColor, priorityInfo } from '@/lib/utils';
 import { parseISO, format } from 'date-fns';
@@ -39,12 +39,28 @@ export default function SchedulePage() {
   const activeCompanyId = session ? session.companyId : companyId;
 
   const tasksQuery = useMemo(() => {
-    if (!firestore || !activeCompanyId) return null;
-    let q = query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
-    if (!session && profile?.role === 'Employee') {
-      q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    if (!firestore || !activeCompanyId || !profile) return null;
+    
+    // For Managers, filter tasks by the brands they are assigned to.
+    if (profile.role === 'Manager') {
+      if (!profile.brandIds || profile.brandIds.length === 0) {
+        return null; // Manager has no brands, so they see no tasks.
+      }
+      return query(
+        collection(firestore, 'tasks'), 
+        where('companyId', '==', activeCompanyId),
+        where('brandId', 'in', profile.brandIds)
+      );
     }
-    return q;
+
+    // For Employees, show only tasks assigned to them.
+    if (!session && profile.role === 'Employee') {
+      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+    }
+    
+    // For Super Admin and other general cases.
+    return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+
   }, [firestore, activeCompanyId, profile, session]);
   
   const brandsQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId)) : null), [firestore, activeCompanyId]);
@@ -111,20 +127,13 @@ export default function SchedulePage() {
     return (
       <PopoverContent className="w-80" side="bottom" align="start">
         <div className="space-y-4">
-            <div className='space-y-1'>
-                {brand && <Badge style={{ backgroundColor: getBrandColor(brand.id) }} className="text-white font-semibold">{brand.name}</Badge>}
+            <div className='space-y-1.5'>
+                {brand && <Badge style={{ backgroundColor: getBrandColor(brand.id) }} className="text-white font-semibold flex items-center gap-2 w-fit"><Building2 className='h-3 w-3'/>{brand.name}</Badge>}
                 <h4 className="font-bold text-base">{task.title}</h4>
-                {task.description && <p className="text-sm text-muted-foreground line-clamp-2">{task.description}</p>}
+                {task.description && <p className="text-sm text-muted-foreground line-clamp-3">{task.description}</p>}
             </div>
 
-            <div className="text-sm grid grid-cols-2 gap-x-4 gap-y-2">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>Start Date</span>
-              </div>
-              <div className="font-medium">
-                {task.startDate ? format(parseISO(task.startDate), 'MMM d, yyyy') : 'N/A'}
-              </div>
+            <div className="text-sm grid grid-cols-2 gap-x-4 gap-y-2.5">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-4 w-4" />
                 <span>Due Date</span>
@@ -146,16 +155,23 @@ export default function SchedulePage() {
             </div>
 
             {assignees.length > 0 && (
-                <div className='flex items-center gap-2 pt-2 border-t'>
-                    {assignees.slice(0, 3).map(assignee => (
-                         <Avatar key={assignee.id} className="h-7 w-7">
-                            <AvatarImage src={assignee.avatarUrl} />
-                            <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                    ))}
-                    {assignees.length > 3 && <Badge variant="secondary">+{assignees.length - 3}</Badge>}
+                <div className='pt-3 border-t'>
+                    <h5 className='text-sm font-medium mb-2'>Assigned Team</h5>
+                    <div className='flex items-center gap-2'>
+                        {assignees.map(assignee => (
+                            <Avatar key={assignee.id} className="h-8 w-8">
+                                <AvatarImage src={assignee.avatarUrl} />
+                                <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                        ))}
+                    </div>
                 </div>
             )}
+            
+            <div className='pt-3 border-t text-xs text-muted-foreground flex items-center gap-2'>
+                <UserIcon className='h-4 w-4'/>
+                <span>Created by {task.createdBy.name}</span>
+            </div>
             
             <Button asChild size="sm" className="w-full">
                 <Link href={viewDetailsPath}>
