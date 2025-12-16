@@ -83,9 +83,9 @@ service cloud.firestore {
                        (isRole('Manager') && hasPermission('Manager', 'canManageUsers') && isManagerOf(userId)) ||
                        isOwnRecord(userId);
 
-      // Super Admins can create Managers. Managers can create Employees and PICs.
+      // Super Admins can only create Managers. Managers can create Employees, PICs, and Clients.
       allow create: if (isSuperAdmin() && request.resource.data.role == 'Manager') ||
-                       (isRole('Manager') && hasPermission('Manager', 'canManageUsers') && (request.resource.data.role == 'Employee' || request.resource.data.role == 'PIC'));
+                       (isRole('Manager') && hasPermission('Manager', 'canManageUsers') && (request.resource.data.role in ['Employee', 'PIC', 'Client']));
       
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteUsers') && isManagerOf(userId));
       

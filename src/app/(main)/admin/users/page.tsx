@@ -67,7 +67,7 @@ import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/comp
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
   email: z.string().email('Invalid email address.'),
-  role: z.enum(['Super Admin', 'Manager', 'Employee', 'Client']),
+  role: z.enum(['Super Admin', 'Manager', 'PIC', 'Employee', 'Client']),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
   managerId: z.string().optional(),
   brandIds: z.array(z.string()).optional(),
@@ -76,7 +76,7 @@ const userSchema = z.object({
 const editUserSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
   email: z.string().email('Invalid email address.'),
-  role: z.enum(['Super Admin', 'Manager', 'Employee', 'Client']),
+  role: z.enum(['Super Admin', 'Manager', 'PIC', 'Employee', 'Client']),
   managerId: z.string().optional(),
   brandIds: z.array(z.string()).optional(),
 });
@@ -105,7 +105,7 @@ export default function UsersPage() {
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
     // For Managers, we fetch all managers and employees to filter on client side.
     if (currentUserProfile.role === 'Manager') {
-        q = query(q, where('role', 'in', ['Manager', 'Employee']));
+        q = query(q, where('role', 'in', ['Manager', 'Employee', 'PIC']));
     }
     return q;
   }, [firestore, currentUserProfile]);
@@ -146,8 +146,9 @@ export default function UsersPage() {
     const roleOrder: Record<User['role'], number> = {
         'Super Admin': 0,
         'Manager': 1,
-        'Employee': 2,
-        'Client': 3,
+        'PIC': 2,
+        'Employee': 3,
+        'Client': 4,
     };
 
     return [...usersToShow].sort((a, b) => {
@@ -223,7 +224,7 @@ export default function UsersPage() {
       const payload: any = { ...data, companyId: currentUserProfile.companyId };
       
       // If the creator is a Manager, automatically assign the new user to them.
-      if (currentUserProfile.role === 'Manager' && data.role === 'Employee') {
+      if (currentUserProfile.role === 'Manager' && (data.role === 'Employee' || data.role === 'PIC')) {
         payload.managerId = currentUserProfile.id;
       }
       
@@ -404,6 +405,7 @@ export default function UsersPage() {
   const roleColors: Record<User['role'], string> = {
     'Super Admin': 'bg-red-500 text-white',
     'Manager': 'bg-blue-500 text-white',
+    'PIC': 'bg-teal-500 text-white',
     'Employee': 'bg-green-500 text-white',
     'Client': 'bg-gray-500 text-white',
   }
@@ -464,10 +466,16 @@ export default function UsersPage() {
                                     <SelectValue placeholder="Select a role" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                                      {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
-                                      <SelectItem value="Employee">Employee</SelectItem>
-                                      <SelectItem value="Client">Client</SelectItem>
+                                      {currentUserProfile?.role === 'Super Admin' && (
+                                        <SelectItem value="Manager">Manager</SelectItem>
+                                      )}
+                                      {currentUserProfile?.role === 'Manager' && (
+                                        <>
+                                          <SelectItem value="PIC">PIC</SelectItem>
+                                          <SelectItem value="Employee">Employee</SelectItem>
+                                          <SelectItem value="Client">Client</SelectItem>
+                                        </>
+                                      )}
                                     </SelectContent>
                                 </Select>
                                 )}
@@ -490,7 +498,7 @@ export default function UsersPage() {
                                     )}
                                 />
                              )}
-                             {currentUserProfile?.role === 'Super Admin' && createFormRole === 'Employee' && (
+                             {currentUserProfile?.role === 'Super Admin' && (createFormRole === 'Employee' || createFormRole === 'PIC') && (
                                 <div className="space-y-2">
                                     <Label htmlFor="manager-create">Assign Manager</Label>
                                     <Controller
@@ -561,7 +569,7 @@ export default function UsersPage() {
                   const showRoleHeader = user.role !== lastRole;
                   lastRole = user.role;
                   const isCurrentUser = user.id === currentUserProfile?.id;
-                  const canEditThisUser = currentUserProfile?.role === 'Super Admin' || (currentUserProfile?.role === 'Manager' && user.role !== 'Manager' && user.role !== 'Super Admin');
+                  const canEditThisUser = currentUserProfile?.role === 'Super Admin' || (currentUserProfile?.role === 'Manager' && user.managerId === currentUserProfile.id);
                   const isEmergencyAdmin = emergencyAdminId === user.id;
 
                   const manager = users?.find(u => u.id === user.managerId);
@@ -572,7 +580,7 @@ export default function UsersPage() {
                       {showRoleHeader && (
                         <TableRow className="bg-muted/50 hover:bg-muted/50">
                           <TableCell colSpan={5} className="py-2 px-4 text-sm font-semibold text-muted-foreground">
-                            {user.role === 'Super Admin' ? 'Administrators' : user.role === 'Manager' ? 'Managers' : `${user.role}s`}
+                            {user.role === 'Super Admin' ? 'Administrators' : user.role === 'Manager' ? 'Managers' : user.role === 'PIC' ? 'PICs' : `${user.role}s`}
                           </TableCell>
                         </TableRow>
                       )}
@@ -602,7 +610,7 @@ export default function UsersPage() {
                             <div className="flex flex-wrap gap-1">
                               {managedBrands.map(brandName => <Badge key={brandName} variant="secondary">{brandName}</Badge>)}
                             </div>
-                          ) : user.role === 'Employee' && manager ? (
+                          ) : (user.role === 'Employee' || user.role === 'PIC') && manager ? (
                              <span className="text-sm text-muted-foreground">{manager.name}</span>
                           ) : null}
                         </TableCell>
@@ -697,8 +705,8 @@ export default function UsersPage() {
                                 <SelectValue placeholder="Select a role" />
                               </SelectTrigger>
                               <SelectContent>
-                                {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Super Admin">Super Admin</SelectItem>}
-                                <SelectItem value="Manager">Manager</SelectItem>
+                                {currentUserProfile?.role === 'Super Admin' && <SelectItem value="Manager">Manager</SelectItem>}
+                                <SelectItem value="PIC">PIC</SelectItem>
                                 <SelectItem value="Employee">Employee</SelectItem>
                                 <SelectItem value="Client">Client</SelectItem>
                               </SelectContent>
@@ -723,7 +731,7 @@ export default function UsersPage() {
                           )}
                       />
                   )}
-                  {editFormRole === 'Employee' && (
+                  {(editFormRole === 'Employee' || editFormRole === 'PIC') && (
                       <div className="space-y-2">
                           <Label htmlFor="manager-edit">Assign Manager</Label>
                           <Controller
