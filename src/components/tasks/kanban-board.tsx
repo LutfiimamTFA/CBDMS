@@ -215,6 +215,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
       const isEmployeeOrPIC = profile.role === 'Employee' || profile.role === 'PIC';
       const isManagerOrAdmin = profile.role === 'Manager' || profile.role === 'Super Admin';
 
+      // Block Employee/PIC from moving task to 'Done'
       if (isEmployeeOrPIC && newStatus === 'Done') {
         toast({
             variant: "destructive",
@@ -223,12 +224,24 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         });
         return;
       }
+      
+      // Block Employee/PIC from moving task to 'Revisi'
+      if (isEmployeeOrPIC && newStatus === 'Revisi') {
+        toast({
+            variant: "destructive",
+            title: "Action Not Allowed",
+            description: "Only Managers or Admins can move tasks for revision."
+        });
+        return;
+      }
 
+      // Open final review dialog for Manager/Admin moving task to 'Done'
       if (isManagerOrAdmin && newStatus === 'Done') {
           setFinalReviewState({ isOpen: true, task });
           return;
       }
       
+      // Open revision dialog for Manager/Admin moving task from Preview/Done to Revisi
       if (isManagerOrAdmin && newStatus === 'Revisi' && (task.status === 'Preview' || task.status === 'Done')) {
         setRevisionState({ isOpen: true, task, items: [], currentItemText: '' });
         return; 
@@ -446,3 +459,5 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     </>
   );
 }
+
+    
