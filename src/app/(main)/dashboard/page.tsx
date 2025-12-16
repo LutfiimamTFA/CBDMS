@@ -134,9 +134,17 @@ export default function DashboardPage() {
 
                <Alert>
                   <Archive className="h-4 w-4" />
-                  <AlertTitle>Tampilan Terfilter</AlertTitle>
+                  <AlertTitle>Papan Kanban Terfilter Otomatis</AlertTitle>
                   <AlertDescription>
-                    Papan ini secara otomatis menampilkan tugas yang relevan untuk Anda. Untuk melihat semua tugas, termasuk yang sudah lama selesai atau yang akan datang, kunjungi halaman <Button variant="link" asChild className="p-0 h-auto"><Link href="/tasks">Daftar Tugas</Link></Button>.
+                     Untuk menjaga fokus, papan ini hanya menampilkan tugas yang relevan:
+                    <ul className="list-disc pl-5 mt-2 text-xs">
+                        <li><b>Baru Selesai:</b> Menampilkan tugas di kolom 'Done' yang selesai dalam <strong>7 hari terakhir</strong>.</li>
+                        <li><b>Akan Datang:</b> Menampilkan tugas di 'To Do' dengan tenggat waktu dalam <strong>30 hari ke depan</strong>.</li>
+                        <li><b>Aktif:</b> Semua tugas yang sedang berjalan akan selalu terlihat.</li>
+                    </ul>
+                     <p className="mt-2 text-xs">
+                      Untuk melihat <strong>semua tugas</strong> (termasuk arsip lama), silakan kunjungi halaman <Button variant="link" asChild className="p-0 h-auto text-xs"><Link href="/tasks">Daftar Tugas</Link></Button>.
+                    </p>
                   </AlertDescription>
                 </Alert>
 
