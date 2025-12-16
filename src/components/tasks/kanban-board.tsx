@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -14,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from '../ui/textarea';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { isAfter, isBefore, startOfDay, addDays, subDays } from 'date-fns';
 
 const createActivity = (user: User, action: string): Activity => {
   return {
@@ -67,6 +69,28 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     if (!profile) return false;
     return true;
   }, [profile, permissions]);
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    const now = new Date();
+    const thirtyDaysFromNow = addDays(now, 30);
+    const sevenDaysAgo = subDays(startOfDay(now), 7);
+
+    return tasks.filter(task => {
+      switch (task.status) {
+        case 'Done':
+          // Show if completed within the last 7 days
+          return task.actualCompletionDate && isAfter(new Date(task.actualCompletionDate), sevenDaysAgo);
+        case 'To Do':
+          // Show if due date is within 30 days or if there's no due date
+          return !task.dueDate || isBefore(new Date(task.dueDate), thirtyDaysFromNow);
+        default:
+          // Always show active tasks
+          return true;
+      }
+    });
+  }, [tasks]);
+
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
@@ -281,7 +305,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
           <KanbanColumn
             key={status.id}
             status={status}
-            tasks={tasks.filter((task) => task.status === status.name)}
+            tasks={filteredTasks.filter((task) => task.status === status.name)}
             onDrop={handleDrop}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
@@ -340,3 +364,5 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     </>
   );
 }
+
+    
