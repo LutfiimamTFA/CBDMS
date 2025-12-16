@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -248,30 +249,24 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 createdAt: serverTimestamp(),
             });
 
-            if (status === 'Needs Approval') {
-                const usersSnapshot = await getDocs(collection(firestore, 'users'));
-                usersSnapshot.forEach(userDoc => {
-                    const userData = userDoc.data();
-                    const isManagerForBrand = userData.role === 'Manager' && data.brandId && userData.brandIds?.includes(data.brandId);
-
-                    if ((userData.role === 'Super Admin' || isManagerForBrand) && userData.companyId === profile.companyId) {
-                        const notifRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
-                        const newNotification: Omit<Notification, 'id'> = {
-                            userId: userDoc.id,
-                            title: 'Content for Approval',
-                            message: `${profile.name} submitted a new social media post for approval.`,
-                            taskId: postRef.id, // Using taskId field to link to the post
-                            isRead: false,
-                            createdAt: serverTimestamp(),
-                            createdBy: {
-                                id: user.uid,
-                                name: profile.name,
-                                avatarUrl: profile.avatarUrl || '',
-                            },
-                        };
-                        batch.set(notifRef, newNotification);
-                    }
-                });
+            // Smart notification logic
+            if (status === 'Needs Approval' && profile.managerId) {
+                const managerRef = doc(firestore, `users/${profile.managerId}`);
+                const notifRef = doc(collection(managerRef, 'notifications'));
+                const newNotification: Omit<Notification, 'id'> = {
+                    userId: profile.managerId,
+                    title: 'Content for Approval',
+                    message: `${profile.name} submitted a new social media post for approval.`,
+                    taskId: postRef.id, // Using taskId field to link to the post
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    createdBy: {
+                        id: user.uid,
+                        name: profile.name,
+                        avatarUrl: profile.avatarUrl || '',
+                    },
+                };
+                batch.set(notifRef, newNotification);
             }
             toast({ title: `Post ${status === 'Draft' ? 'Draft Saved' : 'Submitted'}!`, description: `Your post for ${data.platform} has been saved.` });
         } else if (post) {

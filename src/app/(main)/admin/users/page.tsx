@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -67,7 +68,7 @@ import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/comp
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
   email: z.string().email('Invalid email address.'),
-  role: z.enum(['Super Admin', 'Manager', 'PIC', 'Employee', 'Client']),
+  role: z.enum(['Super Admin', 'Manager', 'PIC', 'Employee' | 'Client']),
   password: z.string().min(6, 'Password must be at least 6 characters.'),
   managerId: z.string().optional(),
   brandIds: z.array(z.string()).optional(),
@@ -466,16 +467,15 @@ export default function UsersPage() {
                                     <SelectValue placeholder="Select a role" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {currentUserProfile?.role === 'Super Admin' && (
+                                      {currentUserProfile?.role === 'Super Admin' ? (
                                         <SelectItem value="Manager">Manager</SelectItem>
-                                      )}
-                                      {currentUserProfile?.role === 'Manager' && (
+                                      ) : currentUserProfile?.role === 'Manager' ? (
                                         <>
                                           <SelectItem value="PIC">PIC</SelectItem>
                                           <SelectItem value="Employee">Employee</SelectItem>
                                           <SelectItem value="Client">Client</SelectItem>
                                         </>
-                                      )}
+                                      ) : null}
                                     </SelectContent>
                                 </Select>
                                 )}
