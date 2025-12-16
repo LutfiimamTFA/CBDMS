@@ -9,24 +9,37 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // Function to check if the user has access to a specific task document in Firestore
+    function hasTaskAccess(taskId) {
+      let taskDoc = get(/databases/$(database)/documents/tasks/$(taskId));
+      // Allow if the user is the creator
+      if (taskDoc.data.createdBy.id == request.auth.uid) {
+        return true;
+      }
+      // Allow if the user is one of the assignees
+      if (request.auth.uid in taskDoc.data.assigneeIds) {
+        return true;
+      }
+      // Allow if the user is a Super Admin or a Manager of the task's brand
+      let userDoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return userDoc.data.role == 'Super Admin' || (userDoc.data.role == 'Manager' && taskDoc.data.brandId in userDoc.data.brandIds);
+    }
+
     // Avatars can be read by anyone, but only the user themselves can write.
     match /avatars/{userId} {
       allow read;
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
-
+    
     // Logos can be read by anyone, but only authenticated users can write.
     match /logos/{companyId} {
         allow read;
         allow write: if isSignedIn();
     }
 
-    // Attachments can only be written by authenticated users.
-    // We assume that the read access will be handled by the application logic
-    // which only shows task details (and thus attachment links) to authorized users.
+    // Attachments can be read or written only by users who have access to the corresponding task.
     match /attachments/{taskId}/{attachmentId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if isSignedIn() && hasTaskAccess(taskId);
     }
     
     // Social media uploads can be written by authenticated users.
@@ -34,10 +47,10 @@ service firebase.storage {
       allow read;
       allow write: if isSignedIn();
     }
-    
-    // Deny all other writes by default for security.
+
+    // Deny all other reads and writes by default for security.
     match /{allPaths=**} {
-      allow write: if false;
+      allow read, write: if false;
     }
   }
 }
