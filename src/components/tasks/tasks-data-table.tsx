@@ -57,6 +57,7 @@ import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
 import { useSharedSession } from '@/context/shared-session-provider';
+import { useRouter } from 'next/navigation';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -87,6 +88,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
   const { profile } = useUserProfile();
   const { permissions, isLoading: arePermsLoading } = usePermissions();
   const { session } = useSharedSession();
+  const router = useRouter();
   
   const [data, setData] = React.useState<Task[]>(tasks);
   React.useEffect(() => {
@@ -298,7 +300,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                     </Tooltip>
                 </TooltipProvider>
             )}
-            <Link href={session ? `/share/${session.linkId}/${task.id}` : `/tasks/${task.id}`} className="font-medium cursor-pointer hover:underline truncate">{task.title}</Link>
+            <span className="font-medium truncate">{task.title}</span>
             {hasDescription && (
                 <TooltipProvider>
                     <Tooltip>
@@ -471,7 +473,9 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <Link href={`/tasks/${task.id}`}><DropdownMenuItem onSelect={(e) => e.preventDefault()}>View details</DropdownMenuItem></Link>
+              <DropdownMenuItem onSelect={() => router.push(`/tasks/${task.id}`)}>
+                View details
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setHistoryTask(task)}>
                   <History className="mr-2 h-4 w-4" />
                   View History
@@ -619,7 +623,12 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                   <TableRow
                     key={row.id}
                     data-state={row.getIsSelected() && 'selected'}
-                    className="group"
+                    className="group cursor-pointer"
+                    onClick={() => {
+                        const task = row.original;
+                        const path = session ? `/share/${session.linkId}/${task.id}` : `/tasks/${task.id}`;
+                        router.push(path);
+                    }}
                   >
                     {row.getVisibleCells().map((cell) => (
                       <TableCell key={cell.id}>
@@ -760,3 +769,5 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     </>
   );
 }
+
+    
