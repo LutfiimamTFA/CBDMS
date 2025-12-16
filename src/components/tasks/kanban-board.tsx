@@ -213,6 +213,8 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     if (task && task.status !== newStatus) {
       
       const isEmployeeOrPIC = profile.role === 'Employee' || profile.role === 'PIC';
+      const isManagerOrAdmin = profile.role === 'Manager' || profile.role === 'Super Admin';
+
       if (isEmployeeOrPIC && newStatus === 'Done') {
         toast({
             variant: "destructive",
@@ -222,12 +224,12 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
         return;
       }
 
-      if ((profile.role === 'Manager' || profile.role === 'Super Admin') && newStatus === 'Done') {
+      if (isManagerOrAdmin && newStatus === 'Done') {
           setFinalReviewState({ isOpen: true, task });
           return;
       }
       
-      if (newStatus === 'Revisi' && (task.status === 'Preview' || task.status === 'Done')) {
+      if (isManagerOrAdmin && newStatus === 'Revisi' && (task.status === 'Preview' || task.status === 'Done')) {
         setRevisionState({ isOpen: true, task, items: [], currentItemText: '' });
         return; 
       }
