@@ -8,6 +8,6 @@ runConfig:
 # Add a rewrite rule to handle all routes by the Next.js server.
 # This is crucial for dynamic routes like /share/[linkId] to work correctly.
 rewrites:
-  - source: /_**
+  - source: /**
     run:
       region: us-west1 # Specify a region if needed, or use your default
