@@ -257,9 +257,12 @@ export function TaskDetailsSheet({
   const canManageSubtasks = useMemo(() => {
     if (isSharedView) return permissions.canEditContent || false;
     if (!currentUser) return false;
-    // Allow adding/editing subtasks in To Do, Doing, and Revisi states
-    return ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
-  }, [isSharedView, permissions, currentUser, form.watch('status')]);
+    
+    const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
+    
+    // An assignee can always manage, or a manager/admin can manage in the right status
+    return isAssignee || (isManagerOrAdmin && isAllowedStatus);
+  }, [isSharedView, permissions, currentUser, isAssignee, isManagerOrAdmin, form.watch('status')]);
   
   useEffect(() => {
     if (initialTask && open) {
@@ -1300,7 +1303,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {(isAssignee || isCreator) && !isSharedView && initialTask.status !== 'Done' && initialTask.status !== 'Preview' &&(
+                    {(isAssignee || isCreator) && !isSharedView && initialTask.status === 'Doing' && (
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -1372,7 +1375,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
                                <FormField control={form.control} name="status" render={({ field }) => (
-                                <Select onValueChange={(v) => handleStatusChange(v)} value={field.value} disabled={!canChangeStatus}>
+                                <Select onValueChange={(v) => handleStatusChange(v)} value={field.value} disabled={true}>
                                     <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
                                     <SelectContent>
                                     {allStatuses?.map(s => (
@@ -1571,8 +1574,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={aiValidation.onConfirm}>Yes, set as Urgent</AlertDialogAction>
+                <AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => {
+                  aiValidation.onConfirm();
+                  setAiValidation(prev => ({ ...prev, isOpen: false }));
+                }}>Yes, set as Urgent</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
