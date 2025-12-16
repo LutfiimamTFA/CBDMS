@@ -1,4 +1,3 @@
-
 'use client';
 import { useMemo } from 'react';
 import { useFirebase } from '@/firebase/provider';
@@ -11,7 +10,7 @@ interface UserProfile {
   id: string;
   name: string;
   email: string;
-  role: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
+  role: 'Super Admin' | 'Manager' | 'PIC' | 'Employee' | 'Client';
   companyId: string;
   avatarUrl?: string;
   createdAt: string;
