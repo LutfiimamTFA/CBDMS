@@ -29,7 +29,7 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, updatePassword, verifyBeforeUpdateEmail } from 'firebase/auth';
+import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail } from 'firebase/auth';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -95,7 +95,7 @@ export default function SettingsPage() {
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user || !storage || !firestore) return;
+    if (!file || !user || !storage || !firestore || !auth?.currentUser) return;
 
     setIsUploadingPhoto(true);
     try {
@@ -103,13 +103,13 @@ export default function SettingsPage() {
       await uploadBytes(storageRef, file);
       const photoURL = await getDownloadURL(storageRef);
 
+      // CRITICAL STEP: Update the user's profile in Firebase Authentication
+      await updateProfile(auth.currentUser, { photoURL });
+      
+      // Then, update the profile URL in the Firestore document
       const userDocRef = doc(firestore, 'users', user.uid);
       await updateDoc(userDocRef, { avatarUrl: photoURL });
       
-      if (auth?.currentUser) {
-        await updateProfile(auth.currentUser, { photoURL });
-      }
-
       toast({
         title: 'Photo Updated',
         description: 'Your new profile picture has been saved.',
@@ -122,20 +122,21 @@ export default function SettingsPage() {
         description: 'Could not upload your new photo. Please try again.',
       });
     } finally {
+      // ALWAYS ensure the loading state is turned off
       setIsUploadingPhoto(false);
     }
   };
 
   const onProfileSubmit = async (data: ProfileFormValues) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore || !auth?.currentUser) return;
     setIsSavingProfile(true);
     try {
+      // Update Firebase Auth profile
+      await updateProfile(auth.currentUser, { displayName: data.name });
+      
+      // Update Firestore document
       const userDocRef = doc(firestore, 'users', user.uid);
       await updateDoc(userDocRef, { name: data.name });
-
-      if (auth?.currentUser) {
-        await updateProfile(auth.currentUser, { displayName: data.name });
-      }
 
       toast({
         title: 'Profile Updated',
