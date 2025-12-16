@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 import type { jsPDF } from 'jspdf';
@@ -7,7 +8,7 @@ export type User = {
   name: string;
   avatarUrl: string;
   email: string;
-  role: 'Super Admin' | 'Manager' | 'Employee' | 'Client';
+  role: 'Super Admin' | 'Manager' | 'PIC' | 'Employee' | 'Client';
   createdAt?: string;
   companyId: string;
   managerId?: string;
@@ -263,7 +264,7 @@ export type NavigationItem = {
   path: string;
   icon: string;
   order: number;
-  roles: ('Super Admin' | 'Manager' | 'Employee' | 'Client')[];
+  roles: ('Super Admin' | 'Manager' | 'PIC' | 'Employee' | 'Client')[];
   parentId: string | null;
 }
 

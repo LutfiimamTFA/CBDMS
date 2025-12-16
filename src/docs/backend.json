@@ -28,7 +28,7 @@
         "role": {
             "type": "string",
             "description": "The role of the user, determining their access level.",
-            "enum": ["Super Admin", "Manager", "Employee", "Client"]
+            "enum": ["Super Admin", "Manager", "PIC", "Employee", "Client"]
         },
         "companyId": {
             "type": "string",

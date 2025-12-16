@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       role,
     };
     
-    if (role === 'Employee' && managerId) {
+    if ((role === 'Employee' || role === 'PIC') && managerId) {
       userDataToUpdate.managerId = managerId;
     } else {
       userDataToUpdate.managerId = null; 

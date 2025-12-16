@@ -49,7 +49,7 @@ export async function POST(req: Request) {
       createdAt: new Date().toISOString()
     };
 
-    if (role === 'Employee' && managerId) {
+    if ((role === 'Employee' || role === 'PIC') && managerId) {
       userData.managerId = managerId;
     }
 
