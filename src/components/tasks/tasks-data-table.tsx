@@ -129,20 +129,12 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         return Circle;
     };
 
-    if (profile?.role === 'Employee') {
-        return (statuses || []).filter(s => s.name !== 'Done').map(s => ({
-            value: s.name,
-            label: s.name,
-            icon: getIcon(s.name),
-        }));
-    }
-
     return (statuses || []).map(s => ({
         value: s.name,
         label: s.name,
         icon: getIcon(s.name),
     }));
-  }, [statuses, profile]);
+  }, [statuses]);
 
   const priorityOptions = Object.values(priorityInfo).map(p => ({
       value: p.value,
@@ -769,5 +761,3 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     </>
   );
 }
-
-    
