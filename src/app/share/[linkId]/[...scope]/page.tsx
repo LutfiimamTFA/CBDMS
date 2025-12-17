@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { useParams, notFound } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { useSharedSession } from '@/context/shared-session-provider';
 import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,8 @@ import { SharedDashboardView } from '@/components/share/shared-dashboard-view';
 import { SharedTasksView } from '@/components/share/shared-tasks-view';
 import { SharedCalendarView } from '@/components/share/shared-calendar-view';
 import { SharedReportsView } from '@/components/share/shared-reports-view';
+import { ShareSidebar } from '@/components/share/share-sidebar';
+import { Sidebar, SidebarInset } from '@/components/ui/sidebar';
 
 const AccessDeniedComponent = () => (
     <div className="flex h-full items-center justify-center p-8">
@@ -61,9 +63,9 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
 };
 
 export default function ShareScopePage() {
-  const { session: sharedLink, isLoading: isLinkLoading, error: linkError } = useSharedSession();
+  const { session, isLoading, error } = useSharedSession();
   
-  if (isLinkLoading) {
+  if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -71,12 +73,12 @@ export default function ShareScopePage() {
     );
   }
 
-  if (linkError || !sharedLink) {
+  if (error || !session) {
     return <LinkNotFoundComponent />;
   }
 
   // Determine which page to render based on the snapshot
-  const currentRoute = sharedLink.viewConfig?.currentRoute || '/dashboard';
+  const currentRoute = session.viewConfig?.currentRoute || '/dashboard';
   const PageComponent = pageComponents[currentRoute];
 
   if (!PageComponent) {
@@ -86,13 +88,20 @@ export default function ShareScopePage() {
   
   // All data and view state is passed down from the sharedLink document snapshot.
   const viewProps = {
-    permissions: sharedLink.permissions,
-    tasks: sharedLink.tasks || [],
-    users: sharedLink.users || [],
-    brands: sharedLink.brands || [],
-    statuses: sharedLink.statuses || [],
-    viewConfig: sharedLink.viewConfig, // Pass the entire view config
+    permissions: session.permissions,
+    tasks: session.tasks || [],
+    users: session.users || [],
+    brands: session.brands || [],
+    statuses: session.statuses || [],
+    viewConfig: session.viewConfig, // Pass the entire view config
   };
 
-  return <PageComponent {...viewProps} />;
+  return (
+    <div className='flex h-svh'>
+        <ShareSidebar />
+        <main className='flex-1'>
+            <PageComponent {...viewProps} />
+        </main>
+    </div>
+  );
 }
