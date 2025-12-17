@@ -8,13 +8,14 @@ import type { Task, SharedLink, WorkflowStatus } from '@/lib/types';
 interface SharedDashboardViewProps {
   tasks: Task[];
   permissions: SharedLink['permissions'];
+  viewConfig?: SharedLink['viewConfig'];
 }
 
-export function SharedDashboardView({ tasks, permissions }: SharedDashboardViewProps) {
+export function SharedDashboardView({ tasks, permissions, viewConfig }: SharedDashboardViewProps) {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Dashboard" isPublicView={true} />
+      <Header title="Shared Dashboard" isPublicView={true} />
       <main className="flex-1 overflow-hidden p-4 md:p-6">
         <KanbanBoard tasks={tasks || []} permissions={permissions} />
       </main>

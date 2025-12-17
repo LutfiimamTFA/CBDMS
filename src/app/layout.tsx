@@ -9,6 +9,7 @@ import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
 import { SharedSessionProvider } from '@/context/shared-session-provider';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 export default function RootLayout({
   children,
@@ -51,11 +52,13 @@ export default function RootLayout({
               enableSystem
               disableTransitionOnChange
             >
-              <FirebaseClientProvider>
-                <SharedSessionProvider>
-                    {children}
-                </SharedSessionProvider>
-              </FirebaseClientProvider>
+              <TooltipProvider>
+                <FirebaseClientProvider>
+                  <SharedSessionProvider>
+                      {children}
+                  </SharedSessionProvider>
+                </FirebaseClientProvider>
+              </TooltipProvider>
               <Toaster />
             </ThemeProvider>
         ) : (

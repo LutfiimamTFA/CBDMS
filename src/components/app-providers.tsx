@@ -7,7 +7,7 @@ import { I18nProvider } from '@/context/i18n-provider';
 import { FirebaseClientProvider } from '@/firebase';
 import { PermissionsProvider } from '@/context/permissions-provider';
 import { CompanyProvider } from '@/context/company-provider';
-import { SharedSessionProvider } from '@/context/shared-session-provider';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -17,18 +17,18 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      <I18nProvider>
-        <FirebaseClientProvider>
-          <SharedSessionProvider>
-            <CompanyProvider>
-              <PermissionsProvider>
-                {children}
-              </PermissionsProvider>
-            </CompanyProvider>
-          </SharedSessionProvider>
-        </FirebaseClientProvider>
-        <Toaster />
-      </I18nProvider>
+      <TooltipProvider>
+        <I18nProvider>
+          <FirebaseClientProvider>
+              <CompanyProvider>
+                <PermissionsProvider>
+                  {children}
+                </PermissionsProvider>
+              </CompanyProvider>
+          </FirebaseClientProvider>
+          <Toaster />
+        </I18nProvider>
+      </TooltipProvider>
     </ThemeProvider>
   );
 }

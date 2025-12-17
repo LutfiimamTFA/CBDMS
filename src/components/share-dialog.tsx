@@ -19,9 +19,9 @@ import { Switch } from '@/components/ui/switch';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useUserProfile, useCollection, useDoc } from '@/firebase';
+import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
-import type { SharedLink, Brand, User, NavigationItem, Task, WorkflowStatus } from '@/lib/types';
+import type { SharedLink, Brand, User, NavigationItem, Task, WorkflowStatus, Company } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -29,20 +29,8 @@ import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { defaultNavItems } from '@/lib/navigation-items';
-import * as lucideIcons from 'lucide-react';
-
-const Icon = ({
-  name,
-  ...props
-}: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
-  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
-  if (!LucideIconComponent) {
-    return <lucideIcons.HelpCircle {...props} />;
-  }
-  return <LucideIconComponent {...props} />;
-};
+import { usePathname } from 'next/navigation';
+import { useCompany } from '@/context/company-provider';
 
 const defaultPermissions = {
   canViewDetails: true,
@@ -71,10 +59,11 @@ export function ShareDialog() {
   const [permissions, setPermissions] = useState(defaultPermissions);
   const [historyLink, setHistoryLink] = useState<SharedLink | null>(null);
 
-
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
+  const { company, isLoading: isCompanyLoading } = useCompany();
   const { toast } = useToast();
+  const pathname = usePathname();
   
   const linksQuery = useMemo(() => {
     if (!firestore || !profile?.companyId) return null;
@@ -93,9 +82,6 @@ export function ShareDialog() {
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
   const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
   const { data: allNavItems } = useCollection<NavigationItem>(navItemsQuery);
-  const companyQuery = useMemo(() => (firestore && profile?.companyId) ? doc(firestore, 'companies', profile.companyId) : null, [firestore, profile?.companyId]);
-  const { data: company } = useDoc<any>(companyQuery);
-
 
 
   useEffect(() => {
@@ -162,7 +148,6 @@ export function ShareDialog() {
     return combinedDate.toISOString();
   };
 
-
   const handleCreateOrUpdateLink = async () => {
     if (!firestore || !profile || !allNavItems || !allTasks || !allUsers || !allBrands || !allStatuses || !company) {
         toast({ variant: 'destructive', title: 'Error', description: 'Core data not loaded. Please try again.' });
@@ -171,20 +156,29 @@ export function ShareDialog() {
     setIsLoading(true);
 
     const isCreating = !activeLink;
-    const allowedNavItemIds = allNavItems.filter(item => item.roles.includes(profile.role)).map(item => item.id);
+    
+    const relevantNavItems = allNavItems.filter(item => item.roles.includes(profile.role));
 
+    // Capture the current view state
+    const viewConfig = {
+        currentRoute: pathname,
+        // In a real app, you would get this from a zustand store, redux, or URL params
+        filters: {}, 
+        activeTab: 'all',
+    };
+    
     const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
         name: linkName,
-        allowedNavItems: allowedNavItemIds,
         permissions,
         companyId: profile.companyId,
         createdBy: profile.id,
-        // Snapshot data
+        viewConfig,
+        // Snapshot all necessary data at creation time
         tasks: allTasks,
         users: allUsers,
         brands: allBrands,
         statuses: allStatuses,
-        navItems: allNavItems,
+        navItems: relevantNavItems,
         company: company,
     };
 
@@ -250,20 +244,16 @@ export function ShareDialog() {
   };
   
   const shareUrl = useMemo(() => {
-    if (typeof window === 'undefined') return ''; // Return empty string on server
-    const baseUrl = window.location.origin;
-    
-    if (!activeLink) return baseUrl;
-    return `${baseUrl}/share/${activeLink.id}`;
+    if (typeof window === 'undefined' || !activeLink) return '';
+    return `${window.location.origin}/share/${activeLink.id}`;
   }, [activeLink]);
-
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(shareUrl);
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || !allTasks || !allUsers || !allBrands || !allStatuses || !allNavItems || !company;
+  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isCompanyLoading || !allTasks || !allUsers || !allBrands || !allStatuses || !allNavItems;
   
   if (profile?.role === 'Client') {
     return null;
@@ -292,7 +282,7 @@ export function ShareDialog() {
           <DialogHeader className="p-6 pb-0">
             <DialogTitle>Share View</DialogTitle>
             <DialogDescription>
-              Generate a secure, permission-based link to share a live view of your workspace.
+              Generate a secure, permission-based link to share a snapshot of your current workspace view.
             </DialogDescription>
           </DialogHeader>
           
@@ -336,8 +326,11 @@ export function ShareDialog() {
                       
                       <Card>
                         <CardHeader>
-                          <h3 className="font-semibold">Shared Experience</h3>
-                          <span className="text-sm text-muted-foreground">The generated link will share pages visible to the <Badge variant="outline">{profile?.role}</Badge> role.</span>
+                          <h3 className="font-semibold">Shared Context</h3>
+                          <p className="text-sm text-muted-foreground">
+                            This link will create a snapshot of your current view: <Badge variant="outline">{pathname}</Badge>.
+                            Any active filters or tabs on this page will also be included in the shared view.
+                          </p>
                         </CardHeader>
                       </Card>
 
@@ -348,7 +341,7 @@ export function ShareDialog() {
                         </CardHeader>
                         <CardContent className='space-y-5'>
                           <PermissionSwitch id="perm-view" label="View Full Task Details" description="Allows viewers to open tasks and see all fields." checked={permissions.canViewDetails} onCheckedChange={(val) => handlePermissionChange('canViewDetails', val)} />
-                          <PermissionSwitch id="perm-comment" label="Comment on Tasks" description="Allows viewers to post comments and mention users." checked={permissions.canComment} onCheckedChange={(val) => handlePermissionChange('canComment', val)} />
+                          <PermissionSwitch id="perm-comment" label="Comment on Tasks" description="Allows viewers to post comments." checked={permissions.canComment} onCheckedChange={(val) => handlePermissionChange('canComment', val)} />
                           <PermissionSwitch id="perm-status" label="Change Task Status" description="Allows viewers to drag-and-drop tasks between columns." checked={permissions.canChangeStatus} onCheckedChange={(val) => handlePermissionChange('canChangeStatus', val)} />
                           <PermissionSwitch id="perm-edit" label="Edit Task Content" description="Allows viewers to change title, description, dates, etc." checked={permissions.canEditContent} onCheckedChange={(val) => handlePermissionChange('canEditContent', val)} />
                           <PermissionSwitch id="perm-assign" label="Assign/Unassign Users" description="Allows viewers to change who is assigned to a task." checked={permissions.canAssignUsers} onCheckedChange={(val) => handlePermissionChange('canAssignUsers', val)} />
@@ -401,7 +394,7 @@ export function ShareDialog() {
               </div>
               <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything}>
                   {isLoadingAnything && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                  {activeLink ? 'Update Link' : 'Create Link'}
+                  {activeLink ? 'Update Link' : 'Create & Snapshot Link'}
               </Button>
           </DialogFooter>
         </DialogContent>
@@ -427,14 +420,9 @@ export function ShareDialog() {
                 <span className="font-medium">{historyLink?.updatedAt ? format(historyLink.updatedAt.toDate(), 'PP, p') : 'Never'}</span>
              </div>
               <Separator />
-              <div>
-                <h4 className="font-medium mb-2">Permitted Navigation</h4>
-                <div className="flex flex-wrap gap-2">
-                    {(historyLink?.allowedNavItems || []).map(navId => {
-                        const navItem = allNavItems?.find(item => item.id === navId);
-                        return <Badge key={navId} variant="secondary">{navItem?.label || navId}</Badge>
-                    })}
-                </div>
+               <div>
+                <h4 className="font-medium mb-2">View Context</h4>
+                <Badge variant="secondary">{historyLink?.viewConfig?.currentRoute || 'N/A'}</Badge>
               </div>
                <div>
                 <h4 className="font-medium mb-2">Enabled Permissions</h4>

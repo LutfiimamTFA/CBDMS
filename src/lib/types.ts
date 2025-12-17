@@ -1,7 +1,7 @@
 
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
-import type { jsPDF } from 'jspdf';
 
 export type User = {
   id: string;
@@ -131,7 +131,6 @@ export type SharedLink = {
   id: string;
   name: string;
   companyId: string;
-  allowedNavItems: string[];
   password?: string;
   expiresAt?: string;
   permissions: {
@@ -140,6 +139,12 @@ export type SharedLink = {
     canChangeStatus: boolean;
     canEditContent: boolean;
     canAssignUsers: boolean;
+  };
+  // UI State Snapshot
+  viewConfig?: {
+    currentRoute: string; // e.g., '/dashboard', '/tasks'
+    filters?: any;
+    activeTab?: string;
   };
   createdBy: string;
   createdAt: any;

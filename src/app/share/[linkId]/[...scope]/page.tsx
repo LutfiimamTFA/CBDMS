@@ -44,7 +44,7 @@ const LinkNotFoundComponent = () => (
         <CardContent>
             <p className="text-muted-foreground">The share link you are trying to access is invalid, has expired, or has been disabled.</p>
             <Button variant="link" asChild className='mt-4'>
-                <a href="/">Return to Homepage</a>
+                <a href="/login">Return to Login</a>
             </Button>
         </CardContent>
       </Card>
@@ -52,26 +52,16 @@ const LinkNotFoundComponent = () => (
 );
 
 const pageComponents: { [key: string]: React.ComponentType<any> } = {
-  dashboard: SharedDashboardView,
-  tasks: SharedTasksView,
-  calendar: SharedCalendarView,
-  reports: SharedReportsView,
-};
-
-const navIdToScope: { [key: string]: string } = {
-  nav_task_board: 'dashboard',
-  nav_list: 'tasks',
-  nav_calendar: 'calendar',
-  nav_performance_analysis: 'reports',
+  '/dashboard': SharedDashboardView,
+  '/tasks': SharedTasksView,
+  '/calendar': SharedCalendarView,
+  '/reports': SharedReportsView,
+  '/admin/users': SharedTasksView, // Fallback to tasks view for now
+  '/my-work': SharedTasksView, // Fallback to tasks view
 };
 
 export default function ShareScopePage() {
-  const params = useParams();
   const { session: sharedLink, isLoading: isLinkLoading, error: linkError } = useSharedSession();
-  
-  const scope = params.scope as string[] | undefined;
-  // Safely determine the current scope, defaulting to 'dashboard'
-  const currentScope = (scope && scope.length > 0) ? scope[0] : 'dashboard';
   
   if (isLinkLoading) {
     return (
@@ -85,27 +75,23 @@ export default function ShareScopePage() {
     return <LinkNotFoundComponent />;
   }
 
-  const isScopeAllowed = sharedLink.allowedNavItems.some(navId => navIdToScope[navId] === currentScope);
-
-  if (!isScopeAllowed) {
-    return <AccessDeniedComponent />;
-  }
-
-  const PageComponent = pageComponents[currentScope];
+  // Determine which page to render based on the snapshot
+  const currentRoute = sharedLink.viewConfig?.currentRoute || '/dashboard';
+  const PageComponent = pageComponents[currentRoute];
 
   if (!PageComponent) {
-    notFound();
-    return null;
+    // If the route in the snapshot is not a shareable page, show access denied.
+    return <AccessDeniedComponent />;
   }
   
-  // All data is passed down from the sharedLink document snapshot.
-  // The components are now "dumb" and only render what they are given.
+  // All data and view state is passed down from the sharedLink document snapshot.
   const viewProps = {
     permissions: sharedLink.permissions,
     tasks: sharedLink.tasks || [],
     users: sharedLink.users || [],
     brands: sharedLink.brands || [],
     statuses: sharedLink.statuses || [],
+    viewConfig: sharedLink.viewConfig, // Pass the entire view config
   };
 
   return <PageComponent {...viewProps} />;

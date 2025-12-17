@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -80,9 +81,10 @@ interface TasksDataTableProps {
     brands: Brand[];
     users: User[];
     permissions?: SharedLink['permissions'] | null;
+    viewConfig?: SharedLink['viewConfig'];
 }
 
-export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null }: TasksDataTableProps) {
+export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null, viewConfig }: TasksDataTableProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   
@@ -106,7 +108,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       desc: true,
     },
   ]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(viewConfig?.filters || []);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
     lastActivity: false,
   });
@@ -446,7 +448,9 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       cell: ({ row }) => {
         const task = row.original;
         
-        if (sharedPermissions) return null; // No actions in share mode
+        const canPerformActions = !sharedPermissions;
+
+        if (!canPerformActions) return null;
 
         return (
           <DropdownMenu>
@@ -517,6 +521,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   });
 
   const isFiltered = table.getState().columnFilters.length > 0;
+  const isShareView = !!sharedPermissions;
 
   return (
     <>
@@ -564,7 +569,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
           </div>
           <div className="flex items-center gap-2">
               <DataTableViewOptions table={table}/>
-            {canCreateTasks && (
+            {canCreateTasks && !isShareView && (
               <AddTaskDialog>
                 <Button size="sm" className="h-8">
                   <Plus className="mr-2 h-4 w-4" />
@@ -603,7 +608,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                     className="group cursor-pointer"
                     onClick={() => {
                         const task = row.original;
-                        const path = sharedPermissions ? `/share/${location.pathname.split('/')[2]}/tasks/${task.id}` : `/tasks/${task.id}`;
+                        const path = isShareView ? `/share/${location.pathname.split('/')[2]}/tasks/${task.id}` : `/tasks/${task.id}`;
                         router.push(path);
                     }}
                   >

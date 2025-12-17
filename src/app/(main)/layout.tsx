@@ -3,7 +3,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter, useParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   SidebarProvider,
   Sidebar,
@@ -27,7 +27,6 @@ import {
   User,
   Icon as LucideIcon,
   LogOut,
-  Ban,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -37,10 +36,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
-import { useSharedSession } from '@/context/shared-session-provider';
 import { getIdTokenResult } from 'firebase/auth';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 
 
 const Icon = ({
@@ -60,26 +57,21 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const params = useParams();
   const router = useRouter();
   const { t } = useI18n();
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
-  const { session, isLoading: isSessionLoading } = useSharedSession();
-  const firestore = useFirestore();
   const auth = useAuth();
   
-  const isSharedView = !!params.linkId;
-
-  // This effect handles initial authentication and redirection.
+  // This effect handles initial authentication and redirection for the main app.
   useEffect(() => {
-    if (isUserLoading || isSessionLoading) return;
+    if (isUserLoading) return;
     
-    if (!isSharedView && !user) {
+    if (!user) {
       router.replace('/login');
       return;
     }
   
-    if (!isSharedView && auth?.currentUser) {
+    if (auth?.currentUser) {
       getIdTokenResult(auth.currentUser, true)
         .then((idTokenResult) => {
           if (idTokenResult.claims.mustChangePassword) {
@@ -93,7 +85,7 @@ export default function MainLayout({
         });
     }
 
-  }, [user, isUserLoading, auth, router, isSharedView, isSessionLoading]);
+  }, [user, isUserLoading, auth, router]);
 
 
   const navItemsCollectionRef = useMemo(
@@ -147,12 +139,9 @@ export default function MainLayout({
   const currentRole = profile?.role;
 
   const filteredNavItems = useMemo(() => {
-    if (isSharedView && session) {
-        return allNavItems.filter(item => session.allowedNavItems.includes(item.id));
-    }
     if (!currentRole || allNavItems.length === 0) return [];
     return allNavItems.filter(item => item.roles.includes(currentRole));
-  }, [currentRole, allNavItems, session, isSharedView]);
+  }, [currentRole, allNavItems]);
 
 
   const renderNavItems = useCallback(
@@ -169,7 +158,7 @@ export default function MainLayout({
         .sort((a, b) => a.order - b.order)
         .map((item) => {
           const children = childMap.get(item.id)?.filter(child => filteredNavItems.some(i => i.id === child.id)) || [];
-          const path = isSharedView && session ? `/share/${session.id}${item.path}` : item.path;
+          const path = item.path;
           const isActive = pathname === path || (path.length > 1 && pathname.startsWith(path));
 
           if (children.length > 0) {
@@ -218,12 +207,12 @@ export default function MainLayout({
           );
         });
     },
-    [filteredNavItems, childMap, pathname, openSections, session, t, isSharedView]
+    [filteredNavItems, childMap, pathname, openSections, t]
   );
 
-  const isLoading = isUserLoading || isNavItemsLoading || isSessionLoading;
+  const isLoading = isUserLoading || isNavItemsLoading;
 
-  if (isLoading || (!isSharedView && !user)) {
+  if (isLoading || !user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -232,42 +221,28 @@ export default function MainLayout({
   }
 
   return (
-    <SidebarProvider isSharedView={isSharedView}>
-      <Sidebar collapsible={isSharedView ? 'offcanvas' : 'icon'}>
+    <SidebarProvider>
+      <Sidebar>
         <SidebarHeader>
           <Logo />
-           {isSharedView && session && (
-              <div className="flex flex-col gap-2 items-start">
-                  <Badge variant="outline">Preview Mode</Badge>
-                  <p className="text-xs text-muted-foreground p-2 bg-secondary rounded-md">
-                      You are viewing a shared link named <span className="font-semibold text-foreground">"{session.name}"</span>.
-                  </p>
-              </div>
-            )}
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>{renderNavItems(filteredNavItems)}</SidebarMenu>
         </SidebarContent>
          <SidebarFooter>
-            {isSharedView ? (
-                 <Button variant="ghost" onClick={() => window.location.href = '/'}>
-                    <LogOut className="mr-2 h-4 w-4" /> Exit Preview
-                 </Button>
-            ) : (
-                <SidebarMenu>
-                <SidebarMenuItem>
-                    <Link href="/settings">
-                    <SidebarMenuButton
-                        isActive={pathname === '/settings'}
-                        tooltip={t('nav.profile')}
-                    >
-                        <User />
-                        <span>{t('nav.profile')}</span>
-                    </SidebarMenuButton>
-                    </Link>
-                </SidebarMenuItem>
-                </SidebarMenu>
-            )}
+            <SidebarMenu>
+            <SidebarMenuItem>
+                <Link href="/settings">
+                <SidebarMenuButton
+                    isActive={pathname === '/settings'}
+                    tooltip={t('nav.profile')}
+                >
+                    <User />
+                    <span>{t('nav.profile')}</span>
+                </SidebarMenuButton>
+                </Link>
+            </SidebarMenuItem>
+            </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>{children}</SidebarInset>

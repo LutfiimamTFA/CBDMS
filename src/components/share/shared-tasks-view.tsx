@@ -11,10 +11,11 @@ interface SharedTasksViewProps {
   brands: Brand[];
   users: User[];
   permissions: SharedLink['permissions'];
+  viewConfig?: SharedLink['viewConfig'];
 }
 
-export function SharedTasksView({ tasks, statuses, brands, users, permissions }: SharedTasksViewProps) {
-  const title = "Tasks";
+export function SharedTasksView({ tasks, statuses, brands, users, permissions, viewConfig }: SharedTasksViewProps) {
+  const title = "Shared Tasks";
   
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -26,6 +27,7 @@ export function SharedTasksView({ tasks, statuses, brands, users, permissions }:
             brands={brands || []}
             users={users || []}
             permissions={permissions}
+            viewConfig={viewConfig}
         />
       </main>
     </div>
