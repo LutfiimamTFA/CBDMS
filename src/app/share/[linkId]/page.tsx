@@ -12,7 +12,15 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PublicLogo } from '@/components/share/public-logo';
 import { isAfter } from 'date-fns';
-import { shareableNavItems, getScopeFromPath } from '@/lib/share-nav-config';
+
+// This function was previously in the deleted share-nav-config.ts
+// Defining it here locally to resolve the dependency issue.
+const getScopeFromPath = (path: string): string | undefined => {
+    if (!path) return undefined;
+    const parts = path.split('/');
+    return parts[parts.length -1];
+};
+
 
 // --- Fallback Components ---
 
@@ -149,7 +157,7 @@ export default function SharedLinkRedirectorPage() {
         }
         
         const allowedNavIds = sharedLink.allowedNavItems || [];
-        const availableNavItems = sharedLink.navItems || []; // Use the snapshotted navItems
+        const availableNavItems = sharedLink.navItems || [];
 
         const firstValidItem = availableNavItems
             .filter(item => allowedNavIds.includes(item.id))
