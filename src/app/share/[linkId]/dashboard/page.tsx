@@ -1,23 +1,17 @@
-
 'use client';
 
 import { useMemo } from 'react';
 import { Header } from '@/components/layout/header';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
-import { useCollection, useFirestore, useSharedSession } from '@/firebase';
+import { useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
-import { notFound } from 'next/navigation';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 export default function SharedDashboardPage() {
   const { session, isLoading: isSessionLoading } = useSharedSession();
   const firestore = useFirestore();
-
-  // Security check: If this page is not in the allowed list, deny access.
-  if (!isSessionLoading && session && !session.allowedNavItems.includes('nav_task_board')) {
-    return notFound();
-  }
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !session) return null;

@@ -1,10 +1,8 @@
-
 'use client';
 import { Header } from '@/components/layout/header';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import { useI18n } from '@/context/i18n-provider';
 import { useSharedSession } from '@/context/shared-session-provider';
-import { notFound } from 'next/navigation';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { Task, WorkflowStatus, Brand, User } from '@/lib/types';
@@ -16,11 +14,6 @@ export default function SharedTasksPage() {
   const { t } = useI18n();
   const { session, isLoading: isSessionLoading } = useSharedSession();
   const firestore = useFirestore();
-
-  // Security check: If this page is not in the allowed list, deny access.
-  if (!isSessionLoading && session && !session.allowedNavItems.includes('nav_list')) {
-    return notFound();
-  }
 
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !session) return null;
