@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import Link from 'next/link';
@@ -38,6 +37,7 @@ import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
 import { Badge } from '@/components/ui/badge';
+import { AppProviders } from '@/components/app-providers';
 
 
 const Icon = ({
@@ -51,11 +51,7 @@ const Icon = ({
   return <LucideIconComponent {...props} />;
 };
 
-export default function MainLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function MainAppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
@@ -252,5 +248,14 @@ export default function MainLayout({
       </Sidebar>
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
+  );
+}
+
+// New root component for the main layout that wraps everything in the required providers
+export default function MainLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AppProviders>
+      <MainAppLayout>{children}</MainAppLayout>
+    </AppProviders>
   );
 }
