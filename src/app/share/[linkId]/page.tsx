@@ -5,12 +5,12 @@ import { notFound, useParams, useRouter, usePathname } from 'next/navigation';
 import { useDoc, useFirestore, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
-import type { SharedLink, NavigationItem } from '@/lib/types';
+import type { SharedLink, NavigationItem, Company } from '@/lib/types';
 import { useMemo, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Logo } from '@/components/logo';
+import { PublicLogo } from '@/components/share/public-logo';
 
 export default function SharedLinkRedirectorPage() {
     const params = useParams();
@@ -29,6 +29,12 @@ export default function SharedLinkRedirectorPage() {
     }, [firestore, linkId]);
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
+
+    const companyDocRef = useMemo(() => {
+        if (!firestore || !sharedLink?.companyId) return null;
+        return doc(firestore, 'companies', sharedLink.companyId);
+    }, [firestore, sharedLink?.companyId]);
+    const { data: company, isLoading: isCompanyLoading } = useDoc<Company>(companyDocRef);
 
     const navItemsQuery = useMemo(
         () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
@@ -81,7 +87,7 @@ export default function SharedLinkRedirectorPage() {
         }
     }, [isAuthenticated, sharedLink, allNavItems, linkId, router, pathname]);
 
-    const isLoading = isLinkLoading || isNavItemsLoading;
+    const isLoading = isLinkLoading || isNavItemsLoading || isCompanyLoading;
     const isRedirecting = isAuthenticated && pathname === `/share/${linkId}` && !!sharedLink && !!allNavItems;
 
     if (isLoading || isRedirecting) {
@@ -101,7 +107,7 @@ export default function SharedLinkRedirectorPage() {
             <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
                 <Card className="w-full max-w-sm">
                      <CardHeader className='text-center'>
-                        <div className='flex justify-center mb-4'><Logo/></div>
+                        <div className='flex justify-center mb-4'><PublicLogo company={company} isLoading={isCompanyLoading} /></div>
                         <CardTitle>Password Required</CardTitle>
                         <CardDescription>This content is protected. Please enter the password to view.</CardDescription>
                      </CardHeader>
