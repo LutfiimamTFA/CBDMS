@@ -23,7 +23,7 @@ export default function SharedLinkRedirectorPage() {
     const [authError, setAuthError] = useState<string | null>(null);
 
     const linkDocRef = useMemo(() => {
-        if (!firestore) return null;
+        if (!firestore || !linkId) return null;
         return doc(firestore, 'sharedLinks', linkId);
     }, [firestore, linkId]);
 
@@ -45,20 +45,21 @@ export default function SharedLinkRedirectorPage() {
         }
     };
     
+    // Effect to handle passwordless or already authenticated sessions
     useEffect(() => {
         if (sharedLink) {
             if (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date()) {
                 notFound();
                 return;
             }
-            if (sessionStorage.getItem(`share_token_${linkId}`) === 'true' || !sharedLink.password) {
+            if (!sharedLink.password || sessionStorage.getItem(`share_token_${linkId}`) === 'true') {
                  setIsAuthenticated(true);
             }
         }
     }, [sharedLink, linkId]);
-
+    
+    // Effect to handle redirection *after* authentication is confirmed and data is loaded.
     useEffect(() => {
-        // Only redirect if we are on the base share page and authenticated.
         if (isAuthenticated && sharedLink && allNavItems && pathname === `/share/${linkId}`) {
             const firstValidNavItem = allNavItems
                 .filter(item => sharedLink.allowedNavItems.includes(item.id) && item.path)
@@ -73,7 +74,7 @@ export default function SharedLinkRedirectorPage() {
     }, [isAuthenticated, sharedLink, allNavItems, linkId, router, pathname]);
 
     const isLoading = isLinkLoading || isNavItemsLoading;
-    const isRedirecting = isAuthenticated && pathname === `/share/${linkId}`;
+    const isRedirecting = isAuthenticated && pathname === `/share/${linkId}` && !!sharedLink && !!allNavItems;
 
     if (isLoading || isRedirecting) {
         return (
@@ -83,7 +84,8 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    if (linkError || !sharedLink) {
+    // If the link doesn't exist after loading, show not found.
+    if (!isLoading && !sharedLink) {
         return notFound();
     }
     
@@ -110,7 +112,6 @@ export default function SharedLinkRedirectorPage() {
         )
     }
 
-    // If authenticated but not redirecting (e.g. on a sub-page already), show nothing.
-    // The actual page content will be rendered by its own component.
+    // If authenticated but on a sub-page, render nothing and let the sub-page handle its content.
     return null;
 }
