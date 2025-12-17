@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -6,18 +7,16 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Briefcase, Loader2 } from 'lucide-react';
 import {
   initiateEmailSignIn,
 } from '@/firebase/non-blocking-login';
 import { useAuth, useFirebase, useFirestore } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import { Logo } from '@/components/logo';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useForm } from 'react-hook-form';
@@ -89,7 +88,12 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="mb-4 flex justify-center">
-            <Logo />
+            <div className="flex items-center gap-2">
+              <div className="bg-primary p-2 rounded-lg">
+                <Briefcase className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <h1 className="font-headline text-xl font-bold truncate">WorkWise</h1>
+            </div>
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
           <CardDescription>
