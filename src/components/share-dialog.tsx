@@ -32,7 +32,6 @@ import { Badge } from './ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { defaultNavItems } from '@/lib/navigation-items';
 import * as lucideIcons from 'lucide-react';
-import { firebaseConfig } from '@/firebase/config';
 
 const Icon = ({
   name,
@@ -241,12 +240,12 @@ export function ShareDialog() {
   };
   
   const shareUrl = useMemo(() => {
-    const projectId = firebaseConfig.projectId;
-    const baseUrl = `https://${projectId}.web.app`;
+    if (typeof window === 'undefined') return ''; // Return empty string on server
+    const baseUrl = window.location.origin;
     
     if (!activeLink) return baseUrl;
     return `${baseUrl}/share/${activeLink.id}`;
-}, [activeLink]);
+  }, [activeLink]);
 
 
   const copyToClipboard = () => {
