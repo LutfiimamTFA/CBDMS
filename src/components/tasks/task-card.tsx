@@ -9,7 +9,6 @@ import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, Refres
 import { format, parseISO, isAfter } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '../ui/progress';
-import { useI18n } from '@/context/i18n-provider';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
 import { useSharedSession } from '@/context/shared-session-provider';
@@ -23,15 +22,12 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
-  const { t } = useI18n();
   const { session } = useSharedSession();
 
 
   const timeTrackingProgress = task.timeEstimate && task.timeTracked
     ? (task.timeTracked / task.timeEstimate) * 100
     : 0;
-  
-  const priorityTranslationKey = `priority.${task.priority.toLowerCase()}` as any;
   
   const completionStatus = useMemo(() => {
     if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
@@ -79,7 +75,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                           <PriorityIcon className={`h-5 w-5 shrink-0 ${priorityColor}`} />
                       </TooltipTrigger>
                       <TooltipContent>
-                          <p>{t(priorityTranslationKey)}</p>
+                          <p>{priorityInfo[task.priority].label}</p>
                       </TooltipContent>
                   </Tooltip>
               </TooltipProvider>
