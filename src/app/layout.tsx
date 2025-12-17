@@ -8,13 +8,21 @@ import { useEffect, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { FirebaseClientProvider } from '@/firebase';
 
-// Define public routes that should not use AppProviders
-const PUBLIC_ROUTES = [
-  '/login',
-  '/check-email',
-  '/force-password-change',
-  '/force-acknowledge-tasks',
+// Define public routes that do not need full AppProviders
+const APP_ROUTES = [
+  '/dashboard',
+  '/tasks',
+  '/my-work',
+  '/reports',
+  '/calendar',
+  '/schedule',
+  '/social-media',
+  '/admin',
+  '/settings',
+  '/guide',
+  '/daily-report',
 ];
 
 export default function RootLayout({
@@ -29,11 +37,8 @@ export default function RootLayout({
     setIsMounted(true);
   }, []);
 
-  // Determine if the current route is a public-facing page
-  const isPublicPage =
-    PUBLIC_ROUTES.includes(pathname) ||
-    pathname.startsWith('/share') ||
-    pathname === '/';
+  // Determine if the current route is a main application page
+  const isAppPage = APP_ROUTES.some(route => pathname.startsWith(route));
 
   if (!isMounted) {
     return (
@@ -54,9 +59,14 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        {isPublicPage ? (
-          // For public pages, use a minimal provider setup.
-          // This avoids contexts that require authentication (auth, company, permissions, etc).
+        {isAppPage ? (
+          // For the main protected app, use the full AppProviders.
+          <AppProviders>
+            {children}
+          </AppProviders>
+        ) : (
+          // For public pages (login, share, etc.), use a minimal provider setup.
+          // This avoids contexts that require authentication.
            <ThemeProvider
               attribute="class"
               defaultTheme="system"
@@ -64,16 +74,12 @@ export default function RootLayout({
               disableTransitionOnChange
             >
               <TooltipProvider>
-                {/* FirebaseClientProvider can be included here if public pages need basic firebase access without auth context */}
-                {children}
+                <FirebaseClientProvider>
+                  {children}
+                </FirebaseClientProvider>
               </TooltipProvider>
               <Toaster />
             </ThemeProvider>
-        ) : (
-          // For the main protected app, use the full AppProviders.
-          <AppProviders>
-            {children}
-          </AppProviders>
         )}
       </body>
     </html>
