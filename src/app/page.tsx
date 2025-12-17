@@ -1,17 +1,20 @@
-
 'use client';
 
 import { Button } from "@/components/ui/button";
-import { Logo } from "@/components/logo";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Briefcase } from "lucide-react";
 
 export default function RootPage() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
       <div className="text-center space-y-8">
         <div className="flex justify-center">
-            <Logo />
+            <div className="flex items-center gap-2">
+              <div className="bg-primary p-2 rounded-lg">
+                <Briefcase className="h-5 w-5 text-primary-foreground" />
+              </div>
+              <h1 className="font-headline text-xl font-bold truncate">WorkWise</h1>
+            </div>
         </div>
         <div className="space-y-2">
             <h1 className="text-4xl font-bold tracking-tight">Welcome to WorkWise</h1>
