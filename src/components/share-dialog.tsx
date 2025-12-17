@@ -171,7 +171,7 @@ export function ShareDialog() {
     setIsLoading(true);
 
     const isCreating = !activeLink;
-    const allowedNavItemIds = allNavItems.filter(item => item.roles.includes('Client')).map(item => item.id);
+    const allowedNavItemIds = allNavItems.filter(item => item.roles.includes(profile.role)).map(item => item.id);
 
     const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
         name: linkName,
@@ -265,7 +265,7 @@ export function ShareDialog() {
   
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || !allTasks || !allUsers || !allBrands || !allStatuses || !allNavItems || !company;
   
-  if (profile?.role === 'Super Admin') {
+  if (profile?.role === 'Client') {
     return null;
   }
 
@@ -337,7 +337,7 @@ export function ShareDialog() {
                       <Card>
                         <CardHeader>
                           <h3 className="font-semibold">Shared Experience</h3>
-                          <span className="text-sm text-muted-foreground">The generated link will share pages visible to the <Badge variant="outline">Client</Badge> role.</span>
+                          <span className="text-sm text-muted-foreground">The generated link will share pages visible to the <Badge variant="outline">{profile?.role}</Badge> role.</span>
                         </CardHeader>
                       </Card>
 
