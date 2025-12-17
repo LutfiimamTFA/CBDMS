@@ -3,9 +3,7 @@
 
 import React from 'react';
 import { useParams, notFound } from 'next/navigation';
-import { useDoc, useFirestore, useCollection } from '@/firebase';
-import { doc, collection, query, where, orderBy } from 'firebase/firestore';
-import type { SharedLink, Task, User, Brand, WorkflowStatus } from '@/lib/types';
+import { useSharedSession } from '@/context/shared-session-provider';
 import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -69,40 +67,13 @@ const navIdToScope: { [key: string]: string } = {
 
 export default function ShareScopePage() {
   const params = useParams();
-  const firestore = useFirestore();
+  const { session: sharedLink, isLoading: isLinkLoading, error: linkError } = useSharedSession();
   
-  const linkId = Array.isArray(params.linkId) ? params.linkId[0] : params.linkId;
   const scope = params.scope as string[] | undefined;
+  // Safely determine the current scope, defaulting to 'dashboard'
   const currentScope = (scope && scope.length > 0) ? scope[0] : 'dashboard';
   
-  // 1. Fetch the SharedLink document itself.
-  const linkDocRef = React.useMemo(() => {
-    if (!firestore || !linkId) return null;
-    return doc(firestore, 'sharedLinks', linkId);
-  }, [firestore, linkId]);
-
-  const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
-  
-  const activeCompanyId = sharedLink?.companyId;
-
-  // 2. Fetch all necessary data based *only* on the companyId from the shared link.
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(
-    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId)) : null), [firestore, activeCompanyId])
-  );
-  const { data: users, isLoading: isUsersLoading } = useCollection<User>(
-    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId)) : null), [firestore, activeCompanyId])
-  );
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(
-    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId), orderBy('name')) : null), [firestore, activeCompanyId])
-  );
-  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(
-    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'statuses'), where('companyId', '==', activeCompanyId), orderBy('order')) : null), [firestore, activeCompanyId])
-  );
-
-  // Central loading state: Wait for the link AND all its dependent data.
-  const isLoading = isLinkLoading || isTasksLoading || isUsersLoading || areBrandsLoading || areStatusesLoading;
-
-  if (!linkId || isLoading) {
+  if (isLinkLoading) {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -127,12 +98,14 @@ export default function ShareScopePage() {
     return null;
   }
   
+  // All data is passed down from the sharedLink document snapshot.
+  // The components are now "dumb" and only render what they are given.
   const viewProps = {
     permissions: sharedLink.permissions,
-    tasks: tasks || [],
-    users: users || [],
-    brands: brands || [],
-    statuses: statuses || [],
+    tasks: sharedLink.tasks || [],
+    users: sharedLink.users || [],
+    brands: sharedLink.brands || [],
+    statuses: sharedLink.statuses || [],
   };
 
   return <PageComponent {...viewProps} />;

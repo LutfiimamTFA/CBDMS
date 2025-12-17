@@ -7,9 +7,8 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
-
-// We can't use Metadata here because this is a client component.
-// Metadata should be handled in specific page.tsx files if needed.
+import { FirebaseClientProvider } from '@/firebase';
+import { SharedSessionProvider } from '@/context/shared-session-provider';
 
 export default function RootLayout({
   children,
@@ -25,7 +24,6 @@ export default function RootLayout({
   }, []);
 
   if (!isMounted) {
-    // To prevent hydration mismatch, we can return null or a loading spinner on the server.
     return (
         <html lang="en" suppressHydrationWarning>
             <body className="font-body antialiased"></body>
@@ -45,19 +43,23 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         {isShareRoute ? (
-          // For share routes, we use a minimal provider setup, bypassing the main AppProviders
-          // to avoid auth/user context dependencies.
+          // For share routes, use a minimal, isolated provider setup.
+          // This avoids all internal app contexts (auth, company, permissions, etc).
            <ThemeProvider
               attribute="class"
               defaultTheme="system"
               enableSystem
               disableTransitionOnChange
             >
-              {children}
+              <FirebaseClientProvider>
+                <SharedSessionProvider>
+                    {children}
+                </SharedSessionProvider>
+              </FirebaseClientProvider>
               <Toaster />
             </ThemeProvider>
         ) : (
-          // For the main app, we use the full AppProviders.
+          // For the main app, use the full AppProviders.
           <AppProviders>
             {children}
           </AppProviders>

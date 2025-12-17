@@ -144,6 +144,13 @@ export type SharedLink = {
   createdBy: string;
   createdAt: any;
   updatedAt?: any;
+  // Data snapshots
+  tasks: Task[];
+  users: User[];
+  brands: Brand[];
+  statuses: WorkflowStatus[];
+  navItems: NavigationItem[];
+  company: Company;
 };
 
 export type RevisionItem = {

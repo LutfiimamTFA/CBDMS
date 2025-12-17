@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
-import type { SharedLink, Brand, User, NavigationItem } from '@/lib/types';
+import type { SharedLink, Brand, User, NavigationItem, Task, WorkflowStatus } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -82,16 +82,20 @@ export function ShareDialog() {
   }, [firestore, profile?.companyId]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
   
-  const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
-  const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
-  
-  const usersQuery = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+  // Fetch all necessary data for snapshotting
+  const tasksQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
+  const { data: allTasks } = useCollection<Task>(tasksQuery);
+  const usersQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allUsers } = useCollection<User>(usersQuery);
+  const brandsQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
+  const { data: allBrands } = useCollection<Brand>(brandsQuery);
+  const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
+  const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
+  const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
+  const { data: allNavItems } = useCollection<NavigationItem>(navItemsQuery);
+  const companyQuery = useMemo(() => (firestore && profile?.companyId) ? doc(firestore, 'companies', profile.companyId) : null, [firestore, profile?.companyId]);
+  const { data: company } = useDoc<any>(companyQuery);
 
-  const userVisibleNavItems = useMemo(() => {
-    if (!allNavItems || !profile) return [];
-    return allNavItems.filter(item => item.roles.includes(profile.role));
-  }, [allNavItems, profile]);
 
 
   useEffect(() => {
@@ -104,7 +108,6 @@ export function ShareDialog() {
     if (!activeLink && !isLinksLoading && existingLinks && existingLinks.length > 0) {
         loadLinkDetails(existingLinks[0]);
     } else if (!activeLink && !isLinksLoading && (!existingLinks || existingLinks.length === 0)) {
-        // If there are no links, ensure the 'new link' form is shown
         handleOpenNew();
     }
   }, [existingLinks, isLinksLoading, activeLink]);
@@ -161,14 +164,14 @@ export function ShareDialog() {
 
 
   const handleCreateOrUpdateLink = async () => {
-    if (!firestore || !profile || !userVisibleNavItems) {
-        toast({ variant: 'destructive', title: 'Error', description: 'User profile or navigation items not loaded.' });
+    if (!firestore || !profile || !allNavItems || !allTasks || !allUsers || !allBrands || !allStatuses || !company) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Core data not loaded. Please try again.' });
         return;
     };
     setIsLoading(true);
 
     const isCreating = !activeLink;
-    const allowedNavItemIds = userVisibleNavItems.map(item => item.id);
+    const allowedNavItemIds = allNavItems.filter(item => item.roles.includes('Client')).map(item => item.id);
 
     const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
         name: linkName,
@@ -176,10 +179,17 @@ export function ShareDialog() {
         permissions,
         companyId: profile.companyId,
         createdBy: profile.id,
+        // Snapshot data
+        tasks: allTasks,
+        users: allUsers,
+        brands: allBrands,
+        statuses: allStatuses,
+        navItems: allNavItems,
+        company: company,
     };
 
     if (usePassword && password) {
-        if (password !== '********') { // Only update if password is changed
+        if (password !== '********') {
             linkData.password = password;
         }
     } else if (!isCreating) {
@@ -253,9 +263,8 @@ export function ShareDialog() {
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isNavItemsLoading;
+  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || !allTasks || !allUsers || !allBrands || !allStatuses || !allNavItems || !company;
   
-  // Disable share feature for Super Admin
   if (profile?.role === 'Super Admin') {
     return null;
   }
@@ -328,7 +337,7 @@ export function ShareDialog() {
                       <Card>
                         <CardHeader>
                           <h3 className="font-semibold">Shared Experience</h3>
-                          <span className="text-sm text-muted-foreground">The generated link will share all pages accessible to your role: <Badge variant="outline">{profile?.role}</Badge>.</span>
+                          <span className="text-sm text-muted-foreground">The generated link will share pages visible to the <Badge variant="outline">Client</Badge> role.</span>
                         </CardHeader>
                       </Card>
 
@@ -390,8 +399,8 @@ export function ShareDialog() {
                   </Button>
                 )}
               </div>
-              <Button onClick={handleCreateOrUpdateLink} disabled={isLoading}>
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+              <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything}>
+                  {isLoadingAnything && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                   {activeLink ? 'Update Link' : 'Create Link'}
               </Button>
           </DialogFooter>

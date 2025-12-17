@@ -8,7 +8,7 @@ service cloud.firestore {
     function isSignedIn() {
       return request.auth != null;
     }
-
+    
     function getUserData(userId) {
       return get(/databases/$(database)/documents/users/$(userId)).data;
     }
@@ -63,21 +63,15 @@ service cloud.firestore {
       return isSignedIn() && isRole('Manager') && brandId in getRequestingUserData().brandIds;
     }
 
-    // --- Rules for Public Share Links ---
-    function isPublicLinkValid(linkId) {
-      let link = get(/databases/$(database)/documents/sharedLinks/$(linkId)).data;
-      // Check if the link exists and has not expired.
-      return link != null && (link.expiresAt == null || link.expiresAt > request.time);
-    }
-
-    // This rule allows anyone to read a shared link document to validate it.
+    // --- Public Share Link Rules ---
+    // Anyone can read a shared link document to validate it.
     match /sharedLinks/{linkId} {
-      allow get: if true; 
-      allow list: if false; // Do not allow listing all links.
-      allow write: if isSignedIn(); // Only signed-in users can create/update links.
+      allow get: if true;
+      allow list: if false; // NEVER allow listing all share links.
+      allow write, update, delete: if isSignedIn() && (isSuperAdmin() || isRole('Manager')); // Only admins/managers can create/manage links.
     }
     
-    // --- Standard Application Rules ---
+    // --- Standard Application Rules (All require authentication) ---
 
     match /permissions/{docId} {
       allow read, write: if isSuperAdmin();
@@ -89,7 +83,6 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      // Allow read for shared views IF the link is valid.
       allow read: if isSuperAdmin() || 
                      (isRole('Manager') && (isOwnRecord(userId) || isManagerOf(userId))) ||
                      isOwnRecord(userId);
@@ -176,6 +169,11 @@ service cloud.firestore {
         allow update, delete: if isSuperAdmin() || 
                                  (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
                                  (isOwnRecord(resource.data.createdBy) && resource.data.status == 'Draft');
+    }
+
+    // Default deny all other access
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
