@@ -19,7 +19,7 @@ import { Switch } from '@/components/ui/switch';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useUserProfile, useCollection } from '@/firebase';
+import { useFirestore, useUserProfile, useCollection, useDoc } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
 import type { SharedLink, Brand, User, NavigationItem, Task, WorkflowStatus } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
