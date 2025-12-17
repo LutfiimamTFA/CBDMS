@@ -19,7 +19,8 @@ interface HeaderProps {
 export function Header({ title, actions, isPublicView = false }: HeaderProps) {
   const { profile } = useUserProfile();
   
-  const showShareDialog = !isPublicView && profile && (profile.role === 'Super Admin' || profile.role === 'Manager' || profile.role === 'Employee');
+  // Super Admins should not see the share dialog.
+  const showShareDialog = !isPublicView && profile && profile.role !== 'Super Admin';
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">

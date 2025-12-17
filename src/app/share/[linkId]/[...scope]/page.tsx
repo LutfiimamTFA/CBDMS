@@ -1,12 +1,13 @@
 
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { notFound } from 'next/navigation';
 import { useSharedSession } from '@/context/shared-session-provider';
 import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useParams } from 'next/navigation';
 
 // Import reusable, stateless view components
 import { SharedDashboardView } from '@/components/share/shared-dashboard-view';
@@ -53,16 +54,16 @@ const LinkNotFoundComponent = () => (
 );
 
 const pageComponents: { [key: string]: React.ComponentType<any> } = {
-  '/dashboard': SharedDashboardView,
-  '/tasks': SharedTasksView,
-  '/calendar': SharedCalendarView,
-  '/reports': SharedReportsView,
-  '/admin/users': SharedTasksView, // Fallback to tasks view for now
-  '/my-work': SharedTasksView, // Fallback to tasks view
+  'dashboard': SharedDashboardView,
+  'tasks': SharedTasksView,
+  'calendar': SharedCalendarView,
+  'reports': SharedReportsView,
 };
 
 export default function ShareScopePage() {
   const { session, isLoading, error } = useSharedSession();
+  const params = useParams();
+  const scope = Array.isArray(params.scope) ? params.scope[0] : params.scope;
   
   if (isLoading) {
     return (
@@ -76,23 +77,27 @@ export default function ShareScopePage() {
     return <LinkNotFoundComponent />;
   }
 
-  // Determine which page to render based on the snapshot
-  const currentRoute = session.viewConfig?.currentRoute || '/dashboard';
-  const PageComponent = pageComponents[currentRoute];
+  // Determine which page to render based on the URL scope
+  const navItemForScope = session.navItems.find(item => item.path.endsWith(scope));
+
+  // Check if the current scope is allowed by the link
+  if (!navItemForScope || !session.allowedNavItems.includes(navItemForScope.id)) {
+      return <AccessDeniedComponent />;
+  }
+
+  const PageComponent = pageComponents[scope];
 
   if (!PageComponent) {
-    // If the route in the snapshot is not a shareable page, show access denied.
     return <AccessDeniedComponent />;
   }
   
-  // All data and view state is passed down from the sharedLink document snapshot.
   const viewProps = {
     permissions: session.permissions,
     tasks: session.tasks || [],
     users: session.users || [],
     brands: session.brands || [],
     statuses: session.statuses || [],
-    viewConfig: session.viewConfig, // Pass the entire view config
+    viewConfig: session.viewConfig,
   };
 
   return (

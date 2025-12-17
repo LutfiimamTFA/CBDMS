@@ -19,12 +19,17 @@ import { Loader2, LogOut, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
-import { getScopeFromPath } from '@/lib/share-nav-config';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
   if (!LucideIconComponent) return <lucideIcons.HelpCircle {...props} />;
   return <LucideIconComponent {...props} />;
+};
+
+// A mapping to get the URL scope from the path.
+const getScopeFromPath = (path: string): string | undefined => {
+    const parts = path.split('/');
+    return parts[parts.length -1];
 };
 
 export function ShareSidebar() {

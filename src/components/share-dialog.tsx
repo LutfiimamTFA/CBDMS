@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -30,7 +31,6 @@ import { Badge } from './ui/badge';
 import { usePathname } from 'next/navigation';
 import { useCompany } from '@/context/company-provider';
 import { Checkbox } from './ui/checkbox';
-import { shareableNavItems } from '@/lib/share-nav-config';
 
 const defaultPermissions = {
   canViewDetails: true,
@@ -75,7 +75,6 @@ export function ShareDialog() {
   const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
   const { data: allDbNavItems } = useCollection<NavigationItem>(navItemsQuery);
   
-  // Fetch all necessary data for snapshotting
   const tasksQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allTasks } = useCollection<Task>(tasksQuery);
   const usersQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
@@ -85,17 +84,18 @@ export function ShareDialog() {
   const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
 
-  // This is the CRITICAL part: get the navigation items visible to the current user
-  const visibleNavItemsForCreator = useMemo(() => {
+  // CRITICAL: This is the source of truth for what the current user can see.
+  const creatorVisibleNavItems = useMemo(() => {
     if (!allDbNavItems || !profile) return [];
     return allDbNavItems.filter(item => item.roles.includes(profile.role));
   }, [allDbNavItems, profile]);
   
-  // The pages that can be selected in the dialog are the intersection of what's shareable and what the creator can see.
+  // The pages that can be selected in the dialog are the ones visible to the creator.
   const selectableSharePages = useMemo(() => {
-    const visibleIds = new Set(visibleNavItemsForCreator.map(item => item.id));
-    return shareableNavItems.filter(item => visibleIds.has(item.id));
-  }, [visibleNavItemsForCreator]);
+    return creatorVisibleNavItems.filter(item => 
+        ['nav_task_board', 'nav_list', 'nav_calendar', 'nav_performance_analysis'].includes(item.id)
+    );
+  }, [creatorVisibleNavItems]);
 
 
   useEffect(() => {
@@ -177,7 +177,6 @@ export function ShareDialog() {
         return;
     };
     
-    // Guard against creating a link with no selected pages.
     if (allowedNavItems.length === 0) {
         toast({ variant: 'destructive', title: 'Action Blocked', description: 'You must select at least one page to share.' });
         return;
@@ -201,7 +200,7 @@ export function ShareDialog() {
         createdBy: profile.id,
         viewConfig,
         // Snapshot the user's visible nav items at creation time.
-        navItems: visibleNavItemsForCreator, 
+        navItems: creatorVisibleNavItems, 
         // Snapshot all necessary data at creation time
         tasks: allTasks,
         users: allUsers,
@@ -329,7 +328,7 @@ export function ShareDialog() {
                           ) : (existingLinks || []).map(link => (
                               <div key={link.id} className="flex items-center justify-between rounded-md hover:bg-secondary">
                                 <Button variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start text-left h-auto py-2" onClick={() => loadLinkDetails(link)}>
-                                  <span className="truncate">{link.name || `Link from ${link.createdAt ? format(link.createdAt.toDate(), 'PP') : 'New'}`}</span>
+                                  <span className="truncate">{link.name || (link.createdAt ? `Link from ${format(link.createdAt.toDate(), 'PP')}` : 'New Link')}</span>
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
                                     <History className="h-4 w-4" />
