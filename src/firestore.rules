@@ -102,11 +102,14 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      // Super Admin sees all. Manager sees tasks of brands they manage. Employee and PIC see their assigned tasks.
-      allow read: if isSuperAdmin() ||
+      // Read access is now also granted for valid public links.
+      allow get: if isSuperAdmin() ||
+                    (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
+                    ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId));
+      allow list: if isSuperAdmin() || 
                      (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
                      ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId));
-                     
+
       allow create: if isSuperAdmin() ||
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));

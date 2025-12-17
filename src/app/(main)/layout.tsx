@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Link from 'next/link';
@@ -128,7 +129,7 @@ export default function MainLayout({
     
     if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
     if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
+    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav.social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
     
     return { itemMap, childMap };
   }, [navItemsFromDB, t]);
