@@ -7,9 +7,15 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
-import { FirebaseClientProvider } from '@/firebase';
-import { SharedSessionProvider } from '@/context/shared-session-provider';
 import { TooltipProvider } from '@/components/ui/tooltip';
+
+// Define public routes that should not use AppProviders
+const PUBLIC_ROUTES = [
+  '/login',
+  '/check-email',
+  '/force-password-change',
+  '/force-acknowledge-tasks',
+];
 
 export default function RootLayout({
   children,
@@ -17,12 +23,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const pathname = usePathname();
-  const isShareRoute = pathname.startsWith('/share');
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Determine if the current route is a public-facing page
+  const isPublicPage =
+    PUBLIC_ROUTES.includes(pathname) ||
+    pathname.startsWith('/share') ||
+    pathname === '/';
 
   if (!isMounted) {
     return (
@@ -43,9 +54,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        {isShareRoute ? (
-          // For share routes, use a minimal, isolated provider setup.
-          // This avoids all internal app contexts (auth, company, permissions, etc).
+        {isPublicPage ? (
+          // For public pages, use a minimal provider setup.
+          // This avoids contexts that require authentication (auth, company, permissions, etc).
            <ThemeProvider
               attribute="class"
               defaultTheme="system"
@@ -53,16 +64,13 @@ export default function RootLayout({
               disableTransitionOnChange
             >
               <TooltipProvider>
-                <FirebaseClientProvider>
-                  <SharedSessionProvider>
-                      {children}
-                  </SharedSessionProvider>
-                </FirebaseClientProvider>
+                {/* FirebaseClientProvider can be included here if public pages need basic firebase access without auth context */}
+                {children}
               </TooltipProvider>
               <Toaster />
             </ThemeProvider>
         ) : (
-          // For the main app, use the full AppProviders.
+          // For the main protected app, use the full AppProviders.
           <AppProviders>
             {children}
           </AppProviders>
