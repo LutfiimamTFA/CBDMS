@@ -5,6 +5,7 @@ import React from 'react';
 import { SharedSessionProvider } from '@/context/shared-session-provider';
 import { FirebaseClientProvider } from '@/firebase';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { ThemeProvider } from '@/components/theme-provider';
 
 export default function ShareLayout({
   children,
@@ -13,12 +14,20 @@ export default function ShareLayout({
 }) {
   return (
     // This layout provides a completely isolated Firebase context for the share feature.
-    <FirebaseClientProvider>
-      <SharedSessionProvider>
-        <SidebarProvider isSharedView={true}>
-          {children}
-        </SidebarProvider>
-      </SharedSessionProvider>
-    </FirebaseClientProvider>
+    // It does not use AppProviders.
+    <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+    >
+      <FirebaseClientProvider>
+        <SharedSessionProvider>
+          <SidebarProvider isSharedView={true}>
+            {children}
+          </SidebarProvider>
+        </SharedSessionProvider>
+      </FirebaseClientProvider>
+    </ThemeProvider>
   );
 }

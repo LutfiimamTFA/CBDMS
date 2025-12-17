@@ -31,6 +31,7 @@ import { Badge } from './ui/badge';
 import { usePathname } from 'next/navigation';
 import { useCompany } from '@/context/company-provider';
 import { Checkbox } from './ui/checkbox';
+import { shareableNavItems } from '@/lib/share-nav-config';
 
 const defaultPermissions = {
   canViewDetails: true,
@@ -81,8 +82,6 @@ export function ShareDialog() {
   const { data: allBrands } = useCollection<Brand>(brandsQuery);
   const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
-  const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
-  const { data: allNavItems } = useCollection<NavigationItem>(navItemsQuery);
 
 
   useEffect(() => {
@@ -159,18 +158,24 @@ export function ShareDialog() {
   };
 
   const handleCreateOrUpdateLink = async () => {
-    if (!firestore || !profile || !allNavItems || !allTasks || !allUsers || !allBrands || !allStatuses || !company) {
+    if (!firestore || !profile || !allTasks || !allUsers || !allBrands || !allStatuses || !company) {
         toast({ variant: 'destructive', title: 'Error', description: 'Core data not loaded. Please try again.' });
         return;
     };
+    
+    // Guard against creating a link with no selected pages.
+    if (allowedNavItems.length === 0) {
+        toast({ variant: 'destructive', title: 'Action Blocked', description: 'You must select at least one page to share.' });
+        return;
+    }
+
     setIsLoading(true);
 
     const isCreating = !activeLink;
     
-    // Capture the current view state
     const viewConfig = {
         currentRoute: pathname,
-        filters: [], // This will be populated if we add live filtering to the main app
+        filters: [],
         activeTab: 'all',
     };
     
@@ -181,12 +186,13 @@ export function ShareDialog() {
         companyId: profile.companyId,
         createdBy: profile.id,
         viewConfig,
+        // Snapshot static nav items to ensure consistency
+        navItems: shareableNavItems,
         // Snapshot all necessary data at creation time
         tasks: allTasks,
         users: allUsers,
         brands: allBrands,
         statuses: allStatuses,
-        navItems: allNavItems, // Snapshot all available nav items
         company: company,
     };
 
@@ -261,7 +267,7 @@ export function ShareDialog() {
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isCompanyLoading || !allTasks || !allUsers || !allBrands || !allStatuses || !allNavItems;
+  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isCompanyLoading || !allTasks || !allUsers || !allBrands || !allStatuses;
   
   if (profile?.role === 'Client') {
     return null;
@@ -309,7 +315,7 @@ export function ShareDialog() {
                           ) : (existingLinks || []).map(link => (
                               <div key={link.id} className="flex items-center justify-between rounded-md hover:bg-secondary">
                                 <Button variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start text-left h-auto py-2" onClick={() => loadLinkDetails(link)}>
-                                  <span className="truncate">{link.name || (link.createdAt ? `Link from ${format(link.createdAt.toDate(), 'PP')}` : 'New Link')}</span>
+                                  <span className="truncate">{link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}</span>
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
                                     <History className="h-4 w-4" />
@@ -336,13 +342,13 @@ export function ShareDialog() {
                         <CardHeader>
                           <h3 className="font-semibold">Shared Context</h3>
                           <p className="text-sm text-muted-foreground">
-                            This link will create a snapshot of all data related to your current view (tasks, users, brands, etc.). The recipient will see this exact page, including any active filters, as a read-only preview.
+                            This link will create a snapshot of all data related to your current view (tasks, users, brands, etc.). The recipient will see this exact page as a read-only preview.
                           </p>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <h4 className="font-medium text-sm">Visible Pages</h4>
                             <div className="space-y-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                                {allNavItems?.filter(item => item.roles.includes('Client')).map(item => (
+                                {shareableNavItems.map(item => (
                                     <div key={item.id} className="flex items-center gap-3">
                                         <Checkbox 
                                           id={`nav-${item.id}`} 
@@ -414,7 +420,7 @@ export function ShareDialog() {
                   </Button>
                 )}
               </div>
-              <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything}>
+              <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything || allowedNavItems.length === 0}>
                   {isLoadingAnything && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                   {activeLink ? 'Update Link' : 'Create & Snapshot Link'}
               </Button>

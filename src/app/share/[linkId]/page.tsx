@@ -1,19 +1,20 @@
 
 'use client';
 
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Loader2, FileWarning, Clock, ShieldAlert } from 'lucide-react';
+import { Loader2, FileWarning, Clock } from 'lucide-react';
 import type { SharedLink, NavigationItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PublicLogo } from '@/components/share/public-logo';
 import { isAfter } from 'date-fns';
+import { shareableNavItems, getScopeFromPath } from '@/lib/share-nav-config';
 
-// --- Stateless Fallback Components ---
+// --- Fallback Components ---
 
 const LinkNotFoundComponent = ({ isMisconfigured = false }: { isMisconfigured?: boolean }) => (
     <div className="flex h-screen w-full items-center justify-center bg-secondary p-4">
@@ -27,7 +28,7 @@ const LinkNotFoundComponent = ({ isMisconfigured = false }: { isMisconfigured?: 
         <CardContent>
             <p className="text-muted-foreground">
                 {isMisconfigured 
-                    ? "This link is valid, but no pages have been configured for viewing. Please contact the sender."
+                    ? "This link is valid, but no accessible pages have been configured for viewing. Please contact the sender."
                     : "The share link you are trying to access is invalid, has been disabled, or does not exist."
                 }
             </p>
@@ -59,25 +60,32 @@ const LinkExpiredComponent = () => (
 );
 
 const PasswordFormComponent = ({ company, linkId }: { company: SharedLink['company'] | null, linkId: string }) => {
-    const [password, setPassword] = React.useState('');
-    const [authError, setAuthError] = React.useState<string | null>(null);
+    const [password, setPassword] = useState('');
+    const [authError, setAuthError] = useState<string | null>(null);
+    const [isChecking, setIsChecking] = useState(false);
     const router = useRouter();
+    const firestore = useFirestore();
 
     const handleAuth = async () => {
-        // We fetch the document again here to validate the password against the latest data.
-        const firestore = useFirestore();
         if (!firestore) return;
-        const linkDocRef = doc(firestore, 'sharedLinks', linkId);
-        const docSnap = await (await import('firebase/firestore')).getDoc(linkDocRef);
+        setIsChecking(true);
+        setAuthError(null);
 
-        if (docSnap.exists() && docSnap.data().password === password) {
-            if (typeof window !== 'undefined') {
-                sessionStorage.setItem(`share_token_${linkId}`, 'true');
+        const linkDocRef = doc(firestore, 'sharedLinks', linkId);
+        try {
+            const docSnap = await (await import('firebase/firestore')).getDoc(linkDocRef);
+            if (docSnap.exists() && docSnap.data().password === password) {
+                if (typeof window !== 'undefined') {
+                    sessionStorage.setItem(`share_token_${linkId}`, 'true');
+                }
+                router.refresh(); 
+            } else {
+                setAuthError('Invalid password.');
             }
-            setAuthError(null);
-            router.refresh(); 
-        } else {
-            setAuthError('Invalid password.');
+        } catch (error) {
+            setAuthError('An error occurred. Please try again.');
+        } finally {
+            setIsChecking(false);
         }
     };
 
@@ -97,8 +105,12 @@ const PasswordFormComponent = ({ company, linkId }: { company: SharedLink['compa
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
+                            disabled={isChecking}
                         />
-                        <Button onClick={handleAuth}>Unlock</Button>
+                        <Button onClick={handleAuth} disabled={isChecking}>
+                            {isChecking && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            Unlock
+                        </Button>
                     </div>
                     {authError && <p className="text-sm text-destructive text-center">{authError}</p>}
                 </CardContent>
@@ -106,9 +118,6 @@ const PasswordFormComponent = ({ company, linkId }: { company: SharedLink['compa
         </div>
     );
 };
-
-
-// --- The Main Validator Component ---
 
 export default function SharedLinkRedirectorPage() {
     const params = useParams();
@@ -122,36 +131,53 @@ export default function SharedLinkRedirectorPage() {
     }, [firestore, linkId]);
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
-    
-    // --- REDIRECT LOGIC ---
-    // This effect runs ONLY after the validation logic in the render block has passed.
+
+    // --- Validation and Redirect Logic ---
+    // This effect runs only when loading is complete and we have a definitive result.
     useEffect(() => {
-        // Guard against running on initial load or if there's no valid link
-        if (isLinkLoading || !sharedLink || linkError) return;
+        if (isLinkLoading || !linkId) return;
 
-        // Skip if password is required but not yet authenticated
-        if (sharedLink.password && (typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) return;
-        
-        // --- Navigation Logic ---
-        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-        const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-        const navIdToScope: { [key: string]: string } = {
-            '/dashboard': 'dashboard', '/tasks': 'tasks', '/calendar': 'calendar', '/reports': 'reports'
-        };
-
-        const firstValidNavItem = availableNavItems
-            .filter(item => allowedNavIds.includes(item.id) && navIdToScope[item.path])
-            .sort((a, b) => a.order - b.order)[0];
-        
-        if (firstValidNavItem) {
-            const scope = navIdToScope[firstValidNavItem.path];
-            router.replace(`/share/${linkId}/${scope}`);
+        // Condition 1: Document doesn't exist or there was a Firestore error.
+        if (!sharedLink || linkError) {
+            return; // Render will handle showing the NotFound component.
         }
-        // If no valid nav item is found, the render logic below will show an error.
+
+        // Condition 2: Link is expired.
+        if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
+            return; // Render will handle showing the Expired component.
+        }
+        
+        // Condition 3: Password protection is active and user is not authenticated for this link.
+        const isAuthenticated = typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) === 'true';
+        if (sharedLink.password && !isAuthenticated) {
+            return; // Render will handle showing the PasswordForm component.
+        }
+
+        // Condition 4: Find the first valid page to redirect to.
+        const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
+        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : shareableNavItems;
+
+        const firstValidItem = availableNavItems
+            .filter(item => allowedNavIds.includes(item.id)) // Filter by allowed IDs
+            .sort((a, b) => a.order - b.order)[0]; // Get the first one by order
+
+        if (firstValidItem) {
+            const scope = getScopeFromPath(firstValidItem.path);
+            if (scope) {
+                router.replace(`/share/${linkId}/${scope}`);
+            } else {
+                // This case should be rare if config is correct, but we handle it.
+                // It means an allowed page has no valid scope.
+                return; // Render will handle showing Misconfigured error.
+            }
+        } else {
+            // No valid/allowed pages found in the snapshot.
+            return; // Render will handle showing Misconfigured error.
+        }
     }, [sharedLink, isLinkLoading, linkError, linkId, router]);
 
 
-    // --- RENDER LOGIC: Follows a strict validation order ---
+    // --- Render Logic: Renders based on the validation status ---
 
     if (isLinkLoading) {
         return (
@@ -161,35 +187,28 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    // 1. Document not found or there was a Firestore error
     if (!sharedLink || linkError) {
         return <LinkNotFoundComponent />;
     }
     
-    // 2. Link is expired
     if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
         return <LinkExpiredComponent />;
     }
     
-    // 3. Link requires a password and it hasn't been provided yet
     if (sharedLink.password && (typeof window === 'undefined' || sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) {
         return <PasswordFormComponent company={sharedLink.company || null} linkId={linkId} />;
     }
 
-    // 4. Link is misconfigured (no valid pages to show)
-    const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
+    // After password check, validate if there's any content to show.
     const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-    const navIdToScope: { [key: string]: string } = {
-        '/dashboard': 'dashboard', '/tasks': 'tasks', '/calendar': 'calendar', '/reports': 'reports'
-    };
-    const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && navIdToScope[item.path]);
+    const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : shareableNavItems;
+    const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && getScopeFromPath(item.path));
     
     if (!hasValidPages) {
         return <LinkNotFoundComponent isMisconfigured={true} />;
     }
 
-    // --- REDIRECTING STAGE ---
-    // If all checks pass, show a loader while the useEffect performs the redirect.
+    // If all checks pass, show a loader while useEffect performs the redirect.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <Loader2 className="h-8 w-8 animate-spin" />
