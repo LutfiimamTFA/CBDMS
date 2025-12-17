@@ -15,6 +15,8 @@ import { SharedTasksView } from '@/components/share/shared-tasks-view';
 import { SharedCalendarView } from '@/components/share/shared-calendar-view';
 import { SharedReportsView } from '@/components/share/shared-reports-view';
 import { ShareSidebar } from '@/components/share/share-sidebar';
+import { SharedMyWorkView } from '@/components/share/shared-my-work-view';
+import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 
 const AccessDeniedComponent = () => (
     <div className="flex h-full items-center justify-center p-8">
@@ -58,12 +60,15 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
   'tasks': SharedTasksView,
   'calendar': SharedCalendarView,
   'reports': SharedReportsView,
+  'my-work': SharedMyWorkView,
+  'social-media': SharedSocialMediaView,
+  'social-media/analytics': SharedSocialMediaView, // Re-use the same component, maybe with a prop
 };
 
 export default function ShareScopePage() {
   const { session, isLoading, error } = useSharedSession();
   const params = useParams();
-  const scope = Array.isArray(params.scope) ? params.scope[0] : params.scope;
+  const scope = Array.isArray(params.scope) ? params.scope.join('/') : params.scope;
   
   if (isLoading) {
     return (
@@ -92,12 +97,14 @@ export default function ShareScopePage() {
   }
   
   const viewProps = {
+    name: session.creatorName,
     permissions: session.permissions,
     tasks: session.tasks || [],
     users: session.users || [],
     brands: session.brands || [],
     statuses: session.statuses || [],
     viewConfig: session.viewConfig,
+    isAnalyticsView: scope === 'social-media/analytics', // Pass analytics flag
   };
 
   return (
