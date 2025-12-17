@@ -17,7 +17,6 @@ import { Input } from '../ui/input';
 import { isAfter, isBefore, startOfDay, addDays, subDays } from 'date-fns';
 import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
-import { useSharedSession } from '@/context/shared-session-provider';
 
 const createActivity = (user: User, action: string): Activity => {
   return {
@@ -31,6 +30,8 @@ const createActivity = (user: User, action: string): Activity => {
 interface KanbanBoardProps {
   tasks: Task[];
   permissions?: SharedLink['permissions'] | null;
+  isSharedView?: boolean;
+  linkId?: string;
 }
 
 interface RevisionState {
@@ -45,7 +46,7 @@ interface FinalReviewState {
   task: Task | null;
 }
 
-export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanBoardProps) {
+export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedView = false, linkId }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
   const { profile } = useUserProfile();
@@ -54,7 +55,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
   const [isSaving, setIsSaving] = useState(false);
-  const { session } = useSharedSession();
 
 
   useEffect(() => {
@@ -355,6 +355,8 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
             canDrag={canDrag}
             draggingTaskId={draggingTaskId}
             permissions={permissions}
+            isSharedView={isSharedView}
+            linkId={linkId}
           />
         ))}
       </div>
