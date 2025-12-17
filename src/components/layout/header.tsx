@@ -21,8 +21,8 @@ interface HeaderProps {
 export function Header({ title, actions, isSharedView = false, navItems = [] }: HeaderProps) {
   const { profile } = useUserProfile();
   
-  // Super Admins and Clients should not see the share dialog.
-  const showShareDialog = !isSharedView && profile && profile.role !== 'Super Admin' && profile.role !== 'Client';
+  // Super Admins should not see the share dialog.
+  const showShareDialog = !isSharedView && profile && profile.role !== 'Super Admin';
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">

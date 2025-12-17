@@ -275,10 +275,6 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   };
   
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isCompanyLoading || !allTasks || !allUsers || !allBrands || !allStatuses;
-  
-  if (profile?.role === 'Client' || profile?.role === 'Super Admin') {
-    return null;
-  }
 
   const PermissionSwitch = ({ id, label, description, checked, onCheckedChange, disabled = false }: {id: string, label: string, description: string, checked: boolean, onCheckedChange: (checked: boolean) => void, disabled?: boolean}) => (
     <div className="flex items-start justify-between space-x-2">

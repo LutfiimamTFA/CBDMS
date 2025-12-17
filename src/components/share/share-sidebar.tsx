@@ -11,7 +11,6 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from '@/components/ui/sidebar';
-import { useSharedSession } from '@/context/shared-session-provider';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as lucideIcons from 'lucide-react';
@@ -21,6 +20,7 @@ import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
 import { getInitials } from '@/lib/utils';
+import type { SharedLink } from '@/lib/types';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -28,29 +28,31 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
   return <LucideIconComponent {...props} />;
 };
 
-// A mapping to get the URL scope from the path.
 const getScopeFromPath = (path: string): string | undefined => {
     if (!path) return undefined;
     const parts = path.split('/');
     return parts[parts.length -1];
 };
 
-export function ShareSidebar() {
+interface ShareSidebarProps {
+    session: SharedLink | null;
+}
+
+export function ShareSidebar({ session }: ShareSidebarProps) {
   const pathname = usePathname();
-  const { session, isLoading: isSessionLoading } = useSharedSession();
   
   const company = session?.company || null;
-  const isLoading = isSessionLoading || !session;
+  const isLoading = !session;
   
   const handleExit = () => {
     if (session) {
       sessionStorage.removeItem(`share_token_${session.id}`);
     }
-    window.location.href = '/login'; // Redirect to login page
+    window.location.href = '/login';
   };
 
   const allowedNavIds = new Set(session?.allowedNavItems || []);
-  const visibleNavItems = (session?.navItems || []).filter(item => allowedNavIds.has(item.id));
+  const visibleNavItems = (session?.navItems || []).filter(item => allowedNavIds.has(item.id) && item.path);
 
   return (
     <Sidebar isSharedView={true}>

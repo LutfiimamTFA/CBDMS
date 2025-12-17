@@ -364,35 +364,35 @@ export default function ReportsPage() {
 
   // --- Data Fetching Logic ---
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(useMemo(() => {
-    if (!firestore || !activeCompanyId || !profile) return null;
+    if (!firestore || !activeCompanyId || isProfileLoading) return null;
     
     // Super Admin: Fetch all tasks for the company
-    if (profile.role === 'Super Admin') {
+    if (profile?.role === 'Super Admin') {
       return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
     }
     // Employee: Fetch only tasks assigned to them
-    if (profile.role === 'Employee') {
+    if (profile?.role === 'Employee') {
       return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
     // Manager: Fetch tasks of all their direct reports + their own
-    if (profile.role === 'Manager') {
+    if (profile?.role === 'Manager') {
       // Note: This requires a separate query for users first, so we handle it below
       return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
     }
     return null;
-  }, [firestore, activeCompanyId, profile]));
+  }, [firestore, activeCompanyId, profile, isProfileLoading]));
 
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(useMemo(() => {
-    if (!firestore || !activeCompanyId || !profile) return null;
+    if (!firestore || !activeCompanyId || isProfileLoading) return null;
 
-    if (profile.role === 'Super Admin') {
+    if (profile?.role === 'Super Admin') {
         return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
     }
-    if (profile.role === 'Manager') {
+    if (profile?.role === 'Manager') {
         return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
     }
     return null; // Employees don't need to fetch other users for their report
-  }, [firestore, activeCompanyId, profile]));
+  }, [firestore, activeCompanyId, profile, isProfileLoading]));
   
   const teamTasks = useMemo(() => {
     if (!profile || profile.role !== 'Manager' || !tasks || !users) return tasks;

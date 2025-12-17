@@ -62,7 +62,7 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
   'reports': SharedReportsView,
   'my-work': SharedMyWorkView,
   'social-media': SharedSocialMediaView,
-  'social-media/analytics': SharedSocialMediaView, // Re-use the same component, maybe with a prop
+  'social-media/analytics': SharedSocialMediaView,
 };
 
 export default function ShareScopePage() {
@@ -97,7 +97,6 @@ export default function ShareScopePage() {
   }
   
   const viewProps = {
-    name: session.creatorName,
     permissions: session.permissions,
     tasks: session.tasks || [],
     users: session.users || [],
@@ -109,7 +108,7 @@ export default function ShareScopePage() {
 
   return (
     <div className='flex h-svh'>
-        <ShareSidebar />
+        <ShareSidebar session={session} />
         <main className='flex-1'>
             <PageComponent {...viewProps} />
         </main>
