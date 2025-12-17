@@ -61,6 +61,7 @@ export default function MainLayout({
   const { t } = useI18n();
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const auth = useAuth();
+  const firestore = useFirestore();
   
   // This effect handles initial authentication and redirection for the main app.
   useEffect(() => {
