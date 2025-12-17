@@ -1047,6 +1047,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
   const formatDate = (date: any): string => {
     if (!date) return 'N/A';
+    // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
     const dateObj = date.toDate ? date.toDate() : parseISO(date);
     return format(dateObj, 'PP, p');
   };
@@ -1597,8 +1598,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 getUniqueActivities(initialTask.activities)
                   .slice()
                   .sort((a, b) => {
-                    const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-                    const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                    const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0;
+                    const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0;
                     return dateB - dateA;
                   })
                   .map((activity) => (
@@ -1612,7 +1613,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp ? formatDate(activity.timestamp) : 'just now'}
+                          {formatDate(activity.timestamp)}
                         </p>
                       </div>
                     </div>

@@ -36,7 +36,6 @@ import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
-import { Badge } from '@/components/ui/badge';
 import { AppProviders } from '@/components/app-providers';
 import { Header } from '@/components/layout/header';
 
