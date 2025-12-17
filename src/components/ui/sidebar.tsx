@@ -77,7 +77,7 @@ const SidebarProvider = React.forwardRef<
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
     const [_open, _setOpen] = React.useState(defaultOpen)
-    const open = openProp ?? _open
+    const open = isSharedView ? true : (openProp ?? _open);
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
         if (isSharedView) return; // Don't allow changing state in shared view
@@ -96,14 +96,10 @@ const SidebarProvider = React.forwardRef<
 
     // Helper to toggle the sidebar.
     const toggleSidebar = React.useCallback(() => {
-      if (isSharedView) {
-        setOpenMobile((open) => !open);
-        return;
-      }
       return isMobile
         ? setOpenMobile((open) => !open)
         : setOpen((open) => !open)
-    }, [isMobile, setOpen, setOpenMobile, isSharedView])
+    }, [isMobile, setOpen, setOpenMobile])
 
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
@@ -187,22 +183,49 @@ const Sidebar = React.forwardRef<
   ) => {
     const { isMobile, state, openMobile, setOpenMobile, isSharedView } = useSidebar()
 
-    if (collapsible === "none" || isSharedView) {
-      collapsible = isSharedView ? "offcanvas" : "none";
-      if (isSharedView && !isMobile) {
-          return (
-             <div
-                className={cn(
-                  "flex h-full w-[--sidebar-width] flex-col bg-card text-foreground border-r",
-                  className
-                )}
-                ref={ref}
-                {...props}
-              >
-                {children}
-            </div>
-          )
+    if (isSharedView) {
+      if (isMobile) {
+        return (
+          <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+            <SheetContent
+              data-sidebar="sidebar"
+              data-mobile="true"
+              className="w-[--sidebar-width] bg-card p-0 text-foreground [&>button]:hidden"
+              style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
+              side={side}
+            >
+              <div className="flex h-full w-full flex-col">{children}</div>
+            </SheetContent>
+          </Sheet>
+        );
       }
+      return (
+        <div
+          className={cn(
+            "flex h-full w-[--sidebar-width] flex-col bg-card text-foreground border-r",
+            className
+          )}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </div>
+      );
+    }
+
+    if (collapsible === "none") {
+      return (
+        <div
+          className={cn(
+            "flex h-full w-[--sidebar-width] flex-col bg-card text-foreground border-r",
+            className
+          )}
+          ref={ref}
+          {...props}
+        >
+          {children}
+        </div>
+      )
     }
 
     if (isMobile) {

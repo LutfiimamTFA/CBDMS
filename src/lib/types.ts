@@ -131,9 +131,7 @@ export type SharedLink = {
   name: string;
   companyId: string;
   password?: string;
-  expiresAt?: string;
-  creatorName: string;
-  creatorRole: User['role'];
+  expiresAt?: any;
   permissions: {
     canViewDetails: boolean;
     canComment: boolean;
@@ -141,23 +139,23 @@ export type SharedLink = {
     canEditContent: boolean;
     canAssignUsers: boolean;
   };
-  // UI State Snapshot
   viewConfig?: {
-    currentRoute: string; // e.g., '/dashboard', '/tasks'
+    currentRoute: string;
     filters?: any;
     activeTab?: string;
   };
   createdBy: string;
   createdAt: any;
   updatedAt?: any;
-  // Data snapshots
   tasks: Task[];
   users: User[];
   brands: Brand[];
   statuses: WorkflowStatus[];
   navItems: NavigationItem[];
-  company: Company;
+  allowedNavItems: string[];
+  company: Company | null;
 };
+
 
 export type RevisionItem = {
     id: string;

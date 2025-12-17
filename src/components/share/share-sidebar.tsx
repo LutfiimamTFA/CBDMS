@@ -18,8 +18,6 @@ import { Loader2, LogOut, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
-import { getInitials } from '@/lib/utils';
 import type { SharedLink } from '@/lib/types';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
@@ -91,17 +89,6 @@ export function ShareSidebar({ session }: ShareSidebarProps) {
         )}
       </SidebarContent>
       <SidebarFooter>
-        {session?.creatorName && (
-          <div className="flex items-center gap-3 p-2 rounded-md bg-muted text-sm">
-             <Avatar className="h-8 w-8">
-                <AvatarFallback>{getInitials(session.creatorName)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-semibold">{session.creatorName}</p>
-              <p className="text-xs text-muted-foreground">Shared as {session.creatorRole}</p>
-            </div>
-          </div>
-        )}
         <Button variant="ghost" onClick={handleExit}>
           <LogOut className="mr-2 h-4 w-4" /> Exit Preview
         </Button>

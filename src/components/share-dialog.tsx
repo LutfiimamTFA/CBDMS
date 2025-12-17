@@ -22,7 +22,7 @@ import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
 import type { SharedLink, Brand, User, NavigationItem, Task, WorkflowStatus, Company } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, Timestamp } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
@@ -184,18 +184,13 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
         activeTab: 'all',
     };
     
-    const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
+    const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt' | 'createdBy'>> = {
         name: linkName,
         permissions,
         allowedNavItems,
         companyId: profile.companyId,
-        createdBy: profile.id,
-        creatorName: profile.name,
-        creatorRole: profile.role,
         viewConfig,
-        // Snapshot the user's visible nav items at creation time.
         navItems: creatorNavItems, 
-        // Snapshot all necessary data at creation time
         tasks: allTasks,
         users: allUsers,
         brands: allBrands,
@@ -231,6 +226,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
         } else {
             const docRef = await addDoc(collection(firestore, 'sharedLinks'), {
                 ...linkData,
+                createdBy: profile.id,
                 createdAt: serverTimestamp(),
             });
             const newLinkDoc = await getDoc(docRef);
@@ -285,6 +281,13 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
     </div>
   );
+  
+   const formatDate = (date: any): string => {
+    if (!date) return 'N/A';
+    // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    return format(dateObj, 'PP, p');
+  };
 
   return (
     <>
@@ -439,19 +442,15 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
           <div className="space-y-4 py-4 text-sm">
              <div className="flex justify-between">
                 <span className="text-muted-foreground">Created By:</span>
-                <span className="font-medium">{historyLink?.creatorName || 'Unknown User'}</span>
-             </div>
-             <div className="flex justify-between">
-                <span className="text-muted-foreground">Creator Role:</span>
-                <span className="font-medium">{historyLink?.creatorRole || 'N/A'}</span>
+                <span className="font-medium">{historyLink?.createdBy || 'Unknown User'}</span>
              </div>
              <div className="flex justify-between">
                 <span className="text-muted-foreground">Created At:</span>
-                <span className="font-medium">{historyLink?.createdAt ? format(historyLink.createdAt.toDate(), 'PP, p') : 'N/A'}</span>
+                <span className="font-medium">{formatDate(historyLink?.createdAt)}</span>
              </div>
              <div className="flex justify-between">
                 <span className="text-muted-foreground">Last Updated:</span>
-                <span className="font-medium">{historyLink?.updatedAt ? format(historyLink.updatedAt.toDate(), 'PP, p') : 'Never'}</span>
+                <span className="font-medium">{historyLink?.updatedAt ? formatDate(historyLink?.updatedAt) : 'Never'}</span>
              </div>
               <Separator />
                <div>
