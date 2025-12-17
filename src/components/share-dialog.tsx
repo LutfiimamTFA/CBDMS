@@ -327,8 +327,7 @@ export function ShareDialog() {
                         <CardHeader>
                           <h3 className="font-semibold">Shared Context</h3>
                           <div className="text-sm text-muted-foreground">
-                            This link will create a snapshot of your current view: <Badge variant="outline">{pathname}</Badge>.
-                            Any active filters or tabs on this page will also be included in the shared view.
+                            This link will create a snapshot of all data related to your current view (tasks, users, brands, etc.). The recipient will see this exact page, including any active filters, as a read-only preview.
                           </div>
                         </CardHeader>
                       </Card>
