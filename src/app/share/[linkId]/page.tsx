@@ -4,7 +4,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Loader2, FileText } from 'lucide-react';
+import { Loader2, FileText, Clock } from 'lucide-react';
 import type { SharedLink, Company } from '@/lib/types';
 import { useMemo, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -18,11 +18,11 @@ const LinkNotFoundComponent = () => (
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2 text-destructive">
              <FileText className="h-6 w-6"/>
-            Invalid or Expired Link
+            Invalid Link
           </CardTitle>
         </CardHeader>
         <CardContent>
-            <p className="text-muted-foreground">The share link you are trying to access is invalid, has expired, or has been disabled. Please check the link or contact the person who shared it with you.</p>
+            <p className="text-muted-foreground">The share link you are trying to access is invalid or has been disabled. Please check the link or contact the person who shared it with you.</p>
             <Button variant="link" asChild className='mt-4'>
                 <a href="/login">Return to Login</a>
             </Button>
@@ -30,6 +30,26 @@ const LinkNotFoundComponent = () => (
       </Card>
     </div>
 );
+
+const LinkExpiredComponent = () => (
+    <div className="flex h-screen w-full items-center justify-center bg-secondary p-4">
+      <Card className="w-full max-w-md text-center">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-center gap-2 text-destructive">
+             <Clock className="h-6 w-6"/>
+            Link Expired
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+            <p className="text-muted-foreground">This share link was valid, but its access period has ended. Please request a new link from the person who shared it with you.</p>
+            <Button variant="link" asChild className='mt-4'>
+                <a href="/login">Return to Login</a>
+            </Button>
+        </CardContent>
+      </Card>
+    </div>
+);
+
 
 export default function SharedLinkRedirectorPage() {
     const params = useParams();
@@ -62,29 +82,19 @@ export default function SharedLinkRedirectorPage() {
     useEffect(() => {
         if (isLinkLoading || !sharedLink) return;
 
-        if (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date()) {
-            return;
-        }
-
-        const hasPassword = !!sharedLink.password;
-        const isAuthenticatedByToken = sessionStorage.getItem(`share_token_${linkId}`) === 'true';
-
-        if (hasPassword && !isAuthenticatedByToken) {
-            return;
-        }
-
-        const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-
+        // The logic for redirecting now happens after all validity checks.
         const navIdToScope: { [key: string]: string } = {
-            'nav_task_board': 'dashboard',
-            'nav_list': 'tasks',
-            'nav_calendar': 'calendar',
-            'nav_performance_analysis': 'reports'
+            '/dashboard': 'dashboard',
+            '/tasks': 'tasks',
+            '/calendar': 'calendar',
+            '/reports': 'reports'
         };
 
+        const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
+        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
+
         const firstValidNavItem = availableNavItems
-            .filter(item => allowedNavIds.includes(item.id) && navIdToScope[item.path])
+            .filter(item => allowedNavItems.includes(item.id) && navIdToScope[item.path])
             .sort((a, b) => a.order - b.order)[0];
         
         if (firstValidNavItem) {
@@ -103,29 +113,32 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    if (
-        !sharedLink || 
-        linkError || 
-        (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date())
-    ) {
+    // Invalid or Deleted Link
+    if (!sharedLink || linkError) {
         return <LinkNotFoundComponent />;
     }
     
-    const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
+    // Expired Link
+    if (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date()) {
+        return <LinkExpiredComponent />;
+    }
+    
+    // Link with no accessible pages configured
+    const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
     const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-     const navIdToScope: { [key: string]: string } = {
+    const navIdToScope: { [key: string]: string } = {
         '/dashboard': 'dashboard',
         '/tasks': 'tasks',
         '/calendar': 'calendar',
         '/reports': 'reports'
     };
-    const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && navIdToScope[item.path]);
-
-
+    const hasValidPages = availableNavItems.some(item => allowedNavItems.includes(item.id) && navIdToScope[item.path]);
+    
     if (!hasValidPages) {
         return <LinkNotFoundComponent />;
     }
 
+    // Password Protected Link
     if (sharedLink.password && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') {
         return (
             <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
@@ -153,6 +166,7 @@ export default function SharedLinkRedirectorPage() {
         )
     }
 
+    // If all checks pass, show a loader while redirecting.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <Loader2 className="h-8 w-8 animate-spin" />
