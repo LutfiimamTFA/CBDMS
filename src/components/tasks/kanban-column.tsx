@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { Eye } from 'lucide-react';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 interface KanbanColumnProps {
   status: WorkflowStatus;
@@ -59,6 +60,7 @@ export function KanbanColumn({
   const router = useRouter();
   const columnRef = useRef<HTMLDivElement>(null);
   const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null);
+  const { session } = useSharedSession();
 
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
@@ -104,8 +106,8 @@ export function KanbanColumn({
     const canViewDetails = permissions ? permissions.canViewDetails : true;
     if (!canViewDetails) return;
 
-    if (permissions) { // In a shared view
-      router.push(`/share/${location.pathname.split('/').pop()}/${taskId}`);
+    if (session) { 
+      router.push(`/share/${session.id}/tasks/${taskId}`);
     } else { // Internal app view
       router.push(`/tasks/${taskId}`);
     }
@@ -178,6 +180,7 @@ export function KanbanColumn({
         <div ref={columnRef} className="flex flex-col gap-3 p-4">
           {tasks.map((task, index) => {
             const isDragging = draggingTaskId === task.id;
+            const path = session ? `/share/${session.id}/tasks/${task.id}` : `/tasks/${task.id}`;
             return (
                 <React.Fragment key={task.id}>
                     {dropIndicatorIndex === index && (
@@ -198,6 +201,7 @@ export function KanbanColumn({
                       <TaskCard 
                           task={task} 
                           draggable={canDrag}
+                          path={path}
                       />
                     </div>
                 </React.Fragment>
@@ -211,5 +215,3 @@ export function KanbanColumn({
     </div>
   );
 }
-
-    

@@ -11,19 +11,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Progress } from '../ui/progress';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
-import { useSharedSession } from '@/context/shared-session-provider';
 
 interface TaskCardProps {
   task: Task;
   draggable?: boolean;
+  path: string;
 }
 
-export function TaskCard({ task, draggable = false }: TaskCardProps) {
+export function TaskCard({ task, draggable = false, path }: TaskCardProps) {
 
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
-  const { session } = useSharedSession();
-
 
   const timeTrackingProgress = task.timeEstimate && task.timeTracked
     ? (task.timeTracked / task.timeEstimate) * 100
@@ -39,8 +37,6 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
   const assignees = task.assignees || [];
   const creatorId = task.createdBy.id;
-
-  const path = session ? `/share/${session.id}/tasks/${task.id}` : `/tasks/${task.id}`;
 
   return (
     <Link href={path}>
