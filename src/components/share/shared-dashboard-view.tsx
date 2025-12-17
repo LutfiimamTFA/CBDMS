@@ -7,7 +7,6 @@ import type { Task, SharedLink, WorkflowStatus } from '@/lib/types';
 
 interface SharedDashboardViewProps {
   tasks: Task[];
-  statuses: WorkflowStatus[];
   permissions: SharedLink['permissions'];
 }
 

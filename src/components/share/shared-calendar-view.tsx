@@ -19,12 +19,10 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { cn, getBrandColor } from '@/lib/utils';
 import { ScrollArea } from '../ui/scroll-area';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Card } from '../ui/card';
 import {
   Popover,
   PopoverContent,

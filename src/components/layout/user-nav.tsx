@@ -18,11 +18,13 @@ import { useUserProfile, useAuth, initiateSignOut } from '@/firebase';
 import { Skeleton } from '../ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { Badge } from '../ui/badge';
+import { useI18n } from '@/context/i18n-provider';
 
 export function UserNav() {
   const router = useRouter();
   const auth = useAuth();
   const { user, profile, isLoading } = useUserProfile();
+  const { t } = useI18n();
 
   const handleLogout = () => {
     if (auth) {
@@ -78,7 +80,7 @@ export function UserNav() {
           <Link href="/settings">
             <DropdownMenuItem>
               <UserIcon />
-              Profile
+              {t('nav.profile')}
             </DropdownMenuItem>
           </Link>
         </DropdownMenuGroup>

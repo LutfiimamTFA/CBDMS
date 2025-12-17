@@ -37,24 +37,6 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from '../ui/dropdown-menu';
-import { Label } from '../ui/label';
-import {
-  addDays,
-  format,
-  formatDistanceToNow,
-  parse,
-  parseISO,
-  startOfWeek,
-  nextSaturday
-} from 'date-fns';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
@@ -73,6 +55,7 @@ import { Calendar as CalendarComponent } from '../ui/calendar';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '../ui/card';
 import { MultiSelect } from '../ui/multi-select';
+import { addDays, format, formatDistanceToNow, parse, parseISO, startOfWeek, nextSaturday } from 'date-fns';
 
 
 const taskSchema = z.object({
@@ -665,10 +648,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const recurringValue = form.watch('recurring');
   const recurringOptions: Record<string, string> = {
-    never: t('addtask.form.recurring.never'),
-    daily: t('addtask.form.recurring.daily'),
-    weekly: t('addtask.form.recurring.weekly'),
-    monthly: t('addtask.form.recurring.monthly'),
+    never: 'Never',
+    daily: 'Daily',
+    weekly: 'Weekly',
+    monthly: 'Monthly',
   };
   
   const timeEstimateValue = form.watch('timeEstimate') ?? 0;
@@ -862,7 +845,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <div className="flex items-center gap-2">
                                 <Select onValueChange={(value) => { field.onChange(value); setSuggestionReason(null); }} value={field.value}>
                                     <FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.priority.placeholder')} /></SelectTrigger></FormControl>
-                                    <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{t(`priority.${p.value.toLowerCase()}` as any)}</div></SelectItem>))}</SelectContent>
+                                    <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
                                 </Select>
                                 <Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting} className="shrink-0">{isSuggesting ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Wand2 className="h-4 w-4" />)}<span className="sr-only">Suggest Priority</span></Button>
                             </div>

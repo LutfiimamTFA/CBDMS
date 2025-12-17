@@ -30,11 +30,8 @@ export default function SharedLinkRedirectorPage() {
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
 
-    const companyDocRef = useMemo(() => {
-        if (!firestore || !sharedLink?.companyId) return null;
-        return doc(firestore, 'companies', sharedLink.companyId);
-    }, [firestore, sharedLink?.companyId]);
-    const { data: company, isLoading: isCompanyLoading } = useDoc<Company>(companyDocRef);
+    const company = sharedLink?.company || null;
+    const isCompanyLoading = isLinkLoading;
 
     // This maps the navigation item ID (e.g., 'nav_task_board') to the URL scope ('dashboard')
     const navIdToScope: { [key: string]: string } = {

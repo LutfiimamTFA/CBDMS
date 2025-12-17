@@ -1,8 +1,8 @@
+
 'use client';
 import { Header } from '@/components/layout/header';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import { useI18n } from '@/context/i18n-provider';
-import { useSharedSession } from '@/context/shared-session-provider';
 import React, { useMemo, useState } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
@@ -16,17 +16,14 @@ export default function TasksPage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const { permissions, isLoading: arePermsLoading } = usePermissions();
-  const { session } = useSharedSession();
   const [activeTab, setActiveTab] = useState('all');
-
-  const activeCompanyId = session ? session.companyId : companyId;
 
   // Base query: Fetches all tasks the user is allowed to see based on their role.
   const tasksQuery = React.useMemo(() => {
-    if (!firestore || !activeCompanyId || !profile) return null;
+    if (!firestore || !companyId || !profile) return null;
 
     if (profile.role === 'Super Admin') {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
     }
     
     if (profile.role === 'Manager') {
@@ -35,7 +32,7 @@ export default function TasksPage() {
       }
       return query(
         collection(firestore, 'tasks'), 
-        where('companyId', '==', activeCompanyId),
+        where('companyId', '==', companyId),
         where('brandId', 'in', profile.brandIds)
       );
     }
@@ -45,7 +42,7 @@ export default function TasksPage() {
     }
 
     return null;
-  }, [firestore, activeCompanyId, profile]);
+  }, [firestore, companyId, profile]);
 
   const { data: allVisibleTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
@@ -72,15 +69,15 @@ export default function TasksPage() {
   const { data: teamUsers, isLoading: isTeamUsersLoading } = useCollection<User>(teamUsersQuery);
 
   const usersQuery = React.useMemo(() => {
-    if (!firestore || !activeCompanyId) return null;
-    let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+    if (!firestore || !companyId) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
     if (profile?.role === 'Manager') {
       // For managers, we fetch their own team to display in the assignee filter.
       // This is simpler than fetching all users and filtering on the client.
       q = query(q, where('managerId', '==', profile.id));
     }
     return q;
-  }, [firestore, activeCompanyId, profile]);
+  }, [firestore, companyId, profile]);
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
 
   // Client-side filtering based on the active tab

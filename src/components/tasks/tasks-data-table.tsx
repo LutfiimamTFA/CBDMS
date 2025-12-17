@@ -33,7 +33,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { format, parseISO, isAfter } from 'date-fns';
 import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
-import { useI18n } from '@/context/i18n-provider';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
 import { DataTableViewOptions } from './data-table-view-options';
 import {
@@ -56,7 +55,6 @@ import { updateDocumentNonBlocking, deleteDocumentNonBlocking } from '@/firebase
 import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
-import { useSharedSession } from '@/context/shared-session-provider';
 import { useRouter } from 'next/navigation';
 
 type AIValidationState = {
@@ -88,15 +86,13 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   
-  // Use a separate hook for internal permissions only when not in share mode
+  // Conditionally use internal permissions hook
   const useInternalPermissions = () => {
     if (sharedPermissions) return { permissions: null, isLoading: false };
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return usePermissions();
   }
   const { permissions, isLoading: arePermsLoading } = useInternalPermissions();
-
-  const { session } = useSharedSession();
   const router = useRouter();
   
   const [data, setData] = React.useState<Task[]>(tasks);
@@ -115,7 +111,6 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
     lastActivity: false,
   });
   const [rowSelection, setRowSelection] = React.useState({})
-  const { t } = useI18n();
   const { toast } = useToast();
   
   const [aiValidation, setAiValidation] = React.useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
@@ -124,10 +119,10 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
 
   const canChangePriority = React.useMemo(() => {
-      if (session || sharedPermissions) return false;
+      if (sharedPermissions) return false;
       if (!profile) return false;
       return profile.role === 'Super Admin' || profile.role === 'Manager';
-  }, [profile, session, sharedPermissions]);
+  }, [profile, sharedPermissions]);
 
   const statusOptions = React.useMemo(() => {
     const getIcon = (statusName: string) => {
@@ -147,7 +142,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
 
   const priorityOptions = Object.values(priorityInfo).map(p => ({
       value: p.value,
-      label: p.label, // Use default label, translation handled elsewhere if needed
+      label: p.label,
       icon: p.icon
   }));
   
@@ -160,19 +155,8 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   }, [brands]);
 
   const assigneeOptions = React.useMemo(() => {
-    if (!users || !profile) return [];
-    
-    if (profile.role === 'Super Admin' || profile.role === 'Manager') {
-        return users
-            .filter(u => u.role === 'Manager' || u.role === 'Employee')
-            .map(u => ({ value: u.id, label: u.name }));
-    }
-    
-    return users
-        .filter(u => u.role === 'Employee')
-        .map(u => ({ value: u.id, label: u.name }));
-        
-  }, [users, profile]);
+    return (users || []).map(u => ({ value: u.id, label: u.name }));
+  }, [users]);
 
 
   const createActivity = (user: User, action: string): Activity => {
@@ -260,13 +244,13 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   };
 
   const canCreateTasks = React.useMemo(() => {
-    if (session || sharedPermissions) return false; // Never allow creation in share mode
+    if (sharedPermissions) return false;
     if (arePermsLoading || !profile || !permissions) return false;
     if (profile.role === 'Super Admin') return true;
     if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
     if (profile.role === 'Employee') return permissions.Employee.canCreateTasks;
     return false;
-  }, [profile, permissions, arePermsLoading, session, sharedPermissions]);
+  }, [profile, permissions, arePermsLoading, sharedPermissions]);
 
 
   const columns: ColumnDef<Task>[] = [
@@ -462,7 +446,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       cell: ({ row }) => {
         const task = row.original;
         
-        if (session || sharedPermissions) return null; // No actions in share mode
+        if (sharedPermissions) return null; // No actions in share mode
 
         return (
           <DropdownMenu>
@@ -619,7 +603,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                     className="group cursor-pointer"
                     onClick={() => {
                         const task = row.original;
-                        const path = session ? `/share/${session.id}/tasks/${task.id}` : `/tasks/${task.id}`;
+                        const path = sharedPermissions ? `/share/${location.pathname.split('/')[2]}/tasks/${task.id}` : `/tasks/${task.id}`;
                         router.push(path);
                     }}
                   >

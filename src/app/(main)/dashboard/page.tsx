@@ -15,7 +15,6 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
-import { useSharedSession } from '@/context/shared-session-provider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Link from 'next/link';
 import {
@@ -29,19 +28,16 @@ export default function DashboardPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const firestore = useFirestore();
   const { t } = useI18n();
-  const { session } = useSharedSession();
 
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const activeCompanyId = session ? session.companyId : companyId;
-
   // Query untuk tugas
   const tasksQuery = useMemo(() => {
-    if (!firestore || !activeCompanyId || !profile) return null;
+    if (!firestore || !companyId || !profile) return null;
 
     if (profile.role === 'Super Admin') {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
     }
     
     // Managers see tasks only from their assigned brands
@@ -51,7 +47,7 @@ export default function DashboardPage() {
       }
       return query(
         collection(firestore, 'tasks'), 
-        where('companyId', '==', activeCompanyId),
+        where('companyId', '==', companyId),
         where('brandId', 'in', profile.brandIds)
       );
     }
@@ -62,16 +58,16 @@ export default function DashboardPage() {
     }
 
     return null; // Fallback for other roles or scenarios
-  }, [firestore, activeCompanyId, profile]);
+  }, [firestore, companyId, profile]);
   
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   // Query untuk semua pengguna di perusahaan (untuk filter)
   const usersQuery = useMemo(() => {
-    if (!firestore || !activeCompanyId) return null;
-    let q = query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+    if (!firestore || !companyId) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
     return q;
-  }, [firestore, activeCompanyId]);
+  }, [firestore, companyId]);
 
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
@@ -119,7 +115,7 @@ export default function DashboardPage() {
         title={t('nav.board')}
         actions={
           <div className="flex items-center gap-2">
-            {!session && profile?.role !== 'Super Admin' && <SmartSuggestions />}
+            {profile?.role !== 'Super Admin' && <SmartSuggestions />}
           </div>
         }
       />

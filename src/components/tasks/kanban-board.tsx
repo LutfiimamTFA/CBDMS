@@ -12,7 +12,6 @@ import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
-import { Textarea } from '../ui/textarea';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { isAfter, isBefore, startOfDay, addDays, subDays } from 'date-fns';
@@ -459,5 +458,3 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null }: KanbanB
     </>
   );
 }
-
-    
