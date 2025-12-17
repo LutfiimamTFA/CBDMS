@@ -115,7 +115,7 @@ export function ShareDialog() {
   
   const loadLinkDetails = (link: SharedLink) => {
     setActiveLink(link);
-    setLinkName(link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`);
+    setLinkName(link.name || (link.createdAt ? `Link from ${format(link.createdAt.toDate(), 'PP')}` : 'New Link'));
     
     if (link.password) {
       setUsePassword(true);
@@ -299,7 +299,7 @@ export function ShareDialog() {
                           ) : (existingLinks || []).map(link => (
                               <div key={link.id} className="flex items-center justify-between rounded-md hover:bg-secondary">
                                 <Button variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start text-left h-auto py-2" onClick={() => loadLinkDetails(link)}>
-                                    <span className="truncate">{link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}</span>
+                                  <span className="truncate">{link.name || (link.createdAt ? `Link from ${format(link.createdAt.toDate(), 'PP')}` : 'New Link')}</span>
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
                                     <History className="h-4 w-4" />
