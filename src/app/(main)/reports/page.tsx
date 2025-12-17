@@ -3,7 +3,6 @@
 
 import { useMemo, useState } from 'react';
 import { useUserProfile, useCollection, useFirestore } from '@/firebase';
-import { useSharedSession } from '@/context/shared-session-provider';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
 import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp, Timer, Ban } from 'lucide-react';
@@ -348,17 +347,14 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
 export default function ReportsPage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
-  const { session, isLoading: isSessionLoading } = useSharedSession();
-  
-  const activeCompanyId = session ? session.companyId : companyId;
 
   // --- Data Fetching Logic ---
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(useMemo(() => {
-    if (!firestore || !activeCompanyId || isProfileLoading) return null;
+    if (!firestore || !companyId || isProfileLoading) return null;
     
     // Super Admin: Fetch all tasks for the company
     if (profile?.role === 'Super Admin') {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
     }
     // Employee: Fetch only tasks assigned to them
     if (profile?.role === 'Employee') {
@@ -367,22 +363,22 @@ export default function ReportsPage() {
     // Manager: Fetch tasks of all their direct reports + their own
     if (profile?.role === 'Manager') {
       // Note: This requires a separate query for users first, so we handle it below
-      return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
     }
     return null;
-  }, [firestore, activeCompanyId, profile, isProfileLoading]));
+  }, [firestore, companyId, profile, isProfileLoading]));
 
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(useMemo(() => {
-    if (!firestore || !activeCompanyId || isProfileLoading) return null;
+    if (!firestore || !companyId || isProfileLoading) return null;
 
     if (profile?.role === 'Super Admin') {
-        return query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId));
+        return query(collection(firestore, 'users'), where('companyId', '==', companyId));
     }
     if (profile?.role === 'Manager') {
         return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
     }
     return null; // Employees don't need to fetch other users for their report
-  }, [firestore, activeCompanyId, profile, isProfileLoading]));
+  }, [firestore, companyId, profile, isProfileLoading]));
   
   const teamTasks = useMemo(() => {
     if (!profile || profile.role !== 'Manager' || !tasks || !users) return tasks;
@@ -392,12 +388,8 @@ export default function ReportsPage() {
     return tasks.filter(task => task.assigneeIds.some(id => teamMemberIds.includes(id)));
   }, [tasks, users, profile]);
 
-  const isLoading = isProfileLoading || isTasksLoading || isUsersLoading || isSessionLoading;
+  const isLoading = isProfileLoading || isTasksLoading || isUsersLoading;
 
-  if (session && !session.allowedNavItems.includes('nav_performance_analysis')) {
-    return notFound();
-  }
-  
   const renderContent = () => {
     if (isLoading) {
       return (
