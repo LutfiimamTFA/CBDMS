@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -65,10 +66,6 @@ function PersonalReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
 
   return (
     <>
-      <div className="mb-4">
-          <h2 className="text-2xl font-bold">{t('reports.employee.title')}</h2>
-          <p className="text-muted-foreground">{t('reports.employee.description')}</p>
-      </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -102,7 +99,7 @@ function PersonalReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('reports.metric.onTimeRate')}</CardHeader>
+            <CardTitle className="text-sm font-medium">{t('reports.metric.onTimeRate')}</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -127,7 +124,7 @@ function PersonalReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
         <Card>
           <CardHeader>
             <CardTitle>{t('reports.chart.hoursByPriority.title')}</CardTitle>
-            <CardDescription>{t('reports.chart.hoursByPriority.description.employee')}</CardHeader>
+            <CardDescription>{t('reports.chart.hoursByPriority.description.employee')}</CardDescription>
           </CardHeader>
           <CardContent>
             <HoursByPriorityChart tasks={tasks || []} />
@@ -211,11 +208,6 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
 
   return (
     <>
-      <div className="mb-6">
-          <h2 className="text-2xl font-bold tracking-tight">{title}</h2>
-          <p className="text-muted-foreground">{description}</p>
-      </div>
-
        <div className="mb-6 p-4 border rounded-lg bg-card">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -321,7 +313,7 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>{t('reports.chart.teamWorkload.title')}</CardTitle>
-              <CardDescription>{t('reports.chart.teamWorkload.description')}</CardHeader>
+              <CardDescription>{t('reports.chart.teamWorkload.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <TeamWorkloadChart tasks={filteredTasks || []} users={filteredUsers || []} />
@@ -330,7 +322,7 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
           <Card>
             <CardHeader>
               <CardTitle>{t('reports.chart.taskStatus.title')}</CardTitle>
-              <CardDescription>{t('reports.chart.taskStatus.description')}</CardHeader>
+              <CardDescription>{t('reports.chart.taskStatus.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <TaskStatusChart tasks={filteredTasks || []} />
@@ -339,7 +331,7 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
           <Card className="lg:col-span-3">
              <CardHeader>
                 <CardTitle>{t('reports.chart.hoursByPriority.title')}</CardTitle>
-                <CardDescription>{t('reports.chart.hoursByPriority.description.admin')}</CardHeader>
+                <CardDescription>{t('reports.chart.hoursByPriority.description.admin')}</CardDescription>
             </CardHeader>
             <CardContent>
                 <HoursByPriorityChart tasks={filteredTasks || []} />
