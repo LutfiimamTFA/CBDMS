@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2, FileText, Clock } from 'lucide-react';
-import type { SharedLink, Company } from '@/lib/types';
+import type { SharedLink, Company, NavigationItem } from '@/lib/types';
 import { useMemo, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,7 +88,7 @@ export default function SharedLinkRedirectorPage() {
             return;
         }
 
-        if (sharedLink.expiresAt && isAfter(new Date(), sharedLink.expiresAt.toDate())) {
+        if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
             return;
         }
         
@@ -138,6 +138,7 @@ export default function SharedLinkRedirectorPage() {
         '/calendar': 'calendar',
         '/reports': 'reports'
     };
+    
     const hasValidPages = availableNavItems.some(item => allowedNavItems.includes(item.id) && navIdToScope[item.path]);
     
     if (!hasValidPages) {
