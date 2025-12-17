@@ -14,7 +14,6 @@ import { SharedTasksView } from '@/components/share/shared-tasks-view';
 import { SharedCalendarView } from '@/components/share/shared-calendar-view';
 import { SharedReportsView } from '@/components/share/shared-reports-view';
 import { ShareSidebar } from '@/components/share/share-sidebar';
-import { Sidebar, SidebarInset } from '@/components/ui/sidebar';
 
 const AccessDeniedComponent = () => (
     <div className="flex h-full items-center justify-center p-8">

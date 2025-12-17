@@ -40,6 +40,16 @@ export function ShareSidebar() {
     window.location.href = '/login'; // Redirect to login page
   };
 
+  const navPathToScope = (path: string) => {
+    const mapping: { [key:string]: string } = {
+        '/dashboard': 'dashboard',
+        '/tasks': 'tasks',
+        '/calendar': 'calendar',
+        '/reports': 'reports'
+    }
+    return mapping[path] || 'dashboard';
+  }
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -57,10 +67,12 @@ export function ShareSidebar() {
         ) : (
           <SidebarMenu>
             {(session?.navItems || []).map(item => {
-              const isActive = pathname.endsWith(item.path);
+              const scope = navPathToScope(item.path);
+              const linkPath = `/share/${session?.id}/${scope}`;
+              const isActive = pathname === linkPath;
               return (
                 <SidebarMenuItem key={item.id}>
-                  <Link href={`/share/${session?.id}${item.path}`}>
+                  <Link href={linkPath}>
                     <SidebarMenuButton isActive={isActive} tooltip={item.label}>
                       <Icon name={item.icon} />
                       <span>{item.label.startsWith('nav.') ? item.label.split('.')[1].replace(/_/g, ' ') : item.label}</span>
