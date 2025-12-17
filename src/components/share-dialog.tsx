@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -72,6 +71,9 @@ export function ShareDialog() {
     return query(collection(firestore, 'sharedLinks'), where('companyId', '==', profile.companyId));
   }, [firestore, profile?.companyId]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
+
+  const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
+  const { data: allDbNavItems } = useCollection<NavigationItem>(navItemsQuery);
   
   // Fetch all necessary data for snapshotting
   const tasksQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
@@ -82,6 +84,18 @@ export function ShareDialog() {
   const { data: allBrands } = useCollection<Brand>(brandsQuery);
   const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
+
+  // This is the CRITICAL part: get the navigation items visible to the current user
+  const visibleNavItemsForCreator = useMemo(() => {
+    if (!allDbNavItems || !profile) return [];
+    return allDbNavItems.filter(item => item.roles.includes(profile.role));
+  }, [allDbNavItems, profile]);
+  
+  // The pages that can be selected in the dialog are the intersection of what's shareable and what the creator can see.
+  const selectableSharePages = useMemo(() => {
+    const visibleIds = new Set(visibleNavItemsForCreator.map(item => item.id));
+    return shareableNavItems.filter(item => visibleIds.has(item.id));
+  }, [visibleNavItemsForCreator]);
 
 
   useEffect(() => {
@@ -186,8 +200,8 @@ export function ShareDialog() {
         companyId: profile.companyId,
         createdBy: profile.id,
         viewConfig,
-        // Snapshot static nav items to ensure consistency
-        navItems: shareableNavItems,
+        // Snapshot the user's visible nav items at creation time.
+        navItems: visibleNavItemsForCreator, 
         // Snapshot all necessary data at creation time
         tasks: allTasks,
         users: allUsers,
@@ -315,7 +329,7 @@ export function ShareDialog() {
                           ) : (existingLinks || []).map(link => (
                               <div key={link.id} className="flex items-center justify-between rounded-md hover:bg-secondary">
                                 <Button variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start text-left h-auto py-2" onClick={() => loadLinkDetails(link)}>
-                                  <span className="truncate">{link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}</span>
+                                  <span className="truncate">{link.name || `Link from ${link.createdAt ? format(link.createdAt.toDate(), 'PP') : 'New'}`}</span>
                                 </Button>
                                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
                                     <History className="h-4 w-4" />
@@ -340,24 +354,23 @@ export function ShareDialog() {
                       
                       <Card>
                         <CardHeader>
-                          <h3 className="font-semibold">Shared Context</h3>
-                          <p className="text-sm text-muted-foreground">
-                            This link will create a snapshot of all data related to your current view (tasks, users, brands, etc.). The recipient will see this exact page as a read-only preview.
+                          <h3 className="font-semibold">Visible Pages</h3>
+                           <p className="text-sm text-muted-foreground">
+                            Select which pages the recipient can access. Only pages visible to your role are shown.
                           </p>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <h4 className="font-medium text-sm">Visible Pages</h4>
                             <div className="space-y-2 max-h-40 overflow-y-auto p-2 border rounded-md">
-                                {shareableNavItems.map(item => (
+                                {selectableSharePages.length > 0 ? selectableSharePages.map(item => (
                                     <div key={item.id} className="flex items-center gap-3">
                                         <Checkbox 
                                           id={`nav-${item.id}`} 
                                           checked={allowedNavItems.includes(item.id)}
                                           onCheckedChange={(checked) => handleAllowedNavItemChange(item.id, !!checked)}
                                         />
-                                        <Label htmlFor={`nav-${item.id}`}>{item.label.split('.').pop()?.replace(/_/g, ' ')}</Label>
+                                        <Label htmlFor={`nav-${item.id}`}>{item.label}</Label>
                                     </div>
-                                ))}
+                                )) : <p className="text-xs text-muted-foreground text-center p-4">Your role does not have access to any shareable pages.</p>}
                             </div>
                         </CardContent>
                       </Card>

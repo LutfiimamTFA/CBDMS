@@ -6,7 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2, FileWarning, Clock } from 'lucide-react';
-import type { SharedLink, NavigationItem } from '@/lib/types';
+import type { SharedLink } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -132,52 +132,41 @@ export default function SharedLinkRedirectorPage() {
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
 
-    // --- Validation and Redirect Logic ---
-    // This effect runs only when loading is complete and we have a definitive result.
     useEffect(() => {
         if (isLinkLoading || !linkId) return;
 
-        // Condition 1: Document doesn't exist or there was a Firestore error.
         if (!sharedLink || linkError) {
-            return; // Render will handle showing the NotFound component.
+            return; 
         }
 
-        // Condition 2: Link is expired.
         if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
-            return; // Render will handle showing the Expired component.
+            return;
         }
         
-        // Condition 3: Password protection is active and user is not authenticated for this link.
         const isAuthenticated = typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) === 'true';
         if (sharedLink.password && !isAuthenticated) {
-            return; // Render will handle showing the PasswordForm component.
+            return;
         }
-
-        // Condition 4: Find the first valid page to redirect to.
-        const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : shareableNavItems;
+        
+        const allowedNavIds = sharedLink.allowedNavItems || [];
+        const availableNavItems = sharedLink.navItems || []; // Use the snapshotted navItems
 
         const firstValidItem = availableNavItems
-            .filter(item => allowedNavIds.includes(item.id)) // Filter by allowed IDs
-            .sort((a, b) => a.order - b.order)[0]; // Get the first one by order
+            .filter(item => allowedNavIds.includes(item.id))
+            .sort((a, b) => a.order - b.order)[0];
 
         if (firstValidItem) {
             const scope = getScopeFromPath(firstValidItem.path);
             if (scope) {
                 router.replace(`/share/${linkId}/${scope}`);
             } else {
-                // This case should be rare if config is correct, but we handle it.
-                // It means an allowed page has no valid scope.
-                return; // Render will handle showing Misconfigured error.
+                return;
             }
         } else {
-            // No valid/allowed pages found in the snapshot.
-            return; // Render will handle showing Misconfigured error.
+            return;
         }
     }, [sharedLink, isLinkLoading, linkError, linkId, router]);
 
-
-    // --- Render Logic: Renders based on the validation status ---
 
     if (isLinkLoading) {
         return (
@@ -199,16 +188,14 @@ export default function SharedLinkRedirectorPage() {
         return <PasswordFormComponent company={sharedLink.company || null} linkId={linkId} />;
     }
 
-    // After password check, validate if there's any content to show.
-    const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-    const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : shareableNavItems;
+    const allowedNavIds = sharedLink.allowedNavItems || [];
+    const availableNavItems = sharedLink.navItems || [];
     const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && getScopeFromPath(item.path));
     
     if (!hasValidPages) {
         return <LinkNotFoundComponent isMisconfigured={true} />;
     }
 
-    // If all checks pass, show a loader while useEffect performs the redirect.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <Loader2 className="h-8 w-8 animate-spin" />

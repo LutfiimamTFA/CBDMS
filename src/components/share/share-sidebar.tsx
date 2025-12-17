@@ -19,6 +19,7 @@ import { Loader2, LogOut, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
+import { getScopeFromPath } from '@/lib/share-nav-config';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -40,15 +41,8 @@ export function ShareSidebar() {
     window.location.href = '/login'; // Redirect to login page
   };
 
-  const navPathToScope = (path: string) => {
-    const mapping: { [key:string]: string } = {
-        '/dashboard': 'dashboard',
-        '/tasks': 'tasks',
-        '/calendar': 'calendar',
-        '/reports': 'reports'
-    }
-    return mapping[path] || 'dashboard';
-  }
+  const allowedNavIds = new Set(session?.allowedNavItems || []);
+  const visibleNavItems = (session?.navItems || []).filter(item => allowedNavIds.has(item.id));
 
   return (
     <Sidebar>
@@ -66,8 +60,10 @@ export function ShareSidebar() {
           </div>
         ) : (
           <SidebarMenu>
-            {(session?.navItems || []).map(item => {
-              const scope = navPathToScope(item.path);
+            {visibleNavItems.map(item => {
+              const scope = getScopeFromPath(item.path);
+              if (!scope) return null;
+
               const linkPath = `/share/${session?.id}/${scope}`;
               const isActive = pathname === linkPath;
               return (
@@ -75,7 +71,7 @@ export function ShareSidebar() {
                   <Link href={linkPath}>
                     <SidebarMenuButton isActive={isActive} tooltip={item.label}>
                       <Icon name={item.icon} />
-                      <span>{item.label.startsWith('nav.') ? item.label.split('.')[1].replace(/_/g, ' ') : item.label}</span>
+                      <span>{item.label}</span>
                     </SidebarMenuButton>
                   </Link>
                 </SidebarMenuItem>
