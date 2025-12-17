@@ -14,11 +14,14 @@ interface SharedTasksViewProps {
 }
 
 export function SharedTasksView({ tasks, statuses, brands, users }: SharedTasksViewProps) {
-  const { t } = useI18n();
+  // Although useI18n is here, the parent layout for share routes doesn't have the provider,
+  // so we need to be careful. Let's provide a fallback.
+  // A better solution is to not use components that rely on this hook in public views.
+  const title = "Tasks";
   
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title={t('nav.list')} />
+      <Header title={title} isPublicView={true} />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <TasksDataTable 
             tasks={tasks || []}

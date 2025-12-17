@@ -12,9 +12,10 @@ import { ShareDialog } from '../share-dialog';
 interface HeaderProps {
   title: string;
   actions?: React.ReactNode;
+  isPublicView?: boolean;
 }
 
-export function Header({ title, actions }: HeaderProps) {
+export function Header({ title, actions, isPublicView = false }: HeaderProps) {
   
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
@@ -27,13 +28,17 @@ export function Header({ title, actions }: HeaderProps) {
       <div className="flex items-center gap-4">
         {actions}
         <div className="flex items-center gap-2">
-            <>
-              <ShareDialog />
-              <LanguageSwitcher />
+            {!isPublicView ? (
+              <>
+                <ShareDialog />
+                <LanguageSwitcher />
+                <ThemeSwitcher />
+                <NotificationBell />
+                <UserNav />
+              </>
+            ) : (
               <ThemeSwitcher />
-              <NotificationBell />
-              <UserNav />
-            </>
+            )}
         </div>
       </div>
     </header>

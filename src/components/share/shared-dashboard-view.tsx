@@ -15,7 +15,7 @@ export function SharedDashboardView({ tasks, permissions }: SharedDashboardViewP
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Dashboard" />
+      <Header title="Dashboard" isPublicView={true} />
       <main className="flex-1 overflow-hidden p-4 md:p-6">
         <KanbanBoard tasks={tasks || []} permissions={permissions} />
       </main>
