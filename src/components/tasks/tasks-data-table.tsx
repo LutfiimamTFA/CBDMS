@@ -762,5 +762,3 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
     </>
   );
 }
-
-    

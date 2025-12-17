@@ -36,12 +36,6 @@ export default function SharedLinkRedirectorPage() {
     }, [firestore, sharedLink?.companyId]);
     const { data: company, isLoading: isCompanyLoading } = useDoc<Company>(companyDocRef);
 
-    const navItemsQuery = useMemo(
-        () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
-        [firestore]
-    );
-    const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
-    
     // This maps the navigation item ID (e.g., 'nav_task_board') to the URL scope ('dashboard')
     const navIdToScope: { [key: string]: string } = {
         'nav_task_board': 'dashboard',
@@ -73,8 +67,8 @@ export default function SharedLinkRedirectorPage() {
     }, [sharedLink, linkId]);
     
     useEffect(() => {
-        if (isAuthenticated && sharedLink && allNavItems && pathname === `/share/${linkId}`) {
-            const firstValidNavItem = allNavItems
+        if (isAuthenticated && sharedLink && pathname === `/share/${linkId}`) {
+            const firstValidNavItem = (sharedLink.navItems || [])
                 .filter(item => sharedLink.allowedNavItems.includes(item.id) && navIdToScope[item.id])
                 .sort((a, b) => a.order - b.order)[0];
 
@@ -85,10 +79,10 @@ export default function SharedLinkRedirectorPage() {
                  notFound();
             }
         }
-    }, [isAuthenticated, sharedLink, allNavItems, linkId, router, pathname]);
+    }, [isAuthenticated, sharedLink, linkId, router, pathname, navIdToScope]);
 
-    const isLoading = isLinkLoading || isNavItemsLoading || isCompanyLoading;
-    const isRedirecting = isAuthenticated && pathname === `/share/${linkId}` && !!sharedLink && !!allNavItems;
+    const isLoading = isLinkLoading || isCompanyLoading;
+    const isRedirecting = isAuthenticated && pathname === `/share/${linkId}` && !!sharedLink;
 
     if (isLoading || isRedirecting) {
         return (

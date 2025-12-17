@@ -2,8 +2,7 @@
 'use client';
 import { Header } from '@/components/layout/header';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
-import { useI18n } from '@/context/i18n-provider';
-import type { Task, WorkflowStatus, Brand, User } from '@/lib/types';
+import type { Task, WorkflowStatus, Brand, User, SharedLink } from '@/lib/types';
 import React from 'react';
 
 interface SharedTasksViewProps {
@@ -11,12 +10,10 @@ interface SharedTasksViewProps {
   statuses: WorkflowStatus[];
   brands: Brand[];
   users: User[];
+  permissions: SharedLink['permissions'];
 }
 
-export function SharedTasksView({ tasks, statuses, brands, users }: SharedTasksViewProps) {
-  // Although useI18n is here, the parent layout for share routes doesn't have the provider,
-  // so we need to be careful. Let's provide a fallback.
-  // A better solution is to not use components that rely on this hook in public views.
+export function SharedTasksView({ tasks, statuses, brands, users, permissions }: SharedTasksViewProps) {
   const title = "Tasks";
   
   return (
@@ -28,6 +25,7 @@ export function SharedTasksView({ tasks, statuses, brands, users }: SharedTasksV
             statuses={statuses || []}
             brands={brands || []}
             users={users || []}
+            permissions={permissions}
         />
       </main>
     </div>
