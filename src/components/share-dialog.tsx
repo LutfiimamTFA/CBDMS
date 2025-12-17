@@ -30,6 +30,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { usePathname } from 'next/navigation';
 import { useCompany } from '@/context/company-provider';
+import { Checkbox } from './ui/checkbox';
 
 const defaultPermissions = {
   canViewDetails: true,
@@ -56,6 +57,7 @@ export function ShareDialog() {
 
   // Permissions State
   const [permissions, setPermissions] = useState(defaultPermissions);
+  const [allowedNavItems, setAllowedNavItems] = useState<string[]>([]);
   const [historyLink, setHistoryLink] = useState<SharedLink | null>(null);
 
   const firestore = useFirestore();
@@ -101,6 +103,13 @@ export function ShareDialog() {
   const handlePermissionChange = (permission: keyof typeof permissions, value: boolean) => {
     setPermissions(prev => ({ ...prev, [permission]: value }));
   };
+  
+  const handleAllowedNavItemChange = (navItemId: string, isChecked: boolean) => {
+    setAllowedNavItems(prev => 
+        isChecked ? [...prev, navItemId] : prev.filter(id => id !== navItemId)
+    );
+  };
+
 
   const handleOpenNew = () => {
     setActiveLink(null);
@@ -111,6 +120,7 @@ export function ShareDialog() {
     setExpiresAtDate(undefined);
     setExpiresAtTime('00:00');
     setPermissions(defaultPermissions);
+    setAllowedNavItems([]);
   };
   
   const loadLinkDetails = (link: SharedLink) => {
@@ -126,7 +136,7 @@ export function ShareDialog() {
     }
 
     if (link.expiresAt) {
-      const expirationDate = new Date(link.expiresAt);
+      const expirationDate = link.expiresAt.toDate();
       setUseExpiration(true);
       setExpiresAtDate(expirationDate);
       setExpiresAtTime(format(expirationDate, 'HH:mm'));
@@ -137,6 +147,7 @@ export function ShareDialog() {
     }
 
     setPermissions(link.permissions || defaultPermissions);
+    setAllowedNavItems(link.allowedNavItems || []);
   };
 
   const getCombinedExpiration = () => {
@@ -144,7 +155,7 @@ export function ShareDialog() {
     const [hours, minutes] = expiresAtTime.split(':').map(Number);
     const combinedDate = new Date(expiresAtDate);
     combinedDate.setHours(hours, minutes);
-    return combinedDate.toISOString();
+    return combinedDate;
   };
 
   const handleCreateOrUpdateLink = async () => {
@@ -156,8 +167,6 @@ export function ShareDialog() {
 
     const isCreating = !activeLink;
     
-    const relevantNavItems = allNavItems.filter(item => item.roles.includes(profile.role));
-
     // Capture the current view state
     const viewConfig = {
         currentRoute: pathname,
@@ -168,6 +177,7 @@ export function ShareDialog() {
     const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
         name: linkName,
         permissions,
+        allowedNavItems,
         companyId: profile.companyId,
         createdBy: profile.id,
         viewConfig,
@@ -176,7 +186,7 @@ export function ShareDialog() {
         users: allUsers,
         brands: allBrands,
         statuses: allStatuses,
-        navItems: relevantNavItems,
+        navItems: allNavItems, // Snapshot all available nav items
         company: company,
     };
 
@@ -189,7 +199,7 @@ export function ShareDialog() {
     }
 
     if (useExpiration && expiresAtDate) {
-        linkData.expiresAt = getCombinedExpiration() as any;
+        linkData.expiresAt = getCombinedExpiration();
     } else if (!isCreating) {
         linkData.expiresAt = deleteField() as any;
     }
@@ -329,6 +339,21 @@ export function ShareDialog() {
                             This link will create a snapshot of all data related to your current view (tasks, users, brands, etc.). The recipient will see this exact page, including any active filters, as a read-only preview.
                           </p>
                         </CardHeader>
+                        <CardContent className="space-y-4">
+                            <h4 className="font-medium text-sm">Visible Pages</h4>
+                            <div className="space-y-2 max-h-40 overflow-y-auto p-2 border rounded-md">
+                                {allNavItems?.filter(item => item.roles.includes('Client')).map(item => (
+                                    <div key={item.id} className="flex items-center gap-3">
+                                        <Checkbox 
+                                          id={`nav-${item.id}`} 
+                                          checked={allowedNavItems.includes(item.id)}
+                                          onCheckedChange={(checked) => handleAllowedNavItemChange(item.id, !!checked)}
+                                        />
+                                        <Label htmlFor={`nav-${item.id}`}>{item.label.split('.').pop()?.replace(/_/g, ' ')}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
                       </Card>
 
                       <Card>
