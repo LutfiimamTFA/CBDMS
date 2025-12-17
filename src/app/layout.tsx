@@ -5,6 +5,8 @@ import './globals.css';
 import { AppProviders } from '@/components/app-providers';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from '@/components/ui/toaster';
 
 // We can't use Metadata here because this is a client component.
 // Metadata should be handled in specific page.tsx files if needed.
@@ -43,9 +45,17 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         {isShareRoute ? (
-          // For share routes, we bypass the main AppProviders to avoid auth/user context dependencies.
-          // The share layout will have its own minimal providers.
-          children
+          // For share routes, we use a minimal provider setup, bypassing the main AppProviders
+          // to avoid auth/user context dependencies.
+           <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              {children}
+              <Toaster />
+            </ThemeProvider>
         ) : (
           // For the main app, we use the full AppProviders.
           <AppProviders>

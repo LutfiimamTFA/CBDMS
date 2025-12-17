@@ -2,7 +2,6 @@
 'use client';
 
 import React from 'react';
-import { AppProviders } from '@/components/app-providers';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter } from '@/components/ui/sidebar';
 import { useSharedSession } from '@/context/shared-session-provider';
 import { useCollection, useFirestore, useDoc } from '@/firebase';
@@ -12,8 +11,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as lucideIcons from 'lucide-react';
 import { Loader2, LogOut } from 'lucide-react';
-import { ThemeProvider } from '@/components/theme-provider';
-import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
 import { SharedSessionProvider } from '@/context/shared-session-provider';
 import { Button } from '@/components/ui/button';
@@ -33,20 +30,13 @@ export default function ShareLayout({
 }) {
   const pathname = usePathname();
   
+  // This lightweight provider setup is ONLY for the share routes.
   const ShareProviders = ({ children }: { children: React.ReactNode }) => (
-      <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-      >
-          <FirebaseClientProvider>
-              <SharedSessionProvider>
-                  {children}
-                  <Toaster/>
-              </SharedSessionProvider>
-          </FirebaseClientProvider>
-      </ThemeProvider>
+      <FirebaseClientProvider>
+          <SharedSessionProvider>
+              {children}
+          </SharedSessionProvider>
+      </FirebaseClientProvider>
   );
 
   const ShareSidebar = () => {

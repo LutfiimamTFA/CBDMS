@@ -84,10 +84,10 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
     return () => unsubscribe();
   }, [auth]); // Depends on the auth instance
 
+  const servicesAvailable = !!(firebaseApp && firestore && auth && storage);
+
   // Memoize the context value to prevent unnecessary re-renders in consumers.
-  // This is crucial for preventing infinite loops in hooks that depend on this context.
   const contextValue = useMemo((): FirebaseContextState => {
-    const servicesAvailable = !!(firebaseApp && firestore && auth && storage);
     return {
       areServicesAvailable: servicesAvailable,
       firebaseApp: servicesAvailable ? firebaseApp : null,
@@ -98,11 +98,11 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
       isUserLoading: userAuthState.isUserLoading,
       userError: userAuthState.userError,
     };
-  }, [firebaseApp, firestore, auth, storage, userAuthState]);
+  }, [firebaseApp, firestore, auth, storage, userAuthState, servicesAvailable]);
 
   return (
     <FirebaseContext.Provider value={contextValue}>
-      <FirebaseErrorListener />
+      {servicesAvailable && <FirebaseErrorListener />}
       {children}
     </FirebaseContext.Provider>
   );
