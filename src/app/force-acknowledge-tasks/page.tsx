@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -28,6 +29,7 @@ export default function ForceAcknowledgeTasksPage() {
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+  const todayTimestamp = Timestamp.fromDate(todayStart);
 
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
@@ -35,10 +37,9 @@ export default function ForceAcknowledgeTasksPage() {
       collection(firestore, 'tasks'),
       where('assigneeIds', 'array-contains', profile.id),
       where('isMandatory', '==', true),
-      // IMPORTANT FIX: Use ISO string for server-side `createdAt` which is also a string
-      where('createdAt', '>=', todayStart.toISOString())
+      where('createdAt', '>=', todayTimestamp)
     );
-  }, [firestore, profile, todayStart]);
+  }, [firestore, profile, todayTimestamp]);
 
   const { data: newTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 

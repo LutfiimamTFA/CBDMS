@@ -84,17 +84,13 @@ export function ShareDialog() {
   const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
 
-  // CRITICAL: This is the source of truth for what the current user can see.
   const creatorVisibleNavItems = useMemo(() => {
     if (!allDbNavItems || !profile) return [];
     return allDbNavItems.filter(item => item.roles.includes(profile.role));
   }, [allDbNavItems, profile]);
   
-  // The pages that can be selected in the dialog are the ones visible to the creator.
   const selectableSharePages = useMemo(() => {
-    return creatorVisibleNavItems.filter(item => 
-        ['nav_task_board', 'nav_list', 'nav_calendar', 'nav_performance_analysis'].includes(item.id)
-    );
+    return creatorVisibleNavItems.filter(item => !!item.path);
   }, [creatorVisibleNavItems]);
 
 
@@ -282,7 +278,7 @@ export function ShareDialog() {
   
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isCompanyLoading || !allTasks || !allUsers || !allBrands || !allStatuses;
   
-  if (profile?.role === 'Client') {
+  if (profile?.role === 'Client' || profile?.role === 'Super Admin') {
     return null;
   }
 
