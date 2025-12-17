@@ -15,10 +15,9 @@ import { Badge } from '../ui/badge';
 interface TaskCardProps {
   task: Task;
   draggable?: boolean;
-  path: string;
 }
 
-export function TaskCard({ task, draggable = false, path }: TaskCardProps) {
+export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
@@ -39,7 +38,6 @@ export function TaskCard({ task, draggable = false, path }: TaskCardProps) {
   const creatorId = task.createdBy.id;
 
   return (
-    <Link href={path}>
       <Card
         className={cn(
           "transition-shadow duration-200 hover:shadow-lg w-full relative",
@@ -165,7 +163,6 @@ export function TaskCard({ task, draggable = false, path }: TaskCardProps) {
         </div>
         </CardContent>
       </Card>
-    </Link>
   );
 }
 

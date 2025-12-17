@@ -15,7 +15,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { Eye } from 'lucide-react';
-import { useSharedSession } from '@/context/shared-session-provider';
 
 interface KanbanColumnProps {
   status: WorkflowStatus;
@@ -60,8 +59,7 @@ export function KanbanColumn({
   const router = useRouter();
   const columnRef = useRef<HTMLDivElement>(null);
   const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null);
-  const { session } = useSharedSession();
-
+  
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
     tasks.forEach((task) => {
@@ -102,15 +100,10 @@ export function KanbanColumn({
     onDrop(e, status.name);
   };
   
-  const handleCardClick = (taskId: string) => {
+  const handleCardClick = (path: string) => {
     const canViewDetails = permissions ? permissions.canViewDetails : true;
     if (!canViewDetails) return;
-
-    if (session) { 
-      router.push(`/share/${session.id}/tasks/${taskId}`);
-    } else { // Internal app view
-      router.push(`/tasks/${taskId}`);
-    }
+    router.push(path);
   };
 
   return (
@@ -180,7 +173,8 @@ export function KanbanColumn({
         <div ref={columnRef} className="flex flex-col gap-3 p-4">
           {tasks.map((task, index) => {
             const isDragging = draggingTaskId === task.id;
-            const path = session ? `/share/${session.id}/tasks/${task.id}` : `/tasks/${task.id}`;
+            // The path is now constructed in the parent (KanbanBoard)
+            // and passed down to TaskCard. This component doesn't need to know the context.
             return (
                 <React.Fragment key={task.id}>
                     {dropIndicatorIndex === index && (
@@ -190,7 +184,7 @@ export function KanbanColumn({
                       draggable={canDrag}
                       onDragStart={(e) => onDragStart(e, task.id)}
                       onDragEnd={onDragEnd}
-                      onClick={() => handleCardClick(task.id)}
+                      onClick={() => handleCardClick(`/tasks/${task.id}`)}
                       className={cn(
                         "transition-opacity", 
                         isDragging && "opacity-30",
@@ -201,7 +195,6 @@ export function KanbanColumn({
                       <TaskCard 
                           task={task} 
                           draggable={canDrag}
-                          path={path}
                       />
                     </div>
                 </React.Fragment>
