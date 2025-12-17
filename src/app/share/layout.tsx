@@ -4,11 +4,10 @@
 import React from 'react';
 import { AppProviders } from '@/components/app-providers';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter } from '@/components/ui/sidebar';
-import { Logo } from '@/components/logo';
 import { useSharedSession } from '@/context/shared-session-provider';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, orderBy, query } from 'firebase/firestore';
-import type { NavigationItem } from '@/lib/types';
+import { useCollection, useFirestore, useDoc } from '@/firebase';
+import { collection, orderBy, query, doc } from 'firebase/firestore';
+import type { NavigationItem, Company } from '@/lib/types';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as lucideIcons from 'lucide-react';
@@ -18,6 +17,7 @@ import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
 import { SharedSessionProvider } from '@/context/shared-session-provider';
 import { Button } from '@/components/ui/button';
+import { PublicLogo } from '@/components/share/public-logo';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
     const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -33,8 +33,6 @@ export default function ShareLayout({
 }) {
   const pathname = usePathname();
   
-  // This minimal provider setup is only for the share layout.
-  // It provides Firebase, but not the user-specific contexts like PermissionsProvider or CompanyProvider.
   const ShareProviders = ({ children }: { children: React.ReactNode }) => (
       <ThemeProvider
           attribute="class"
@@ -61,6 +59,13 @@ export default function ShareLayout({
     );
     const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
 
+    const companyDocRef = React.useMemo(() => {
+        if (!firestore || !session?.companyId) return null;
+        return doc(firestore, 'companies', session.companyId);
+    }, [firestore, session?.companyId]);
+    const { data: company, isLoading: isCompanyLoading } = useDoc<Company>(companyDocRef);
+
+
     const allowedItems = React.useMemo(() => {
       if (!session || !allNavItems) return [];
       
@@ -76,7 +81,7 @@ export default function ShareLayout({
           .sort((a,b) => a.order - b.order);
     }, [session, allNavItems]);
     
-    const isLoading = isSessionLoading || isNavItemsLoading;
+    const isLoading = isSessionLoading || isNavItemsLoading || isCompanyLoading;
     
     const handleExit = () => {
         sessionStorage.removeItem(`share_token_${session?.id}`);
@@ -87,7 +92,7 @@ export default function ShareLayout({
         <SidebarProvider isSharedView>
           <Sidebar>
             <SidebarHeader>
-              <Logo />
+              <PublicLogo company={company} isLoading={isLoading} />
             </SidebarHeader>
             <SidebarContent>
               {isLoading ? (
@@ -139,3 +144,4 @@ export default function ShareLayout({
     </ShareProviders>
   );
 }
+
