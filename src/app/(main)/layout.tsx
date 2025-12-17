@@ -63,9 +63,13 @@ export default function MainLayout({
   const auth = useAuth();
   const firestore = useFirestore();
   
-  // This effect handles initial authentication and redirection for the main app.
   useEffect(() => {
     if (isUserLoading) return;
+    
+    // Explicitly do not perform any redirection logic if we are on a share route.
+    if (pathname.startsWith('/share')) {
+        return;
+    }
     
     if (!user) {
       router.replace('/login');
@@ -86,7 +90,7 @@ export default function MainLayout({
         });
     }
 
-  }, [user, isUserLoading, auth, router]);
+  }, [user, isUserLoading, auth, router, pathname]);
 
 
   const navItemsCollectionRef = useMemo(

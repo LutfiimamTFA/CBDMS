@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useParams, useRouter, usePathname } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2, FileText } from 'lucide-react';
@@ -34,7 +34,6 @@ const LinkNotFoundComponent = () => (
 export default function SharedLinkRedirectorPage() {
     const params = useParams();
     const router = useRouter();
-    const pathname = usePathname();
     const linkId = params.linkId as string;
     const firestore = useFirestore();
 
@@ -50,58 +49,50 @@ export default function SharedLinkRedirectorPage() {
 
     const company = sharedLink?.company || null;
 
-    // This maps the navigation item ID (e.g., 'nav_task_board') to the URL scope ('dashboard')
-    const navIdToScope: { [key: string]: string } = {
-        'nav_task_board': 'dashboard',
-        'nav_list': 'tasks',
-        'nav_calendar': 'calendar',
-        'nav_performance_analysis': 'reports'
-    };
-
     const handleAuth = () => {
         if (sharedLink?.password === password) {
             sessionStorage.setItem(`share_token_${linkId}`, 'true');
             setAuthError(null);
-            router.refresh(); // Refresh the page to trigger the redirect logic
+            router.refresh(); 
         } else {
             setAuthError('Invalid password.');
         }
     };
     
-    // This effect handles the redirect logic once the link data is available.
     useEffect(() => {
         if (isLinkLoading || !sharedLink) return;
 
-        // Condition 1: Check for expiration
         if (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date()) {
-            return; // Don't redirect, let the component render notFound.
+            return;
         }
 
-        // Condition 2: Check for password protection
         const hasPassword = !!sharedLink.password;
-        const isAuthenticated = sessionStorage.getItem(`share_token_${linkId}`) === 'true';
+        const isAuthenticatedByToken = sessionStorage.getItem(`share_token_${linkId}`) === 'true';
 
-        if (hasPassword && !isAuthenticated) {
-            return; // Don't redirect, let the component render the password form.
+        if (hasPassword && !isAuthenticatedByToken) {
+            return;
         }
 
-        // Condition 3: Proceed with redirect if not password protected or already authenticated
-        if (pathname === `/share/${linkId}`) {
-            const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-            const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
+        const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
+        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
 
-            const firstValidNavItem = availableNavItems
-                .filter(item => allowedNavIds.includes(item.id) && navIdToScope[item.id])
-                .sort((a, b) => a.order - b.order)[0];
-            
-            if (firstValidNavItem) {
-                const scope = navIdToScope[firstValidNavItem.id];
-                router.replace(`/share/${linkId}/${scope}`);
-            }
-            // If no valid nav item, the component will render the notFound component below.
+        const navIdToScope: { [key: string]: string } = {
+            'nav_task_board': 'dashboard',
+            'nav_list': 'tasks',
+            'nav_calendar': 'calendar',
+            'nav_performance_analysis': 'reports'
+        };
+
+        const firstValidNavItem = availableNavItems
+            .filter(item => allowedNavIds.includes(item.id) && navIdToScope[item.path])
+            .sort((a, b) => a.order - b.order)[0];
+        
+        if (firstValidNavItem) {
+            const scope = navIdToScope[firstValidNavItem.path];
+            router.replace(`/share/${linkId}/${scope}`);
         }
 
-    }, [sharedLink, isLinkLoading, linkId, router, pathname, navIdToScope]);
+    }, [sharedLink, isLinkLoading, linkId, router]);
 
 
     if (isLinkLoading) {
@@ -112,7 +103,6 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    // Handle cases where the link is not found, expired, or has no valid pages.
     if (
         !sharedLink || 
         linkError || 
@@ -120,16 +110,22 @@ export default function SharedLinkRedirectorPage() {
     ) {
         return <LinkNotFoundComponent />;
     }
-
+    
     const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
     const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-    const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && navIdToScope[item.id]);
+     const navIdToScope: { [key: string]: string } = {
+        '/dashboard': 'dashboard',
+        '/tasks': 'tasks',
+        '/calendar': 'calendar',
+        '/reports': 'reports'
+    };
+    const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && navIdToScope[item.path]);
+
 
     if (!hasValidPages) {
         return <LinkNotFoundComponent />;
     }
 
-    // If password is required and user is not authenticated via session, show password form.
     if (sharedLink.password && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') {
         return (
             <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
@@ -157,7 +153,6 @@ export default function SharedLinkRedirectorPage() {
         )
     }
 
-    // If all checks pass but redirect hasn't happened, show a loading spinner.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <Loader2 className="h-8 w-8 animate-spin" />
