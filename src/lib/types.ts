@@ -1,5 +1,4 @@
 
-
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -133,6 +132,8 @@ export type SharedLink = {
   companyId: string;
   password?: string;
   expiresAt?: string;
+  creatorName: string;
+  creatorRole: User['role'];
   permissions: {
     canViewDetails: boolean;
     canComment: boolean;

@@ -19,6 +19,8 @@ import { Loader2, LogOut, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
+import { getInitials } from '@/lib/utils';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -28,6 +30,7 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 
 // A mapping to get the URL scope from the path.
 const getScopeFromPath = (path: string): string | undefined => {
+    if (!path) return undefined;
     const parts = path.split('/');
     return parts[parts.length -1];
 };
@@ -50,7 +53,7 @@ export function ShareSidebar() {
   const visibleNavItems = (session?.navItems || []).filter(item => allowedNavIds.has(item.id));
 
   return (
-    <Sidebar>
+    <Sidebar isSharedView={true}>
       <SidebarHeader>
         <PublicLogo company={company} isLoading={isLoading} />
         <Badge variant="outline" className="w-fit">
@@ -86,6 +89,17 @@ export function ShareSidebar() {
         )}
       </SidebarContent>
       <SidebarFooter>
+        {session?.creatorName && (
+          <div className="flex items-center gap-3 p-2 rounded-md bg-muted text-sm">
+             <Avatar className="h-8 w-8">
+                <AvatarFallback>{getInitials(session.creatorName)}</AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-semibold">{session.creatorName}</p>
+              <p className="text-xs text-muted-foreground">Shared as {session.creatorRole}</p>
+            </div>
+          </div>
+        )}
         <Button variant="ghost" onClick={handleExit}>
           <LogOut className="mr-2 h-4 w-4" /> Exit Preview
         </Button>

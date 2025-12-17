@@ -40,7 +40,11 @@ const defaultPermissions = {
   canAssignUsers: false,
 };
 
-export function ShareDialog() {
+interface ShareDialogProps {
+  creatorNavItems: NavigationItem[];
+}
+
+export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeLink, setActiveLink] = useState<SharedLink | null>(null);
@@ -72,9 +76,6 @@ export function ShareDialog() {
   }, [firestore, profile?.companyId]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
-  const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
-  const { data: allDbNavItems } = useCollection<NavigationItem>(navItemsQuery);
-  
   const tasksQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allTasks } = useCollection<Task>(tasksQuery);
   const usersQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
@@ -83,15 +84,10 @@ export function ShareDialog() {
   const { data: allBrands } = useCollection<Brand>(brandsQuery);
   const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
-
-  const creatorVisibleNavItems = useMemo(() => {
-    if (!allDbNavItems || !profile) return [];
-    return allDbNavItems.filter(item => item.roles.includes(profile.role));
-  }, [allDbNavItems, profile]);
   
   const selectableSharePages = useMemo(() => {
-    return creatorVisibleNavItems.filter(item => !!item.path);
-  }, [creatorVisibleNavItems]);
+    return creatorNavItems.filter(item => !!item.path);
+  }, [creatorNavItems]);
 
 
   useEffect(() => {
@@ -194,9 +190,11 @@ export function ShareDialog() {
         allowedNavItems,
         companyId: profile.companyId,
         createdBy: profile.id,
+        creatorName: profile.name,
+        creatorRole: profile.role,
         viewConfig,
         // Snapshot the user's visible nav items at creation time.
-        navItems: creatorVisibleNavItems, 
+        navItems: creatorNavItems, 
         // Snapshot all necessary data at creation time
         tasks: allTasks,
         users: allUsers,
@@ -445,7 +443,11 @@ export function ShareDialog() {
           <div className="space-y-4 py-4 text-sm">
              <div className="flex justify-between">
                 <span className="text-muted-foreground">Created By:</span>
-                <span className="font-medium">{allUsers?.find(u => u.id === historyLink?.createdBy)?.name || 'Unknown User'}</span>
+                <span className="font-medium">{historyLink?.creatorName || 'Unknown User'}</span>
+             </div>
+             <div className="flex justify-between">
+                <span className="text-muted-foreground">Creator Role:</span>
+                <span className="font-medium">{historyLink?.creatorRole || 'N/A'}</span>
              </div>
              <div className="flex justify-between">
                 <span className="text-muted-foreground">Created At:</span>

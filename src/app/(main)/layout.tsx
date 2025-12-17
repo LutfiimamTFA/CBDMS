@@ -60,7 +60,6 @@ function MainAppLayout({
   finalNavItems: NavigationItem[];
 }) {
   const pathname = usePathname();
-  const { t } = useI18n();
 
   const { childMap } = useMemo(() => {
     const itemMap = new Map(finalNavItems.map(item => [item.id, item]));
@@ -181,10 +180,10 @@ function MainAppLayout({
                 <Link href="/settings">
                 <SidebarMenuButton
                     isActive={pathname === '/settings'}
-                    tooltip={t('nav.profile')}
+                    tooltip="Profile"
                 >
                     <User />
-                    <span>{t('nav.profile')}</span>
+                    <span>Profile</span>
                 </SidebarMenuButton>
                 </Link>
             </SidebarMenuItem>

@@ -14,15 +14,15 @@ import type { NavigationItem } from '@/lib/types';
 interface HeaderProps {
   title: string;
   actions?: React.ReactNode;
-  isPublicView?: boolean;
+  isSharedView?: boolean;
   navItems?: NavigationItem[];
 }
 
-export function Header({ title, actions, isPublicView = false, navItems = [] }: HeaderProps) {
+export function Header({ title, actions, isSharedView = false, navItems = [] }: HeaderProps) {
   const { profile } = useUserProfile();
   
   // Super Admins should not see the share dialog.
-  const showShareDialog = !isPublicView && profile && profile.role !== 'Super Admin';
+  const showShareDialog = !isSharedView && profile && profile.role !== 'Super Admin';
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
@@ -35,7 +35,7 @@ export function Header({ title, actions, isPublicView = false, navItems = [] }: 
       <div className="flex items-center gap-4">
         {actions}
         <div className="flex items-center gap-2">
-            {!isPublicView ? (
+            {!isSharedView ? (
               <>
                 {showShareDialog && <ShareDialog creatorNavItems={navItems} />}
                 <LanguageSwitcher />
