@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -327,10 +326,10 @@ export function ShareDialog() {
                       <Card>
                         <CardHeader>
                           <h3 className="font-semibold">Shared Context</h3>
-                          <p className="text-sm text-muted-foreground">
+                          <div className="text-sm text-muted-foreground">
                             This link will create a snapshot of your current view: <Badge variant="outline">{pathname}</Badge>.
                             Any active filters or tabs on this page will also be included in the shared view.
-                          </p>
+                          </div>
                         </CardHeader>
                       </Card>
 
