@@ -1,18 +1,19 @@
 
 'use client';
 
+import React, { useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Loader2, FileWarning, Clock } from 'lucide-react';
+import { Loader2, FileWarning, Clock, ShieldAlert } from 'lucide-react';
 import type { SharedLink, NavigationItem } from '@/lib/types';
-import { useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PublicLogo } from '@/components/share/public-logo';
 import { isAfter } from 'date-fns';
-import React from 'react';
+
+// --- Stateless Fallback Components ---
 
 const LinkNotFoundComponent = ({ isMisconfigured = false }: { isMisconfigured?: boolean }) => (
     <div className="flex h-screen w-full items-center justify-center bg-secondary p-4">
@@ -57,6 +58,57 @@ const LinkExpiredComponent = () => (
     </div>
 );
 
+const PasswordFormComponent = ({ company, linkId }: { company: SharedLink['company'] | null, linkId: string }) => {
+    const [password, setPassword] = React.useState('');
+    const [authError, setAuthError] = React.useState<string | null>(null);
+    const router = useRouter();
+
+    const handleAuth = async () => {
+        // We fetch the document again here to validate the password against the latest data.
+        const firestore = useFirestore();
+        if (!firestore) return;
+        const linkDocRef = doc(firestore, 'sharedLinks', linkId);
+        const docSnap = await (await import('firebase/firestore')).getDoc(linkDocRef);
+
+        if (docSnap.exists() && docSnap.data().password === password) {
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem(`share_token_${linkId}`, 'true');
+            }
+            setAuthError(null);
+            router.refresh(); 
+        } else {
+            setAuthError('Invalid password.');
+        }
+    };
+
+    return (
+        <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
+            <Card className="w-full max-w-sm">
+                 <CardHeader className='text-center'>
+                    <div className='flex justify-center mb-4'><PublicLogo company={company} isLoading={false} /></div>
+                    <CardTitle>Password Required</CardTitle>
+                    <CardDescription>This content is protected. Please enter the password to view.</CardDescription>
+                 </CardHeader>
+                 <CardContent className="space-y-4">
+                    <div className="flex w-full items-center space-x-2">
+                        <Input 
+                            type="password" 
+                            placeholder="Enter password" 
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
+                        />
+                        <Button onClick={handleAuth}>Unlock</Button>
+                    </div>
+                    {authError && <p className="text-sm text-destructive text-center">{authError}</p>}
+                </CardContent>
+            </Card>
+        </div>
+    );
+};
+
+
+// --- The Main Validator Component ---
 
 export default function SharedLinkRedirectorPage() {
     const params = useParams();
@@ -64,32 +116,27 @@ export default function SharedLinkRedirectorPage() {
     const linkId = params.linkId as string;
     const firestore = useFirestore();
 
-    const [password, setPassword] = React.useState('');
-    const [authError, setAuthError] = React.useState<string | null>(null);
-
     const linkDocRef = useMemo(() => {
         if (!firestore || !linkId) return null;
         return doc(firestore, 'sharedLinks', linkId);
     }, [firestore, linkId]);
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
-
+    
+    // --- REDIRECT LOGIC ---
+    // This effect runs ONLY after the validation logic in the render block has passed.
     useEffect(() => {
-        // This effect ONLY handles redirection. All validation is done in the render logic.
+        // Guard against running on initial load or if there's no valid link
         if (isLinkLoading || !sharedLink || linkError) return;
 
-        // Skip redirection logic if password protection is active and not yet bypassed
+        // Skip if password is required but not yet authenticated
         if (sharedLink.password && (typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) return;
         
-        // Defensive normalization of navigation data
-        const availableNavItems: NavigationItem[] = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-        const allowedNavIds: string[] = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-
+        // --- Navigation Logic ---
+        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
+        const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
         const navIdToScope: { [key: string]: string } = {
-            '/dashboard': 'dashboard',
-            '/tasks': 'tasks',
-            '/calendar': 'calendar',
-            '/reports': 'reports'
+            '/dashboard': 'dashboard', '/tasks': 'tasks', '/calendar': 'calendar', '/reports': 'reports'
         };
 
         const firstValidNavItem = availableNavItems
@@ -100,22 +147,12 @@ export default function SharedLinkRedirectorPage() {
             const scope = navIdToScope[firstValidNavItem.path];
             router.replace(`/share/${linkId}/${scope}`);
         }
-        // If no valid nav item is found, the render logic below will catch it and show an error page.
+        // If no valid nav item is found, the render logic below will show an error.
     }, [sharedLink, isLinkLoading, linkError, linkId, router]);
-    
-    const handleAuth = () => {
-        if (sharedLink?.password === password) {
-            if (typeof window !== 'undefined') {
-                sessionStorage.setItem(`share_token_${linkId}`, 'true');
-            }
-            setAuthError(null);
-            router.refresh(); 
-        } else {
-            setAuthError('Invalid password.');
-        }
-    };
-    
-    // --- STAGE 1: LOADING ---
+
+
+    // --- RENDER LOGIC: Follows a strict validation order ---
+
     if (isLinkLoading) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -124,54 +161,26 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    // --- STAGE 2: VALIDATION (runs only after loading is complete) ---
-
-    // 2a. Document not found or there was a Firestore error
+    // 1. Document not found or there was a Firestore error
     if (!sharedLink || linkError) {
         return <LinkNotFoundComponent />;
     }
     
-    // 2b. Link is expired
+    // 2. Link is expired
     if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
         return <LinkExpiredComponent />;
     }
     
-    // 2c. Link requires a password and it hasn't been provided yet
+    // 3. Link requires a password and it hasn't been provided yet
     if (sharedLink.password && (typeof window === 'undefined' || sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) {
-        return (
-            <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
-                <Card className="w-full max-w-sm">
-                     <CardHeader className='text-center'>
-                        <div className='flex justify-center mb-4'><PublicLogo company={sharedLink.company || null} isLoading={false} /></div>
-                        <CardTitle>Password Required</CardTitle>
-                        <CardDescription>This content is protected. Please enter the password to view.</CardDescription>
-                     </CardHeader>
-                     <CardContent className="space-y-4">
-                        <div className="flex w-full items-center space-x-2">
-                            <Input 
-                                type="password" 
-                                placeholder="Enter password" 
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAuth()}
-                            />
-                            <Button onClick={handleAuth}>Unlock</Button>
-                        </div>
-                        {authError && <p className="text-sm text-destructive text-center">{authError}</p>}
-                    </CardContent>
-                </Card>
-            </div>
-        )
+        return <PasswordFormComponent company={sharedLink.company || null} linkId={linkId} />;
     }
 
-    // 2d. Link is misconfigured (no valid pages to show)
+    // 4. Link is misconfigured (no valid pages to show)
     const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
     const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
     const navIdToScope: { [key: string]: string } = {
-        '/dashboard': 'dashboard',
-        '/tasks': 'tasks',
-        '/calendar': 'calendar',
-        '/reports': 'reports'
+        '/dashboard': 'dashboard', '/tasks': 'tasks', '/calendar': 'calendar', '/reports': 'reports'
     };
     const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && navIdToScope[item.path]);
     
@@ -179,7 +188,7 @@ export default function SharedLinkRedirectorPage() {
         return <LinkNotFoundComponent isMisconfigured={true} />;
     }
 
-    // --- STAGE 3: REDIRECTING ---
+    // --- REDIRECTING STAGE ---
     // If all checks pass, show a loader while the useEffect performs the redirect.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">

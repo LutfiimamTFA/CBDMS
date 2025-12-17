@@ -63,8 +63,8 @@ export default function RootLayout({
             {children}
           </AppProviders>
         ) : isSharePage ? (
-          // For share pages, render children directly without any main providers
-          // to ensure complete isolation. The share layout will handle its own providers.
+          // For share pages, render children within a minimal provider setup
+          // to ensure complete isolation from the main app's providers.
           <ThemeProvider
               attribute="class"
               defaultTheme="system"
