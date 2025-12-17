@@ -1,5 +1,7 @@
+
 'use client';
 
+import React from 'react';
 import { AppProviders } from '@/components/app-providers';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
@@ -37,8 +39,17 @@ export default function ShareLayout({
 
   const allowedItems = React.useMemo(() => {
     if (!session || !allNavItems) return [];
+    
+    // This maps the navigation item ID (e.g., 'nav_task_board') to the URL scope ('dashboard')
+    const navIdToScope: { [key: string]: string } = {
+        'nav_task_board': 'dashboard',
+        'nav_list': 'tasks',
+        'nav_calendar': 'calendar',
+        'nav_performance_analysis': 'reports',
+    };
+
     return allNavItems
-        .filter(item => session.allowedNavItems.includes(item.id) && item.parentId === null)
+        .filter(item => session.allowedNavItems.includes(item.id) && navIdToScope[item.id])
         .sort((a,b) => a.order - b.order);
   }, [session, allNavItems]);
   
@@ -60,7 +71,14 @@ export default function ShareLayout({
               ) : (
                 <SidebarMenu>
                     {allowedItems.map(item => {
-                       const path = `/share/${session?.id}${item.path}`;
+                        const navIdToScope: { [key: string]: string } = {
+                            'nav_task_board': 'dashboard',
+                            'nav_list': 'tasks',
+                            'nav_calendar': 'calendar',
+                            'nav_performance_analysis': 'reports',
+                        };
+
+                       const path = `/share/${session?.id}/${navIdToScope[item.id]}`;
                        const isActive = pathname === path;
                         return (
                            <SidebarMenuItem key={item.id}>
