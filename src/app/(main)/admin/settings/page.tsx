@@ -1,5 +1,4 @@
 'use client';
-import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -113,7 +112,6 @@ export default function AppSettingsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="App Settings" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mx-auto max-w-2xl space-y-6">
             <Form {...form}>

@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Header } from '@/components/layout/header';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -183,7 +181,6 @@ export default function SchedulePage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Schedule" />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">

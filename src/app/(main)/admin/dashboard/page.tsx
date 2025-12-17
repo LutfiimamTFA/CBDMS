@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import {
   Card,
   CardContent,
@@ -50,7 +49,6 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Admin Dashboard" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mb-6">
           <h2 className="text-2xl font-bold tracking-tight">System Overview</h2>

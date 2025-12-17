@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { useSharedSession } from '@/context/shared-session-provider';
 import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
@@ -216,7 +214,6 @@ export default function CalendarPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Team Calendar" />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">

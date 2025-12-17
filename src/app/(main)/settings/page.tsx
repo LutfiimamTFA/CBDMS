@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { Header } from '@/components/layout/header';
 import {
   Card,
   CardContent,
@@ -29,7 +27,7 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail } from 'firebase/auth';
+import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, updatePassword } from 'firebase/auth';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -242,7 +240,6 @@ export default function SettingsPage() {
   if (isProfileLoading) {
     return (
       <div className="flex h-svh flex-col bg-background">
-        <Header title="Profile" />
         <main className="flex-1 overflow-auto p-4 md:p-6 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
         </main>
@@ -252,7 +249,6 @@ export default function SettingsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Profile" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mx-auto max-w-3xl space-y-8">
           <Card>
@@ -387,7 +383,7 @@ export default function SettingsPage() {
                                 <FormMessage />
                             </FormItem>
                             )}
-                        />
+                         />
                          <FormField
                             control={passwordForm.control}
                             name="confirmPassword"

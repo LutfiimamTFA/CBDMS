@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { SocialMediaPost } from '@/lib/types';
@@ -30,7 +29,6 @@ export default function SocialMediaAnalyticsPage() {
   if (postsLoading) {
     return (
       <div className="flex h-svh flex-col bg-background">
-        <Header title="Social Media Analytics" />
         <main className="flex-1 overflow-auto p-4 md:p-6 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin" />
         </main>
@@ -40,7 +38,6 @@ export default function SocialMediaAnalyticsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Social Media Analytics" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mb-6">
           <h2 className="text-2xl font-bold tracking-tight">Content Performance</h2>

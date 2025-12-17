@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -72,7 +71,6 @@ import {
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Header } from '@/components/layout/header';
 import { priorityInfo } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -297,7 +295,6 @@ export default function RecurringTasksPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Recurring Task Templates" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
           <div>

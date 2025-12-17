@@ -23,7 +23,6 @@ import {
 } from 'firebase/firestore';
 import { Loader2, Icon as LucideIcon, Save } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
-import { Header } from '@/components/layout/header';
 import { Badge } from '@/components/ui/badge';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { Button } from '@/components/ui/button';
@@ -217,7 +216,6 @@ export default function NavigationSettingsPage() {
 
   return (
     <div className="h-svh flex flex-col bg-background">
-      <Header title="Navigation Settings" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
           <div>

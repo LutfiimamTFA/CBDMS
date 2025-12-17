@@ -1,10 +1,8 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Header } from '@/components/layout/header';
-import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { SmartSuggestions } from '@/components/smart-suggestions/page';
+import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
@@ -111,14 +109,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header
-        title={t('nav.board')}
-        actions={
-          <div className="flex items-center gap-2">
-            {profile?.role !== 'Super Admin' && <SmartSuggestions />}
-          </div>
-        }
-      />
       <main className="flex-1 overflow-hidden p-4 md:p-6">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">

@@ -59,7 +59,6 @@ import { collection, doc, query, where, orderBy, updateDoc, setDoc } from 'fireb
 import { Badge } from '@/components/ui/badge';
 import { format, parseISO } from 'date-fns';
 import { usePermissions } from '@/context/permissions-provider';
-import { Header } from '@/components/layout/header';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -417,7 +416,6 @@ export default function UsersPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="User Management" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
             <div>

@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { Loader2, HelpCircle, Eye, ClipboardList, Calendar } from 'lucide-react';
 import { ActionItems } from '@/components/my-work/action-items';

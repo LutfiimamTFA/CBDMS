@@ -10,7 +10,6 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { PermissionSettings } from '@/lib/types';
 import { Separator } from '@/components/ui/separator';
-import { Header } from '@/components/layout/header';
 
 const defaultPermissions: PermissionSettings = {
   Manager: {
@@ -106,7 +105,6 @@ export default function RoleSettingsPage() {
 
   return (
     <div className="h-svh flex flex-col bg-background">
-      <Header title="Roles & Permissions" />
       <main className='flex-1 overflow-auto p-4 md:p-6'>
        <div>
             <h2 className="text-2xl font-bold tracking-tight">Roles & Permissions</h2>

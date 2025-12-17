@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import {
@@ -126,18 +124,6 @@ export default function SocialMediaPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header
-        title="Social Media Center"
-        actions={
-          canCreate ? (
-            <CreatePostDialog>
-              <Button size="sm">
-                <Plus className="mr-2" /> Create Post
-              </Button>
-            </CreatePostDialog>
-          ) : null
-        }
-      />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-2">
@@ -162,6 +148,13 @@ export default function SocialMediaPage() {
                 </Button>
                 </div>
             </div>
+             {canCreate && (
+                <CreatePostDialog>
+                    <Button size="sm">
+                        <Plus className="mr-2" /> Create Post
+                    </Button>
+                </CreatePostDialog>
+            )}
         </div>
         
         <div className="grid grid-cols-7 flex-shrink-0 border-t border-l border-r rounded-t-lg">

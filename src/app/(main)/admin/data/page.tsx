@@ -1,5 +1,4 @@
 'use client';
-import { Header } from '@/components/layout/header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, AlertTriangle, Database, Trash2, Upload, Send } from 'lucide-react';
@@ -219,7 +218,6 @@ export default function DataManagementPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Data Management" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="grid gap-6">
             <Card>

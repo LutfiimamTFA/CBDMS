@@ -37,7 +37,6 @@ import { useCollection, useFirestore } from '@/firebase';
 import type { Brand } from '@/lib/types';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
-import { Header } from '@/components/layout/header';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -131,7 +130,6 @@ export default function BrandsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Brand Management" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="flex items-center justify-between mb-4">
           <div>

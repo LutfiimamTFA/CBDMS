@@ -1,8 +1,6 @@
-
 'use client';
 
 import React from 'react';
-import { Header } from '@/components/layout/header';
 import { useUserProfile } from '@/firebase';
 import { guideContent, type GuideTopic } from '@/lib/guide-content';
 import {
@@ -55,7 +53,6 @@ export default function GuidePage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Pusat Panduan" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
