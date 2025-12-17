@@ -1,6 +1,5 @@
-
 'use client';
-import { Header } from '@/components/layout/header';
+import { SharedHeader } from '@/components/share/shared-header';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import type { Task, WorkflowStatus, Brand, User, SharedLink } from '@/lib/types';
 import React from 'react';
@@ -19,7 +18,7 @@ export function SharedTasksView({ tasks, statuses, brands, users, permissions, v
   
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title={title} isPublicView={true} />
+      <SharedHeader title={title} />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <TasksDataTable 
             tasks={tasks || []}
