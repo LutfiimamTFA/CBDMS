@@ -1,23 +1,22 @@
+
 'use client';
 
 import React from 'react';
 import { useParams, notFound } from 'next/navigation';
-import { useDoc, useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { SharedLink } from '@/lib/types';
+import { useDoc, useFirestore, useCollection } from '@/firebase';
+import { doc, collection, query, where, orderBy } from 'firebase/firestore';
+import type { SharedLink, Task, User, Brand, WorkflowStatus } from '@/lib/types';
 import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-// Import reusable components for each view
+// Import reusable, stateless view components
 import { SharedDashboardView } from '@/components/share/shared-dashboard-view';
 import { SharedTasksView } from '@/components/share/shared-tasks-view';
 import { SharedCalendarView } from '@/components/share/shared-calendar-view';
 import { SharedReportsView } from '@/components/share/shared-reports-view';
 
-// Component for fallback if the page is not in scope
-const AccessDeniedComponent = () => {
-  return (
+const AccessDeniedComponent = () => (
     <div className="flex h-full items-center justify-center p-8">
       <Card className="w-full max-w-md text-center">
         <CardHeader>
@@ -33,8 +32,7 @@ const AccessDeniedComponent = () => {
         </CardContent>
       </Card>
     </div>
-  );
-};
+);
 
 const LinkNotFoundComponent = () => (
     <div className="flex h-full items-center justify-center p-8">
@@ -42,7 +40,7 @@ const LinkNotFoundComponent = () => (
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2">
             <FileWarning className="h-6 w-6 text-destructive"/>
-            Link Not Found
+            Link Not Found or Expired
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -53,10 +51,8 @@ const LinkNotFoundComponent = () => (
         </CardContent>
       </Card>
     </div>
-)
+);
 
-
-// Map URL scopes to their corresponding components
 const pageComponents: { [key: string]: React.ComponentType<any> } = {
   dashboard: SharedDashboardView,
   tasks: SharedTasksView,
@@ -64,7 +60,6 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
   reports: SharedReportsView,
 };
 
-// Map Navigation Item IDs (from the database) to URL scopes
 const navIdToScope: { [key: string]: string } = {
   nav_task_board: 'dashboard',
   nav_list: 'tasks',
@@ -76,22 +71,37 @@ export default function ShareScopePage() {
   const params = useParams();
   const firestore = useFirestore();
   
-  // Guard against undefined params during initial render
   const linkId = Array.isArray(params.linkId) ? params.linkId[0] : params.linkId;
   const scope = params.scope as string[] | undefined;
-
-  // Safely determine the current scope, defaulting to 'dashboard'
   const currentScope = (scope && scope.length > 0) ? scope[0] : 'dashboard';
   
+  // 1. Fetch the SharedLink document itself.
   const linkDocRef = React.useMemo(() => {
-    // Only create the doc ref if linkId is a valid string
-    if (!firestore || typeof linkId !== 'string' || !linkId) return null;
+    if (!firestore || !linkId) return null;
     return doc(firestore, 'sharedLinks', linkId);
   }, [firestore, linkId]);
 
-  const { data: sharedLink, isLoading, error } = useDoc<SharedLink>(linkDocRef);
+  const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
+  
+  const activeCompanyId = sharedLink?.companyId;
 
-  // PRIMARY LOADING STATE: Show spinner if params aren't ready or data is being fetched.
+  // 2. Fetch all necessary data based *only* on the companyId from the shared link.
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(
+    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId)) : null), [firestore, activeCompanyId])
+  );
+  const { data: users, isLoading: isUsersLoading } = useCollection<User>(
+    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId)) : null), [firestore, activeCompanyId])
+  );
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(
+    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId), orderBy('name')) : null), [firestore, activeCompanyId])
+  );
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(
+    React.useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'statuses'), where('companyId', '==', activeCompanyId), orderBy('order')) : null), [firestore, activeCompanyId])
+  );
+
+  // Central loading state: Wait for the link AND all its dependent data.
+  const isLoading = isLinkLoading || isTasksLoading || isUsersLoading || areBrandsLoading || areStatusesLoading;
+
   if (!linkId || isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -100,12 +110,10 @@ export default function ShareScopePage() {
     );
   }
 
-  // ERROR/NOT FOUND STATE: If fetching finished and there's an error or no data, show a proper message.
-  if (!isLoading && (error || !sharedLink)) {
+  if (linkError || !sharedLink) {
     return <LinkNotFoundComponent />;
   }
 
-  // PERMISSION CHECK STATE: Data is loaded, now check if the scope is allowed.
   const isScopeAllowed = sharedLink.allowedNavItems.some(navId => navIdToScope[navId] === currentScope);
 
   if (!isScopeAllowed) {
@@ -114,12 +122,18 @@ export default function ShareScopePage() {
 
   const PageComponent = pageComponents[currentScope];
 
-  // If the scope doesn't map to a known component, show a 404
   if (!PageComponent) {
     notFound();
     return null;
   }
+  
+  const viewProps = {
+    permissions: sharedLink.permissions,
+    tasks: tasks || [],
+    users: users || [],
+    brands: brands || [],
+    statuses: statuses || [],
+  };
 
-  // SUCCESS STATE: All checks passed, render the appropriate component.
-  return <PageComponent permissions={sharedLink.permissions} companyId={sharedLink.companyId} />;
+  return <PageComponent {...viewProps} />;
 }

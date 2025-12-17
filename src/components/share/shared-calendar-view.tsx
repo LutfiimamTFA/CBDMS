@@ -19,16 +19,18 @@ import {
 } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn, getBrandColor } from '@/lib/utils';
+import { ScrollArea } from '../ui/scroll-area';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Card } from '../ui/card';
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Badge } from '@/components/ui/badge';
-import { cn, getBrandColor } from '@/lib/utils';
-import { ScrollArea } from '../ui/scroll-area';
-import { useRouter, useParams } from 'next/navigation';
-import Link from 'next/link';
+
 
 interface SharedCalendarViewProps {
   tasks: Task[];
@@ -37,7 +39,6 @@ interface SharedCalendarViewProps {
 
 export function SharedCalendarView({ tasks, permissions = null }: SharedCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const router = useRouter();
   const params = useParams();
   const linkId = params.linkId as string;
 
@@ -75,8 +76,8 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
   const prevMonth = () => setCurrentDate(sub(currentDate, { months: 1 }));
 
   return (
-    <div className="flex flex-col flex-1 h-full border rounded-lg">
-      <div className="flex items-center justify-between p-2 border-b">
+    <div className="flex flex-col flex-1 h-full">
+      <header className="flex items-center justify-between p-4 border-b">
         <h2 className="font-semibold text-lg">{format(currentDate, 'MMMM yyyy')}</h2>
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={prevMonth}>
@@ -89,10 +90,10 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-      </div>
-      <div className="grid grid-cols-7 flex-shrink-0">
+      </header>
+      <div className="grid grid-cols-7 flex-shrink-0 border-b">
         {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-          <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-r border-b last:border-r-0">
+          <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-r last:border-r-0">
             {day}
           </div>
         ))}
@@ -122,18 +123,33 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
                 <div className="flex flex-col gap-1 p-1">
                   {tasksForDay.map(task => {
                     const path = permissions?.canViewDetails ? `/share/${linkId}/tasks/${task.id}` : '#';
-                    return (
+                     const canClick = permissions?.canViewDetails;
+
+                     const content = (
+                        <div
+                            className={cn(
+                            'w-full px-1.5 py-0.5 rounded text-white text-xs font-medium truncate',
+                            canClick ? 'cursor-pointer hover:opacity-80' : 'cursor-default',
+                            getBrandColor(task.brandId)
+                            )}
+                        >
+                            {task.title}
+                        </div>
+                     );
+
+                    return canClick ? (
                         <Link href={path} key={task.id}>
-                            <div
-                                className={cn(
-                                'w-full px-1.5 py-0.5 rounded text-white text-xs font-medium truncate',
-                                permissions?.canViewDetails ? 'cursor-pointer hover:opacity-80' : 'cursor-default',
-                                getBrandColor(task.brandId)
-                                )}
-                            >
-                                {task.title}
-                            </div>
+                           {content}
                         </Link>
+                    ) : (
+                        <Popover key={task.id}>
+                            <PopoverTrigger asChild>
+                                {content}
+                            </PopoverTrigger>
+                            <PopoverContent className="w-60 text-sm">
+                                To view task details, ask the sender to enable the "View Full Task Details" permission for this link.
+                            </PopoverContent>
+                        </Popover>
                     )
                   })}
                 </div>
