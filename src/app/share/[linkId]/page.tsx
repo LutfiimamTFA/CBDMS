@@ -1,10 +1,10 @@
 
 'use client';
 
-import { notFound, useParams, useRouter, usePathname } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import type { SharedLink, Company } from '@/lib/types';
 import { useMemo, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -87,7 +87,7 @@ export default function SharedLinkRedirectorPage() {
 
         // Condition 3: Proceed with redirect if not password protected or already authenticated
         if (pathname === `/share/${linkId}`) {
-            const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
+            const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
             const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
 
             const firstValidNavItem = availableNavItems
