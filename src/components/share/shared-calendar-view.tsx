@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn, getBrandColor } from '@/lib/utils';
 import { ScrollArea } from '../ui/scroll-area';
 import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
 
 interface SharedCalendarViewProps {
   tasks: Task[];
@@ -72,12 +73,6 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
   
   const nextMonth = () => setCurrentDate(add(currentDate, { months: 1 }));
   const prevMonth = () => setCurrentDate(sub(currentDate, { months: 1 }));
-
-  const handleCardClick = (taskId: string) => {
-    if (permissions?.canViewDetails) {
-      router.push(`/share/${linkId}/${taskId}`);
-    }
-  };
 
   return (
     <div className="flex flex-col flex-1 h-full border rounded-lg">
@@ -125,32 +120,22 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
               </span>
               <ScrollArea className="flex-1">
                 <div className="flex flex-col gap-1 p-1">
-                  {tasksForDay.map(task => (
-                    <Popover key={task.id}>
-                      <PopoverTrigger asChild>
-                        <div
-                          onClick={() => handleCardClick(task.id)}
-                          className={cn(
-                            'w-full px-1.5 py-0.5 rounded text-white text-xs font-medium truncate',
-                            permissions?.canViewDetails ? 'cursor-pointer' : 'cursor-default',
-                            getBrandColor(task.brandId)
-                          )}
-                        >
-                          {task.title}
-                        </div>
-                      </PopoverTrigger>
-                       {permissions?.canViewDetails && (
-                        <PopoverContent className="w-60">
-                          <div className="space-y-2">
-                            <h4 className="font-semibold">{task.title}</h4>
-                            <p className="text-sm text-muted-foreground">
-                              Status: <Badge variant="secondary">{task.status}</Badge>
-                            </p>
-                          </div>
-                        </PopoverContent>
-                      )}
-                    </Popover>
-                  ))}
+                  {tasksForDay.map(task => {
+                    const path = permissions?.canViewDetails ? `/share/${linkId}/tasks/${task.id}` : '#';
+                    return (
+                        <Link href={path} key={task.id}>
+                            <div
+                                className={cn(
+                                'w-full px-1.5 py-0.5 rounded text-white text-xs font-medium truncate',
+                                permissions?.canViewDetails ? 'cursor-pointer hover:opacity-80' : 'cursor-default',
+                                getBrandColor(task.brandId)
+                                )}
+                            >
+                                {task.title}
+                            </div>
+                        </Link>
+                    )
+                  })}
                 </div>
               </ScrollArea>
             </div>
@@ -160,5 +145,3 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
     </div>
   );
 }
-
-    

@@ -1,8 +1,8 @@
 
 'use client';
 
-import { notFound, useParams, useRouter } from 'next/navigation';
-import { useDoc, useFirestore } from '@/firebase';
+import { notFound, useParams, useRouter, usePathname } from 'next/navigation';
+import { useDoc, useFirestore, useCollection } from '@/firebase';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import type { SharedLink, NavigationItem } from '@/lib/types';
@@ -10,11 +10,11 @@ import { useMemo, useState, useEffect } from 'react';
 import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useCollection } from '@/firebase/firestore/use-collection';
 
-export default function SharedLinkPage() {
+export default function SharedLinkRedirectorPage() {
     const params = useParams();
     const router = useRouter();
+    const pathname = usePathname();
     const linkId = params.linkId as string;
     const firestore = useFirestore();
 
@@ -30,17 +30,14 @@ export default function SharedLinkPage() {
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
 
     const navItemsQuery = useMemo(
-        () =>
-        firestore
-            ? query(collection(firestore, 'navigationItems'), orderBy('order'))
-            : null,
+        () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
         [firestore]
     );
-
     const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
 
     const handleAuth = () => {
         if (sharedLink?.password === password) {
+            sessionStorage.setItem(`share_token_${linkId}`, 'true');
             setIsAuthenticated(true);
             setAuthError(null);
         } else {
@@ -54,32 +51,31 @@ export default function SharedLinkPage() {
                 notFound();
                 return;
             }
-            if (!sharedLink.password) {
-                setIsAuthenticated(true);
+            if (sessionStorage.getItem(`share_token_${linkId}`) === 'true' || !sharedLink.password) {
+                 setIsAuthenticated(true);
             }
         }
-    }, [sharedLink]);
+    }, [sharedLink, linkId]);
 
     useEffect(() => {
-        if (isAuthenticated && sharedLink && allNavItems) {
-            // Find the first valid navigation item that has a path.
-            const firstValidNavItem = sharedLink.allowedNavItems
-                .map(id => allNavItems.find(item => item.id === id))
-                .find(item => item && item.path);
+        // Only redirect if we are on the base share page and authenticated.
+        if (isAuthenticated && sharedLink && allNavItems && pathname === `/share/${linkId}`) {
+            const firstValidNavItem = allNavItems
+                .filter(item => sharedLink.allowedNavItems.includes(item.id) && item.path)
+                .sort((a, b) => a.order - b.order)[0];
 
             if (firstValidNavItem) {
                 router.replace(`/share/${linkId}${firstValidNavItem.path}`);
             } else {
-                // As a final fallback, if no valid path is found in the allowed items,
-                // redirect to a default known page to prevent errors.
-                // We'll use '/dashboard' as a safe default.
-                router.replace(`/share/${linkId}/dashboard`);
+                 notFound();
             }
         }
-    }, [isAuthenticated, sharedLink, allNavItems, linkId, router]);
+    }, [isAuthenticated, sharedLink, allNavItems, linkId, router, pathname]);
 
+    const isLoading = isLinkLoading || isNavItemsLoading;
+    const isRedirecting = isAuthenticated && pathname === `/share/${linkId}`;
 
-    if (isLinkLoading || isNavItemsLoading) {
+    if (isLoading || isRedirecting) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -94,7 +90,7 @@ export default function SharedLinkPage() {
     if (!isAuthenticated) {
         return (
             <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
-                <div className="w-full max-w-sm space-y-4">
+                <div className="w-full max-w-sm space-y-4 rounded-lg border bg-card p-8">
                      <div className="flex justify-center"><Logo/></div>
                     <h2 className="text-xl font-semibold text-center">Password Required</h2>
                     <p className="text-muted-foreground text-center text-sm">This content is protected. Please enter the password to view.</p>
@@ -114,10 +110,7 @@ export default function SharedLinkPage() {
         )
     }
 
-    // Render a loading state while the redirect is processed by the useEffect hook
-    return (
-        <div className="flex h-screen w-full items-center justify-center bg-background">
-            <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-    );
+    // If authenticated but not redirecting (e.g. on a sub-page already), show nothing.
+    // The actual page content will be rendered by its own component.
+    return null;
 }

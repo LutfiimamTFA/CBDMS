@@ -465,21 +465,21 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => router.push(`/tasks/${task.id}`)}>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); router.push(`/tasks/${task.id}`)}}>
                 View details
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setHistoryTask(task)}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setHistoryTask(task)}}>
                   <History className="mr-2 h-4 w-4" />
                   View History
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => copyTaskLink(task.id)}>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyTaskLink(task.id)}}>
                 <LinkIcon className="mr-2 h-4 w-4" />
                 Copy Link
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className='text-destructive focus:text-destructive focus:bg-destructive/10'
-                onClick={() => handleDeleteTask(task.id)}
+                onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id)}}
               >
                 <Trash2 className='mr-2 h-4 w-4' />
                 Delete Task
@@ -538,6 +538,26 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
               }
               className="h-8 w-[150px] lg:w-[250px]"
             />
+             <DataTableFacetedFilter
+              column={table.getColumn("brandId")}
+              title="Brand"
+              options={brandOptions}
+            />
+            <DataTableFacetedFilter
+              column={table.getColumn("status")}
+              title="Status"
+              options={statusOptions}
+            />
+            <DataTableFacetedFilter
+              column={table.getColumn("priority")}
+              title="Priority"
+              options={priorityOptions}
+            />
+             {assigneeOptions.length > 0 && <DataTableFacetedFilter
+              column={table.getColumn("assigneeIds")}
+              title="Assignees"
+              options={assigneeOptions}
+            />}
             {isFiltered && (
               <Button
                 variant="ghost"
@@ -590,12 +610,12 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                     className="group cursor-pointer"
                     onClick={() => {
                         const task = row.original;
-                        const path = session ? `/share/${session.linkId}/${task.id}` : `/tasks/${task.id}`;
+                        const path = session ? `/share/${session.id}/tasks/${task.id}` : `/tasks/${task.id}`;
                         router.push(path);
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
+                      <TableCell key={cell.id} onClick={(e) => cell.column.id === 'actions' && e.stopPropagation()}>
                         {flexRender(
                           cell.column.columnDef.cell,
                           cell.getContext()
