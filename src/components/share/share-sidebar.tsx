@@ -53,7 +53,7 @@ export function ShareSidebar({ session }: ShareSidebarProps) {
   const visibleNavItems = (session?.navItems || []).filter(item => allowedNavIds.has(item.id) && item.path);
 
   return (
-    <Sidebar isSharedView={true}>
+    <Sidebar>
       <SidebarHeader>
         <PublicLogo company={company} isLoading={isLoading} />
         <Badge variant="outline" className="w-fit">
