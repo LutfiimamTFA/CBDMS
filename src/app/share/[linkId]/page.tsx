@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PublicLogo } from '@/components/share/public-logo';
+import { isAfter } from 'date-fns';
 
 const LinkNotFoundComponent = () => (
     <div className="flex h-screen w-full items-center justify-center bg-secondary p-4">
@@ -18,11 +19,11 @@ const LinkNotFoundComponent = () => (
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2 text-destructive">
              <FileText className="h-6 w-6"/>
-            Invalid Link
+            Invalid or Disabled Link
           </CardTitle>
         </CardHeader>
         <CardContent>
-            <p className="text-muted-foreground">The share link you are trying to access is invalid or has been disabled. Please check the link or contact the person who shared it with you.</p>
+            <p className="text-muted-foreground">The share link you are trying to access is invalid, has been disabled, or is not configured correctly. Please check the link or contact the person who shared it with you.</p>
             <Button variant="link" asChild className='mt-4'>
                 <a href="/login">Return to Login</a>
             </Button>
@@ -42,7 +43,7 @@ const LinkExpiredComponent = () => (
         </CardHeader>
         <CardContent>
             <p className="text-muted-foreground">This share link was valid, but its access period has ended. Please request a new link from the person who shared it with you.</p>
-            <Button variant="link" asChild className='mt-4'>
+             <Button variant="link" asChild className='mt-4'>
                 <a href="/login">Return to Login</a>
             </Button>
         </CardContent>
@@ -79,10 +80,20 @@ export default function SharedLinkRedirectorPage() {
         }
     };
     
+    // This effect now ONLY handles redirection after all checks have passed.
     useEffect(() => {
-        if (isLinkLoading || !sharedLink) return;
+        if (isLinkLoading || !sharedLink || linkError) return;
 
-        // The logic for redirecting now happens after all validity checks.
+        // Skip if password protected and not yet authenticated
+        if (sharedLink.password && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') {
+            return;
+        }
+
+        // Skip if expired
+        if (sharedLink.expiresAt && isAfter(new Date(), sharedLink.expiresAt.toDate())) {
+            return;
+        }
+        
         const navIdToScope: { [key: string]: string } = {
             '/dashboard': 'dashboard',
             '/tasks': 'tasks',
@@ -100,9 +111,11 @@ export default function SharedLinkRedirectorPage() {
         if (firstValidNavItem) {
             const scope = navIdToScope[firstValidNavItem.path];
             router.replace(`/share/${linkId}/${scope}`);
+        } else {
+             // If no valid pages, it will be caught by the return statement below.
         }
 
-    }, [sharedLink, isLinkLoading, linkId, router]);
+    }, [sharedLink, isLinkLoading, linkId, router, linkError]);
 
 
     if (isLinkLoading) {
@@ -113,17 +126,20 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    // Invalid or Deleted Link
+    // --- Validation Checks ---
+
+    // 1. Invalid or Deleted Link
     if (!sharedLink || linkError) {
         return <LinkNotFoundComponent />;
     }
     
-    // Expired Link
-    if (sharedLink.expiresAt && new Date(sharedLink.expiresAt) < new Date()) {
+    // 2. Expired Link
+    // Check only if expiresAt exists and is a valid date object.
+    if (sharedLink.expiresAt?.toDate && isAfter(new Date(), sharedLink.expiresAt.toDate())) {
         return <LinkExpiredComponent />;
     }
     
-    // Link with no accessible pages configured
+    // 3. Link with no accessible pages configured
     const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
     const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
     const navIdToScope: { [key: string]: string } = {
@@ -138,7 +154,7 @@ export default function SharedLinkRedirectorPage() {
         return <LinkNotFoundComponent />;
     }
 
-    // Password Protected Link
+    // 4. Password Protected Link
     if (sharedLink.password && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') {
         return (
             <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
@@ -167,9 +183,11 @@ export default function SharedLinkRedirectorPage() {
     }
 
     // If all checks pass, show a loader while redirecting.
+    // The useEffect hook will handle the redirect.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
             <Loader2 className="h-8 w-8 animate-spin" />
         </div>
     );
 }
+
