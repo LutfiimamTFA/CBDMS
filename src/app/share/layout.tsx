@@ -3,7 +3,7 @@
 
 import React from 'react';
 import { AppProviders } from '@/components/app-providers';
-import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from '@/components/ui/sidebar';
+import { Sidebar, SidebarContent, SidebarHeader, SidebarInset, SidebarProvider, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter } from '@/components/ui/sidebar';
 import { Logo } from '@/components/logo';
 import { useSharedSession } from '@/context/shared-session-provider';
 import { useCollection, useFirestore } from '@/firebase';
@@ -16,6 +16,7 @@ import { Loader2, LogOut } from 'lucide-react';
 import { ThemeProvider } from '@/components/theme-provider';
 import { Toaster } from '@/components/ui/toaster';
 import { FirebaseClientProvider } from '@/firebase';
+import { SharedSessionProvider } from '@/context/shared-session-provider';
 import { Button } from '@/components/ui/button';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
