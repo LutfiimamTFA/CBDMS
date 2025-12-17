@@ -136,7 +136,7 @@ export function ShareDialog() {
     }
 
     if (link.expiresAt) {
-      const expirationDate = link.expiresAt.toDate();
+      const expirationDate = (link.expiresAt as any).toDate();
       setUseExpiration(true);
       setExpiresAtDate(expirationDate);
       setExpiresAtTime(format(expirationDate, 'HH:mm'));
@@ -199,7 +199,7 @@ export function ShareDialog() {
     }
 
     if (useExpiration && expiresAtDate) {
-        linkData.expiresAt = getCombinedExpiration();
+        linkData.expiresAt = getCombinedExpiration() as any;
     } else if (!isCreating) {
         linkData.expiresAt = deleteField() as any;
     }

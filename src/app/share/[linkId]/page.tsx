@@ -4,26 +4,32 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
-import { Loader2, FileText, Clock } from 'lucide-react';
-import type { SharedLink } from '@/lib/types';
-import { useMemo, useEffect, useState } from 'react';
+import { Loader2, FileWarning, Clock } from 'lucide-react';
+import type { SharedLink, NavigationItem } from '@/lib/types';
+import { useMemo, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PublicLogo } from '@/components/share/public-logo';
 import { isAfter } from 'date-fns';
+import React from 'react';
 
-const LinkNotFoundComponent = () => (
+const LinkNotFoundComponent = ({ isMisconfigured = false }: { isMisconfigured?: boolean }) => (
     <div className="flex h-screen w-full items-center justify-center bg-secondary p-4">
       <Card className="w-full max-w-md text-center">
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2 text-destructive">
-             <FileText className="h-6 w-6"/>
-            Invalid, Disabled, or Misconfigured Link
+             <FileWarning className="h-6 w-6"/>
+             {isMisconfigured ? "Link is Misconfigured" : "Link Not Found or Disabled"}
           </CardTitle>
         </CardHeader>
         <CardContent>
-            <p className="text-muted-foreground">The share link you are trying to access is invalid, has been disabled, or is not configured correctly. Please check the link or contact the person who shared it with you.</p>
+            <p className="text-muted-foreground">
+                {isMisconfigured 
+                    ? "This link is valid, but no pages have been configured for viewing. Please contact the sender."
+                    : "The share link you are trying to access is invalid, has been disabled, or does not exist."
+                }
+            </p>
             <Button variant="link" asChild className='mt-4'>
                 <a href="/login">Return to Login</a>
             </Button>
@@ -58,8 +64,8 @@ export default function SharedLinkRedirectorPage() {
     const linkId = params.linkId as string;
     const firestore = useFirestore();
 
-    const [password, setPassword] = useState('');
-    const [authError, setAuthError] = useState<string | null>(null);
+    const [password, setPassword] = React.useState('');
+    const [authError, setAuthError] = React.useState<string | null>(null);
 
     const linkDocRef = useMemo(() => {
         if (!firestore || !linkId) return null;
@@ -69,11 +75,15 @@ export default function SharedLinkRedirectorPage() {
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
 
     useEffect(() => {
-        // This effect ONLY handles redirection once all checks have passed and the component re-renders.
-        // It's separated to ensure it only runs when it's safe to do so.
+        // This effect ONLY handles redirection. All validation is done in the render logic.
         if (isLinkLoading || !sharedLink || linkError) return;
-        if (sharedLink.password && typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') return;
-        if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) return;
+
+        // Skip redirection logic if password protection is active and not yet bypassed
+        if (sharedLink.password && (typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) return;
+        
+        // Defensive normalization of navigation data
+        const availableNavItems: NavigationItem[] = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
+        const allowedNavIds: string[] = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
 
         const navIdToScope: { [key: string]: string } = {
             '/dashboard': 'dashboard',
@@ -82,23 +92,22 @@ export default function SharedLinkRedirectorPage() {
             '/reports': 'reports'
         };
 
-        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-        const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-
         const firstValidNavItem = availableNavItems
-            .filter(item => allowedNavItems.includes(item.id) && navIdToScope[item.path])
+            .filter(item => allowedNavIds.includes(item.id) && navIdToScope[item.path])
             .sort((a, b) => a.order - b.order)[0];
         
         if (firstValidNavItem) {
             const scope = navIdToScope[firstValidNavItem.path];
             router.replace(`/share/${linkId}/${scope}`);
         }
-        // If no valid page is found, this effect does nothing, and the main return block shows an error.
-    }, [sharedLink, isLinkLoading, linkId, router, linkError]);
+        // If no valid nav item is found, the render logic below will catch it and show an error page.
+    }, [sharedLink, isLinkLoading, linkError, linkId, router]);
     
     const handleAuth = () => {
         if (sharedLink?.password === password) {
-            sessionStorage.setItem(`share_token_${linkId}`, 'true');
+            if (typeof window !== 'undefined') {
+                sessionStorage.setItem(`share_token_${linkId}`, 'true');
+            }
             setAuthError(null);
             router.refresh(); 
         } else {
@@ -156,19 +165,18 @@ export default function SharedLinkRedirectorPage() {
     }
 
     // 2d. Link is misconfigured (no valid pages to show)
+    const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
+    const allowedNavIds = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
     const navIdToScope: { [key: string]: string } = {
         '/dashboard': 'dashboard',
         '/tasks': 'tasks',
         '/calendar': 'calendar',
         '/reports': 'reports'
     };
-    // Defensive normalization
-    const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-    const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-    const hasValidPages = availableNavItems.some(item => allowedNavItems.includes(item.id) && navIdToScope[item.path]);
+    const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && navIdToScope[item.path]);
     
     if (!hasValidPages) {
-        return <LinkNotFoundComponent />;
+        return <LinkNotFoundComponent isMisconfigured={true} />;
     }
 
     // --- STAGE 3: REDIRECTING ---

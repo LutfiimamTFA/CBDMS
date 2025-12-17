@@ -10,7 +10,6 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { FirebaseClientProvider } from '@/firebase';
 
-// Define public routes that do not need full AppProviders
 const APP_ROUTES = [
   '/dashboard',
   '/tasks',
@@ -37,8 +36,8 @@ export default function RootLayout({
     setIsMounted(true);
   }, []);
 
-  // Determine if the current route is a main application page
   const isAppPage = APP_ROUTES.some(route => pathname.startsWith(route));
+  const isSharePage = pathname.startsWith('/share');
 
   if (!isMounted) {
     return (
@@ -60,13 +59,25 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         {isAppPage ? (
-          // For the main protected app, use the full AppProviders.
           <AppProviders>
             {children}
           </AppProviders>
+        ) : isSharePage ? (
+          // For share pages, render children directly without any main providers
+          // to ensure complete isolation. The share layout will handle its own providers.
+          <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <TooltipProvider>
+                  {children}
+              </TooltipProvider>
+              <Toaster />
+          </ThemeProvider>
         ) : (
-          // For public pages (login, share, etc.), use a minimal provider setup.
-          // This avoids contexts that require authentication.
+          // For other public pages (login, etc.), use a minimal provider setup.
            <ThemeProvider
               attribute="class"
               defaultTheme="system"
