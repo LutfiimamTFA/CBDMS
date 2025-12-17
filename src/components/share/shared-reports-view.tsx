@@ -7,7 +7,7 @@ import { Header } from '@/components/layout/header';
 export function SharedReportsView() {
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Reports" isPublicView={true} />
+      <Header title="Reports" isSharedView={true} />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <Card>
             <CardContent className="p-12 text-center">

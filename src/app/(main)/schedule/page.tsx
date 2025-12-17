@@ -7,8 +7,7 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { useSharedSession } from '@/context/shared-session-provider';
-import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
+import type { Task, Brand, WorkflowStatus } from '@/lib/types';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { Loader2, Link as LinkIcon, Calendar, Building2, User as UserIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -27,7 +26,6 @@ import Link from 'next/link';
 export default function SchedulePage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
-  const { session, isLoading: isSessionLoading } = useSharedSession();
   const router = useRouter();
 
   const [popoverState, setPopoverState] = useState<{
@@ -36,10 +34,8 @@ export default function SchedulePage() {
     task: Task | null;
   }>({ open: false, target: null, task: null });
 
-  const activeCompanyId = session ? session.companyId : companyId;
-
   const tasksQuery = useMemo(() => {
-    if (!firestore || !activeCompanyId || !profile) return null;
+    if (!firestore || !companyId || !profile) return null;
     
     // For Managers, filter tasks by the brands they are assigned to.
     if (profile.role === 'Manager') {
@@ -48,29 +44,29 @@ export default function SchedulePage() {
       }
       return query(
         collection(firestore, 'tasks'), 
-        where('companyId', '==', activeCompanyId),
+        where('companyId', '==', companyId),
         where('brandId', 'in', profile.brandIds)
       );
     }
 
     // For Employees, show only tasks assigned to them.
-    if (!session && profile.role === 'Employee') {
+    if (profile.role === 'Employee') {
       return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
     
     // For Super Admin and other general cases.
-    return query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
+    return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
-  }, [firestore, activeCompanyId, profile, session]);
+  }, [firestore, companyId, profile]);
   
-  const brandsQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'brands'), where('companyId', '==', activeCompanyId)) : null), [firestore, activeCompanyId]);
+  const brandsQuery = useMemo(() => (firestore && companyId ? query(collection(firestore, 'brands'), where('companyId', '==', companyId)) : null), [firestore, companyId]);
   const { data: allBrands } = useCollection<Brand>(brandsQuery);
 
-  const statusesQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'statuses'), where('companyId', '==', activeCompanyId)) : null), [firestore, activeCompanyId]);
+  const statusesQuery = useMemo(() => (firestore && companyId ? query(collection(firestore, 'statuses'), where('companyId', '==', companyId)) : null), [firestore, companyId]);
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
   
   const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
-  const isLoading = isTasksLoading || isProfileLoading || isSessionLoading;
+  const isLoading = isTasksLoading || isProfileLoading;
 
   const calendarEvents = useMemo(() => {
     if (!allTasks) return [];
@@ -122,7 +118,7 @@ export default function SchedulePage() {
     const priority = priorityInfo[task.priority];
     const assignees = task.assignees || [];
     
-    const viewDetailsPath = session ? `/share/${session.id}/${task.id}` : `/tasks/${task.id}`;
+    const viewDetailsPath = `/tasks/${task.id}`;
 
     return (
       <PopoverContent className="w-80" side="bottom" align="start">
