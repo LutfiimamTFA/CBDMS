@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2, FileText, Clock } from 'lucide-react';
-import type { SharedLink, NavigationItem } from '@/lib/types';
+import type { SharedLink } from '@/lib/types';
 import { useMemo, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,8 +68,34 @@ export default function SharedLinkRedirectorPage() {
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
 
-    const company = sharedLink?.company || null;
+    useEffect(() => {
+        // This effect ONLY handles redirection once all checks have passed and the component re-renders.
+        // It's separated to ensure it only runs when it's safe to do so.
+        if (isLinkLoading || !sharedLink || linkError) return;
+        if (sharedLink.password && typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') return;
+        if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) return;
 
+        const navIdToScope: { [key: string]: string } = {
+            '/dashboard': 'dashboard',
+            '/tasks': 'tasks',
+            '/calendar': 'calendar',
+            '/reports': 'reports'
+        };
+
+        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
+        const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
+
+        const firstValidNavItem = availableNavItems
+            .filter(item => allowedNavItems.includes(item.id) && navIdToScope[item.path])
+            .sort((a, b) => a.order - b.order)[0];
+        
+        if (firstValidNavItem) {
+            const scope = navIdToScope[firstValidNavItem.path];
+            router.replace(`/share/${linkId}/${scope}`);
+        }
+        // If no valid page is found, this effect does nothing, and the main return block shows an error.
+    }, [sharedLink, isLinkLoading, linkId, router, linkError]);
+    
     const handleAuth = () => {
         if (sharedLink?.password === password) {
             sessionStorage.setItem(`share_token_${linkId}`, 'true');
@@ -80,49 +106,7 @@ export default function SharedLinkRedirectorPage() {
         }
     };
     
-    // This effect now ONLY handles redirection after all checks have passed.
-    useEffect(() => {
-        if (isLinkLoading || !sharedLink || linkError) {
-             // Wait for loading to finish, or if there's an error/no data, do nothing here.
-             // The main return block will handle rendering the correct component.
-            return;
-        }
-        
-        // This is a stateless check. If a password is required, the component will render the password form.
-        // If the token is present in sessionStorage, the redirect logic will proceed.
-        if (sharedLink.password && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') {
-            return;
-        }
-        
-        // This check is also stateless. If the link is expired, the component renders the expired message.
-        if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
-            return;
-        }
-        
-        const navIdToScope: { [key: string]: string } = {
-            '/dashboard': 'dashboard',
-            '/tasks': 'tasks',
-            '/calendar': 'calendar',
-            '/reports': 'reports'
-        };
-
-        // Defensive normalization: Ensure navItems and allowedNavItems are arrays.
-        const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
-        const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
-
-        // Find the first valid, routable page based on the intersection of available and allowed items.
-        const firstValidNavItem = availableNavItems
-            .filter(item => allowedNavItems.includes(item.id) && navIdToScope[item.path])
-            .sort((a, b) => a.order - b.order)[0];
-        
-        // Only redirect if a valid page is found. Otherwise, the main return block shows an error.
-        if (firstValidNavItem) {
-            const scope = navIdToScope[firstValidNavItem.path];
-            router.replace(`/share/${linkId}/${scope}`);
-        }
-    }, [sharedLink, isLinkLoading, linkId, router, linkError]);
-
-
+    // --- STAGE 1: LOADING ---
     if (isLinkLoading) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -131,24 +115,25 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    // Strict validation order after loading is complete.
-    // 1. Check if the document exists.
+    // --- STAGE 2: VALIDATION (runs only after loading is complete) ---
+
+    // 2a. Document not found or there was a Firestore error
     if (!sharedLink || linkError) {
         return <LinkNotFoundComponent />;
     }
     
-    // 2. Check for expiration (only if the field exists).
+    // 2b. Link is expired
     if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
         return <LinkExpiredComponent />;
     }
     
-    // 3. Check for password protection.
-    if (sharedLink.password && sessionStorage.getItem(`share_token_${linkId}`) !== 'true') {
+    // 2c. Link requires a password and it hasn't been provided yet
+    if (sharedLink.password && (typeof window === 'undefined' || sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) {
         return (
             <div className="flex h-screen w-full flex-col items-center justify-center bg-secondary p-4">
                 <Card className="w-full max-w-sm">
                      <CardHeader className='text-center'>
-                        <div className='flex justify-center mb-4'><PublicLogo company={company} isLoading={isLinkLoading} /></div>
+                        <div className='flex justify-center mb-4'><PublicLogo company={sharedLink.company || null} isLoading={false} /></div>
                         <CardTitle>Password Required</CardTitle>
                         <CardDescription>This content is protected. Please enter the password to view.</CardDescription>
                      </CardHeader>
@@ -170,13 +155,14 @@ export default function SharedLinkRedirectorPage() {
         )
     }
 
-    // 4. Check for misconfiguration (no valid pages allowed).
+    // 2d. Link is misconfigured (no valid pages to show)
     const navIdToScope: { [key: string]: string } = {
         '/dashboard': 'dashboard',
         '/tasks': 'tasks',
         '/calendar': 'calendar',
         '/reports': 'reports'
     };
+    // Defensive normalization
     const availableNavItems = Array.isArray(sharedLink.navItems) ? sharedLink.navItems : [];
     const allowedNavItems = Array.isArray(sharedLink.allowedNavItems) ? sharedLink.allowedNavItems : [];
     const hasValidPages = availableNavItems.some(item => allowedNavItems.includes(item.id) && navIdToScope[item.path]);
@@ -185,6 +171,7 @@ export default function SharedLinkRedirectorPage() {
         return <LinkNotFoundComponent />;
     }
 
+    // --- STAGE 3: REDIRECTING ---
     // If all checks pass, show a loader while the useEffect performs the redirect.
     return (
         <div className="flex h-screen w-full items-center justify-center bg-background">
