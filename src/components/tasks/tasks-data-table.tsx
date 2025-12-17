@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activity } from '@/lib/types';
+import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activity, SharedLink } from '@/lib/types';
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -81,12 +81,21 @@ interface TasksDataTableProps {
     statuses: WorkflowStatus[];
     brands: Brand[];
     users: User[];
+    permissions?: SharedLink['permissions'] | null;
 }
 
-export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTableProps) {
+export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null }: TasksDataTableProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
-  const { permissions, isLoading: arePermsLoading } = usePermissions();
+  
+  // Use a separate hook for internal permissions only when not in share mode
+  const useInternalPermissions = () => {
+    if (sharedPermissions) return { permissions: null, isLoading: false };
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return usePermissions();
+  }
+  const { permissions, isLoading: arePermsLoading } = useInternalPermissions();
+
   const { session } = useSharedSession();
   const router = useRouter();
   
@@ -115,10 +124,10 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
 
   const canChangePriority = React.useMemo(() => {
-      if (session) return false;
+      if (session || sharedPermissions) return false;
       if (!profile) return false;
       return profile.role === 'Super Admin' || profile.role === 'Manager';
-  }, [profile, session]);
+  }, [profile, session, sharedPermissions]);
 
   const statusOptions = React.useMemo(() => {
     const getIcon = (statusName: string) => {
@@ -138,7 +147,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
 
   const priorityOptions = Object.values(priorityInfo).map(p => ({
       value: p.value,
-      label: t(`priority.${p.value.toLowerCase()}` as any),
+      label: p.label, // Use default label, translation handled elsewhere if needed
       icon: p.icon
   }));
   
@@ -251,19 +260,19 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
   };
 
   const canCreateTasks = React.useMemo(() => {
-    if (session) return false;
+    if (session || sharedPermissions) return false; // Never allow creation in share mode
     if (arePermsLoading || !profile || !permissions) return false;
     if (profile.role === 'Super Admin') return true;
     if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
     if (profile.role === 'Employee') return permissions.Employee.canCreateTasks;
     return false;
-  }, [profile, permissions, arePermsLoading, session]);
+  }, [profile, permissions, arePermsLoading, session, sharedPermissions]);
 
 
   const columns: ColumnDef<Task>[] = [
     {
       accessorKey: 'title',
-      header: t('tasks.column.title'),
+      header: 'Title',
       cell: ({ row }) => {
         const task = row.original;
         const hasDescription = task.description && task.description.trim() !== '';
@@ -323,7 +332,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     },
      {
       accessorKey: 'priority',
-      header: t('tasks.column.priority'),
+      header: 'Priority',
       sortingFn: prioritySortingFn,
       cell: ({ row }) => {
         const task = row.original;
@@ -337,7 +346,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
             return (
               <Badge variant="outline" className='font-normal'>
                   <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
-                  <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
+                  <span>{priority.label}</span>
               </Badge>
             )
         }
@@ -353,7 +362,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
               <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
                  <div className="flex items-center gap-2">
                     <priority.icon className={`h-4 w-4 ${priority.color}`} />
-                    <span>{t(`priority.${priority.value.toLowerCase()}` as any)}</span>
+                    <span>{priority.label}</span>
                 </div>
               </SelectTrigger>
               <SelectContent>
@@ -361,7 +370,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                   <SelectItem key={p.value} value={p.value}>
                     <div className="flex items-center gap-2">
                       <p.icon className={`h-4 w-4 ${p.color}`} />
-                      <span>{t(`priority.${p.value.toLowerCase()}` as any)}</span>
+                      <span>{p.label}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -376,7 +385,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     },
     {
       accessorKey: 'assigneeIds',
-      header: t('tasks.column.assignees'),
+      header: 'Assignees',
       cell: ({ row }) => {
         const assignees = row.original.assignees || [];
         if (!assignees || assignees.length === 0) {
@@ -424,7 +433,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     },
     {
       accessorKey: 'status',
-      header: t('tasks.column.status'),
+      header: 'Status',
       cell: ({ row }) => {
         const statusName = row.getValue('status') as string;
         const statusDetails = statuses?.find(s => s.name === statusName);
@@ -453,7 +462,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
       cell: ({ row }) => {
         const task = row.original;
         
-        if (session) return null; // No actions in shared view
+        if (session || sharedPermissions) return null; // No actions in share mode
 
         return (
           <DropdownMenu>
@@ -531,7 +540,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         <div className="flex items-center justify-between">
           <div className="flex flex-1 items-center space-x-2">
             <Input
-              placeholder={t('tasks.filter')}
+              placeholder="Filter tasks by title..."
               value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
               onChange={(event) =>
                 table.getColumn('title')?.setFilterValue(event.target.value)
@@ -575,7 +584,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
               <AddTaskDialog>
                 <Button size="sm" className="h-8">
                   <Plus className="mr-2 h-4 w-4" />
-                  {t('tasks.createtask')}
+                  Create Task
                 </Button>
               </AddTaskDialog>
             )}
@@ -630,7 +639,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                     colSpan={columns.length}
                     className="h-24 text-center"
                   >
-                    {t('tasks.noresults')}
+                    No results found.
                   </TableCell>
                 </TableRow>
               )}
@@ -753,3 +762,5 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     </>
   );
 }
+
+    
