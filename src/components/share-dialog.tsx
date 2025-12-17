@@ -60,9 +60,6 @@ export function ShareDialog() {
   // Form state
   const [linkName, setLinkName] = useState('');
   
-  // Nav Items State
-  const [allowedNavItems, setAllowedNavItems] = useState<string[]>([]);
-
   // Security State
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
@@ -116,21 +113,10 @@ export function ShareDialog() {
   const handlePermissionChange = (permission: keyof typeof permissions, value: boolean) => {
     setPermissions(prev => ({ ...prev, [permission]: value }));
   };
-  
-  const handleNavItemChange = (itemId: string, isChecked: boolean) => {
-      setAllowedNavItems(prev => {
-          if (isChecked) {
-              return [...prev, itemId];
-          } else {
-              return prev.filter(id => id !== itemId);
-          }
-      });
-  };
 
   const handleOpenNew = () => {
     setActiveLink(null);
     setLinkName('');
-    setAllowedNavItems([]);
     setUsePassword(false);
     setPassword('');
     setUseExpiration(false);
@@ -142,7 +128,6 @@ export function ShareDialog() {
   const loadLinkDetails = (link: SharedLink) => {
     setActiveLink(link);
     setLinkName(link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`);
-    setAllowedNavItems(link.allowedNavItems || []);
     
     if (link.password) {
       setUsePassword(true);
@@ -176,17 +161,18 @@ export function ShareDialog() {
 
 
   const handleCreateOrUpdateLink = async () => {
-    if (!firestore || !profile) {
-        toast({ variant: 'destructive', title: 'Error', description: 'User profile not loaded.' });
+    if (!firestore || !profile || !userVisibleNavItems) {
+        toast({ variant: 'destructive', title: 'Error', description: 'User profile or navigation items not loaded.' });
         return;
     };
     setIsLoading(true);
 
     const isCreating = !activeLink;
+    const allowedNavItemIds = userVisibleNavItems.map(item => item.id);
 
     const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
         name: linkName,
-        allowedNavItems,
+        allowedNavItems: allowedNavItemIds,
         permissions,
         companyId: profile.companyId,
         createdBy: profile.id,
@@ -268,7 +254,11 @@ export function ShareDialog() {
   };
   
   const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isNavItemsLoading;
-  const isManagerOrAdmin = profile?.role === 'Super Admin' || profile?.role === 'Manager';
+  
+  // Disable share feature for Super Admin
+  if (profile?.role === 'Super Admin') {
+    return null;
+  }
 
   const PermissionSwitch = ({ id, label, description, checked, onCheckedChange, disabled = false }: {id: string, label: string, description: string, checked: boolean, onCheckedChange: (checked: boolean) => void, disabled?: boolean}) => (
     <div className="flex items-start justify-between space-x-2">
@@ -277,24 +267,6 @@ export function ShareDialog() {
         <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} disabled={disabled} />
-    </div>
-  );
-  
-  const NavItemCheckbox = ({ item }: { item: NavigationItem }) => (
-    <div className="flex items-start gap-3 p-2 rounded-md hover:bg-secondary">
-      <Switch
-        id={`nav-${item.id}`}
-        checked={allowedNavItems.includes(item.id)}
-        onCheckedChange={(checked) => handleNavItemChange(item.id, checked)}
-        className="mt-1"
-      />
-      <div className="grid gap-0.5">
-        <Label htmlFor={`nav-${item.id}`} className="font-medium flex items-center gap-2">
-            <Icon name={item.icon} className="h-4 w-4 text-muted-foreground"/>
-            {item.label}
-        </Label>
-        <p className="text-xs text-muted-foreground">{item.path}</p>
-      </div>
     </div>
   );
 
@@ -332,11 +304,9 @@ export function ShareDialog() {
                                 <Button variant={activeLink?.id === link.id ? 'secondary' : 'ghost'} className="w-full justify-start text-left h-auto py-2" onClick={() => loadLinkDetails(link)}>
                                     <span className="truncate">{link.name || `Link from ${format(link.createdAt.toDate(), 'PP')}`}</span>
                                 </Button>
-                                {isManagerOrAdmin && (
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
-                                        <History className="h-4 w-4" />
-                                    </Button>
-                                )}
+                                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={(e) => { e.stopPropagation(); setHistoryLink(link); }}>
+                                    <History className="h-4 w-4" />
+                                </Button>
                               </div>
                           ))}
                       </div>
@@ -358,24 +328,14 @@ export function ShareDialog() {
                       <Card>
                         <CardHeader>
                           <h3 className="font-semibold">Shared Experience</h3>
-                          <span className="text-sm text-muted-foreground">The generated link provides a view consistent with your current role: <Badge variant="outline">{profile?.role}</Badge>.</span>
+                          <span className="text-sm text-muted-foreground">The generated link will share all pages accessible to your role: <Badge variant="outline">{profile?.role}</Badge>.</span>
                         </CardHeader>
-                      </Card>
-
-                      <Card>
-                          <CardHeader>
-                              <Label className="flex items-center gap-2"><Eye className="h-4 w-4"/> Shared Navigation</Label>
-                              <p className="text-sm text-muted-foreground pt-1">Select which pages the viewer of this link will be able to see.</p>
-                          </CardHeader>
-                          <CardContent className="space-y-2">
-                             {userVisibleNavItems.map(item => <NavItemCheckbox key={item.id} item={item} />)}
-                          </CardContent>
                       </Card>
 
                       <Card>
                         <CardHeader>
                           <Label className="flex items-center gap-2"><Shield className="h-4 w-4"/> Permissions</Label>
-                          <p className="text-sm text-muted-foreground pt-1">Control exactly what viewers can do within the pages you've shared.</p>
+                          <p className="text-sm text-muted-foreground pt-1">Control exactly what viewers can do within the shared pages.</p>
                         </CardHeader>
                         <CardContent className='space-y-5'>
                           <PermissionSwitch id="perm-view" label="View Full Task Details" description="Allows viewers to open tasks and see all fields." checked={permissions.canViewDetails} onCheckedChange={(val) => handlePermissionChange('canViewDetails', val)} />
@@ -481,4 +441,3 @@ export function ShareDialog() {
     </>
   );
 }
-

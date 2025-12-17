@@ -2,12 +2,14 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
-# Add a rewrite rule to handle all routes by the Next.js server.
-# This is crucial for dynamic routes like /share/[linkId] to work correctly.
+  cpu: 1
+  memoryMiB: 512
+  maxInstances: 2
+
+# This rewrite rule is crucial for Next.js dynamic routing to work.
+# It directs all non-file requests to the Next.js server.
 rewrites:
-  - source: /**
+  - source: "**"
     run:
-      region: us-west1 # Specify a region if needed, or use your default
+      region: "us-west1"
+      serviceId: "default"
