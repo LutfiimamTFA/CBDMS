@@ -9,14 +9,16 @@ import { UserNav } from './user-nav';
 import { NotificationBell } from './notification-bell';
 import { ShareDialog } from '../share-dialog';
 import { useUserProfile } from '@/firebase';
+import type { NavigationItem } from '@/lib/types';
 
 interface HeaderProps {
   title: string;
   actions?: React.ReactNode;
   isPublicView?: boolean;
+  navItems?: NavigationItem[];
 }
 
-export function Header({ title, actions, isPublicView = false }: HeaderProps) {
+export function Header({ title, actions, isPublicView = false, navItems = [] }: HeaderProps) {
   const { profile } = useUserProfile();
   
   // Super Admins should not see the share dialog.
@@ -35,7 +37,7 @@ export function Header({ title, actions, isPublicView = false }: HeaderProps) {
         <div className="flex items-center gap-2">
             {!isPublicView ? (
               <>
-                {showShareDialog && <ShareDialog />}
+                {showShareDialog && <ShareDialog creatorNavItems={navItems} />}
                 <LanguageSwitcher />
                 <ThemeSwitcher />
                 <NotificationBell />

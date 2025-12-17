@@ -395,8 +395,10 @@ export default function ReportsPage() {
   }, [firestore, activeCompanyId, profile]));
   
   const teamTasks = useMemo(() => {
-    if (profile?.role !== 'Manager' || !tasks || !users) return null;
+    if (!profile || profile.role !== 'Manager' || !tasks || !users) return tasks;
     const teamMemberIds = users.map(u => u.id);
+    // Include manager's own tasks as well
+    teamMemberIds.push(profile.id);
     return tasks.filter(task => task.assigneeIds.some(id => teamMemberIds.includes(id)));
   }, [tasks, users, profile]);
 
@@ -434,12 +436,9 @@ export default function ReportsPage() {
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Performance Analysis" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         {renderContent()}
       </main>
     </div>
   );
 }
-
-    

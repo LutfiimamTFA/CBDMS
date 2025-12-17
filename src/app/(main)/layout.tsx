@@ -38,6 +38,7 @@ import { collection, query, orderBy } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
 import { Badge } from '@/components/ui/badge';
 import { AppProviders } from '@/components/app-providers';
+import { Header } from '@/components/layout/header';
 
 
 const Icon = ({
@@ -51,62 +52,21 @@ const Icon = ({
   return <LucideIconComponent {...props} />;
 };
 
-function MainAppLayout({ children }: { children: React.ReactNode }) {
+function MainAppLayout({
+  children,
+  finalNavItems,
+}: {
+  children: React.ReactNode;
+  finalNavItems: NavigationItem[];
+}) {
   const pathname = usePathname();
-  const router = useRouter();
   const { t } = useI18n();
-  const { user, profile, isLoading: isUserLoading } = useUserProfile();
-  const auth = useAuth();
-  const firestore = useFirestore();
-  
-  useEffect(() => {
-    if (isUserLoading) return;
-    
-    // Explicitly do not perform any redirection logic if we are on a share route.
-    if (pathname.startsWith('/share')) {
-        return;
-    }
-    
-    if (!user) {
-      router.replace('/login');
-      return;
-    }
-  
-    if (auth?.currentUser) {
-      getIdTokenResult(auth.currentUser, true)
-        .then((idTokenResult) => {
-          if (idTokenResult.claims.mustChangePassword) {
-            router.replace('/force-password-change');
-          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
-            router.replace('/force-acknowledge-tasks');
-          }
-        })
-        .catch(() => {
-          router.replace('/login');
-        });
-    }
 
-  }, [user, isUserLoading, auth, router, pathname]);
-
-
-  const navItemsCollectionRef = useMemo(
-    () =>
-      firestore
-        ? query(collection(firestore, 'navigationItems'), orderBy('order'))
-        : null,
-    [firestore]
-  );
-
-  const { data: navItemsFromDB, isLoading: isNavItemsLoading } =
-    useCollection<NavigationItem>(navItemsCollectionRef);
-
-  const { itemMap, childMap } = useMemo(() => {
-    if (!navItemsFromDB) return { itemMap: new Map(), childMap: new Map() };
-    const items = navItemsFromDB.map(item => ({...item, label: t(item.label as any) || item.label}));
-    const itemMap = new Map(items.map(item => [item.id, item]));
+  const { childMap } = useMemo(() => {
+    const itemMap = new Map(finalNavItems.map(item => [item.id, item]));
     const childMap = new Map<string, NavigationItem[]>();
 
-    items.forEach(item => {
+    finalNavItems.forEach(item => {
       let parentId: string | null = null;
       if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
       else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
@@ -119,16 +79,10 @@ function MainAppLayout({ children }: { children: React.ReactNode }) {
         childMap.get(parentId)!.push(item);
       }
     });
-    
-    if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
-    
+
     return { itemMap, childMap };
-  }, [navItemsFromDB, t]);
-
-  const allNavItems = Array.from(itemMap.values());
-
+  }, [finalNavItems]);
+  
   const [openSections, setOpenSections] = useState<Record<string, boolean>>(() => {
     const sections: Record<string, boolean> = {};
     if (pathname.startsWith('/admin/settings')) sections.nav_settings = true;
@@ -136,14 +90,6 @@ function MainAppLayout({ children }: { children: React.ReactNode }) {
     else if (pathname.startsWith('/social-media')) sections.nav_social_media = true;
     return sections;
   });
-  
-  const currentRole = profile?.role;
-
-  const filteredNavItems = useMemo(() => {
-    if (!currentRole || allNavItems.length === 0) return [];
-    return allNavItems.filter(item => item.roles.includes(currentRole));
-  }, [currentRole, allNavItems]);
-
 
   const renderNavItems = useCallback(
     (items: NavigationItem[], parentId: string | null = null) => {
@@ -154,15 +100,17 @@ function MainAppLayout({ children }: { children: React.ReactNode }) {
            else if (item.path.startsWith('/admin') && item.id !== 'nav_admin') itemParentId = 'nav_admin';
            else if (item.path.startsWith('/social-media') && item.id !== 'nav_social_media') itemParentId = 'nav_social_media';
 
-           return (parentId === null && itemParentId === null && !childMap.has(item.id)) || itemParentId === parentId;
+           return (parentId === null && itemParentId === null) || itemParentId === parentId;
         })
         .sort((a, b) => a.order - b.order)
         .map((item) => {
-          const children = childMap.get(item.id)?.filter(child => filteredNavItems.some(i => i.id === child.id)) || [];
+          const children = childMap.get(item.id) || [];
           const path = item.path;
           const isActive = pathname === path || (path.length > 1 && pathname.startsWith(path));
+          
+          const hasVisibleChildren = children.some(child => finalNavItems.some(i => i.id === child.id));
 
-          if (children.length > 0) {
+          if (hasVisibleChildren) {
             return (
               <SidebarMenuItem key={item.id}>
                 <Collapsible
@@ -191,6 +139,8 @@ function MainAppLayout({ children }: { children: React.ReactNode }) {
             );
           }
 
+          if (!item.path) return null; // Don't render folders without visible children
+
           return (
             <SidebarMenuItem key={item.id}>
               <Link href={path} passHref>
@@ -208,18 +158,13 @@ function MainAppLayout({ children }: { children: React.ReactNode }) {
           );
         });
     },
-    [filteredNavItems, childMap, pathname, openSections, t]
+    [finalNavItems, childMap, pathname, openSections]
   );
-
-  const isLoading = isUserLoading || isNavItemsLoading;
-
-  if (isLoading || !user) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  
+  const headerTitle = useMemo(() => {
+    const activeItem = finalNavItems.find(item => item.path === pathname);
+    return activeItem?.label || 'Dashboard';
+  }, [pathname, finalNavItems]);
 
   return (
     <SidebarProvider>
@@ -228,7 +173,7 @@ function MainAppLayout({ children }: { children: React.ReactNode }) {
           <Logo />
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>{renderNavItems(filteredNavItems)}</SidebarMenu>
+          <SidebarMenu>{renderNavItems(finalNavItems)}</SidebarMenu>
         </SidebarContent>
          <SidebarFooter>
             <SidebarMenu>
@@ -246,16 +191,93 @@ function MainAppLayout({ children }: { children: React.ReactNode }) {
             </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>{children}</SidebarInset>
+      <SidebarInset>
+         <Header title={headerTitle} navItems={finalNavItems} />
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   );
 }
 
-// New root component for the main layout that wraps everything in the required providers
+function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
+  const { user, profile, isLoading: isUserLoading } = useUserProfile();
+  const auth = useAuth();
+  const firestore = useFirestore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { t } = useI18n();
+
+  useEffect(() => {
+    if (isUserLoading) return;
+    
+    if (pathname.startsWith('/share')) return;
+    
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+  
+    if (auth?.currentUser) {
+      getIdTokenResult(auth.currentUser, true)
+        .then((idTokenResult) => {
+          if (idTokenResult.claims.mustChangePassword) {
+            router.replace('/force-password-change');
+          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
+            router.replace('/force-acknowledge-tasks');
+          }
+        })
+        .catch(() => router.replace('/login'));
+    }
+  }, [user, isUserLoading, auth, router, pathname]);
+
+  const navItemsCollectionRef = useMemo(
+    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
+    [firestore]
+  );
+  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
+  
+  const finalNavItems = useMemo(() => {
+    if (!profile || !navItemsFromDB) return [];
+    
+    const translatedItems = navItemsFromDB.map(item => ({...item, label: t(item.label as any) || item.label}));
+    const itemMap = new Map(translatedItems.map(item => [item.id, item]));
+
+    // Add pseudo-items for folders if they have children
+    const childMap = new Map<string, NavigationItem[]>();
+    translatedItems.forEach(item => {
+      let parentId: string | null = null;
+      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
+      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
+       else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
+      if (parentId && item.id !== parentId) {
+        if (!childMap.has(parentId)) childMap.set(parentId, []);
+        childMap.get(parentId)!.push(item);
+      }
+    });
+     if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
+    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
+    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
+
+    return Array.from(itemMap.values()).filter(item => item.roles.includes(profile.role));
+  }, [profile, navItemsFromDB, t]);
+
+  const isLoading = isUserLoading || isNavItemsLoading;
+  
+  if (isLoading || !user || !profile) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  return <MainAppLayout finalNavItems={finalNavItems}>{children}</MainAppLayout>;
+}
+
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   return (
     <AppProviders>
-      <MainAppLayout>{children}</MainAppLayout>
+      <MainLayoutWrapper>{children}</MainLayoutWrapper>
     </AppProviders>
   );
 }
