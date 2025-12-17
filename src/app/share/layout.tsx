@@ -13,8 +13,8 @@ export default function ShareLayout({
   children: React.ReactNode;
 }) {
   return (
-    // This layout provides a completely isolated Firebase context for the share feature.
-    // It does not use AppProviders.
+    // This layout provides a completely isolated context for the share feature.
+    // It does not use AppProviders or any other global application providers.
     <ThemeProvider
         attribute="class"
         defaultTheme="system"
@@ -23,7 +23,7 @@ export default function ShareLayout({
     >
       <FirebaseClientProvider>
         <SharedSessionProvider>
-          <SidebarProvider isSharedView={true}>
+          <SidebarProvider>
             {children}
           </SidebarProvider>
         </SharedSessionProvider>
