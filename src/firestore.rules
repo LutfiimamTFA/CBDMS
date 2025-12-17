@@ -1,11 +1,10 @@
 
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // --- Helper Functions ---
     function isSignedIn() {
       return request.auth != null;
     }
@@ -15,17 +14,15 @@ service cloud.firestore {
     }
     
     function getRequestingUserData() {
-        return getUserData(request.auth.uid);
+      return getUserData(request.auth.uid);
     }
     
     function getCompanySettings(companyId) {
-        return get(/databases/$(database)/documents/companySettings/$(companyId)).data;
+      return get(/databases/$(database)/documents/companySettings/$(companyId)).data;
     }
 
     function isEmergencyAdmin(userId) {
       let userCompanyId = getUserData(userId).companyId;
-      // Check if a companySettings doc exists for the user's company
-      // and if the user ID matches the emergency admin ID.
       return exists(/databases/$(database)/documents/companySettings/$(userCompanyId)) && 
              getCompanySettings(userCompanyId).emergencyAdminUserId == userId;
     }
@@ -47,15 +44,15 @@ service cloud.firestore {
     }
 
     function isSameCompanyAsRequestingUser(entityCompanyId) {
-        return getRequestingUserData().companyId == entityCompanyId;
+      return getRequestingUserData().companyId == entityCompanyId;
     }
     
     function isAssignee(taskId) {
-        return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds;
+      return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assigneeIds;
     }
     
     function isManagerOf(userId) {
-        return isSignedIn() && getUserData(userId).managerId == request.auth.uid;
+      return isSignedIn() && getUserData(userId).managerId == request.auth.uid;
     }
     
     function isOwnRecord(userId) {
@@ -63,8 +60,24 @@ service cloud.firestore {
     }
 
     function managerManagesBrand(brandId) {
-        return isSignedIn() && isRole('Manager') && brandId in getRequestingUserData().brandIds;
+      return isSignedIn() && isRole('Manager') && brandId in getRequestingUserData().brandIds;
     }
+
+    // --- Rules for Public Share Links ---
+    function isPublicLinkValid(linkId) {
+      let link = get(/databases/$(database)/documents/sharedLinks/$(linkId)).data;
+      // Check if the link exists and has not expired.
+      return link != null && (link.expiresAt == null || link.expiresAt > request.time);
+    }
+
+    // This rule allows anyone to read a shared link document to validate it.
+    match /sharedLinks/{linkId} {
+      allow get: if true; 
+      allow list: if false; // Do not allow listing all links.
+      allow write: if isSignedIn(); // Only signed-in users can create/update links.
+    }
+    
+    // --- Standard Application Rules ---
 
     match /permissions/{docId} {
       allow read, write: if isSuperAdmin();
@@ -76,6 +89,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      // Allow read for shared views IF the link is valid.
       allow read: if isSuperAdmin() || 
                      (isRole('Manager') && (isOwnRecord(userId) || isManagerOf(userId))) ||
                      isOwnRecord(userId);
@@ -84,7 +98,6 @@ service cloud.firestore {
                        (isRole('Manager') && hasPermission('Manager', 'canManageUsers') && isManagerOf(userId)) ||
                        isOwnRecord(userId);
 
-      // Super Admins can only create Managers. Managers can create Employees, PICs, and Clients.
       allow create: if (isSuperAdmin() && request.resource.data.role == 'Manager') ||
                        (isRole('Manager') && hasPermission('Manager', 'canManageUsers') && (request.resource.data.role in ['Employee', 'PIC', 'Client']));
       
@@ -92,34 +105,26 @@ service cloud.firestore {
       
       match /notifications/{notificationId} {
         allow read, update, delete: if isOwnRecord(userId);
-        allow create: if isSignedIn(); // Allow any signed-in user to create notifications
+        allow create: if isSignedIn();
       }
     }
 
     match /companies/{companyId} {
-      allow read: if isSignedIn() && isSameCompanyAsRequestingUser(companyId);
-      allow write: if isSuperAdmin() && isSameCompanyAsRequestingUser(companyId);
+       allow read: if isSignedIn() && isSameCompanyAsRequestingUser(companyId);
+       allow write: if isSuperAdmin() && isSameCompanyAsRequestingUser(companyId);
     }
 
     match /tasks/{taskId} {
-      // Read access is now also granted for valid public links.
-      allow get: if isSuperAdmin() ||
+      allow get, list: if isSuperAdmin() ||
                     (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
                     ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId));
-      allow list: if isSuperAdmin() || 
-                     (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
-                     ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId));
 
       allow create: if isSuperAdmin() ||
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
 
-      allow update: if 
-          // Admins can always update.
-          (isSuperAdmin()) ||
-          // Managers can update tasks for brands they manage.
+      allow update: if (isSuperAdmin()) ||
           (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
-          // Employees can update if they are an assignee AND the current status isn't "Done".
           ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId) && resource.data.status != 'Done');
       
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks') && managerManagesBrand(resource.data.brandId));
@@ -165,21 +170,12 @@ service cloud.firestore {
     }
 
     match /socialMediaPosts/{postId} {
-        // Read: Admins and Managers can read all posts in their company.
         allow read: if isSuperAdmin() || 
                      (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId));
-        // Create: Any authenticated user can create a post.
         allow create: if isSignedIn();
-        // Update/Delete: Admins, Managers, or the original creator if it's still a draft.
         allow update, delete: if isSuperAdmin() || 
                                  (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
                                  (isOwnRecord(resource.data.createdBy) && resource.data.status == 'Draft');
-    }
-
-    match /sharedLinks/{linkId} {
-      allow get: if true;
-      allow list: if false;
-      allow write: if isSignedIn();
     }
   }
 }

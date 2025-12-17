@@ -1,18 +1,36 @@
 
-import type { Metadata } from 'next';
+'use client';
+
 import './globals.css';
 import { AppProviders } from '@/components/app-providers';
+import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
-export const metadata: Metadata = {
-  title: 'WorkWise',
-  description: 'Collaborate, manage projects, and reach new productivity peaks.',
-};
+// We can't use Metadata here because this is a client component.
+// Metadata should be handled in specific page.tsx files if needed.
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const pathname = usePathname();
+  const isShareRoute = pathname.startsWith('/share');
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  if (!isMounted) {
+    // To prevent hydration mismatch, we can return null or a loading spinner on the server.
+    return (
+        <html lang="en" suppressHydrationWarning>
+            <body className="font-body antialiased"></body>
+        </html>
+    )
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -24,9 +42,16 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <AppProviders>
-          {children}
-        </AppProviders>
+        {isShareRoute ? (
+          // For share routes, we bypass the main AppProviders to avoid auth/user context dependencies.
+          // The share layout will have its own minimal providers.
+          children
+        ) : (
+          // For the main app, we use the full AppProviders.
+          <AppProviders>
+            {children}
+          </AppProviders>
+        )}
       </body>
     </html>
   );

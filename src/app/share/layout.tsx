@@ -12,7 +12,11 @@ import type { NavigationItem } from '@/lib/types';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import * as lucideIcons from 'lucide-react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
+import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from '@/components/ui/toaster';
+import { FirebaseClientProvider } from '@/firebase';
+import { Button } from '@/components/ui/button';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
     const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -26,38 +30,59 @@ export default function ShareLayout({
 }: {
   children: React.ReactNode;
 }) {
-
-  const firestore = useFirestore();
   const pathname = usePathname();
-  const { session, isLoading: isSessionLoading } = useSharedSession();
   
-  const navItemsQuery = React.useMemo(
-    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
-    [firestore]
+  // This minimal provider setup is only for the share layout.
+  // It provides Firebase, but not the user-specific contexts like PermissionsProvider or CompanyProvider.
+  const ShareProviders = ({ children }: { children: React.ReactNode }) => (
+      <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+      >
+          <FirebaseClientProvider>
+              <SharedSessionProvider>
+                  {children}
+                  <Toaster/>
+              </SharedSessionProvider>
+          </FirebaseClientProvider>
+      </ThemeProvider>
   );
-  const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
 
-  const allowedItems = React.useMemo(() => {
-    if (!session || !allNavItems) return [];
+  const ShareSidebar = () => {
+    const firestore = useFirestore();
+    const { session, isLoading: isSessionLoading } = useSharedSession();
     
-    // This maps the navigation item ID (e.g., 'nav_task_board') to the URL scope ('dashboard')
-    const navIdToScope: { [key: string]: string } = {
-        'nav_task_board': 'dashboard',
-        'nav_list': 'tasks',
-        'nav_calendar': 'calendar',
-        'nav_performance_analysis': 'reports',
-    };
+    const navItemsQuery = React.useMemo(
+      () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
+      [firestore]
+    );
+    const { data: allNavItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
 
-    return allNavItems
-        .filter(item => session.allowedNavItems.includes(item.id) && navIdToScope[item.id])
-        .sort((a,b) => a.order - b.order);
-  }, [session, allNavItems]);
-  
-  const isLoading = isSessionLoading || isNavItemsLoading;
+    const allowedItems = React.useMemo(() => {
+      if (!session || !allNavItems) return [];
+      
+      const navIdToScope: { [key: string]: string } = {
+          'nav_task_board': 'dashboard',
+          'nav_list': 'tasks',
+          'nav_calendar': 'calendar',
+          'nav_performance_analysis': 'reports',
+      };
 
+      return allNavItems
+          .filter(item => session.allowedNavItems.includes(item.id) && navIdToScope[item.id])
+          .sort((a,b) => a.order - b.order);
+    }, [session, allNavItems]);
+    
+    const isLoading = isSessionLoading || isNavItemsLoading;
+    
+    const handleExit = () => {
+        sessionStorage.removeItem(`share_token_${session?.id}`);
+        window.location.href = '/';
+    }
 
-  return (
-    <AppProviders>
+    return (
         <SidebarProvider isSharedView>
           <Sidebar>
             <SidebarHeader>
@@ -94,11 +119,22 @@ export default function ShareLayout({
                 </SidebarMenu>
               )}
             </SidebarContent>
+             <SidebarFooter>
+                 <Button variant="ghost" onClick={handleExit}>
+                    <LogOut className="mr-2 h-4 w-4" /> Exit Preview
+                 </Button>
+            </SidebarFooter>
           </Sidebar>
           <SidebarInset>
             {children}
           </SidebarInset>
         </SidebarProvider>
-    </AppProviders>
+    )
+  }
+
+  return (
+    <ShareProviders>
+        <ShareSidebar/>
+    </ShareProviders>
   );
 }
