@@ -8,20 +8,13 @@ import type { SharedLink } from '@/lib/types';
 import { Loader2, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Import halaman-halaman yang akan dirender secara dinamis
-import SharedDashboardPage from '../dashboard/page';
-import SharedTasksPage from '../tasks/page';
-import SharedCalendarPage from '../calendar/page';
-import SharedReportsPage from '../reports/page';
+// Import reusable components for each view
+import { SharedDashboardView } from '@/components/share/shared-dashboard-view';
+import { SharedTasksView } from '@/components/share/shared-tasks-view';
+import { SharedCalendarView } from '@/components/share/shared-calendar-view';
+import { SharedReportsView } from '@/components/share/shared-reports-view';
 
-// Komponen untuk fallback jika halaman tidak ada di scope
-const NotFoundComponent = () => {
-    React.useEffect(() => {
-        notFound();
-    }, []);
-    return null;
-}
-
+// Component for fallback if the page is not in scope
 const AccessDeniedComponent = () => {
      return (
         <div className="flex h-full items-center justify-center p-8">
@@ -29,12 +22,12 @@ const AccessDeniedComponent = () => {
                 <CardHeader>
                     <CardTitle className="flex items-center justify-center gap-2">
                         <ShieldAlert className="h-6 w-6 text-destructive"/>
-                        Akses Ditolak
+                        Access Denied
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <p className="text-muted-foreground">
-                        Anda tidak memiliki izin untuk melihat halaman ini melalui link yang Anda gunakan.
+                        You do not have permission to view this page through the link you are using.
                     </p>
                 </CardContent>
             </Card>
@@ -42,27 +35,26 @@ const AccessDeniedComponent = () => {
     );
 };
 
-
-// Map untuk merender komponen berdasarkan scope
+// Map URL scopes to their corresponding components
 const pageComponents: { [key: string]: React.ComponentType<any> } = {
-  'dashboard': SharedDashboardPage,
-  'tasks': SharedTasksPage,
-  'calendar': SharedCalendarPage,
-  'reports': SharedReportsPage,
+  'dashboard': SharedDashboardView,
+  'tasks': SharedTasksView,
+  'calendar': SharedCalendarView,
+  'reports': SharedReportsView,
 };
 
+// Map Navigation Item IDs (from the database) to URL scopes
 const navIdToScope: { [key: string]: string } = {
     'nav_task_board': 'dashboard',
     'nav_list': 'tasks',
     'nav_calendar': 'calendar',
     'nav_performance_analysis': 'reports'
-}
-
+};
 
 export default function ShareScopePage() {
   const params = useParams();
   const { linkId, scope } = params as { linkId: string; scope: string[] };
-  const currentScope = scope?.[0] || '';
+  const currentScope = scope?.[0] || 'dashboard'; // Default to dashboard if no scope
 
   const firestore = useFirestore();
   
@@ -81,19 +73,27 @@ export default function ShareScopePage() {
     );
   }
 
+  // If the link itself doesn't exist, show a 404
   if (error || !sharedLink) {
     notFound();
     return null;
   }
   
-  // Validasi izin akses berdasarkan scope
+  // Check if the requested page scope is allowed by the share link's permissions
   const isScopeAllowed = sharedLink.allowedNavItems.some(navId => navIdToScope[navId] === currentScope);
 
   if (!isScopeAllowed) {
     return <AccessDeniedComponent />;
   }
 
-  const PageComponent = pageComponents[currentScope] || NotFoundComponent;
+  const PageComponent = pageComponents[currentScope];
 
-  return <PageComponent />;
+  // If the scope doesn't map to a known component, show a 404
+  if (!PageComponent) {
+      notFound();
+      return null;
+  }
+
+  // Render the correct component based on the URL scope
+  return <PageComponent permissions={sharedLink.permissions} companyId={sharedLink.companyId} />;
 }
