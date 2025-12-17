@@ -80,7 +80,7 @@ export function ShareDialog() {
   const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
   const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
   const navItemsQuery = useMemo(() => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]);
-  const { data: allNavItems } = useCollection<NavigationItem>(navItemsQuery);
+  const { data: allNavItems } = useCollection<NavigationItem>(allNavItemsQuery);
 
 
   useEffect(() => {
@@ -161,8 +161,7 @@ export function ShareDialog() {
     // Capture the current view state
     const viewConfig = {
         currentRoute: pathname,
-        // In a real app, you would get this from a zustand store, redux, or URL params
-        filters: {}, 
+        filters: [], // This will be populated if we add live filtering to the main app
         activeTab: 'all',
     };
     

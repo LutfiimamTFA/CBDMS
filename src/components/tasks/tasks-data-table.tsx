@@ -108,7 +108,13 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       desc: true,
     },
   ]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(viewConfig?.filters || []);
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(() => {
+    const filters = viewConfig?.filters;
+    if (filters && !Array.isArray(filters)) {
+      return [filters];
+    }
+    return filters || [];
+  });
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
     lastActivity: false,
   });
