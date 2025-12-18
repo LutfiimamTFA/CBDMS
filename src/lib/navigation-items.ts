@@ -42,7 +42,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_schedule',
-    label: 'Schedule',
+    label: 'nav.schedule',
     path: '/schedule',
     icon: 'CalendarDays',
     order: 4,
@@ -69,7 +69,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_social_media_calendar',
-    label: 'Calendar',
+    label: 'nav.calendar',
     path: '/social-media',
     icon: 'CalendarDays',
     order: 6.1,
@@ -78,7 +78,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
    {
     id: 'nav_social_media_analytics',
-    label: 'Analytics',
+    label: 'nav.analytics',
     path: '/social-media/analytics',
     icon: 'BarChart2',
     order: 6.2,
