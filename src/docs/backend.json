@@ -428,18 +428,17 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "SharedLink",
       "type": "object",
-      "description": "Represents a secure, shareable link to a customized view of the application.",
+      "description": "A secure, shareable link that contains a snapshot of data.",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string", "description": "A user-friendly name for the link (e.g., 'Q3 Report')." },
-        "companyId": { "type": "string", "description": "The company whose data is being shared." },
-        "creatorRole": { "type": "string", "description": "The role of the user who created the link (e.g., 'Manager')." },
-        "allowedNavItems": { "type": "array", "items": { "type": "string" }, "description": "An array of NavigationItem IDs that are visible through this link." },
-        "password": { "type": "string", "description": "An optional password to protect the link." },
-        "expiresAt": { "type": "string", "format": "date-time", "description": "An optional expiration date for the link." },
+        "name": { "type": "string", "description": "A user-friendly name for the link." },
+        "companyId": { "type": "string" },
+        "creatorRole": { "type": "string" },
+        "allowedNavItems": { "type": "array", "items": { "type": "string" } },
+        "password": { "type": "string" },
+        "expiresAt": { "type": "string", "format": "date-time" },
         "permissions": {
           "type": "object",
-          "description": "A set of granular permissions for what the viewer can do.",
           "properties": {
             "canViewDetails": { "type": "boolean" },
             "canComment": { "type": "boolean" },
@@ -449,10 +448,21 @@
           },
           "required": ["canViewDetails", "canComment", "canChangeStatus", "canEditContent", "canAssignUsers"]
         },
-        "createdBy": { "type": "string", "description": "The ID of the user who created the link." },
+        "snapshot": {
+            "type": "object",
+            "description": "A complete snapshot of all data needed for the shared view.",
+            "properties": {
+                "tasks": { "type": "array", "items": { "$ref": "#/backend/entities/Task" } },
+                "statuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } },
+                "users": { "type": "array", "items": { "$ref": "#/backend/entities/User" } },
+                "brands": { "type": "array", "items": { "$ref": "#/backend/entities/Brand" } }
+            },
+            "required": ["tasks", "statuses", "users", "brands"]
+        },
+        "createdBy": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "name", "companyId", "allowedNavItems", "permissions", "createdBy", "createdAt"]
+      "required": ["id", "name", "companyId", "allowedNavItems", "permissions", "snapshot", "createdBy", "createdAt"]
     }
   },
   "auth": {

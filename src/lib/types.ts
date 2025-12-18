@@ -139,6 +139,12 @@ export type SharedLink = {
     canEditContent: boolean;
     canAssignUsers: boolean;
   };
+  snapshot: {
+    tasks: Task[];
+    statuses: WorkflowStatus[];
+    users: User[];
+    brands: Brand[];
+  };
   createdBy: string;
   createdAt: any;
 };
