@@ -181,13 +181,13 @@ export default function SchedulePage() {
 
 
   return (
-    <div className="flex h-svh flex-col bg-background">
-      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
+    <div className="flex h-full flex-col bg-background">
+      <main className="flex flex-1 flex-col p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold tracking-tight">Project Schedule</h2>
         </div>
         {isLoading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
