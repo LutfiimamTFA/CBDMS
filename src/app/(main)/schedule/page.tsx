@@ -183,9 +183,11 @@ export default function SchedulePage() {
   return (
     <div className="flex h-full flex-col bg-background">
       <main className="flex flex-1 flex-col p-4 md:p-6 overflow-hidden">
-        <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold tracking-tight">Project Schedule</h2>
-            <p className="text-muted-foreground">High-level overview of all project timelines.</p>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
+            <div>
+                <h2 className="text-2xl font-bold tracking-tight">Project Schedule</h2>
+                <p className="text-muted-foreground">High-level overview of all project timelines.</p>
+            </div>
         </div>
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center">

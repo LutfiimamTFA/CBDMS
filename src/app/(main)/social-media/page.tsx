@@ -87,7 +87,7 @@ export default function SocialMediaPage() {
     posts.forEach(post => {
       if (post.scheduledAt) {
         const postDate = parseISO(post.scheduledAt);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
+         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
           const dayKey = format(postDate, 'yyyy-MM-dd');
           if (!map.has(dayKey)) {
             map.set(dayKey, []);
