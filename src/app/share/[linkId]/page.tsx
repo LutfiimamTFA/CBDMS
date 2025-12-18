@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useEffect, useState } from 'react';
@@ -15,9 +14,12 @@ import { isAfter } from 'date-fns';
 
 const getScopeFromPath = (path: string): string | undefined => {
     if (!path) return undefined;
-    const parts = path.split('/');
-    if (parts.length > 2 && parts[1] === 'social-media') return parts.slice(1).join('/');
-    return parts[parts.length -1];
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    // Don't generate a scope for paths that are just group folders
+    if (cleanPath === 'admin' || cleanPath === 'admin/settings' || cleanPath === 'social-media') {
+        return undefined;
+    }
+    return cleanPath;
 };
 
 

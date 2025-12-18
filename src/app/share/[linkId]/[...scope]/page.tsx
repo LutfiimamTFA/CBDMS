@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 // Import the new simplified view and other necessary components
 import { ShareSidebar } from '@/components/share/share-sidebar';
 import { SharedSimpleTasksView } from '@/components/share/shared-simple-tasks-view';
+import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -48,22 +49,6 @@ const LinkNotFoundComponent = () => (
     </div>
 );
 
-// This map is the single source of truth for routing in share mode.
-// We now point all task-related views to the new simple component.
-const pageComponents: { [key: string]: React.ComponentType<any> } = {
-  'my-work': SharedSimpleTasksView,
-  'dashboard': SharedSimpleTasksView,
-  'tasks': SharedSimpleTasksView,
-  'daily-report': SharedSimpleTasksView,
-  'schedule': SharedSimpleTasksView,
-  'calendar': SharedSimpleTasksView,
-  'social-media': SharedSimpleTasksView,
-  'social-media/analytics': SharedSimpleTasksView,
-  'reports': SharedSimpleTasksView,
-  'guide': SharedSimpleTasksView,
-  'admin/settings/recurring': SharedSimpleTasksView,
-};
-
 export default function ShareScopePage() {
   const { session, navItems, isLoading, error, ...restOfData } = useSharedSession();
   const params = useParams();
@@ -88,8 +73,16 @@ export default function ShareScopePage() {
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
   
-  // Use the simple tasks view for any allowed task-related scope.
-  const PageComponent = isPageAllowed ? SharedSimpleTasksView : null;
+  // Define which component to render based on the scope
+  let PageComponent: React.ComponentType<any> | null = null;
+  if (isPageAllowed) {
+    if (scope.startsWith('social-media')) {
+      PageComponent = SharedSocialMediaView;
+    } else {
+      PageComponent = SharedSimpleTasksView;
+    }
+  }
+
 
   if (!PageComponent) {
       return (
@@ -105,6 +98,7 @@ export default function ShareScopePage() {
   const viewProps = {
     session,
     isLoading,
+    isAnalyticsView: scope === 'social-media/analytics',
     ...restOfData,
   };
 
