@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
-import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User } from '@/lib/types';
+import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
@@ -47,6 +47,23 @@ const isShareable = (item: NavigationItem) => {
 interface ShareViewDialogProps {
   children?: React.ReactNode;
 }
+
+// Function to recursively remove undefined values from any object
+const removeUndefined = (obj: any): any => {
+    if (Array.isArray(obj)) {
+        return obj.map(removeUndefined);
+    } else if (obj !== null && typeof obj === 'object') {
+        return Object.keys(obj).reduce((acc, key) => {
+            const value = obj[key];
+            if (value !== undefined) {
+                (acc as any)[key] = removeUndefined(value);
+            }
+            return acc;
+        }, {});
+    }
+    return obj;
+};
+
 
 export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -81,12 +98,9 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
 
   useEffect(() => {
-    // Default selection logic when the dialog opens
     if (isOpen) {
-      const defaultIds = shareableNavItems
-        .filter(item => item.path === '/dashboard') // Always select dashboard by default if available
-        .map(item => item.id);
-      setSelectedNavIds(defaultIds);
+      const dashboardItem = shareableNavItems.find(item => item.path === '/dashboard');
+      setSelectedNavIds(dashboardItem ? [dashboardItem.id] : []);
     }
   }, [isOpen, shareableNavItems]);
 
@@ -102,19 +116,19 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     setGeneratedLink(null);
 
     try {
-        // --- Create Data Snapshot ---
         let tasksQuery;
         if (profile.role === 'Manager') {
-            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds || []));
+            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds || ['__dummy_id__']));
         } else { // Employee, PIC, Client
             tasksQuery = query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
         }
         
-        const [tasksSnap, statusesSnap, usersSnap, brandsSnap] = await Promise.all([
+        const [tasksSnap, statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([
             getDocs(tasksQuery),
             getDocs(query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId))),
             getDocs(query(collection(firestore, 'users'), where('companyId', '==', profile.companyId))),
-            getDocs(query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId)))
+            getDocs(query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId))),
+            getDocs(query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId)))
         ]);
 
         const snapshot = {
@@ -122,15 +136,15 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
             statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
             users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
+            socialMediaPosts: socialPostsSnap.docs.map(doc => ({ id: doc.id, ...doc.data()} as SocialMediaPost)),
         };
 
-        // --- Create Link Data ---
         const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
           name: linkName || 'Shared View',
           companyId: profile.companyId,
           creatorRole: profile.role,
           allowedNavItems: selectedNavIds, 
-          navItems: userNavItems.map(item => ({...item, label: t(item.label as any)})), // Snapshot of translated nav items
+          navItems: userNavItems.map(item => ({...item, label: t(item.label as any)})),
           permissions,
           snapshot,
           createdBy: profile.id,
@@ -138,14 +152,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           expiresAt: expiresAt || undefined,
         };
         
-        // --- Clean data before sending to Firestore ---
-        const cleanedData = Object.entries(linkData).reduce((acc, [key, value]) => {
-            if (value !== undefined) {
-                (acc as any)[key] = value;
-            }
-            return acc;
-        }, {} as Partial<SharedLink>);
-
+        const cleanedData = removeUndefined(linkData);
 
         const docRef = await addDoc(collection(firestore, 'sharedLinks'), {
             ...cleanedData,
@@ -188,7 +195,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         <DialogHeader>
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Create a public link to share a filtered view of your tasks.
+            Create a public link to share a filtered view of your work.
           </DialogDescription>
         </DialogHeader>
 
@@ -201,7 +208,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
               </div>
               
               <div className="space-y-4 rounded-md border p-4">
-                <h4 className="text-sm font-medium">Available Views</h4>
+                <h4 className="text-sm font-medium">Available Pages</h4>
+                <p className="text-xs text-muted-foreground">Select which pages the recipient can view.</p>
                 <div className="space-y-2">
                     {shareableNavItems.map(item => (
                         <div key={item.id} className="flex items-center space-x-2">
@@ -229,14 +237,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                     <div className="flex items-center justify-between">
                         <Label htmlFor="perm-view" className="flex flex-col gap-1"><span>View Full Task Details</span><span className="font-normal text-xs text-muted-foreground">Allow viewers to open and see all task details.</span></Label>
                         <Switch id="perm-view" checked={permissions.canViewDetails} onCheckedChange={(c) => setPermissions(p => ({...p, canViewDetails: c}))} />
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <Label htmlFor="perm-comment" className="flex flex-col gap-1"><span>Allow Comments</span><span className="font-normal text-xs text-muted-foreground">Viewers can post comments as guests.</span></Label>
-                        <Switch id="perm-comment" checked={permissions.canComment} onCheckedChange={(c) => setPermissions(p => ({...p, canComment: c}))} />
-                    </div>
-                     <div className="flex items-center justify-between">
-                        <Label htmlFor="perm-status" className="flex flex-col gap-1"><span>Allow Status Change</span><span className="font-normal text-xs text-muted-foreground">Allow viewers to drag-and-drop tasks on the board.</span></Label>
-                        <Switch id="perm-status" checked={permissions.canChangeStatus} onCheckedChange={(c) => setPermissions(p => ({...p, canChangeStatus: c}))} />
                     </div>
                   </div>
               </div>
