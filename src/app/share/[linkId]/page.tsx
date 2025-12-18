@@ -3,8 +3,8 @@
 
 import React, { useMemo, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useDoc, useFirestore, useCollection } from '@/firebase';
-import { doc, collection, query, orderBy } from 'firebase/firestore';
+import { doc, collection, query, orderBy, getFirestore, getDoc, getDocs, type Firestore } from 'firebase/firestore';
+import { initializeFirebase } from '@/firebase';
 import { Loader2, FileWarning, Clock } from 'lucide-react';
 import type { SharedLink, Company, NavigationItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,11 @@ const PasswordFormComponent = ({ company, linkId }: { company: Company | null, l
     const [authError, setAuthError] = useState<string | null>(null);
     const [isChecking, setIsChecking] = useState(false);
     const router = useRouter();
-    const firestore = useFirestore();
+    const [firestore, setFirestore] = useState<Firestore | null>(null);
+
+    useEffect(() => {
+        setFirestore(getFirestore(initializeFirebase().firebaseApp));
+    }, []);
 
     const handleAuth = async () => {
         if (!firestore) return;
@@ -78,7 +82,7 @@ const PasswordFormComponent = ({ company, linkId }: { company: Company | null, l
 
         const linkDocRef = doc(firestore, 'sharedLinks', linkId);
         try {
-            const docSnap = await (await import('firebase/firestore')).getDoc(linkDocRef);
+            const docSnap = await getDoc(linkDocRef);
             if (docSnap.exists() && docSnap.data().password === password) {
                 if (typeof window !== 'undefined') {
                     sessionStorage.setItem(`share_token_${linkId}`, 'true');
@@ -128,31 +132,66 @@ export default function SharedLinkRedirectorPage() {
     const params = useParams();
     const router = useRouter();
     const linkId = params.linkId as string;
-    const firestore = useFirestore();
 
-    const linkDocRef = useMemo(() => {
-        if (!firestore || !linkId) return null;
-        return doc(firestore, 'sharedLinks', linkId);
-    }, [firestore, linkId]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [sharedLink, setSharedLink] = useState<SharedLink | null>(null);
+    const [company, setCompany] = useState<Company | null>(null);
+    const [navItems, setNavItems] = useState<NavigationItem[]>([]);
+    const [error, setError] = useState<string | null>(null);
 
-    const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
+    useEffect(() => {
+        if (!linkId) {
+            setError("Link ID is missing.");
+            setIsLoading(false);
+            return;
+        }
 
-    const {data: company, isLoading: isCompanyLoading} = useDoc<Company>(useMemo(() => {
-        if (!firestore || !sharedLink?.companyId) return null;
-        return doc(firestore, 'companies', sharedLink.companyId);
-    },[firestore, sharedLink?.companyId]));
+        const fetchInitialData = async () => {
+            try {
+                const db = getFirestore(initializeFirebase().firebaseApp);
+                
+                // 1. Fetch Shared Link
+                const linkDocRef = doc(db, 'sharedLinks', linkId);
+                const linkSnap = await getDoc(linkDocRef);
 
-    const navItemsQuery = useMemo(() => {
-        if (!firestore) return null;
-        return query(collection(firestore, 'navigationItems'), orderBy('order'));
-    }, [firestore]);
-    const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
+                if (!linkSnap.exists()) {
+                    throw new Error("Link not found");
+                }
+                const linkData = { ...linkSnap.data(), id: linkSnap.id } as SharedLink;
+                setSharedLink(linkData);
+
+                // 2. Fetch Company if needed
+                if (linkData.companyId) {
+                    const companyDocRef = doc(db, 'companies', linkData.companyId);
+                    const companySnap = await getDoc(companyDocRef);
+                    if (companySnap.exists()) {
+                        setCompany({ ...companySnap.data(), id: companySnap.id } as Company);
+                    }
+                }
+
+                // 3. Fetch all NavItems
+                const navItemsQuery = query(collection(db, 'navigationItems'), orderBy('order'));
+                const navItemsSnap = await getDocs(navItemsQuery);
+                const allNavItems = navItemsSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as NavigationItem));
+                setNavItems(allNavItems);
+
+            } catch (e: any) {
+                console.error("Error fetching shared link data:", e);
+                setError(e.message || "An unknown error occurred.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchInitialData();
+
+    }, [linkId]);
 
 
     useEffect(() => {
-        if (isLinkLoading || isNavItemsLoading || !linkId) return;
+        if (isLoading || !linkId) return;
 
-        if (!sharedLink || linkError) {
+        if (!sharedLink || error) {
             return; 
         }
 
@@ -178,10 +217,10 @@ export default function SharedLinkRedirectorPage() {
                 router.replace(`/share/${linkId}/${scope}`);
             }
         }
-    }, [sharedLink, isLinkLoading, linkError, linkId, router, navItems, isNavItemsLoading]);
+    }, [sharedLink, isLoading, error, linkId, router, navItems]);
 
 
-    if (isLinkLoading || isNavItemsLoading) {
+    if (isLoading) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -189,7 +228,7 @@ export default function SharedLinkRedirectorPage() {
         );
     }
     
-    if (!sharedLink || linkError) {
+    if (!sharedLink || error) {
         return <LinkNotFoundComponent />;
     }
     
