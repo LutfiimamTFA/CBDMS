@@ -19,7 +19,6 @@ export const ui = {
     'nav.list': 'List',
     'nav.daily_checklist': 'Daily Checklist',
     'nav.recurring_tasks': 'Recurring Tasks',
-    'nav.schedule': 'Schedule',
     'nav.calendar': 'Calendar',
     'nav.social_media': 'Social Media',
     'nav.analytics': 'Analytics',
@@ -148,7 +147,6 @@ export const ui = {
     'nav.list': 'Daftar',
     'nav.daily_checklist': 'Ceklis Harian',
     'nav.recurring_tasks': 'Tugas Berulang',
-    'nav.schedule': 'Jadwal',
     'nav.calendar': 'Kalender',
     'nav.social_media': 'Media Sosial',
     'nav.analytics': 'Analitik',
@@ -267,6 +265,7 @@ export const ui = {
     'dashboard.role': 'Anda masuk sebagai {role}. Selamat bekerja dan semoga harimu produktif!',
   },
 } as const;
+
 
 
 

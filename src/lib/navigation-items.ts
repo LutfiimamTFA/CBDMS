@@ -41,15 +41,6 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: null,
   },
   {
-    id: 'nav_schedule',
-    label: 'nav.schedule',
-    path: '/schedule',
-    icon: 'CalendarDays',
-    order: 4,
-    roles: ['Super Admin', 'Manager', 'Employee'],
-    parentId: null,
-  },
-  {
     id: 'nav_calendar',
     label: 'nav.calendar',
     path: '/calendar',
