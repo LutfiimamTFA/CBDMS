@@ -1,8 +1,6 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import {
@@ -29,6 +27,7 @@ import { PostPerformanceChart } from '@/components/social-media/post-performance
 import { ImpressionsCard } from '@/components/social-media/impressions-card';
 import { PostTypeChart } from '@/components/social-media/post-type-chart';
 import { EngagementCard } from '@/components/social-media/engagement-card';
+import { SharedHeader } from './shared-header';
 
 interface SharedSocialMediaViewProps {
   tasks: SocialMediaPost[];
@@ -66,7 +65,7 @@ export function SharedSocialMediaView({ tasks: posts, permissions, isAnalyticsVi
     posts.forEach(post => {
       if (post.scheduledAt) {
         const postDate = parseISO(post.scheduledAt);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
           const dayKey = format(postDate, 'yyyy-MM-dd');
           if (!map.has(dayKey)) {
             map.set(dayKey, []);
@@ -98,7 +97,7 @@ export function SharedSocialMediaView({ tasks: posts, permissions, isAnalyticsVi
   if (isAnalyticsView) {
     return (
        <div className="flex h-svh flex-col bg-background">
-        <Header title="Social Media Analytics" isSharedView={true} />
+        <SharedHeader title="Social Media Analytics" />
         <main className="flex-1 overflow-auto p-4 md:p-6">
           <div className="mb-6">
             <h2 className="text-2xl font-bold tracking-tight">Content Performance</h2>
@@ -127,7 +126,7 @@ export function SharedSocialMediaView({ tasks: posts, permissions, isAnalyticsVi
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="Social Media Center" isSharedView={true} />
+      <SharedHeader title="Social Media Center" />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-2">

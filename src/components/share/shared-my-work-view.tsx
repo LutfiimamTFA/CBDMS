@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -21,6 +20,7 @@ import { MyTasksDataTable } from '@/components/my-work/my-tasks-data-table';
 import { Card, CardContent } from '@/components/ui/card';
 import { DailyChecklist } from '@/components/my-work/daily-checklist';
 import type { Task, User } from '@/lib/types';
+import { SharedHeader } from './shared-header';
 
 interface SharedMyWorkViewProps {
   name: string;
@@ -33,6 +33,7 @@ export function SharedMyWorkView({ name, tasks, teamUsers, profile }: SharedMyWo
 
   return (
     <div className="flex h-svh flex-col bg-background">
+      <SharedHeader title="My Work" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mb-6">
           <h2 className="text-2xl font-bold tracking-tight">

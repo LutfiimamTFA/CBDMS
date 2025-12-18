@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -28,6 +27,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { SharedHeader } from './shared-header';
 
 
 interface SharedCalendarViewProps {
@@ -58,7 +58,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
     tasks.forEach(task => {
       if (task.dueDate) {
         const postDate = parseISO(task.dueDate);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
           const dayKey = format(postDate, 'yyyy-MM-dd');
           if (!map.has(dayKey)) {
             map.set(dayKey, []);
@@ -75,6 +75,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
 
   return (
     <div className="flex flex-col flex-1 h-full">
+      <SharedHeader title="Calendar" />
       <header className="flex items-center justify-between p-4 border-b">
         <h2 className="font-semibold text-lg">{format(currentDate, 'MMMM yyyy')}</h2>
         <div className="flex items-center gap-1">
@@ -120,8 +121,8 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
               <ScrollArea className="flex-1">
                 <div className="flex flex-col gap-1 p-1">
                   {tasksForDay.map(task => {
-                    const path = permissions?.canViewDetails ? `/share/${linkId}/tasks/${task.id}` : '#';
-                     const canClick = permissions?.canViewDetails;
+                    const path = `/tasks/${task.id}`;
+                    const canClick = permissions?.canViewDetails;
 
                      const content = (
                         <div
@@ -136,7 +137,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
                      );
 
                     return canClick ? (
-                        <Link href={path} key={task.id}>
+                        <Link href={path} key={task.id} onClick={(e) => { e.preventDefault(); router.push(`/tasks/${task.id}?shared=true`) }}>
                            {content}
                         </Link>
                     ) : (

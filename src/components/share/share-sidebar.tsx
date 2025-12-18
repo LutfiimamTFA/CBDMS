@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -29,6 +28,8 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 const getScopeFromPath = (path: string): string | undefined => {
     if (!path) return undefined;
     const parts = path.split('/');
+    // Handles paths like /social-media/analytics as well
+    if (parts.length > 2) return parts.slice(1).join('/');
     return parts[parts.length -1];
 };
 
