@@ -1,3 +1,4 @@
+
 'use client';
 import { SharedHeader } from '@/components/share/shared-header';
 import { SharedTasksTable } from '@/components/share/shared-tasks-table';
@@ -9,12 +10,11 @@ interface SharedTasksViewProps {
   session: SharedLink;
   tasks: Task[] | null;
   statuses: WorkflowStatus[] | null;
-  brands: Brand[] | null;
   users: User[] | null;
   isLoading: boolean;
 }
 
-export function SharedTasksView({ session, tasks, statuses, brands, users, isLoading }: SharedTasksViewProps) {
+export function SharedTasksView({ session, tasks, statuses, users, isLoading }: SharedTasksViewProps) {
   return (
     <div className="flex flex-col flex-1 h-full w-full">
       <SharedHeader title="Task List" />
@@ -27,7 +27,6 @@ export function SharedTasksView({ session, tasks, statuses, brands, users, isLoa
           <SharedTasksTable 
               tasks={tasks || []}
               statuses={statuses || []}
-              brands={brands || []}
               users={users || []}
               permissions={session.permissions}
               isShareView={true}

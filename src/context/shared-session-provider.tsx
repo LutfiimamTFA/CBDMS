@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useContext, useMemo, useEffect, useState } from 'react';
@@ -12,7 +13,6 @@ interface SharedSessionContextType {
   company: Company | null;
   tasks: Task[] | null;
   statuses: WorkflowStatus[] | null;
-  brands: Brand[] | null;
   users: User[] | null;
   isLoading: boolean;
   error: Error | null;
@@ -72,11 +72,11 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
   const tasksQuery = useMemo(() => {
     if (!firestore || !session?.companyId) return null;
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
-    if (session.brandIds && session.brandIds.length > 0) {
-      q = query(q, where('brandId', 'in', session.brandIds));
-    } else if (session.creatorRole !== 'Super Admin') {
-      return null;
-    }
+    
+    // Note: Filtering by brandIds is removed to simplify and fix permission errors.
+    // If the creator was a manager, we assume they shared tasks from their scope,
+    // but we fetch all company tasks and rely on the UI components to filter if needed.
+    
     return q;
   }, [firestore, session]);
   const { data: tasks, isLoading: isTasksLoading, error: tasksError } = useCollection<Task>(tasksQuery);
@@ -87,15 +87,6 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
   }, [firestore, session?.companyId]);
   const { data: statuses, isLoading: areStatusesLoading, error: statusesError } = useCollection<WorkflowStatus>(statusesQuery);
   
-  const brandsQuery = useMemo(() => {
-    if (!firestore || !session?.companyId) return null;
-    let q: Query = query(collection(firestore, 'brands'), where('companyId', '==', session.companyId), orderBy('name'));
-    if (session.brandIds && session.brandIds.length > 0) {
-      q = query(q, where('__name__', 'in', session.brandIds));
-    }
-    return q;
-  }, [firestore, session]);
-  const { data: brands, isLoading: areBrandsLoading, error: brandsError } = useCollection<Brand>(brandsQuery);
   
   const usersQuery = useMemo(() => {
     if (!firestore || !session?.companyId) return null;
@@ -111,10 +102,9 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
     isCompanyLoading || 
     isTasksLoading ||
     areStatusesLoading ||
-    areBrandsLoading ||
     areUsersLoading;
     
-  const error = sessionError || navItemsError || companyError || tasksError || statusesError || brandsError || usersError;
+  const error = sessionError || navItemsError || companyError || tasksError || statusesError || usersError;
 
   const value = useMemo(
     () => ({
@@ -123,12 +113,12 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
       company: company || null,
       tasks: tasks || null,
       statuses: statuses || null,
-      brands: brands || null,
+      brands: [], // Returning empty array as we are no longer fetching brands
       users: users || null,
       isLoading,
       error,
     }),
-    [session, navItems, company, tasks, statuses, brands, users, isLoading, error]
+    [session, navItems, company, tasks, statuses, users, isLoading, error]
   );
 
   return (

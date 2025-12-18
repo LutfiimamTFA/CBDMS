@@ -18,10 +18,8 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
-import type { SharedLink, Brand } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Users, Star, KanbanSquare, ClipboardList, Clock } from 'lucide-react';
-import { MultiSelect } from '../ui/multi-select';
-import { usePathname } from 'next/navigation';
+import type { SharedLink } from '@/lib/types';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -30,7 +28,6 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 
-// The shareable views are now static and always included.
 const includedNavItems = ['nav_task_board', 'nav_list', 'nav_calendar', 'nav_schedule'];
 
 interface ShareViewDialogProps {
@@ -46,7 +43,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const { profile } = useUserProfile();
   const { toast } = useToast();
   
-  // Form state
   const [linkName, setLinkName] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
@@ -59,22 +55,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     canAssignUsers: false,
   });
   
-  const brandsQuery = useMemo(() => {
-      if (!firestore || !profile) return null;
-      let q = query(collection(firestore, 'brands'), orderBy('name'));
-      if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
-        q = query(q, where('__name__', 'in', profile.brandIds));
-      }
-      return q;
-  }, [firestore, profile]);
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
-  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>(profile?.brandIds || []);
-  
-  useEffect(() => {
-    if (isOpen) {
-        setSelectedBrandIds(profile?.brandIds || []);
-    }
-  }, [isOpen, profile]);
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
@@ -92,7 +72,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
       creatorRole: profile.role,
       allowedNavItems: includedNavItems, 
       permissions,
-      brandIds: selectedBrandIds.length > 0 ? selectedBrandIds : profile.brandIds,
       createdBy: profile.id,
       ...(usePassword && { password }),
       ...(expiresAt && { expiresAt }),
@@ -132,11 +111,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     }
   }, [isOpen]);
 
-  const brandOptions = useMemo(() => (brands || []).map(b => ({ value: b.id, label: b.name })), [brands]);
-
-  const isManager = profile?.role === 'Manager';
-  const showBrandFilter = isManager && brandOptions.length > 1;
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -144,7 +118,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         <DialogHeader>
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Create a public link to share a view of your tasks. All relevant pages (Board, List, Calendar) will be included automatically.
+            Create a public link to share a filtered view of your tasks.
           </DialogDescription>
         </DialogHeader>
 
@@ -155,13 +129,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                 <Label htmlFor="link-name">Link Name</Label>
                 <Input id="link-name" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="e.g., Q3 Client Preview" />
               </div>
-              
-              {showBrandFilter && (
-                <div className="space-y-2">
-                  <Label>Data Scope (Brands)</Label>
-                  <MultiSelect options={brandOptions} onValueChange={setSelectedBrandIds} defaultValue={selectedBrandIds} placeholder="Defaults to all your brands"/>
-                </div>
-              )}
               
               <div className="space-y-4 rounded-md border p-4">
                   <h4 className="text-sm font-medium">Permissions for Viewer</h4>
@@ -242,7 +209,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateLink} disabled={isLoading || (showBrandFilter && selectedBrandIds.length === 0)}>
+              <Button onClick={handleCreateLink} disabled={isLoading}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
                 Create Link
               </Button>

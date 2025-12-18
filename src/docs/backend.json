@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -433,7 +434,6 @@
         "name": { "type": "string", "description": "A user-friendly name for the link (e.g., 'Q3 Report')." },
         "companyId": { "type": "string", "description": "The company whose data is being shared." },
         "creatorRole": { "type": "string", "description": "The role of the user who created the link (e.g., 'Manager')." },
-        "brandIds": { "type": "array", "items": { "type": "string" }, "description": "For links created by managers, the specific brands included."},
         "allowedNavItems": { "type": "array", "items": { "type": "string" }, "description": "An array of NavigationItem IDs that are visible through this link." },
         "password": { "type": "string", "description": "An optional password to protect the link." },
         "expiresAt": { "type": "string", "format": "date-time", "description": "An optional expiration date for the link." },

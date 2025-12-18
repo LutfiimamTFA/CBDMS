@@ -129,7 +129,6 @@ export type SharedLink = {
   name: string;
   companyId: string;
   creatorRole: User['role'];
-  brandIds?: string[];
   allowedNavItems: string[];
   password?: string;
   expiresAt?: any;

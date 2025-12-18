@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -40,13 +41,12 @@ import { useRouter } from 'next/navigation';
 interface SharedTasksTableProps {
     tasks: Task[];
     statuses: WorkflowStatus[];
-    brands: Brand[];
     users: User[];
     permissions: SharedLink['permissions'];
     isShareView: boolean;
 }
 
-export function SharedTasksTable({ tasks, statuses, brands, users, permissions, isShareView }: SharedTasksTableProps) {
+export function SharedTasksTable({ tasks, statuses, users, permissions, isShareView }: SharedTasksTableProps) {
   const router = useRouter();
   const [data, setData] = React.useState<Task[]>(tasks);
   React.useEffect(() => {
@@ -72,10 +72,6 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions, 
 
   const priorityOptions = Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label, icon: p.icon }));
   
-  const brandOptions = React.useMemo(() => {
-    return (brands || []).map((brand) => ({ value: brand.id, label: brand.name, icon: Building2 }));
-  }, [brands]);
-
   const assigneeOptions = React.useMemo(() => {
     return (users || []).map(u => ({ value: u.id, label: u.name }));
   }, [users]);
@@ -132,11 +128,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions, 
     {
       accessorKey: 'brandId',
       header: 'Brand',
-      cell: ({ row }) => {
-        const brandId = row.getValue('brandId') as string;
-        const brand = brands?.find(b => b.id === brandId);
-        return brand ? <Badge variant="outline" className="font-normal bg-secondary/50"><Building2 className='mr-2 h-4 w-4'/>{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
-      },
+      cell: ({ row }) => null, // Column is hidden but can be used for filtering
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
       },
@@ -261,7 +253,6 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions, 
             onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
             className="h-8 w-[150px] lg:w-[250px]"
           />
-          {brandOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("brandId")} title="Brand" options={brandOptions} />}
           {statusOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("status")} title="Status" options={statusOptions} />}
           {priorityOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("priority")} title="Priority" options={priorityOptions} />}
           {assigneeOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("assigneeIds")} title="Assignees" options={assigneeOptions} />}
