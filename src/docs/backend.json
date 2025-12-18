@@ -431,32 +431,19 @@
       "description": "Represents a secure, shareable link to a customized view of the application.",
       "properties": {
         "id": { "type": "string" },
-        "name": { "type": "string", "description": "A user-friendly name for the link (e.g., 'Client Preview Q3')." },
+        "name": { "type": "string", "description": "A user-friendly name for the link (e.g., 'Q3 Report')." },
+        "linkType": { "type": "string", "enum": ["task", "view"], "description": "The type of content being shared." },
+        "targetId": { "type": "string", "description": "The ID of the primary resource being shared (e.g., a taskId)." },
+        "filters": { "type": "object", "description": "A snapshot of filters applied to a view-type link." },
         "companyId": { "type": "string", "description": "The company whose data is being shared." },
-        "allowedNavItems": {
-          "type": "array",
-          "description": "An array of NavigationItem IDs that are visible through this link.",
-          "items": { "type": "string" }
-        },
         "password": { "type": "string", "description": "An optional password to protect the link." },
         "expiresAt": { "type": "string", "format": "date-time", "description": "An optional expiration date for the link." },
-        "permissions": {
-          "type": "object",
-          "description": "A set of granular permissions for what the viewer can do.",
-          "properties": {
-            "canViewDetails": { "type": "boolean" },
-            "canComment": { "type": "boolean" },
-            "canChangeStatus": { "type": "boolean" },
-            "canEditContent": { "type": "boolean" },
-            "canAssignUsers": { "type": "boolean" }
-          },
-          "required": ["canViewDetails", "canComment", "canChangeStatus", "canEditContent", "canAssignUsers"]
-        },
+        "allowComments": { "type": "boolean" },
+        "public": { "type": "boolean", "description": "Whether search engines can index the link." },
         "createdBy": { "type": "string", "description": "The ID of the user who created the link." },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "updatedAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "name", "companyId", "allowedNavItems", "permissions", "createdBy", "createdAt"]
+      "required": ["id", "linkType", "companyId", "createdBy", "createdAt"]
     }
   },
   "auth": {

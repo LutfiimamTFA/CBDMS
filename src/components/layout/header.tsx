@@ -7,8 +7,6 @@ import { ThemeSwitcher } from '@/components/theme-switcher';
 import { LanguageSwitcher } from '../language-switcher';
 import { UserNav } from './user-nav';
 import { NotificationBell } from './notification-bell';
-import { ShareDialog } from '../share-dialog';
-import { useUserProfile } from '@/firebase';
 import type { NavigationItem } from '@/lib/types';
 
 interface HeaderProps {
@@ -19,11 +17,7 @@ interface HeaderProps {
 }
 
 export function Header({ title, actions, isSharedView = false, navItems = [] }: HeaderProps) {
-  const { profile } = useUserProfile();
   
-  // Only show the share dialog for non-admin roles. Super Admins should not create share links.
-  const showShareDialog = !isSharedView && profile && profile.role !== 'Super Admin';
-
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
       <div className="flex items-center gap-2">
@@ -37,7 +31,6 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
         <div className="flex items-center gap-2">
             {!isSharedView ? (
               <>
-                {showShareDialog && <ShareDialog creatorNavItems={navItems} />}
                 <LanguageSwitcher />
                 <ThemeSwitcher />
                 <NotificationBell />
@@ -51,4 +44,3 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
     </header>
   );
 }
-

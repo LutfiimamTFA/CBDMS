@@ -126,23 +126,24 @@ export type DailyReport = {
 
 export type SharedLink = {
   id: string;
-  name: string;
+  name?: string;
+  linkType: 'task' | 'view'; // 'task' for single task, 'view' for filtered board/list/calendar
+  targetId?: string; // e.g., taskId
+  filters?: {
+    // Snapshot of filters applied when creating a 'view' link
+    brandIds?: string[];
+    assigneeIds?: string[];
+    statuses?: string[];
+    priorities?: Priority[];
+  };
   companyId: string;
   password?: string;
   expiresAt?: any;
-  creatorRole: 'Super Admin' | 'Manager' | 'Employee' | 'PIC' | 'Client';
-  permissions: {
-    canViewDetails: boolean;
-    canComment: boolean;
-    canChangeStatus: boolean;
-    canEditContent: boolean;
-    canAssignUsers: boolean;
-  };
+  allowComments?: boolean;
+  allowReactions?: boolean;
+  public?: boolean; // Allow search engine indexing
   createdBy: string;
   createdAt: any;
-  updatedAt?: any;
-  allowedNavItems: string[];
-  brandIds?: string[];
 };
 
 
@@ -282,4 +283,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
