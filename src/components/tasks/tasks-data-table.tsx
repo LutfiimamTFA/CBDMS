@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -81,20 +80,16 @@ interface TasksDataTableProps {
     brands: Brand[];
     users: User[];
     permissions?: SharedLink['permissions'] | null;
-    viewConfig?: SharedLink['viewConfig'];
+    isShareView?: boolean;
 }
 
-export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null, viewConfig }: TasksDataTableProps) {
+export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null, isShareView = false }: TasksDataTableProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   
-  // Conditionally use internal permissions hook
-  const useInternalPermissions = () => {
-    if (sharedPermissions) return { permissions: null, isLoading: false };
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    return usePermissions();
-  }
-  const { permissions, isLoading: arePermsLoading } = useInternalPermissions();
+  // Conditionally use internal permissions hook only when not in share view
+  const { permissions, isLoading: arePermsLoading } = !isShareView ? usePermissions() : { permissions: null, isLoading: false };
+  
   const router = useRouter();
   
   const [data, setData] = React.useState<Task[]>(tasks);
@@ -108,13 +103,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       desc: true,
     },
   ]);
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(() => {
-    const filters = viewConfig?.filters;
-    if (filters && !Array.isArray(filters)) {
-      return [filters];
-    }
-    return filters || [];
-  });
+  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
     lastActivity: false,
   });
@@ -527,7 +516,6 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   });
 
   const isFiltered = table.getState().columnFilters.length > 0;
-  const isShareView = !!sharedPermissions;
 
   return (
     <>
@@ -614,7 +602,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                     className="group cursor-pointer"
                     onClick={() => {
                         const task = row.original;
-                        const path = isShareView ? `/share/${location.pathname.split('/')[2]}/tasks/${task.id}` : `/tasks/${task.id}`;
+                        const path = isShareView ? `/tasks/${task.id}?shared=true` : `/tasks/${task.id}`;
                         router.push(path);
                     }}
                   >

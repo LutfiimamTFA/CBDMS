@@ -38,7 +38,15 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
+    
+    if (!session.brandIds || session.brandIds.length === 0) {
+      if (session.creatorRole !== 'Super Admin') {
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'no-such-document'));
+      }
+    }
+
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
+
     if (session.brandIds && session.brandIds.length > 0) {
         q = query(q, where('brandId', 'in', session.brandIds));
     }
@@ -138,7 +146,6 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
               <ScrollArea className="flex-1">
                 <div className="flex flex-col gap-1 p-1">
                   {tasksForDay.map(task => {
-                    const path = `/tasks/${task.id}`;
                     const canClick = session.permissions.canViewDetails;
 
                      const content = (
@@ -154,9 +161,9 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
                      );
 
                     return canClick ? (
-                        <a href={`/tasks/${task.id}?shared=true`} key={task.id} onClick={(e) => { e.preventDefault(); router.push(`/tasks/${task.id}?shared=true`) }}>
+                        <div key={task.id} onClick={() => router.push(`/tasks/${task.id}?shared=true`)}>
                            {content}
-                        </a>
+                        </div>
                     ) : (
                         <Popover key={task.id}>
                             <PopoverTrigger asChild>

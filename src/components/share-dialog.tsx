@@ -42,8 +42,8 @@ const defaultPermissions = {
 
 // Explicitly define which pages are allowed in share mode to prevent leakage.
 const SHAREABLE_NAV_IDS = new Set([
-  'nav_task_board',
-  'nav_list',
+  'nav_task_board', // Dashboard / Kanban
+  'nav_list', // Task List
   'nav_schedule',
   'nav_calendar',
   'nav_social_media_calendar',
@@ -81,18 +81,21 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   const { toast } = useToast();
   
   const linksQuery = useMemo(() => {
-    if (!firestore || !profile?.companyId) return null;
-    return query(collection(firestore, 'sharedLinks'), where('companyId', '==', profile.companyId));
-  }, [firestore, profile?.companyId]);
+    if (!firestore || !profile?.id) return null;
+    return query(collection(firestore, 'sharedLinks'), where('createdBy', '==', profile.id));
+  }, [firestore, profile?.id]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
   const brandsQuery = useMemo(() => {
-    if (!firestore || !profile?.brandIds) return null;
-    if (profile.role === 'Manager' && profile.brandIds.length === 0) return null;
+    if (!firestore || !profile) return null;
 
     let q = query(collection(firestore, 'brands'), orderBy('name'));
+
     if (profile.role === 'Manager') {
+        if (!profile.brandIds || profile.brandIds.length === 0) return null;
         q = query(q, where('__name__', 'in', profile.brandIds));
+    } else {
+        q = query(q, where('companyId', '==', profile.companyId));
     }
     return q;
   }, [firestore, profile]);
@@ -191,6 +194,11 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
         toast({ variant: 'destructive', title: 'Action Blocked', description: 'You must select at least one page to share.' });
         return;
     }
+    
+    if (selectableSharePages.length === 0) {
+        toast({ variant: 'destructive', title: 'Action Blocked', description: 'Your role does not have access to any shareable pages.' });
+        return;
+    }
 
     setIsLoading(true);
 
@@ -202,7 +210,6 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
         allowedNavItems,
         companyId: profile.companyId,
         brandIds: brandIds,
-        // Store the role of the creator to enforce data scoping in share views
         creatorRole: profile.role,
     };
 
@@ -309,7 +316,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
           <DialogHeader className="p-6 pb-0">
             <DialogTitle>Share View</DialogTitle>
             <DialogDescription>
-              Generate a secure, permission-based link to share a snapshot of your current workspace view.
+              Generate a secure, permission-based link to share a snapshot of your workspace view.
             </DialogDescription>
           </DialogHeader>
           
@@ -351,7 +358,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                         <Input id="link-name" value={linkName || ''} onChange={e => setLinkName(e.target.value)} placeholder="e.g. Q3 Report for Client" />
                       </div>
 
-                      {profile?.role === 'Manager' && (
+                      {profile?.role !== 'Super Admin' && (
                         <Card>
                             <CardHeader>
                                 <h3 className="font-semibold">Data Scope</h3>
@@ -452,7 +459,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                   </Button>
                 )}
               </div>
-              <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything || allowedNavItems.length === 0}>
+              <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything || allowedNavItems.length === 0 || (profile?.role !== 'Super Admin' && brandIds.length === 0)}>
                   {isLoadingAnything && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                   {activeLink ? 'Update Link' : 'Create Link'}
               </Button>

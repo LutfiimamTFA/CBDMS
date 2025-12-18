@@ -24,6 +24,13 @@ export function SharedScheduleView({ session }: SharedScheduleViewProps) {
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
+    
+    if (!session.brandIds || session.brandIds.length === 0) {
+      if (session.creatorRole !== 'Super Admin') {
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'no-such-document'));
+      }
+    }
+    
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));

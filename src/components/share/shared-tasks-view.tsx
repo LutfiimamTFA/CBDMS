@@ -15,22 +15,24 @@ interface SharedTasksViewProps {
 export function SharedTasksView({ session }: SharedTasksViewProps) {
   const firestore = useFirestore();
 
-  // CRITICAL: This query is now strictly filtered by brandIds from the session link, if they exist.
-  // It no longer relies on the viewer's context.
+  // CRITICAL: This query is now strictly filtered by brandIds from the session link.
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
+
+    // If a link is created without specific brands, it must show no data
+    // to prevent accidental data leakage, unless created by a Super Admin.
+    if (!session.brandIds || session.brandIds.length === 0) {
+      if (session.creatorRole !== 'Super Admin') {
+        // Return a query that is guaranteed to be empty.
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'no-such-document'));
+      }
+    }
+
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
     
-    // This is the key security fix: only fetch tasks for the brands specified in the share link.
+    // The key security filter: only fetch tasks for the brands specified in the share link.
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
-    } else {
-      // If a non-admin creates a link without specific brands, it should show nothing
-      // to prevent accidentally sharing all company data.
-      // We can simulate an empty query by asking for a non-existent ID.
-      if (session.creatorRole !== 'Super Admin') {
-         q = query(q, where('__name__', '==', 'no-tasks'));
-      }
     }
 
     return q;
@@ -78,6 +80,7 @@ export function SharedTasksView({ session }: SharedTasksViewProps) {
               brands={brands || []}
               users={users || []}
               permissions={session.permissions}
+              isShareView={true}
           />
         )}
       </main>
