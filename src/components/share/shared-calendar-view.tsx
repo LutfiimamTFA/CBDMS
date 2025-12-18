@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -24,33 +23,16 @@ import { ScrollArea } from '../ui/scroll-area';
 import { useRouter } from 'next/navigation';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SharedHeader } from './shared-header';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, where, type Query } from 'firebase/firestore';
 
 interface SharedCalendarViewProps {
   session: SharedLink;
+  tasks: Task[] | null;
+  isLoading: boolean;
 }
 
-export function SharedCalendarView({ session }: SharedCalendarViewProps) {
+export function SharedCalendarView({ session, tasks, isLoading }: SharedCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const router = useRouter();
-  const firestore = useFirestore();
-
-  const tasksQuery = useMemo(() => {
-    if (!firestore || !session.companyId) return null;
-    
-    let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
-    
-    if (session.brandIds && session.brandIds.length > 0) {
-        q = query(q, where('brandId', 'in', session.brandIds));
-    } else if (session.creatorRole !== 'Super Admin') {
-        return null;
-    }
-    
-    return q;
-  }, [firestore, session]);
-
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = startOfMonth(currentDate);
@@ -114,7 +96,7 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
           </div>
         ))}
       </div>
-       {isTasksLoading ? (
+       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
         </div>
@@ -182,4 +164,3 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
     </div>
   );
 }
-

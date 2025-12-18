@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -20,7 +19,6 @@ import {
 } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
 import type { SocialMediaPost, SharedLink } from '@/lib/types';
 import { SocialPostCard } from '@/components/social-media/social-post-card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -29,33 +27,16 @@ import { ImpressionsCard } from '@/components/social-media/impressions-card';
 import { PostTypeChart } from '@/components/social-media/post-type-chart';
 import { EngagementCard } from '@/components/social-media/engagement-card';
 import { SharedHeader } from './shared-header';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
 
 interface SharedSocialMediaViewProps {
   session: SharedLink;
   isAnalyticsView?: boolean;
+  posts: SocialMediaPost[] | null;
+  isLoading: boolean;
 }
 
-export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocialMediaViewProps) {
+export function SharedSocialMediaView({ session, isAnalyticsView, posts, isLoading }: SharedSocialMediaViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const firestore = useFirestore();
-
-  const postsQuery = useMemo(() => {
-    if (!firestore || !session.companyId) return null;
-    let q = query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', session.companyId));
-    
-    // Apply brand filtering for security
-    if (session.brandIds && session.brandIds.length > 0) {
-      q = query(q, where('brandId', 'in', session.brandIds));
-    } else if (session.creatorRole !== 'Super Admin') {
-       return null;
-    }
-    
-    return q;
-  }, [firestore, session]);
-
-  const { data: posts, isLoading: isPostsLoading } = useCollection<SocialMediaPost>(postsQuery);
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -79,7 +60,7 @@ export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocial
       if (post.scheduledAt) {
         try {
           const postDate = parseISO(post.scheduledAt);
-          if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+          if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
             const dayKey = format(postDate, 'yyyy-MM-dd');
             if (!map.has(dayKey)) {
               map.set(dayKey, []);
@@ -116,7 +97,7 @@ export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocial
        <div className="flex h-svh flex-col bg-background">
         <SharedHeader title="Social Media Analytics" />
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          {isPostsLoading ? (
+          {isLoading ? (
             <div className="flex h-full w-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>
@@ -186,7 +167,7 @@ export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocial
             ))}
         </div>
         <ScrollArea className="flex-1 border-b border-x rounded-b-lg">
-        {isPostsLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-full min-h-[50vh]">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
@@ -221,4 +202,3 @@ export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocial
     </div>
   );
 }
-

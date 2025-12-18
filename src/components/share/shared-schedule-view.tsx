@@ -1,10 +1,7 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
 import type { Task, SharedLink } from '@/lib/types';
-import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, where, type Query } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -16,31 +13,16 @@ import { SharedHeader } from './shared-header';
 
 interface SharedScheduleViewProps {
   session: SharedLink;
+  tasks: Task[] | null;
+  isLoading: boolean;
 }
 
-export function SharedScheduleView({ session }: SharedScheduleViewProps) {
-  const firestore = useFirestore();
+export function SharedScheduleView({ session, tasks, isLoading }: SharedScheduleViewProps) {
   const router = useRouter();
 
-  const tasksQuery = useMemo(() => {
-    if (!firestore || !session.companyId) return null;
-    
-    let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
-    
-    if (session.brandIds && session.brandIds.length > 0) {
-      q = query(q, where('brandId', 'in', session.brandIds));
-    } else if (session.creatorRole !== 'Super Admin') {
-        return null;
-    }
-
-    return q;
-  }, [firestore, session]);
-
-  const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
-
   const calendarEvents = useMemo(() => {
-    if (!allTasks) return [];
-    return allTasks
+    if (!tasks) return [];
+    return tasks
       .filter((task) => !!task.dueDate)
       .map((task) => {
         const brandColor = getBrandColor(task.brandId);
@@ -55,7 +37,7 @@ export function SharedScheduleView({ session }: SharedScheduleViewProps) {
           borderColor: brandColor,
         };
       });
-  }, [allTasks]);
+  }, [tasks]);
 
   const handleEventClick = (clickInfo: any) => {
     if (session?.permissions.canViewDetails) {
@@ -68,7 +50,7 @@ export function SharedScheduleView({ session }: SharedScheduleViewProps) {
     <div className="flex flex-col flex-1 h-full w-full">
       <SharedHeader title="Schedule" />
       <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
-        {isTasksLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
@@ -101,4 +83,3 @@ export function SharedScheduleView({ session }: SharedScheduleViewProps) {
     </div>
   );
 }
-

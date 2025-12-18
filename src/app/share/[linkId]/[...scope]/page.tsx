@@ -1,8 +1,7 @@
-
 'use client';
 
 import React from 'react';
-import { notFound, useParams } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { useSharedSession } from '@/context/shared-session-provider';
 import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,8 +42,8 @@ const LinkNotFoundComponent = () => (
     <div className="flex h-full items-center justify-center p-8 w-full">
       <Card className="w-full max-w-md text-center">
         <CardHeader>
-          <CardTitle className="flex items-center justify-center gap-2">
-            <FileWarning className="h-6 w-6 text-destructive"/>
+          <CardTitle className="flex items-center justify-center gap-2 text-destructive">
+            <FileWarning className="h-6 w-6"/>
             Link Not Found or Expired
           </CardTitle>
         </CardHeader>
@@ -74,7 +73,7 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
 };
 
 export default function ShareScopePage() {
-  const { session, navItems, isLoading, error } = useSharedSession();
+  const { session, navItems, isLoading, error, ...restOfData } = useSharedSession();
   const params = useParams();
   const scope = Array.isArray(params.scope) ? params.scope.join('/') : params.scope;
   
@@ -102,11 +101,10 @@ export default function ShareScopePage() {
   const PageComponent = pageComponents[scope];
 
   // If the page is not allowed or the component doesn't exist, show a placeholder.
-  // This completely replaces the old "Access Denied" logic.
   if (!isPageAllowed || !PageComponent) {
       return (
           <div className='flex h-svh w-full'>
-              <ShareSidebar session={session} navItems={navItems || []} />
+              <ShareSidebar />
               <main className='flex-1 overflow-auto flex w-full'>
                  <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />
               </main>
@@ -116,12 +114,14 @@ export default function ShareScopePage() {
   
   const viewProps = {
     session,
+    isLoading,
+    ...restOfData,
     isAnalyticsView: scope === 'social-media/analytics', // Prop for multi-purpose components
   };
 
   return (
     <div className='flex h-svh w-full'>
-        <ShareSidebar session={session} navItems={navItems || []} />
+        <ShareSidebar />
         <main className='flex-1 overflow-auto flex w-full'>
             <PageComponent {...viewProps} />
         </main>
