@@ -16,31 +16,41 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { useFirestore, useUserProfile } from '@/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import type { SharedLink, Brand, User } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar, Users, Star } from 'lucide-react';
+import { useFirestore, useUserProfile, useCollection } from '@/firebase';
+import { collection, addDoc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
+import type { SharedLink, Brand } from '@/lib/types';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar, Users, Star, KanbanSquare, ClipboardList } from 'lucide-react';
 import { MultiSelect } from '../ui/multi-select';
-import { useCollection } from '@/firebase';
-import { query, orderBy, where } from 'firebase/firestore';
+import { usePathname } from 'next/navigation';
+import { Checkbox } from '../ui/checkbox';
+
+const navConfig = {
+    '/dashboard': { id: 'nav_task_board', label: 'Kanban Board', icon: KanbanSquare },
+    '/tasks': { id: 'nav_list', label: 'Task List', icon: ClipboardList },
+    '/calendar': { id: 'nav_calendar', label: 'Big Calendar', icon: Calendar },
+    '/schedule': { id: 'nav_schedule', label: 'Schedule', icon: Calendar },
+    '/social-media': { id: 'nav_social_media_calendar', label: 'Social Media Calendar', icon: Calendar },
+};
 
 interface ShareViewDialogProps {
   children?: React.ReactNode;
-  allowedNavItems: string[];
-  viewFilters?: {
-    brandIds?: string[];
-  };
 }
 
-export function ShareViewDialog({ children, allowedNavItems, viewFilters }: ShareViewDialogProps) {
+export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
-
+  
+  const pathname = usePathname();
+  const firestore = useFirestore();
+  const { profile } = useUserProfile();
+  const { toast } = useToast();
+  
   // Form state
   const [linkName, setLinkName] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
+  const [allowedNavItems, setAllowedNavItems] = useState<string[]>([]);
   const [permissions, setPermissions] = useState({
     canViewDetails: true,
     canComment: false,
@@ -48,10 +58,6 @@ export function ShareViewDialog({ children, allowedNavItems, viewFilters }: Shar
     canEditContent: false,
     canAssignUsers: false,
   });
-
-  const firestore = useFirestore();
-  const { profile } = useUserProfile();
-  const { toast } = useToast();
   
   const brandsQuery = useMemo(() => {
       if (!firestore || !profile) return null;
@@ -62,18 +68,24 @@ export function ShareViewDialog({ children, allowedNavItems, viewFilters }: Shar
       return q;
   }, [firestore, profile]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
-  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>(viewFilters?.brandIds || []);
+  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>(profile?.brandIds || []);
   
   useEffect(() => {
-    if (viewFilters?.brandIds) {
-      setSelectedBrandIds(viewFilters.brandIds);
+    if (isOpen) {
+        const currentNav = Object.values(navConfig).find(nav => nav.id === (navConfig as any)[pathname]?.id);
+        setAllowedNavItems(currentNav ? [currentNav.id] : []);
+        setSelectedBrandIds(profile?.brandIds || []);
     }
-  }, [viewFilters?.brandIds, isOpen]);
+  }, [isOpen, pathname, profile]);
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
     if (profile.role === 'Super Admin') {
         toast({ variant: 'destructive', title: 'Action Not Allowed', description: 'Super Admins cannot create share links.' });
+        return;
+    }
+    if (allowedNavItems.length === 0) {
+        toast({ variant: 'destructive', title: 'No Views Selected', description: 'Please select at least one view to share.' });
         return;
     }
     setIsLoading(true);
@@ -112,7 +124,6 @@ export function ShareViewDialog({ children, allowedNavItems, viewFilters }: Shar
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  // Reset state when dialog opens
   React.useEffect(() => {
     if (isOpen) {
       setIsLoading(false);
@@ -154,8 +165,30 @@ export function ShareViewDialog({ children, allowedNavItems, viewFilters }: Shar
                 </div>
               )}
               
+               <div className="space-y-4 rounded-md border p-4">
+                  <h4 className="text-sm font-medium">Available Views</h4>
+                  <div className="space-y-3">
+                    {Object.values(navConfig).map(nav => (
+                       <div key={nav.id} className="flex items-center gap-3">
+                         <Checkbox 
+                           id={`nav-${nav.id}`} 
+                           checked={allowedNavItems.includes(nav.id)}
+                           onCheckedChange={(checked) => {
+                             setAllowedNavItems(prev => 
+                               checked ? [...prev, nav.id] : prev.filter(id => id !== nav.id)
+                             )
+                           }}
+                         />
+                         <Label htmlFor={`nav-${nav.id}`} className="flex items-center gap-2 font-normal">
+                           <nav.icon className="h-4 w-4 text-muted-foreground"/> {nav.label}
+                         </Label>
+                       </div>
+                    ))}
+                  </div>
+               </div>
+
               <div className="space-y-4 rounded-md border p-4">
-                  <h4 className="text-sm font-medium">Permissions</h4>
+                  <h4 className="text-sm font-medium">Permissions for Viewer</h4>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                         <Label htmlFor="perm-view" className="flex flex-col gap-1"><span>View Full Task Details</span><span className="font-normal text-xs text-muted-foreground">Allow viewers to open and see all task details.</span></Label>
