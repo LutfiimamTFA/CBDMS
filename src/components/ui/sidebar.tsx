@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from "react"
@@ -89,10 +88,9 @@ const SidebarProvider = React.forwardRef<
     const [openMobile, setOpenMobile] = React.useState(false)
 
     const [_open, _setOpen] = React.useState(defaultOpen)
-    const open = isSharedView ? true : (openProp ?? _open);
+    const open = openProp ?? _open;
     const setOpen = React.useCallback(
       (value: boolean | ((value: boolean) => boolean)) => {
-        if (isSharedView) return; 
         const openState = typeof value === "function" ? value(open) : value
         if (setOpenProp) {
           setOpenProp(openState)
@@ -101,18 +99,14 @@ const SidebarProvider = React.forwardRef<
         }
         document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
       },
-      [setOpenProp, open, isSharedView]
+      [setOpenProp, open]
     )
 
     const toggleSidebar = React.useCallback(() => {
-      if (isSharedView) {
-        setOpenMobile((open) => !open);
-        return;
-      }; 
       return isMobile
         ? setOpenMobile((open) => !open)
         : setOpen((open) => !open)
-    }, [isMobile, setOpen, setOpenMobile, isSharedView])
+    }, [isMobile, setOpen, setOpenMobile])
 
     React.useEffect(() => {
       const handleKeyDown = (event: KeyboardEvent) => {
@@ -191,7 +185,7 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile, isSharedView } = useSidebar()
+    const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
     if (collapsible === "none") {
       return (
@@ -208,13 +202,13 @@ const Sidebar = React.forwardRef<
       )
     }
 
-    if (isMobile || isSharedView) {
+    if (isMobile) {
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-card p-0 text-foreground [&>button]:hidden"
+            className="w-[--sidebar-width] bg-card p-0 text-foreground"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -222,8 +216,8 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <SheetHeader className="sr-only">
-              <SheetTitle>Navigation Menu</SheetTitle>
+            <SheetHeader className="p-4 border-b">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
             </SheetHeader>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>
@@ -392,7 +386,7 @@ const SidebarFooter = React.forwardRef<
     <div
       ref={ref}
       data-sidebar="footer"
-      className={cn("flex flex-col gap-2 p-2", className)}
+      className={cn("flex flex-col gap-2 p-2 mt-auto", className)}
       {...props}
     />
   )

@@ -89,8 +89,7 @@ export function SharedCalendarView({ session, tasks, isLoading }: SharedCalendar
   };
   
   return (
-    <div className="flex h-svh flex-col bg-background">
-      <SharedHeader title={session.name || 'Shared Calendar'} />
+    <div className="flex h-full flex-col bg-background">
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-2">

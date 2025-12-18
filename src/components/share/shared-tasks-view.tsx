@@ -3,7 +3,6 @@ import type { Task, WorkflowStatus, Brand, User, SharedLink } from '@/lib/types'
 import React from 'react';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { SharedHeader } from './shared-header';
 import { SharedTasksTable } from './shared-tasks-table';
 
 interface SharedTasksViewProps {
@@ -18,7 +17,6 @@ interface SharedTasksViewProps {
 export function SharedTasksView({ session, tasks, statuses, brands, users, isLoading }: SharedTasksViewProps) {
   return (
     <div className="flex flex-col flex-1 h-full w-full">
-      <SharedHeader title={session?.name || 'Shared Task List'} />
       <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
         {isLoading ? (
           <div className="flex h-full w-full items-center justify-center">

@@ -1,6 +1,5 @@
 'use client';
 import { Card, CardContent } from '@/components/ui/card';
-import { SharedHeader } from './shared-header';
 import { ImpressionsCard } from '../social-media/impressions-card';
 import { PostTypeChart } from '../social-media/post-type-chart';
 import { EngagementCard } from '../social-media/engagement-card';
@@ -19,7 +18,6 @@ interface SharedReportsViewProps {
 export function SharedReportsView({ session, posts, isLoading }: SharedReportsViewProps) {
   return (
     <div className="flex flex-col flex-1 h-full w-full">
-      <SharedHeader title="Analytics" />
        <main className="flex-1 overflow-auto p-4 md:p-6">
           <div className="mb-6">
             <h2 className="text-2xl font-bold tracking-tight">Content Performance</h2>

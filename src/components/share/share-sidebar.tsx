@@ -19,6 +19,7 @@ import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
 import type { NavigationItem } from '@/lib/types';
 import { useSharedSession } from '@/context/shared-session-provider';
+import { useSidebar } from '@/components/ui/sidebar';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -37,6 +38,7 @@ const getScopeFromPath = (path: string): string => {
 export function ShareSidebar() {
   const pathname = usePathname();
   const { session, company, isLoading } = useSharedSession();
+  const { state } = useSidebar();
   
   const handleExit = () => {
     if (session) {
@@ -57,13 +59,15 @@ export function ShareSidebar() {
   }, [session]);
 
   return (
-    <Sidebar>
+    <Sidebar collapsible="icon">
       <SidebarHeader>
         <PublicLogo company={company} isLoading={isLoading} />
-        <Badge variant="outline" className="w-fit">
-          <ShieldAlert className="h-3 w-3 mr-1.5" />
-          Preview Mode
-        </Badge>
+        {state === 'expanded' && (
+          <Badge variant="outline" className="w-fit">
+            <ShieldAlert className="h-3 w-3 mr-1.5" />
+            Preview Mode
+          </Badge>
+        )}
       </SidebarHeader>
       <SidebarContent>
         {isLoading ? (
@@ -93,9 +97,9 @@ export function ShareSidebar() {
         )}
       </SidebarContent>
       <SidebarFooter>
-        <Button variant="ghost" onClick={handleExit}>
-          <LogOut className="mr-2 h-4 w-4" /> Exit Preview
-        </Button>
+        <SidebarMenuButton onClick={handleExit} tooltip="Exit Preview">
+          <LogOut /> <span>Exit Preview</span>
+        </SidebarMenuButton>
       </SidebarFooter>
     </Sidebar>
   );

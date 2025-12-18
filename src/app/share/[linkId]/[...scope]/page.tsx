@@ -12,6 +12,8 @@ import { SharedTasksView } from '@/components/share/shared-tasks-view';
 import { SharedCalendarView } from '@/components/share/shared-calendar-view';
 import { SharedScheduleView } from '@/components/share/shared-schedule-view';
 import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
+import { SidebarInset } from '@/components/ui/sidebar';
+import { SharedHeader } from '@/components/share/shared-header';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -105,11 +107,12 @@ export default function ShareScopePage() {
 
 
   return (
-    <div className='flex h-svh w-full'>
-        <ShareSidebar />
-        <main className='flex-1 overflow-auto flex w-full'>
-            {renderContent()}
-        </main>
-    </div>
+    <>
+      <ShareSidebar />
+      <SidebarInset>
+        <SharedHeader title={navItemForScope?.label || 'Shared View'} />
+        {renderContent()}
+      </SidebarInset>
+    </>
   );
 }
