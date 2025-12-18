@@ -21,6 +21,7 @@ import {
   User,
   Icon as LucideIcon,
   LogOut,
+  Share2,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -34,7 +35,8 @@ import { getIdTokenResult } from 'firebase/auth';
 import { AppProviders } from '@/components/app-providers';
 import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
-
+import { Button } from '@/components/ui/button';
+import { ShareViewDialog } from '@/components/share/share-view-dialog';
 
 const Icon = ({
   name,

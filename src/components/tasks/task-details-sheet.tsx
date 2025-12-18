@@ -57,8 +57,6 @@ import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
-import { ShareTaskDialog } from '../share/share-task-dialog';
-
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -1072,7 +1070,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    {!isSharedView && <ShareTaskDialog task={initialTask} />}
                     <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)}><History className="h-4 w-4 mr-2"/> View History</Button>
                     <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
                 </div>

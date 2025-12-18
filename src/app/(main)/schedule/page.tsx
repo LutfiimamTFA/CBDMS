@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -7,7 +8,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { Task, Brand, WorkflowStatus } from '@/lib/types';
 import { collection, query, where, orderBy } from 'firebase/firestore';
-import { Loader2, Link as LinkIcon, Calendar, Building2, User as UserIcon } from 'lucide-react';
+import { Loader2, Link as LinkIcon, Calendar, Building2, User as UserIcon, Share2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getBrandColor, priorityInfo } from '@/lib/utils';
 import { parseISO, format } from 'date-fns';
@@ -20,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
+import { ShareViewDialog } from '@/components/share/share-view-dialog';
 
 export default function SchedulePage() {
   const firestore = useFirestore();
@@ -182,6 +184,14 @@ export default function SchedulePage() {
   return (
     <div className="flex h-svh flex-col bg-background">
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
+        <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-bold tracking-tight">Project Schedule</h2>
+            <ShareViewDialog allowedNavItems={['nav_schedule']}>
+                <Button variant="outline">
+                    <Share2 className="mr-2 h-4 w-4" /> Share View
+                </Button>
+            </ShareViewDialog>
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin" />

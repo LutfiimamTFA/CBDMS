@@ -126,24 +126,24 @@ export type DailyReport = {
 
 export type SharedLink = {
   id: string;
-  name?: string;
-  linkType: 'task' | 'view'; // 'task' for single task, 'view' for filtered board/list/calendar
-  targetId?: string; // e.g., taskId
-  filters?: {
-    // Snapshot of filters applied when creating a 'view' link
-    brandIds?: string[];
-    assigneeIds?: string[];
-    statuses?: string[];
-    priorities?: Priority[];
-  };
+  name: string;
   companyId: string;
+  // New properties for view-based sharing
+  creatorRole: User['role'];
+  brandIds?: string[]; // For manager-created links, specifies which brands are included.
+  allowedNavItems: string[]; // IDs of the nav items to show in the shared view's sidebar.
+  // Security and permissions
   password?: string;
-  expiresAt?: any;
-  allowComments?: boolean;
-  allowReactions?: boolean;
-  public?: boolean; // Allow search engine indexing
+  expiresAt?: any; // Timestamp
+  permissions: {
+    canViewDetails: boolean;
+    canComment: boolean;
+    canChangeStatus: boolean;
+    canEditContent: boolean;
+    canAssignUsers: boolean;
+  };
   createdBy: string;
-  createdAt: any;
+  createdAt: any; // Timestamp
 };
 
 
