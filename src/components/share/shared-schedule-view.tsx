@@ -48,13 +48,19 @@ export function SharedScheduleView({ session, tasks, isLoading }: SharedSchedule
   return (
      <div className="flex h-svh flex-col bg-background">
       <SharedHeader title={session.name || 'Shared Schedule'} />
-      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
+      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
+         <div className="mb-4">
+          <h2 className="text-2xl font-bold tracking-tight">Task Schedule</h2>
+          <p className="text-muted-foreground">
+            An overview of all internal project tasks and their deadlines.
+          </p>
+        </div>
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <div className="flex-1">
+          <div className="flex-1 min-h-0">
                 <FullCalendar
                     plugins={[dayGridPlugin, interactionPlugin]}
                     initialView="dayGridMonth"

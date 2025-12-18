@@ -134,6 +134,12 @@ export function SharedSocialMediaView({ session, isAnalyticsView, posts, isLoadi
     <div className="flex h-svh flex-col bg-background">
       <SharedHeader title="Social Media Calendar" />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold tracking-tight">Social Media Calendar</h2>
+          <p className="text-muted-foreground">
+            An overview of all scheduled social media posts.
+          </p>
+        </div>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-2">
                 <Select value={String(currentDate.getFullYear())} onValueChange={handleYearChange}>
