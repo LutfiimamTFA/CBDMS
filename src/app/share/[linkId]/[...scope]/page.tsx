@@ -7,18 +7,9 @@ import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-// Import reusable, stateless view components
-import { SharedDashboardView } from '@/components/share/shared-dashboard-view';
-import { SharedTasksView } from '@/components/share/shared-tasks-view';
-import { SharedCalendarView } from '@/components/share/shared-calendar-view';
-import { SharedReportsView } from '@/components/share/shared-reports-view';
+// Import the new simplified view and other necessary components
 import { ShareSidebar } from '@/components/share/share-sidebar';
-import { SharedMyWorkView } from '@/components/share/shared-my-work-view';
-import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
-import { SharedDailyReportView } from '@/components/share/shared-daily-report-view';
-import { SharedRecurringTasksView } from '@/components/share/shared-recurring-tasks-view';
-import { SharedScheduleView } from '@/components/share/shared-schedule-view';
-import { SharedGuideView } from '@/components/share/shared-guide-view';
+import { SharedSimpleTasksView } from '@/components/share/shared-simple-tasks-view';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -58,18 +49,19 @@ const LinkNotFoundComponent = () => (
 );
 
 // This map is the single source of truth for routing in share mode.
+// We now point all task-related views to the new simple component.
 const pageComponents: { [key: string]: React.ComponentType<any> } = {
-  'my-work': SharedMyWorkView,
-  'dashboard': SharedDashboardView,
-  'tasks': SharedTasksView,
-  'daily-report': SharedDailyReportView,
-  'schedule': SharedScheduleView,
-  'calendar': SharedCalendarView,
-  'social-media': SharedSocialMediaView,
-  'social-media/analytics': SharedSocialMediaView,
-  'reports': SharedReportsView,
-  'guide': SharedGuideView,
-  'admin/settings/recurring': SharedRecurringTasksView,
+  'my-work': SharedSimpleTasksView,
+  'dashboard': SharedSimpleTasksView,
+  'tasks': SharedSimpleTasksView,
+  'daily-report': SharedSimpleTasksView,
+  'schedule': SharedSimpleTasksView,
+  'calendar': SharedSimpleTasksView,
+  'social-media': SharedSimpleTasksView,
+  'social-media/analytics': SharedSimpleTasksView,
+  'reports': SharedSimpleTasksView,
+  'guide': SharedSimpleTasksView,
+  'admin/settings/recurring': SharedSimpleTasksView,
 };
 
 export default function ShareScopePage() {
@@ -89,19 +81,17 @@ export default function ShareScopePage() {
     return <LinkNotFoundComponent />;
   }
 
-  // Find the nav item corresponding to the current URL scope
   const navItemForScope = (navItems || []).find(item => {
-    // Normalize path by removing leading slash for direct comparison
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
     return itemPath === scope;
   });
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
   
-  const PageComponent = pageComponents[scope];
+  // Use the simple tasks view for any allowed task-related scope.
+  const PageComponent = isPageAllowed ? SharedSimpleTasksView : null;
 
-  // If the page is not allowed or the component doesn't exist, show a placeholder.
-  if (!isPageAllowed || !PageComponent) {
+  if (!PageComponent) {
       return (
           <div className='flex h-svh w-full'>
               <ShareSidebar />
@@ -116,7 +106,6 @@ export default function ShareScopePage() {
     session,
     isLoading,
     ...restOfData,
-    isAnalyticsView: scope === 'social-media/analytics', // Prop for multi-purpose components
   };
 
   return (

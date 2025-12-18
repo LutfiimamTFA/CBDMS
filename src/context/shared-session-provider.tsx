@@ -12,8 +12,6 @@ interface SharedSessionContextType {
   navItems: NavigationItem[] | null;
   company: Company | null;
   tasks: Task[] | null;
-  statuses: WorkflowStatus[] | null;
-  users: User[] | null;
   isLoading: boolean;
   error: Error | null;
 }
@@ -73,26 +71,10 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
     if (!firestore || !session?.companyId) return null;
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
     
-    // Note: Filtering by brandIds is removed to simplify and fix permission errors.
-    // If the creator was a manager, we assume they shared tasks from their scope,
-    // but we fetch all company tasks and rely on the UI components to filter if needed.
-    
     return q;
   }, [firestore, session]);
   const { data: tasks, isLoading: isTasksLoading, error: tasksError } = useCollection<Task>(tasksQuery);
 
-  const statusesQuery = useMemo(() => {
-    if (!firestore || !session?.companyId) return null;
-    return query(collection(firestore, 'statuses'), where('companyId', '==', session.companyId), orderBy('order'));
-  }, [firestore, session?.companyId]);
-  const { data: statuses, isLoading: areStatusesLoading, error: statusesError } = useCollection<WorkflowStatus>(statusesQuery);
-  
-  
-  const usersQuery = useMemo(() => {
-    if (!firestore || !session?.companyId) return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', session.companyId));
-  }, [firestore, session?.companyId]);
-  const { data: users, isLoading: areUsersLoading, error: usersError } = useCollection<User>(usersQuery);
 
   // --- Combined loading and error states ---
   const isLoading = 
@@ -100,11 +82,9 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
     isSessionLoading || 
     isNavItemsLoading || 
     isCompanyLoading || 
-    isTasksLoading ||
-    areStatusesLoading ||
-    areUsersLoading;
+    isTasksLoading;
     
-  const error = sessionError || navItemsError || companyError || tasksError || statusesError || usersError;
+  const error = sessionError || navItemsError || companyError || tasksError;
 
   const value = useMemo(
     () => ({
@@ -112,13 +92,10 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
       navItems: navItems || null,
       company: company || null,
       tasks: tasks || null,
-      statuses: statuses || null,
-      brands: [], // Returning empty array as we are no longer fetching brands
-      users: users || null,
       isLoading,
       error,
     }),
-    [session, navItems, company, tasks, statuses, users, isLoading, error]
+    [session, navItems, company, tasks, isLoading, error]
   );
 
   return (

@@ -63,7 +63,7 @@ service cloud.firestore {
       return isSignedIn() && isRole('Manager') && brandId in getRequestingUserData().brandIds;
     }
 
-    // --- Public Read Rules for Share Feature ---
+    // --- PUBLIC READ RULES ---
     // These collections need to be readable by anyone to support the public share links.
     // Write access remains protected.
     match /sharedLinks/{linkId} {
@@ -71,28 +71,41 @@ service cloud.firestore {
       allow write: if isSignedIn() && (isSuperAdmin() || isRole('Manager'));
     }
     
+    match /tasks/{taskId} {
+      allow get, list: if true;
+      allow create: if isSuperAdmin() ||
+                       (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
+                       (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
+      allow update: if (isSuperAdmin()) ||
+          (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
+          ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId) && resource.data.status != 'Done');
+      allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks') && managerManagesBrand(resource.data.brandId));
+    }
+
+    // --- LOGGED-IN USER RULES ---
+    
     match /companies/{companyId} {
-       allow get: if true;
+       allow get: if isSignedIn();
        allow write: if isSuperAdmin() && isSameCompanyAsRequestingUser(companyId);
     }
 
     match /brands/{brandId} {
-        allow get: if true;
+        allow get: if isSignedIn();
         allow write: if isSuperAdmin() || isRole('Manager');
     }
 
     match /statuses/{statusId} {
-        allow get: if true;
+        allow get: if isSignedIn();
         allow write: if isSuperAdmin();
     }
 
     match /navigationItems/{navItemId} {
-        allow get: if true;
+        allow get: if isSignedIn();
         allow write: if isSuperAdmin();
     }
     
     match /users/{userId} {
-      allow get: if true;
+      allow get: if isSignedIn();
       
       allow update: if isSuperAdmin() ||
                        (isRole('Manager') && hasPermission('Manager', 'canManageUsers') && isManagerOf(userId)) ||
@@ -110,19 +123,6 @@ service cloud.firestore {
     }
     
     match /tasks/{taskId} {
-      allow get: if true;
-      allow list: if true;
-
-      allow create: if isSuperAdmin() ||
-                       (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
-                       (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
-
-      allow update: if (isSuperAdmin()) ||
-          (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
-          ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId) && resource.data.status != 'Done');
-      
-      allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks') && managerManagesBrand(resource.data.brandId));
-
       match /timeTracking/{timeTrackingId} {
           allow read, create, update, delete: if isSuperAdmin() || 
                                (isRole('Manager') && managerManagesBrand(get(/databases/$(database)/documents/tasks/$(taskId)).data.brandId)) ||
@@ -138,7 +138,7 @@ service cloud.firestore {
     }
     
     match /socialMediaPosts/{postId} {
-        allow get: if true; // Public read for share links
+        allow read: if isSignedIn();
         allow create: if isSignedIn();
         allow update, delete: if isSuperAdmin() || 
                                  (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
