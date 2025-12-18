@@ -6,23 +6,20 @@ import { useParams, useRouter } from 'next/navigation';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Loader2, FileWarning, Clock } from 'lucide-react';
-import type { SharedLink } from '@/lib/types';
+import type { SharedLink, Company } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PublicLogo } from '@/components/share/public-logo';
 import { isAfter } from 'date-fns';
 
-// This function was previously in the deleted share-nav-config.ts
-// Defining it here locally to resolve the dependency issue.
 const getScopeFromPath = (path: string): string | undefined => {
     if (!path) return undefined;
     const parts = path.split('/');
+    if (parts.length > 2 && parts[1] === 'social-media') return parts.slice(1).join('/');
     return parts[parts.length -1];
 };
 
-
-// --- Fallback Components ---
 
 const LinkNotFoundComponent = ({ isMisconfigured = false }: { isMisconfigured?: boolean }) => (
     <div className="flex h-screen w-full items-center justify-center bg-secondary p-4">
@@ -67,7 +64,7 @@ const LinkExpiredComponent = () => (
     </div>
 );
 
-const PasswordFormComponent = ({ company, linkId }: { company: SharedLink['company'] | null, linkId: string }) => {
+const PasswordFormComponent = ({ company, linkId }: { company: Company | null, linkId: string }) => {
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState<string | null>(null);
     const [isChecking, setIsChecking] = useState(false);
@@ -140,8 +137,20 @@ export default function SharedLinkRedirectorPage() {
 
     const { data: sharedLink, isLoading: isLinkLoading, error: linkError } = useDoc<SharedLink>(linkDocRef);
 
+    const {data: company, isLoading: isCompanyLoading} = useDoc<Company>(useMemo(() => {
+        if (!firestore || !sharedLink?.companyId) return null;
+        return doc(firestore, 'companies', sharedLink.companyId);
+    },[firestore, sharedLink?.companyId]));
+
+    const navItemsQuery = useMemo(() => {
+        if (!firestore) return null;
+        return query(collection(firestore, 'navigationItems'), orderBy('order'));
+    }, [firestore]);
+    const { data: navItems, isLoading: isNavItemsLoading } = useCollection<any>(navItemsQuery);
+
+
     useEffect(() => {
-        if (isLinkLoading || !linkId) return;
+        if (isLinkLoading || isNavItemsLoading || !linkId) return;
 
         if (!sharedLink || linkError) {
             return; 
@@ -157,7 +166,7 @@ export default function SharedLinkRedirectorPage() {
         }
         
         const allowedNavIds = sharedLink.allowedNavItems || [];
-        const availableNavItems = sharedLink.navItems || [];
+        const availableNavItems = navItems || [];
 
         const firstValidItem = availableNavItems
             .filter(item => allowedNavIds.includes(item.id))
@@ -167,16 +176,12 @@ export default function SharedLinkRedirectorPage() {
             const scope = getScopeFromPath(firstValidItem.path);
             if (scope) {
                 router.replace(`/share/${linkId}/${scope}`);
-            } else {
-                return;
             }
-        } else {
-            return;
         }
-    }, [sharedLink, isLinkLoading, linkError, linkId, router]);
+    }, [sharedLink, isLinkLoading, linkError, linkId, router, navItems, isNavItemsLoading]);
 
 
-    if (isLinkLoading) {
+    if (isLinkLoading || isNavItemsLoading) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-background">
                 <Loader2 className="h-8 w-8 animate-spin" />
@@ -193,11 +198,11 @@ export default function SharedLinkRedirectorPage() {
     }
     
     if (sharedLink.password && (typeof window === 'undefined' || sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) {
-        return <PasswordFormComponent company={sharedLink.company || null} linkId={linkId} />;
+        return <PasswordFormComponent company={company} linkId={linkId} />;
     }
 
     const allowedNavIds = sharedLink.allowedNavItems || [];
-    const availableNavItems = sharedLink.navItems || [];
+    const availableNavItems = navItems || [];
     const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && getScopeFromPath(item.path));
     
     if (!hasValidPages) {

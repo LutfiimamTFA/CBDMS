@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -16,29 +17,31 @@ import {
   isWithinInterval,
   parseISO
 } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn, getBrandColor } from '@/lib/utils';
 import { ScrollArea } from '../ui/scroll-area';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { useRouter } from 'next/navigation';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SharedHeader } from './shared-header';
-
+import { useCollection, useFirestore } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
 
 interface SharedCalendarViewProps {
-  tasks: Task[];
-  permissions?: SharedLink['permissions'] | null;
+  session: SharedLink;
 }
 
-export function SharedCalendarView({ tasks, permissions = null }: SharedCalendarViewProps) {
+export function SharedCalendarView({ session }: SharedCalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const params = useParams();
-  const linkId = params.linkId as string;
+  const router = useRouter();
+  const firestore = useFirestore();
+
+  const tasksQuery = useMemo(() => {
+    if (!firestore || !session.companyId) return null;
+    return query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
+  }, [firestore, session.companyId]);
+
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = startOfMonth(currentDate);
@@ -54,16 +57,21 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
   }, [currentDate]);
 
   const tasksByDay = useMemo(() => {
+    if (!tasks) return new Map();
     const map = new Map<string, Task[]>();
     tasks.forEach(task => {
       if (task.dueDate) {
-        const postDate = parseISO(task.dueDate);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
-          const dayKey = format(postDate, 'yyyy-MM-dd');
-          if (!map.has(dayKey)) {
-            map.set(dayKey, []);
+        try {
+          const postDate = parseISO(task.dueDate);
+          if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
+            const dayKey = format(postDate, 'yyyy-MM-dd');
+            if (!map.has(dayKey)) {
+              map.set(dayKey, []);
+            }
+            map.get(dayKey)?.push(task);
           }
-          map.get(dayKey)?.push(task);
+        } catch (e) {
+          console.warn(`Invalid date format for task ${task.id}: ${task.dueDate}`);
         }
       }
     });
@@ -97,6 +105,11 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
           </div>
         ))}
       </div>
+       {isTasksLoading ? (
+        <div className="flex flex-1 items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+      ) : (
       <div className="grid grid-cols-7 grid-rows-6 flex-1 overflow-hidden">
         {calendarGrid.days.map((day, index) => {
           const dayKey = format(day, 'yyyy-MM-dd');
@@ -122,7 +135,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
                 <div className="flex flex-col gap-1 p-1">
                   {tasksForDay.map(task => {
                     const path = `/tasks/${task.id}`;
-                    const canClick = permissions?.canViewDetails;
+                    const canClick = session.permissions.canViewDetails;
 
                      const content = (
                         <div
@@ -137,9 +150,9 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
                      );
 
                     return canClick ? (
-                        <Link href={path} key={task.id} onClick={(e) => { e.preventDefault(); router.push(`/tasks/${task.id}?shared=true`) }}>
+                        <a href={`/tasks/${task.id}?shared=true`} key={task.id} onClick={(e) => { e.preventDefault(); router.push(`/tasks/${task.id}?shared=true`) }}>
                            {content}
-                        </Link>
+                        </a>
                     ) : (
                         <Popover key={task.id}>
                             <PopoverTrigger asChild>
@@ -157,6 +170,7 @@ export function SharedCalendarView({ tasks, permissions = null }: SharedCalendar
           );
         })}
       </div>
+      )}
     </div>
   );
 }

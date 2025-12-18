@@ -20,16 +20,15 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
-import type { SharedLink, Brand, User, NavigationItem, Task, WorkflowStatus, Company } from '@/lib/types';
+import type { SharedLink, NavigationItem } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
-import { format, Timestamp } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Separator } from './ui/separator';
 import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { usePathname } from 'next/navigation';
-import { useCompany } from '@/context/company-provider';
 import { Checkbox } from './ui/checkbox';
 
 const defaultPermissions = {
@@ -66,7 +65,6 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
 
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
-  const { company, isLoading: isCompanyLoading } = useCompany();
   const { toast } = useToast();
   const pathname = usePathname();
   
@@ -76,17 +74,8 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   }, [firestore, profile?.companyId]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
 
-  const tasksQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
-  const { data: allTasks } = useCollection<Task>(tasksQuery);
-  const usersQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
-  const { data: allUsers } = useCollection<User>(usersQuery);
-  const brandsQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
-  const { data: allBrands } = useCollection<Brand>(brandsQuery);
-  const statusesQuery = useMemo(() => (firestore && profile?.companyId) ? query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId)) : null, [firestore, profile?.companyId]);
-  const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
-  
   const selectableSharePages = useMemo(() => {
-    return creatorNavItems.filter(item => !!item.path);
+    return creatorNavItems.filter(item => !!item.path && item.id !== 'nav_guide'); // Exclude Guide page
   }, [creatorNavItems]);
 
 
@@ -164,7 +153,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   };
 
   const handleCreateOrUpdateLink = async () => {
-    if (!firestore || !profile || !allTasks || !allUsers || !allBrands || !allStatuses || !company) {
+    if (!firestore || !profile) {
         toast({ variant: 'destructive', title: 'Error', description: 'Core data not loaded. Please try again.' });
         return;
     };
@@ -190,12 +179,6 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
         allowedNavItems,
         companyId: profile.companyId,
         viewConfig,
-        navItems: creatorNavItems, 
-        tasks: allTasks,
-        users: allUsers,
-        brands: allBrands,
-        statuses: allStatuses,
-        company: company,
     };
 
     if (usePassword && password) {
@@ -270,7 +253,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading || isCompanyLoading || !allTasks || !allUsers || !allBrands || !allStatuses;
+  const isLoadingAnything = isLoading || isProfileLoading || isLinksLoading;
 
   const PermissionSwitch = ({ id, label, description, checked, onCheckedChange, disabled = false }: {id: string, label: string, description: string, checked: boolean, onCheckedChange: (checked: boolean) => void, disabled?: boolean}) => (
     <div className="flex items-start justify-between space-x-2">
@@ -284,7 +267,6 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   
    const formatDate = (date: any): string => {
     if (!date) return 'N/A';
-    // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
     const dateObj = date.toDate ? date.toDate() : new Date(date);
     return format(dateObj, 'PP, p');
   };
@@ -427,7 +409,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
               </div>
               <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything || allowedNavItems.length === 0}>
                   {isLoadingAnything && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                  {activeLink ? 'Update Link' : 'Create & Snapshot Link'}
+                  {activeLink ? 'Update Link' : 'Create Link'}
               </Button>
           </DialogFooter>
         </DialogContent>

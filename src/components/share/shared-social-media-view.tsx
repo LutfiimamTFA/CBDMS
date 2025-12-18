@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -28,49 +29,56 @@ import { ImpressionsCard } from '@/components/social-media/impressions-card';
 import { PostTypeChart } from '@/components/social-media/post-type-chart';
 import { EngagementCard } from '@/components/social-media/engagement-card';
 import { SharedHeader } from './shared-header';
+import { useCollection, useFirestore } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
 
 interface SharedSocialMediaViewProps {
-  tasks: SocialMediaPost[];
-  permissions?: SharedLink['permissions'] | null;
+  session: SharedLink;
   isAnalyticsView?: boolean;
 }
 
-export function SharedSocialMediaView({ tasks: posts, permissions, isAnalyticsView }: SharedSocialMediaViewProps) {
+export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocialMediaViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const firestore = useFirestore();
+
+  const postsQuery = useMemo(() => {
+    if (!firestore || !session.companyId) return null;
+    return query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', session.companyId));
+  }, [firestore, session.companyId]);
+
+  const { data: posts, isLoading: isPostsLoading } = useCollection<SocialMediaPost>(postsQuery);
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = startOfMonth(currentDate);
     const lastDayOfMonth = endOfMonth(currentDate);
-
     const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
     let calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0});
-
     const totalDaysInView = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-    
     if (totalDaysInView.length / 7 < 6) {
         calendarEnd = add(calendarEnd, { weeks: 6 - (totalDaysInView.length / 7) });
     }
-
     const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-
     return { start: calendarStart, end: calendarEnd, days };
   }, [currentDate]);
 
   const postsByDay = useMemo(() => {
+    if (!posts) return new Map();
     const map = new Map<string, SocialMediaPost[]>();
-    if (!posts) return map;
-
     posts.forEach(post => {
       if (post.scheduledAt) {
-        const postDate = parseISO(post.scheduledAt);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
-          const dayKey = format(postDate, 'yyyy-MM-dd');
-          if (!map.has(dayKey)) {
-            map.set(dayKey, []);
+        try {
+          const postDate = parseISO(post.scheduledAt);
+          if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+            const dayKey = format(postDate, 'yyyy-MM-dd');
+            if (!map.has(dayKey)) {
+              map.set(dayKey, []);
+            }
+            map.get(dayKey)?.push(post);
           }
-          map.get(dayKey)?.push(post);
+        } catch (e) {
+          console.warn(`Invalid date format for post ${post.id}: ${post.scheduledAt}`);
         }
       }
     });
@@ -99,26 +107,34 @@ export function SharedSocialMediaView({ tasks: posts, permissions, isAnalyticsVi
        <div className="flex h-svh flex-col bg-background">
         <SharedHeader title="Social Media Analytics" />
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold tracking-tight">Content Performance</h2>
-            <p className="text-muted-foreground">
-              An overview of your content pipeline and simulated performance metrics.
-            </p>
-          </div>
-
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
-            <ImpressionsCard />
-            <PostTypeChart posts={posts || []} />
-            <EngagementCard />
-            <div className="flex items-center justify-center rounded-lg border-2 border-dashed">
-                <Button variant="ghost" className="text-muted-foreground">
-                    <Plus className="mr-2 h-4 w-4"/>
-                    Add metric
-                </Button>
+          {isPostsLoading ? (
+            <div className="flex h-full w-full items-center justify-center">
+              <Loader2 className="h-8 w-8 animate-spin" />
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold tracking-tight">Content Performance</h2>
+                <p className="text-muted-foreground">
+                  An overview of your content pipeline and simulated performance metrics.
+                </p>
+              </div>
 
-          <PostPerformanceChart posts={posts || []} />
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
+                <ImpressionsCard />
+                <PostTypeChart posts={posts || []} />
+                <EngagementCard />
+                <div className="flex items-center justify-center rounded-lg border-2 border-dashed">
+                    <Button variant="ghost" className="text-muted-foreground">
+                        <Plus className="mr-2 h-4 w-4"/>
+                        Add metric
+                    </Button>
+                </div>
+              </div>
+
+              <PostPerformanceChart posts={posts || []} />
+            </>
+          )}
         </main>
       </div>
     )
@@ -161,6 +177,11 @@ export function SharedSocialMediaView({ tasks: posts, permissions, isAnalyticsVi
             ))}
         </div>
         <ScrollArea className="flex-1 border-b border-x rounded-b-lg">
+        {isPostsLoading ? (
+          <div className="flex items-center justify-center h-full min-h-[50vh]">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
         <div className="grid grid-cols-7 auto-rows-fr">
           {calendarGrid.days.map((day) => {
             const dayKey = format(day, 'yyyy-MM-dd');
@@ -185,6 +206,7 @@ export function SharedSocialMediaView({ tasks: posts, permissions, isAnalyticsVi
             )
           })}
         </div>
+        )}
         </ScrollArea>
       </main>
     </div>

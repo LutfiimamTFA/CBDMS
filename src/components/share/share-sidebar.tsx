@@ -1,6 +1,7 @@
+
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -17,7 +18,9 @@ import { Loader2, LogOut, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
-import type { SharedLink } from '@/lib/types';
+import type { SharedLink, Company, NavigationItem } from '@/lib/types';
+import { useDoc, useFirestore } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -27,21 +30,25 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 
 const getScopeFromPath = (path: string): string | undefined => {
     if (!path) return undefined;
-    const parts = path.split('/');
-    // Handles paths like /social-media/analytics as well
-    if (parts.length > 2) return parts.slice(1).join('/');
-    return parts[parts.length -1];
+    const itemScope = path.startsWith('/') ? path.substring(1) : path;
+    return itemScope;
 };
 
 interface ShareSidebarProps {
     session: SharedLink | null;
+    navItems: NavigationItem[];
 }
 
-export function ShareSidebar({ session }: ShareSidebarProps) {
+export function ShareSidebar({ session, navItems }: ShareSidebarProps) {
   const pathname = usePathname();
+  const firestore = useFirestore();
+
+  const {data: company, isLoading: isCompanyLoading } = useDoc<Company>(useMemo(() => {
+    if (!firestore || !session?.companyId) return null;
+    return doc(firestore, 'companies', session.companyId);
+  }, [firestore, session?.companyId]));
   
-  const company = session?.company || null;
-  const isLoading = !session;
+  const isLoading = !session || isCompanyLoading;
   
   const handleExit = () => {
     if (session) {
@@ -51,7 +58,7 @@ export function ShareSidebar({ session }: ShareSidebarProps) {
   };
 
   const allowedNavIds = new Set(session?.allowedNavItems || []);
-  const visibleNavItems = (session?.navItems || []).filter(item => allowedNavIds.has(item.id) && item.path);
+  const visibleNavItems = navItems.filter(item => allowedNavIds.has(item.id) && item.path);
 
   return (
     <Sidebar>

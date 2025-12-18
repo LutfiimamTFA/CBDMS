@@ -1,13 +1,12 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
-import { notFound } from 'next/navigation';
+import React from 'react';
+import { notFound, useParams } from 'next/navigation';
 import { useSharedSession } from '@/context/shared-session-provider';
 import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useParams } from 'next/navigation';
 
 // Import reusable, stateless view components
 import { SharedDashboardView } from '@/components/share/shared-dashboard-view';
@@ -17,6 +16,8 @@ import { SharedReportsView } from '@/components/share/shared-reports-view';
 import { ShareSidebar } from '@/components/share/share-sidebar';
 import { SharedMyWorkView } from '@/components/share/shared-my-work-view';
 import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
+import { SharedDailyReportView } from '@/components/share/shared-daily-report-view';
+import { SharedRecurringTasksView } from '@/components/share/shared-recurring-tasks-view';
 
 const AccessDeniedComponent = () => (
     <div className="flex h-full items-center justify-center p-8">
@@ -63,10 +64,12 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
   'my-work': SharedMyWorkView,
   'social-media': SharedSocialMediaView,
   'social-media/analytics': SharedSocialMediaView,
+  'daily-report': SharedDailyReportView,
+  'admin/settings/recurring': SharedRecurringTasksView,
 };
 
 export default function ShareScopePage() {
-  const { session, isLoading, error } = useSharedSession();
+  const { session, navItems, isLoading, error } = useSharedSession();
   const params = useParams();
   const scope = Array.isArray(params.scope) ? params.scope.join('/') : params.scope;
   
@@ -82,10 +85,11 @@ export default function ShareScopePage() {
     return <LinkNotFoundComponent />;
   }
 
-  // Determine which page to render based on the URL scope
-  const navItemForScope = session.navItems.find(item => item.path.endsWith(scope));
+  const navItemForScope = (navItems || []).find(item => {
+    const itemScope = item.path.startsWith('/') ? item.path.substring(1) : item.path;
+    return itemScope === scope;
+  });
 
-  // Check if the current scope is allowed by the link
   if (!navItemForScope || !session.allowedNavItems.includes(navItemForScope.id)) {
       return <AccessDeniedComponent />;
   }
@@ -97,19 +101,14 @@ export default function ShareScopePage() {
   }
   
   const viewProps = {
-    permissions: session.permissions,
-    tasks: session.tasks || [],
-    users: session.users || [],
-    brands: session.brands || [],
-    statuses: session.statuses || [],
-    viewConfig: session.viewConfig,
-    isAnalyticsView: scope === 'social-media/analytics', // Pass analytics flag
+    session,
+    isAnalyticsView: scope === 'social-media/analytics',
   };
 
   return (
     <div className='flex h-svh'>
-        <ShareSidebar session={session} />
-        <main className='flex-1'>
+        <ShareSidebar session={session} navItems={navItems || []} />
+        <main className='flex-1 overflow-auto'>
             <PageComponent {...viewProps} />
         </main>
     </div>

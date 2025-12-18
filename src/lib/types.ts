@@ -27,7 +27,6 @@ export type CompanySettings = {
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
 
-// This is now a dynamic string, not a fixed literal type
 export type Status = string;
 
 export type Tag = {
@@ -73,7 +72,6 @@ export type Attachment = {
   url: string; 
 };
 
-// New type for the dynamic status/column
 export type WorkflowStatus = {
   id: string;
   name: string;
@@ -86,6 +84,7 @@ export type Brand = {
   id: string;
   name: string;
   createdAt: any;
+  companyId: string;
 };
 
 export type Activity = {
@@ -126,6 +125,7 @@ export type DailyReport = {
   companyId: string;
 };
 
+// This type is now a pure context/permission object, not a data snapshot.
 export type SharedLink = {
   id: string;
   name: string;
@@ -147,13 +147,7 @@ export type SharedLink = {
   createdBy: string;
   createdAt: any;
   updatedAt?: any;
-  tasks: Task[];
-  users: User[];
-  brands: Brand[];
-  statuses: WorkflowStatus[];
-  navItems: NavigationItem[];
   allowedNavItems: string[];
-  company: Company | null;
 };
 
 
