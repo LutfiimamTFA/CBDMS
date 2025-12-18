@@ -216,6 +216,7 @@ function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useI18n();
+  const firestore = useFirestore();
 
   useEffect(() => {
     if (isUserLoading) return;
