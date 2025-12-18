@@ -28,13 +28,11 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 
 const getScopeFromPath = (path: string): string => {
     if (!path) return '';
-    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    // Don't generate a scope for paths that are just group folders
-    if (cleanPath === 'admin' || cleanPath === 'admin/settings' || cleanPath === 'social-media') {
-        return '';
-    }
-    return cleanPath;
+    // Return the path segment after the initial slash
+    const segments = path.split('/').filter(Boolean);
+    return segments.join('/');
 };
+
 
 export function ShareSidebar() {
   const pathname = usePathname();
@@ -53,7 +51,7 @@ export function ShareSidebar() {
     const allowedIds = new Set(session.allowedNavItems || []);
 
     return session.navItems
-        .filter(item => item.path && allowedIds.has(item.id))
+        .filter(item => allowedIds.has(item.id))
         .sort((a, b) => a.order - b.order);
 
   }, [session]);

@@ -7,7 +7,11 @@ import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShareSidebar } from '@/components/share/share-sidebar';
-import { SharedSimpleTasksView } from '@/components/share/shared-simple-tasks-view';
+import { SharedDashboardView } from '@/components/share/shared-dashboard-view';
+import { SharedTasksView } from '@/components/share/shared-tasks-view';
+import { SharedCalendarView } from '@/components/share/shared-calendar-view';
+import { SharedScheduleView } from '@/components/share/shared-schedule-view';
+import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -76,15 +80,35 @@ export default function ShareScopePage() {
     ...snapshotData,
   };
 
+  const renderContent = () => {
+    if (!isPageAllowed) {
+        return <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />;
+    }
+
+    switch (`/${scope}`) {
+        case '/dashboard':
+            return <SharedDashboardView {...viewProps} />;
+        case '/tasks':
+            return <SharedTasksView {...viewProps} />;
+        case '/calendar':
+            return <SharedCalendarView {...viewProps} />;
+        case '/schedule':
+             return <SharedScheduleView {...viewProps} />;
+        case '/social-media':
+            return <SharedSocialMediaView {...viewProps} isAnalyticsView={false} />;
+        case '/social-media/analytics':
+            return <SharedSocialMediaView {...viewProps} isAnalyticsView={true} />;
+        default:
+            return <AccessDeniedPlaceholder pageName={scope} />;
+    }
+  };
+
+
   return (
     <div className='flex h-svh w-full'>
         <ShareSidebar />
         <main className='flex-1 overflow-auto flex w-full'>
-            {isPageAllowed ? (
-                <SharedSimpleTasksView {...viewProps} />
-            ) : (
-                <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />
-            )}
+            {renderContent()}
         </main>
     </div>
   );

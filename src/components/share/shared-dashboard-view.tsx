@@ -1,6 +1,8 @@
 'use client';
 import type { Task, SharedLink, WorkflowStatus, Brand, User } from '@/lib/types';
-import { SharedSimpleTasksView } from './shared-simple-tasks-view';
+import { SharedHeader } from './shared-header';
+import { KanbanBoard } from '../tasks/kanban-board';
+import { Loader2 } from 'lucide-react';
 
 interface SharedDashboardViewProps {
   session: SharedLink;
@@ -11,6 +13,19 @@ interface SharedDashboardViewProps {
   isLoading: boolean;
 }
 
-export function SharedDashboardView(props: SharedDashboardViewProps) {
-  return <SharedSimpleTasksView {...props} />;
+export function SharedDashboardView({ session, tasks, statuses, brands, users, isLoading }: SharedDashboardViewProps) {
+  return (
+    <div className="flex flex-col flex-1 h-full w-full">
+      <SharedHeader title={session?.name || 'Shared Dashboard'} />
+      <main className="flex-1 overflow-auto p-4 md:p-6">
+        {isLoading ? (
+          <div className="flex h-full w-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
+          <KanbanBoard tasks={tasks || []} permissions={session.permissions} isSharedView={true} />
+        )}
+      </main>
+    </div>
+  );
 }

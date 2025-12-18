@@ -1,18 +1,84 @@
 'use client';
 
-import React from 'react';
-import type { Task, SharedLink, WorkflowStatus, Brand, User } from '@/lib/types';
-import { SharedSimpleTasksView } from './shared-simple-tasks-view';
+import React, { useMemo } from 'react';
+import type { Task, SharedLink } from '@/lib/types';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import { parseISO } from 'date-fns';
+import { getBrandColor } from '@/lib/utils';
+import { SharedHeader } from './shared-header';
+import { Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface SharedScheduleViewProps {
   session: SharedLink;
   tasks: Task[] | null;
-  statuses: WorkflowStatus[] | null;
-  brands: Brand[] | null;
-  users: User[] | null;
   isLoading: boolean;
 }
 
-export function SharedScheduleView(props: SharedScheduleViewProps) {
-  return <SharedSimpleTasksView {...props} />;
+export function SharedScheduleView({ session, tasks, isLoading }: SharedScheduleViewProps) {
+    const router = useRouter();
+
+    const calendarEvents = useMemo(() => {
+        if (!tasks) return [];
+        return tasks
+        .filter((task) => !!task.dueDate)
+        .map((task) => {
+            const brandColor = getBrandColor(task.brandId);
+            const eventDate = parseISO(task.dueDate!);
+            return {
+            id: task.id,
+            title: task.title,
+            start: eventDate,
+            end: eventDate,
+            allDay: true,
+            backgroundColor: brandColor,
+            borderColor: brandColor,
+            };
+        });
+    }, [tasks]);
+
+    const handleEventClick = (clickInfo: any) => {
+        if (session?.permissions?.canViewDetails) {
+            router.push(`/tasks/${clickInfo.event.id}?shared=true`);
+        }
+    }
+
+  return (
+     <div className="flex h-svh flex-col bg-background">
+      <SharedHeader title={session.name || 'Shared Schedule'} />
+      <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        ) : (
+          <div className="flex-1">
+                <FullCalendar
+                    plugins={[dayGridPlugin, interactionPlugin]}
+                    initialView="dayGridMonth"
+                    headerToolbar={{
+                        left: 'prev,next today',
+                        center: 'title',
+                        right: 'dayGridMonth,dayGridWeek,dayGridDay'
+                    }}
+                    events={calendarEvents}
+                    eventClick={handleEventClick}
+                    height="100%"
+                    eventTimeFormat={{
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        meridiem: 'short'
+                    }}
+                    eventDisplay="block"
+                    dayHeaderClassNames="bg-muted"
+                    viewClassNames="bg-card"
+                    eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
+                />
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }

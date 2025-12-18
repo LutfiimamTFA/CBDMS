@@ -132,7 +132,7 @@ export function SharedSocialMediaView({ session, isAnalyticsView, posts, isLoadi
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <SharedHeader title="Social Media Center" />
+      <SharedHeader title="Social Media Calendar" />
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div className="flex items-center gap-2">
