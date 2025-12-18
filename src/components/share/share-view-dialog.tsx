@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -50,9 +51,12 @@ interface ShareViewDialogProps {
 
 // Function to recursively remove undefined values from any object
 const removeUndefined = (obj: any): any => {
+    if (obj === undefined) {
+        return null; // Firestore cannot handle undefined
+    }
     if (Array.isArray(obj)) {
         return obj.map(removeUndefined);
-    } else if (obj !== null && typeof obj === 'object') {
+    } else if (obj !== null && typeof obj === 'object' && !(obj instanceof Date) && !(typeof obj.toDate === 'function')) { // Exclude Timestamps
         return Object.keys(obj).reduce((acc, key) => {
             const value = obj[key];
             if (value !== undefined) {
@@ -99,7 +103,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
   useEffect(() => {
     if (isOpen) {
-      const dashboardItem = shareableNavItems.find(item => item.path === '/dashboard');
+      const dashboardItem = shareableNavItems.find(item => item.id === 'nav_task_board');
       setSelectedNavIds(dashboardItem ? [dashboardItem.id] : []);
     }
   }, [isOpen, shareableNavItems]);
@@ -224,7 +228,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                             />
                             <label htmlFor={item.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
                                 <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
-                                {t(item.label as any)}
+                                {t(item.label as any) || item.label}
                             </label>
                         </div>
                     ))}

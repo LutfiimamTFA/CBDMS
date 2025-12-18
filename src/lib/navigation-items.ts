@@ -41,8 +41,17 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: null,
   },
   {
-    id: 'nav_calendar',
-    label: 'nav.calendar',
+    id: 'nav_schedule',
+    label: 'nav.schedule',
+    path: '/schedule',
+    icon: 'CalendarClock',
+    order: 4,
+    roles: ['Super Admin', 'Manager', 'Employee'],
+    parentId: null,
+  },
+  {
+    id: 'nav_task_calendar',
+    label: 'nav.task_calendar',
     path: '/calendar',
     icon: 'Calendar',
     order: 5,
@@ -60,7 +69,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_social_media_calendar',
-    label: 'nav.calendar',
+    label: 'nav.social_media_calendar',
     path: '/social-media',
     icon: 'CalendarDays',
     order: 6.1,
