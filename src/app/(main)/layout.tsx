@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import Link from 'next/link';
@@ -185,7 +183,7 @@ function MainAppLayout({
       </Sidebar>
       <SidebarInset>
          <Header title={headerTitle} navItems={finalNavItems} />
-        {children}
+         {children}
       </SidebarInset>
     </SidebarProvider>
   );
