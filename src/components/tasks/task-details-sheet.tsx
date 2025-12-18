@@ -264,15 +264,21 @@ export function TaskDetailsSheet({
     resolver: zodResolver(taskDetailsSchema),
   });
   
+  const currentFormStatus = form.watch('status');
+
   const canManageSubtasks = useMemo(() => {
     if (isSharedView) return permissions.canEditContent || false;
     if (!currentUser) return false;
 
-    const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
+    const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(currentFormStatus);
     
     return (isAssignee || isManagerOrAdmin) && isAllowedStatus;
-  }, [isSharedView, permissions, currentUser, isAssignee, isManagerOrAdmin, form.watch('status')]);
+  }, [isSharedView, permissions, currentUser, isAssignee, isManagerOrAdmin, currentFormStatus]);
   
+  const showTimeTracker = useMemo(() => {
+      return isAssignee && !isSharedView && ['To Do', 'Doing', 'Revisi'].includes(currentFormStatus);
+  }, [isAssignee, isSharedView, currentFormStatus]);
+
   useEffect(() => {
     if (initialTask && open) {
         form.reset({
@@ -732,7 +738,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         type: 'gdrive',
         url: gdriveLink,
       };
-      setAttachments(prev => [...prev, ...newAttachment]);
+      setAttachments(prev => [...prev, newAttachment]);
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
       setGdriveName('');
@@ -1052,8 +1058,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     return format(dateObj, 'PP, p');
   };
 
-  const showTimeTracker = isAssignee && !isSharedView && ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
-
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1090,16 +1094,14 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                           Total Logged: <span className="font-medium text-foreground">{formatHours(timeTracked)}</span>
                                       </p>
                                   </div>
-                                  {initialTask.status !== 'Done' && (
-                                    isRunning ? (
-                                        <Button variant="destructive" onClick={handlePauseSession}>
-                                            <PauseCircle className="mr-2"/> Stop Session
-                                        </Button>
-                                    ) : (
-                                        <Button onClick={handleStartSession}>
-                                            <PlayCircle className="mr-2"/> Start Session
-                                        </Button>
-                                    )
+                                  { isRunning ? (
+                                      <Button variant="destructive" onClick={handlePauseSession}>
+                                          <PauseCircle className="mr-2"/> Stop Session
+                                      </Button>
+                                  ) : (
+                                      <Button onClick={handleStartSession}>
+                                          <PlayCircle className="mr-2"/> Start Session
+                                      </Button>
                                   )}
                               </div>
                               {isRunning && (
