@@ -23,6 +23,7 @@ export function SharedTasksView({ session }: SharedTasksViewProps) {
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
     } else if (session.creatorRole !== 'Super Admin') {
+       // A non-admin MUST scope by brand. If no brands are in the link, show no tasks.
        return null;
     }
 
@@ -78,3 +79,4 @@ export function SharedTasksView({ session }: SharedTasksViewProps) {
     </div>
   );
 }
+

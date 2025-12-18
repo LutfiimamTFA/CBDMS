@@ -182,3 +182,4 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
     </div>
   );
 }
+

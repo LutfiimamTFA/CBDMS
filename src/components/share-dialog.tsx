@@ -19,7 +19,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
 import type { SharedLink, NavigationItem, Brand } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
 import { format } from 'date-fns';
@@ -506,3 +506,4 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
     </>
   );
 }
+

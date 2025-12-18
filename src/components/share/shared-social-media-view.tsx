@@ -43,8 +43,17 @@ export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocial
 
   const postsQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
-    return query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', session.companyId));
-  }, [firestore, session.companyId]);
+    let q = query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', session.companyId));
+    
+    // Apply brand filtering for security
+    if (session.brandIds && session.brandIds.length > 0) {
+      q = query(q, where('brandId', 'in', session.brandIds));
+    } else if (session.creatorRole !== 'Super Admin') {
+       return null;
+    }
+    
+    return q;
+  }, [firestore, session]);
 
   const { data: posts, isLoading: isPostsLoading } = useCollection<SocialMediaPost>(postsQuery);
 
@@ -212,3 +221,4 @@ export function SharedSocialMediaView({ session, isAnalyticsView }: SharedSocial
     </div>
   );
 }
+

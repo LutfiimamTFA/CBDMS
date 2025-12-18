@@ -21,7 +21,7 @@ interface HeaderProps {
 export function Header({ title, actions, isSharedView = false, navItems = [] }: HeaderProps) {
   const { profile } = useUserProfile();
   
-  // Super Admins should not see the share dialog.
+  // Only show the share dialog for non-admin roles. Super Admins should not create share links.
   const showShareDialog = !isSharedView && profile && profile.role !== 'Super Admin';
 
   return (
@@ -51,3 +51,4 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
     </header>
   );
 }
+

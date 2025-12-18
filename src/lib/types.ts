@@ -84,7 +84,6 @@ export type Brand = {
   id: string;
   name: string;
   createdAt: any;
-  companyId: string;
 };
 
 export type Activity = {
@@ -283,3 +282,4 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
