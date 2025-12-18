@@ -57,7 +57,9 @@ export function ShareSidebar({ session, navItems }: ShareSidebarProps) {
   };
 
   const allowedNavIds = new Set(session?.allowedNavItems || []);
-  const visibleNavItems = navItems.filter(item => allowedNavIds.has(item.id) && item.path);
+  const visibleNavItems = navItems
+    .filter(item => allowedNavIds.has(item.id) && item.path)
+    .sort((a, b) => a.order - b.order);
 
   return (
     <Sidebar>

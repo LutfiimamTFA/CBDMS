@@ -19,19 +19,20 @@ import { SharedSocialMediaView } from '@/components/share/shared-social-media-vi
 import { SharedDailyReportView } from '@/components/share/shared-daily-report-view';
 import { SharedRecurringTasksView } from '@/components/share/shared-recurring-tasks-view';
 import { SharedScheduleView } from '@/components/share/shared-schedule-view';
+import { SharedGuideView } from '@/components/share/shared-guide-view';
 
-const AccessDeniedComponent = () => (
+const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
       <Card className="w-full max-w-md text-center">
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2">
-            <ShieldAlert className="h-6 w-6 text-destructive" />
-            Access Denied
+            <ShieldAlert className="h-6 w-6 text-muted-foreground" />
+            '{pageName}' Not Included
           </CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">
-            You do not have permission to view this page through the link you are using.
+            This page is not included in this shared link. Please select an available page from the sidebar.
           </p>
         </CardContent>
       </Card>
@@ -57,16 +58,18 @@ const LinkNotFoundComponent = () => (
     </div>
 );
 
+// This map is the single source of truth for routing in share mode.
 const pageComponents: { [key: string]: React.ComponentType<any> } = {
+  'my-work': SharedMyWorkView,
   'dashboard': SharedDashboardView,
   'tasks': SharedTasksView,
-  'calendar': SharedCalendarView,
+  'daily-report': SharedDailyReportView,
   'schedule': SharedScheduleView,
-  'reports': SharedReportsView,
-  'my-work': SharedMyWorkView,
+  'calendar': SharedCalendarView,
   'social-media': SharedSocialMediaView,
   'social-media/analytics': SharedSocialMediaView,
-  'daily-report': SharedDailyReportView,
+  'reports': SharedReportsView,
+  'guide': SharedGuideView,
   'admin/settings/recurring': SharedRecurringTasksView,
 };
 
@@ -87,25 +90,33 @@ export default function ShareScopePage() {
     return <LinkNotFoundComponent />;
   }
 
+  // Find the nav item corresponding to the current URL scope
   const navItemForScope = (navItems || []).find(item => {
-    // Normalize the path by removing the leading slash if it exists
-    const itemScope = item.path.startsWith('/') ? item.path.substring(1) : item.path;
-    return itemScope === scope;
+    // Normalize path by removing leading slash for direct comparison
+    const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
+    return itemPath === scope;
   });
   
-  if (!navItemForScope || !session.allowedNavItems.includes(navItemForScope.id)) {
-      return <AccessDeniedComponent />;
-  }
-
+  const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
+  
   const PageComponent = pageComponents[scope];
 
-  if (!PageComponent) {
-    return <AccessDeniedComponent />;
+  // If the page is not allowed or the component doesn't exist, show a placeholder.
+  // This completely replaces the old "Access Denied" logic.
+  if (!isPageAllowed || !PageComponent) {
+      return (
+          <div className='flex h-svh w-full'>
+              <ShareSidebar session={session} navItems={navItems || []} />
+              <main className='flex-1 overflow-auto flex w-full'>
+                 <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />
+              </main>
+          </div>
+      );
   }
   
   const viewProps = {
     session,
-    isAnalyticsView: scope === 'social-media/analytics',
+    isAnalyticsView: scope === 'social-media/analytics', // Prop for multi-purpose components
   };
 
   return (
