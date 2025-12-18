@@ -28,10 +28,9 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
   return <LucideIconComponent {...props} />;
 };
 
-const getScopeFromPath = (path: string): string | undefined => {
-    if (!path) return undefined;
-    const itemScope = path.startsWith('/') ? path.substring(1) : path;
-    return itemScope;
+const getScopeFromPath = (path: string): string => {
+    if (!path) return '';
+    return path.startsWith('/') ? path.substring(1) : path;
 };
 
 interface ShareSidebarProps {

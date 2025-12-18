@@ -64,7 +64,7 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
   'schedule': SharedScheduleView,
   'reports': SharedReportsView,
   'my-work': SharedMyWorkView,
-  'social-media': SharedSocialMediaView, // Base path for social media calendar
+  'social-media': SharedSocialMediaView,
   'social-media/analytics': SharedSocialMediaView,
   'daily-report': SharedDailyReportView,
   'admin/settings/recurring': SharedRecurringTasksView,
