@@ -215,6 +215,7 @@ export function TaskDetailsSheet({
     }
     
     if (currentUser.role === 'Employee') {
+      // Employee should only see their team
       const manager = allUsers.find(u => u.id === currentUser.managerId);
       const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
       
@@ -733,7 +734,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         type: 'gdrive',
         url: gdriveLink,
       };
-      setAttachments(prev => [...prev, newAttachment]);
+      setAttachments(prev => [...prev, ...newAttachment]);
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
       setGdriveName('');
@@ -1071,7 +1072,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <ShareTaskDialog task={initialTask} />
+                    {!isSharedView && <ShareTaskDialog task={initialTask} />}
                     <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)}><History className="h-4 w-4 mr-2"/> View History</Button>
                     <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
                 </div>
