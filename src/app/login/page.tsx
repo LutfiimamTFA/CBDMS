@@ -15,7 +15,7 @@ import { Briefcase, Loader2 } from 'lucide-react';
 import {
   initiateEmailSignIn,
 } from '@/firebase/non-blocking-login';
-import { useAuth } from '@/firebase';
+import { useAuth, useUserProfile } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,7 @@ type SignInFormValues = z.infer<typeof signInSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
+  const { user, profile, isUserLoading } = useUserProfile();
   const { toast } = useToast();
   const [isSigningIn, setIsSigningIn] = useState(false);
   
@@ -51,13 +52,25 @@ export default function LoginPage() {
     defaultValues: { email: '', password: '' },
   });
 
+  // Effect to handle redirection after user state changes
+  useEffect(() => {
+    // If the profile is loaded and the user is authenticated
+    if (!isUserLoading && user && profile) {
+      if (profile.role === 'Employee' || profile.role === 'PIC') {
+        router.replace('/my-work');
+      } else {
+        router.replace('/dashboard');
+      }
+    }
+  }, [user, profile, isUserLoading, router]);
+
   const onSignIn = async (data: SignInFormValues) => {
     if (!auth) return;
     setIsSigningIn(true);
     try {
       await initiateEmailSignIn(auth, data.email, data.password);
-      // On successful sign-in, the layout's auth listener will handle the redirect.
-      // We don't need to push the router here anymore.
+      // After sign-in is initiated, the useEffect above will handle the redirect
+      // when the `user` and `profile` states are updated by the auth listener.
     } catch (error: any) {
       let description = 'Invalid credentials. Please check your email and password.';
       toast({
@@ -68,6 +81,14 @@ export default function LoginPage() {
       setIsSigningIn(false);
     }
   };
+  
+  if (isUserLoading || user) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary/50 p-4">

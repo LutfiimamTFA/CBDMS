@@ -220,21 +220,10 @@ function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isUserLoading) return;
     
-    if (pathname.startsWith('/share')) return;
-    
-    if (!user) {
+    // If there's no user, and we are on a protected route, redirect to login.
+    if (!user && pathname !== '/login') {
       router.replace('/login');
       return;
-    }
-  
-    // Redirect logic after login
-    if (pathname === '/login' || pathname === '/') {
-        if (profile?.role === 'Employee' || profile?.role === 'PIC') {
-            router.replace('/my-work');
-        } else {
-            router.replace('/dashboard');
-        }
-        return; // Stop further execution in this effect run
     }
 
     if (auth?.currentUser) {
