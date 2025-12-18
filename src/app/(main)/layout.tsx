@@ -11,15 +11,9 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarMenuSub,
   SidebarFooter,
-  SidebarInset,
+  SidebarCollapsibleItem,
 } from '@/components/ui/sidebar';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import {
   Loader2,
   ChevronDown,
@@ -123,30 +117,14 @@ function MainAppLayout({
 
           if (hasVisibleChildren) {
             return (
-              <SidebarMenuItem key={item.id}>
-                <Collapsible
-                  open={openSections[item.id] || false}
-                  onOpenChange={(isOpen) =>
-                    setOpenSections((prev) => ({ ...prev, [item.id]: isOpen }))
-                  }
-                >
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      tooltip={item.label}
-                    >
-                      <Icon name={item.icon} />
-                      <span>{item.label}</span>
-                      <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="pt-1">
-                    <SidebarMenuSub>
-                      {renderNavItems(children, item.id)}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </Collapsible>
-              </SidebarMenuItem>
+              <SidebarCollapsibleItem
+                key={item.id}
+                item={item}
+                isActive={isActive}
+                isOpen={openSections[item.id] || false}
+                onOpenChange={(isOpen) => setOpenSections((prev) => ({ ...prev, [item.id]: isOpen }))}
+                subItems={renderNavItems(children, item.id)}
+              />
             );
           }
 
@@ -179,7 +157,7 @@ function MainAppLayout({
 
   return (
     <SidebarProvider>
-      <Sidebar>
+      <Sidebar collapsible="icon">
         <SidebarHeader>
           <Logo />
         </SidebarHeader>
@@ -221,7 +199,6 @@ function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isUserLoading) return;
     
-    // If there's no user, and we are on a protected route, redirect to login.
     if (!user && pathname !== '/login') {
       router.replace('/login');
       return;

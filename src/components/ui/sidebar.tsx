@@ -4,7 +4,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { PanelLeft, ChevronDown, type LucideIcon } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -19,6 +19,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import type { NavigationItem } from '@/lib/types';
+
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -175,36 +188,7 @@ const Sidebar = React.forwardRef<
     ref
   ) => {
     const { isMobile, state, openMobile, setOpenMobile, isSharedView } = useSidebar()
-
-    if (isSharedView) {
-      if (isMobile) {
-        return (
-          <Sheet open={openMobile} onOpenChange={setOpenMobile}>
-            <SheetContent
-              data-sidebar="sidebar"
-              data-mobile="true"
-              className="w-[--sidebar-width] bg-card p-0 text-foreground [&>button]:hidden"
-              style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
-              side={side}
-            >
-              <div className="flex h-full w-full flex-col">{children}</div>
-            </SheetContent>
-          </Sheet>
-        );
-      }
-      return (
-        <div
-          className={cn(
-            "flex h-full w-[--sidebar-width] flex-col bg-card text-foreground border-r",
-            className
-          )}
-          ref={ref}
-          {...props}
-        >
-          {children}
-        </div>
-      );
-    }
+    const allProps = { ...props, isSharedView };
 
     if (collapsible === "none") {
       return (
@@ -764,6 +748,65 @@ const SidebarMenuSubButton = React.forwardRef<
 })
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton"
 
+const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
+  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
+  if (!LucideIconComponent) return null;
+  return <LucideIconComponent {...props} />;
+};
+
+
+interface SidebarCollapsibleItemProps {
+  item: NavigationItem;
+  isActive: boolean;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  subItems: React.ReactNode;
+}
+
+function SidebarCollapsibleItem({ item, isActive, isOpen, onOpenChange, subItems }: SidebarCollapsibleItemProps) {
+  const { state } = useSidebar();
+
+  if (state === 'collapsed') {
+    return (
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              isActive={isActive}
+              tooltip={item.label}
+              className="justify-center"
+            >
+              <Icon name={item.icon} />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start" sideOffset={10}>
+            <div className="p-2 text-sm font-semibold">{item.label}</div>
+            <div className="flex flex-col gap-1 px-2">{subItems}</div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    );
+  }
+
+  return (
+    <SidebarMenuItem>
+      <Collapsible open={isOpen} onOpenChange={onOpenChange}>
+        <CollapsibleTrigger asChild>
+          <SidebarMenuButton isActive={isActive} tooltip={item.label}>
+            <Icon name={item.icon} />
+            <span>{item.label}</span>
+            <ChevronDown className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+          </SidebarMenuButton>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="pt-1">
+          <SidebarMenuSub>{subItems}</SidebarMenuSub>
+        </CollapsibleContent>
+      </Collapsible>
+    </SidebarMenuItem>
+  );
+}
+
+
 export {
   Sidebar,
   SidebarContent,
@@ -789,4 +832,5 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
+  SidebarCollapsibleItem,
 }
