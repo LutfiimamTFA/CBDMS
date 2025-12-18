@@ -55,6 +55,7 @@ import Link from 'next/link';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { notFound } from 'next/navigation';
+import { TaskCard } from '@/components/tasks/task-card';
 
 type ViewMode = 'month' | 'week';
 
@@ -325,81 +326,9 @@ export default function CalendarPage() {
                               {format(day, 'd')}
                           </span>
                           <div className="mt-2 flex-1 space-y-1 overflow-auto">
-                            {dayTasks.map(task => {
-                              const brandColor = getBrandColor(task.brandId);
-                              const priority = priorityInfo[task.priority];
-
-                              const completionStatus = (() => {
-                                  if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
-                                  const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
-                                  return isLate ? 'Late' : 'On Time';
-                              })();
-
-                              const firstAssignee = task.assignees?.[0];
-
-                              return (
-                                  <Popover key={task.id}>
-                                      <PopoverTrigger asChild>
-                                          <div
-                                              className={cn(
-                                                  'w-full px-2 py-1 rounded-md cursor-pointer hover:opacity-80 text-white text-xs font-medium truncate',
-                                                  brandColor
-                                              )}
-                                              >
-                                              {task.title}
-                                          </div>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-80">
-                                          <div className="space-y-4">
-                                              <div className="space-y-1">
-                                                  <Badge variant="secondary" className={cn(brandColor, 'text-white font-semibold')}>
-                                                      {allBrands?.find(b => b.id === task.brandId)?.name || 'No Brand'}
-                                                  </Badge>
-                                                  <Link href={`/tasks/${task.id}`} className="hover:underline">
-                                                      <h4 className="font-bold text-base">{task.title}</h4>
-                                                  </Link>
-                                              </div>
-                                              
-                                              <div className="text-sm text-muted-foreground">
-                                                  <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'MMM d, yyyy') : 'N/A'}</p>
-                                              </div>
-
-                                              <div className="flex items-center justify-between text-sm text-muted-foreground">
-                                                  <div className='flex items-center gap-2'>
-                                                  {priority && (
-                                                      <>
-                                                      <priority.icon className={`h-4 w-4 ${priority.color}`} />
-                                                      <span>{task.priority}</span>
-                                                      </>
-                                                  )}
-                                                  </div>
-                                                  <div className='flex items-center gap-2'>
-                                                  <span className={cn("h-2 w-2 rounded-full")} style={{ backgroundColor: allStatuses?.find(s => s.name === task.status)?.color || 'bg-gray-400' }}></span>
-                                                  <span>{task.status}</span>
-                                                  </div>
-                                                  {completionStatus && (
-                                                      <Badge variant={completionStatus === 'Late' ? 'destructive' : 'default'} className={cn(completionStatus === 'On Time' && 'bg-green-600 hover:bg-green-700')}>
-                                                          {completionStatus === 'On Time' ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <AlertCircle className="h-3 w-3 mr-1" />}
-                                                          {completionStatus}
-                                                      </Badge>
-                                                  )}
-                                              </div>
-
-                                              {firstAssignee && <div className='flex items-center gap-2 pt-2 border-t'>
-                                                  <Avatar className="h-7 w-7">
-                                                  <AvatarImage src={firstAssignee.avatarUrl} />
-                                                  <AvatarFallback>{firstAssignee.name.charAt(0)}</AvatarFallback>
-                                                  </Avatar>
-                                                  <span className="text-sm font-medium">{firstAssignee.name}</span>
-                                                  {task.assignees.length > 1 && (
-                                                      <Badge variant="secondary">+{task.assignees.length - 1}</Badge>
-                                                  )}
-                                              </div>}
-                                          </div>
-                                      </PopoverContent>
-                                  </Popover>
-                              );
-                            })}
+                            {dayTasks.map(task => (
+                              <TaskCard key={task.id} task={task} />
+                            ))}
                           </div>
                       </div>
                   )

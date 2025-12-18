@@ -74,7 +74,7 @@ export default function SchedulePage() {
   };
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-svh flex-col bg-background">
       <main className="flex flex-1 flex-col p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
             <div>
