@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -8,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { Task, User } from '@/lib/types';
 import {
   CheckCircle2,
@@ -17,28 +18,45 @@ import {
   Loader2,
   Users,
 } from 'lucide-react';
-import { collection } from 'firebase/firestore';
+import { collection, query, where } from 'firebase/firestore';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { TaskStatusChart } from '@/components/reports/task-status-chart';
 
 export default function AdminDashboardPage() {
   const firestore = useFirestore();
+  const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
 
-  const usersCollectionRef = useMemo(
-    () => (firestore ? collection(firestore, 'users') : null),
-    [firestore]
-  );
-  const { data: users, isLoading: isUsersLoading } =
-    useCollection<User>(usersCollectionRef);
+  const usersQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
 
-  const tasksCollectionRef = useMemo(
-    () => (firestore ? collection(firestore, 'tasks') : null),
-    [firestore]
-  );
-  const { data: tasks, isLoading: isTasksLoading } =
-    useCollection<Task>(tasksCollectionRef);
+    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
 
-  const isLoading = isUsersLoading || isTasksLoading;
+    if (profile.role === 'Manager') {
+      // For managers, fetch their direct reports
+      q = query(q, where('managerId', '==', profile.id));
+    }
+    
+    return q;
+  }, [firestore, companyId, profile]);
+  const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
+
+  const tasksQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+
+    if (profile.role === 'Manager') {
+      if (!profile.brandIds || profile.brandIds.length === 0) {
+        return null; // Manager has no brands, sees no tasks.
+      }
+      q = query(q, where('brandId', 'in', profile.brandIds));
+    }
+
+    return q;
+  }, [firestore, companyId, profile]);
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  
+  const isLoading = isProfileLoading || isUsersLoading || isTasksLoading;
 
   const totalUsers = users?.length || 0;
   const totalTasks = tasks?.length || 0;
@@ -72,8 +90,8 @@ export default function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{totalUsers}</div>
-                  <p className="text-xs text-muted-foreground">
-                    registered in the system
+                   <p className="text-xs text-muted-foreground">
+                    {profile?.role === 'Manager' ? 'in your team' : 'registered in the system'}
                   </p>
                 </CardContent>
               </Card>
@@ -87,7 +105,7 @@ export default function AdminDashboardPage() {
                 <CardContent>
                   <div className="text-2xl font-bold">{totalTasks}</div>
                   <p className="text-xs text-muted-foreground">
-                    across all projects
+                    {profile?.role === 'Manager' ? 'in your managed brands' : 'across all projects'}
                   </p>
                 </CardContent>
               </Card>
