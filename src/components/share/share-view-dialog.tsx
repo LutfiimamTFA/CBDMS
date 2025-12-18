@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -38,7 +39,7 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 
 // Define which nav items are shareable
 const isShareable = (item: NavigationItem) => {
-    const shareablePaths = ['/dashboard', '/tasks', '/calendar', '/schedule', '/social-media'];
+    const shareablePaths = ['/dashboard', '/tasks', '/calendar', '/schedule', '/social-media', '/social-media/analytics'];
     return shareablePaths.includes(item.path);
 };
 
@@ -128,18 +129,26 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           name: linkName || 'Shared View',
           companyId: profile.companyId,
           creatorRole: profile.role,
-          brandIds: profile.brandIds || [],
           allowedNavItems: selectedNavIds, 
           navItems: userNavItems.map(item => ({...item, label: t(item.label as any)})), // Snapshot of translated nav items
           permissions,
           snapshot,
           createdBy: profile.id,
-          ...(usePassword && { password }),
-          ...(expiresAt && { expiresAt }),
+          password: usePassword ? password : undefined,
+          expiresAt: expiresAt || undefined,
         };
+        
+        // --- Clean data before sending to Firestore ---
+        const cleanedData = Object.entries(linkData).reduce((acc, [key, value]) => {
+            if (value !== undefined) {
+                (acc as any)[key] = value;
+            }
+            return acc;
+        }, {} as Partial<SharedLink>);
+
 
         const docRef = await addDoc(collection(firestore, 'sharedLinks'), {
-            ...linkData,
+            ...cleanedData,
             createdAt: serverTimestamp(),
         });
 
