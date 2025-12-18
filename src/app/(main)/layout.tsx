@@ -13,6 +13,7 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarCollapsibleItem,
+  SidebarInset,
 } from '@/components/ui/sidebar';
 import {
   Loader2,
