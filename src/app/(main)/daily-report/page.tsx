@@ -36,7 +36,14 @@ export default function DailyReportPage() {
 
   const usersQuery = useMemo(() => {
     if (!firestore || !profile || profile.role === 'Employee') return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', profile.companyId), where('role', '==', 'Employee'));
+
+    let q = query(collection(firestore, 'users'), where('companyId', '==', profile.companyId), where('role', '==', 'Employee'));
+
+    if (profile.role === 'Manager') {
+      q = query(q, where('managerId', '==', profile.id));
+    }
+    
+    return q;
   }, [firestore, profile]);
   const { data: users, isLoading: usersLoading } = useCollection<User>(usersQuery);
 
