@@ -22,8 +22,8 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
-import type { SocialMediaPost, Brand } from '@/lib/types';
+import { collection, query, where } from 'firebase/firestore';
+import type { SocialMediaPost } from '@/lib/types';
 import { SocialPostCard } from '@/components/social-media/social-post-card';
 import { parseISO } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -127,7 +127,7 @@ export default function SocialMediaPage() {
     <div className="flex h-full flex-col bg-background">
       <main className="flex flex-1 flex-col p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
                 <Select value={String(currentDate.getFullYear())} onValueChange={handleYearChange}>
                   <SelectTrigger className="w-28 font-bold text-lg"><SelectValue/></SelectTrigger>
                   <SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
@@ -165,39 +165,39 @@ export default function SocialMediaPage() {
                 </div>
             ))}
         </div>
-        <div className="flex-1 min-h-0 border-b border-x rounded-b-lg">
-        {postsLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : (
-        <div className="h-full grid grid-cols-7 auto-rows-fr">
-          {calendarGrid.days.map((day) => {
-            const dayKey = format(day, 'yyyy-MM-dd');
-            const postsForDay = postsByDay.get(dayKey) || [];
-            return (
-              <div 
-                  key={day.toString()} 
-                  className={cn(
-                      "relative flex flex-col border-r border-t min-h-[120px]",
-                      !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50"
-                  )}
-              >
-                  <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-xs", isSameDay(day, new Date()) && "flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground")}>
-                      {format(day, 'd')}
-                  </span>
-                    <ScrollArea className="flex-1">
+        <div className="flex-1 min-h-0">
+          {postsLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : (
+          <ScrollArea className="h-full border-b border-x rounded-b-lg">
+          <div className="grid grid-cols-7 auto-rows-fr">
+            {calendarGrid.days.map((day) => {
+              const dayKey = format(day, 'yyyy-MM-dd');
+              const postsForDay = postsByDay.get(dayKey) || [];
+              return (
+                <div 
+                    key={day.toString()} 
+                    className={cn(
+                        "relative flex flex-col border-r border-t min-h-[120px]",
+                        !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50"
+                    )}
+                >
+                    <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-xs", isSameDay(day, new Date()) && "flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground")}>
+                        {format(day, 'd')}
+                    </span>
                       <div className="flex flex-col gap-1.5 p-1 pt-8">
                         {postsForDay.map(post => (
                           <SocialPostCard key={post.id} post={post} />
                         ))}
                       </div>
-                    </ScrollArea>
-              </div>
-            )
-          })}
-        </div>
-        )}
+                </div>
+              )
+            })}
+          </div>
+          </ScrollArea>
+          )}
         </div>
       </main>
     </div>
