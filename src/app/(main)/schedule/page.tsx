@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
-import { ShareViewDialog } from '@/components/share/share-view-dialog';
 
 export default function SchedulePage() {
   const firestore = useFirestore();
@@ -186,11 +185,6 @@ export default function SchedulePage() {
       <main className="flex flex-col flex-1 p-4 md:p-6 overflow-auto">
         <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold tracking-tight">Project Schedule</h2>
-            <ShareViewDialog allowedNavItems={['nav_schedule']}>
-                <Button variant="outline">
-                    <Share2 className="mr-2 h-4 w-4" /> Share View
-                </Button>
-            </ShareViewDialog>
         </div>
         {isLoading ? (
           <div className="flex items-center justify-center h-full">

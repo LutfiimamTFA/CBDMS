@@ -31,7 +31,7 @@ import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO, isAfter } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2 } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
 import { DataTableViewOptions } from './data-table-view-options';
@@ -56,6 +56,7 @@ import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ShareViewDialog } from '../share/share-view-dialog';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -516,6 +517,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   });
 
   const isFiltered = table.getState().columnFilters.length > 0;
+  const filteredBrandIds = table.getState().columnFilters.find(f => f.id === 'brandId')?.value as string[] || [];
 
   return (
     <>
@@ -563,6 +565,14 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
           </div>
           <div className="flex items-center gap-2">
               <DataTableViewOptions table={table}/>
+            {profile?.role !== 'Super Admin' && !isShareView && (
+              <ShareViewDialog allowedNavItems={['nav_list', 'nav_task_board', 'nav_calendar']} viewFilters={{ brandIds: filteredBrandIds }}>
+                <Button size="sm" className="h-8">
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share View
+                </Button>
+              </ShareViewDialog>
+            )}
             {canCreateTasks && !isShareView && (
               <AddTaskDialog>
                 <Button size="sm" className="h-8">

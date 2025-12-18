@@ -55,7 +55,6 @@ import Link from 'next/link';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { notFound } from 'next/navigation';
-import { ShareViewDialog } from '@/components/share/share-view-dialog';
 
 type ViewMode = 'month' | 'week';
 
@@ -291,14 +290,6 @@ export default function CalendarPage() {
                     </div>
                 </CollapsibleContent>
             </Collapsible>
-            <ShareViewDialog
-                allowedNavItems={['nav_calendar', 'nav_list']}
-                viewFilters={{brandIds: selectedBrands}}
-              >
-                  <Button variant="outline" className="h-9">
-                      <Share2 className="mr-2 h-4 w-4" /> Share View
-                  </Button>
-              </ShareViewDialog>
            </div>
         </div>
 

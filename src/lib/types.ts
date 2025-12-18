@@ -128,13 +128,11 @@ export type SharedLink = {
   id: string;
   name: string;
   companyId: string;
-  // New properties for view-based sharing
   creatorRole: User['role'];
-  brandIds?: string[]; // For manager-created links, specifies which brands are included.
-  allowedNavItems: string[]; // IDs of the nav items to show in the shared view's sidebar.
-  // Security and permissions
+  brandIds?: string[];
+  allowedNavItems: string[];
   password?: string;
-  expiresAt?: any; // Timestamp
+  expiresAt?: any;
   permissions: {
     canViewDetails: boolean;
     canComment: boolean;
@@ -143,7 +141,7 @@ export type SharedLink = {
     canAssignUsers: boolean;
   };
   createdBy: string;
-  createdAt: any; // Timestamp
+  createdAt: any;
 };
 
 
