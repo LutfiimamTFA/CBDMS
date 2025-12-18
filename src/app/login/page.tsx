@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -15,7 +15,7 @@ import { Briefcase, Loader2 } from 'lucide-react';
 import {
   initiateEmailSignIn,
 } from '@/firebase/non-blocking-login';
-import { useAuth, useFirebase, useFirestore } from '@/firebase';
+import { useAuth } from '@/firebase';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
@@ -44,7 +44,6 @@ export default function LoginPage() {
   const router = useRouter();
   const auth = useAuth();
   const { toast } = useToast();
-  const { user, isUserLoading } = useFirebase();
   const [isSigningIn, setIsSigningIn] = useState(false);
   
   const signInForm = useForm<SignInFormValues>({
@@ -52,18 +51,13 @@ export default function LoginPage() {
     defaultValues: { email: '', password: '' },
   });
 
-  useEffect(() => {
-    if (!isUserLoading && user) {
-      router.push('/dashboard');
-    }
-  }, [user, isUserLoading, router]);
-
   const onSignIn = async (data: SignInFormValues) => {
     if (!auth) return;
     setIsSigningIn(true);
     try {
       await initiateEmailSignIn(auth, data.email, data.password);
-      // Successful sign-in will be handled by the useEffect
+      // On successful sign-in, the layout's auth listener will handle the redirect.
+      router.push('/dashboard');
     } catch (error: any) {
       let description = 'Invalid credentials. Please check your email and password.';
       toast({
@@ -71,18 +65,9 @@ export default function LoginPage() {
         title: 'Sign-in Failed',
         description,
       });
-    } finally {
       setIsSigningIn(false);
     }
   };
-
-  if (isUserLoading || user) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary/50 p-4">
