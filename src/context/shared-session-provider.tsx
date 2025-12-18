@@ -1,9 +1,9 @@
 'use client';
 
-import React, { createContext, useContext, useMemo } from 'react';
-import { useDoc, useCollection, useFirestore } from '@/firebase';
+import React, { createContext, useContext, useMemo, useEffect, useState } from 'react';
+import { useDoc, useCollection, initializeFirebase } from '@/firebase';
 import type { SharedLink, NavigationItem, Company } from '@/lib/types';
-import { doc, collection, query, orderBy } from 'firebase/firestore';
+import { doc, collection, query, orderBy, getFirestore, type Firestore } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 
 interface SharedSessionContextType {
@@ -24,9 +24,24 @@ export function useSharedSession() {
   return context;
 }
 
+// A lightweight, self-contained Firestore instance for the public share view.
+let publicFirestore: Firestore | null = null;
+function getPublicFirestore() {
+    if (!publicFirestore) {
+        publicFirestore = getFirestore(initializeFirebase().firebaseApp);
+    }
+    return publicFirestore;
+}
+
 export function SharedSessionProvider({ children }: { children: React.ReactNode }) {
   const params = useParams();
-  const firestore = useFirestore();
+  // Use the self-contained Firestore instance.
+  const [firestore, setFirestore] = useState<Firestore | null>(null);
+  
+  useEffect(() => {
+    setFirestore(getPublicFirestore());
+  }, []);
+
   const linkId = params.linkId as string | undefined;
 
   const linkDocRef = useMemo(() => {
@@ -50,7 +65,7 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
   
   const { data: company, isLoading: isCompanyLoading, error: companyError } = useDoc<Company>(companyDocRef);
 
-  const isLoading = isSessionLoading || isNavItemsLoading || isCompanyLoading;
+  const isLoading = !firestore || isSessionLoading || isNavItemsLoading || isCompanyLoading;
   const error = sessionError || navItemsError || companyError;
 
   const value = useMemo(
