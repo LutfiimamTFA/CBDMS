@@ -38,6 +38,7 @@ import { collection, query, orderBy } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
 import { AppProviders } from '@/components/app-providers';
 import { Header } from '@/components/layout/header';
+import { useIdleTimer } from '@/hooks/use-idle-timer';
 
 
 const Icon = ({
@@ -59,6 +60,18 @@ function MainAppLayout({
   finalNavItems: NavigationItem[];
 }) {
   const pathname = usePathname();
+  const auth = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    if(auth) {
+        auth.signOut();
+        router.push('/login');
+    }
+  }
+
+  useIdleTimer({ onIdle: handleLogout, idleTime: 60 });
+
 
   const { childMap } = useMemo(() => {
     const itemMap = new Map(finalNavItems.map(item => [item.id, item]));
@@ -200,7 +213,6 @@ function MainAppLayout({
 function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const auth = useAuth();
-  const firestore = useFirestore();
   const router = useRouter();
   const pathname = usePathname();
   const { t } = useI18n();
@@ -215,6 +227,16 @@ function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
       return;
     }
   
+    // Redirect logic after login
+    if (pathname === '/login' || pathname === '/') {
+        if (profile?.role === 'Employee' || profile?.role === 'PIC') {
+            router.replace('/my-work');
+        } else {
+            router.replace('/dashboard');
+        }
+        return; // Stop further execution in this effect run
+    }
+
     if (auth?.currentUser) {
       getIdTokenResult(auth.currentUser, true)
         .then((idTokenResult) => {
@@ -226,7 +248,7 @@ function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
         })
         .catch(() => router.replace('/login'));
     }
-  }, [user, isUserLoading, auth, router, pathname]);
+  }, [user, profile, isUserLoading, auth, router, pathname]);
 
   const navItemsCollectionRef = useMemo(
     () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,

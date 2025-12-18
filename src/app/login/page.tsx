@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -57,7 +57,7 @@ export default function LoginPage() {
     try {
       await initiateEmailSignIn(auth, data.email, data.password);
       // On successful sign-in, the layout's auth listener will handle the redirect.
-      router.push('/dashboard');
+      // We don't need to push the router here anymore.
     } catch (error: any) {
       let description = 'Invalid credentials. Please check your email and password.';
       toast({
