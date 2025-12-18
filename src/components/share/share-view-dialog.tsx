@@ -23,14 +23,10 @@ import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar, Users, Sta
 import { MultiSelect } from '../ui/multi-select';
 import { usePathname } from 'next/navigation';
 import { Checkbox } from '../ui/checkbox';
+import { ScrollArea } from '../ui/scroll-area';
 
-const navConfig = {
-    '/dashboard': { id: 'nav_task_board', label: 'Kanban Board', icon: KanbanSquare },
-    '/tasks': { id: 'nav_list', label: 'Task List', icon: ClipboardList },
-    '/calendar': { id: 'nav_calendar', label: 'Big Calendar', icon: Calendar },
-    '/schedule': { id: 'nav_schedule', label: 'Schedule', icon: Calendar },
-    '/social-media': { id: 'nav_social_media_calendar', label: 'Social Media Calendar', icon: Calendar },
-};
+// The shareable views are now static and always included.
+const includedNavItems = ['nav_task_board', 'nav_list', 'nav_calendar', 'nav_schedule'];
 
 interface ShareViewDialogProps {
   children?: React.ReactNode;
@@ -41,7 +37,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   
-  const pathname = usePathname();
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const { toast } = useToast();
@@ -50,7 +45,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [linkName, setLinkName] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
-  const [allowedNavItems, setAllowedNavItems] = useState<string[]>([]);
   const [permissions, setPermissions] = useState({
     canViewDetails: true,
     canComment: false,
@@ -72,11 +66,9 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   
   useEffect(() => {
     if (isOpen) {
-        const currentNav = Object.values(navConfig).find(nav => nav.id === (navConfig as any)[pathname]?.id);
-        setAllowedNavItems(currentNav ? [currentNav.id] : []);
         setSelectedBrandIds(profile?.brandIds || []);
     }
-  }, [isOpen, pathname, profile]);
+  }, [isOpen, profile]);
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
@@ -84,10 +76,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         toast({ variant: 'destructive', title: 'Action Not Allowed', description: 'Super Admins cannot create share links.' });
         return;
     }
-    if (allowedNavItems.length === 0) {
-        toast({ variant: 'destructive', title: 'No Views Selected', description: 'Please select at least one view to share.' });
-        return;
-    }
+
     setIsLoading(true);
     setGeneratedLink(null);
 
@@ -95,7 +84,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
       name: linkName || 'Shared View',
       companyId: profile.companyId,
       creatorRole: profile.role,
-      allowedNavItems,
+      allowedNavItems: includedNavItems, // Always include all task-related views
       permissions,
       brandIds: selectedBrandIds.length > 0 ? selectedBrandIds : profile.brandIds,
       createdBy: profile.id,
@@ -147,11 +136,12 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         <DialogHeader>
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Create a public link to share the current view with specific filters and permissions.
+            Create a public link to share a view of your tasks. All relevant pages (Board, List, Calendar) will be included automatically.
           </DialogDescription>
         </DialogHeader>
 
         {!generatedLink ? (
+         <ScrollArea className="max-h-[60vh] -mx-6 px-6">
           <div className="space-y-6 py-4">
               <div className="space-y-2">
                 <Label htmlFor="link-name">Link Name</Label>
@@ -165,28 +155,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                 </div>
               )}
               
-               <div className="space-y-4 rounded-md border p-4">
-                  <h4 className="text-sm font-medium">Available Views</h4>
-                  <div className="space-y-3">
-                    {Object.values(navConfig).map(nav => (
-                       <div key={nav.id} className="flex items-center gap-3">
-                         <Checkbox 
-                           id={`nav-${nav.id}`} 
-                           checked={allowedNavItems.includes(nav.id)}
-                           onCheckedChange={(checked) => {
-                             setAllowedNavItems(prev => 
-                               checked ? [...prev, nav.id] : prev.filter(id => id !== nav.id)
-                             )
-                           }}
-                         />
-                         <Label htmlFor={`nav-${nav.id}`} className="flex items-center gap-2 font-normal">
-                           <nav.icon className="h-4 w-4 text-muted-foreground"/> {nav.label}
-                         </Label>
-                       </div>
-                    ))}
-                  </div>
-               </div>
-
               <div className="space-y-4 rounded-md border p-4">
                   <h4 className="text-sm font-medium">Permissions for Viewer</h4>
                   <div className="space-y-3">
@@ -218,6 +186,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                   )}
               </div>
           </div>
+         </ScrollArea>
         ) : (
           <div className="space-y-2 py-4">
             <Label htmlFor="share-link">Your Shareable Link</Label>
