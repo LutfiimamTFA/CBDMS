@@ -63,9 +63,9 @@ service cloud.firestore {
       return isSignedIn() && isRole('Manager') && brandId in getRequestingUserData().brandIds;
     }
 
-    // --- Public Share Link Rules ---
-    // Allow public read for collections needed by the share feature.
-    // The security is the unguessable linkId, which is validated server-side.
+    // --- Public Read Rules for Share Feature ---
+    // These collections need to be readable by anyone to support the public share links.
+    // Write access remains protected.
     match /sharedLinks/{linkId} {
       allow get: if true;
       allow list, write, update, delete: if isSignedIn() && (isSuperAdmin() || isRole('Manager'));
@@ -74,6 +74,21 @@ service cloud.firestore {
     match /companies/{companyId} {
        allow get: if true;
        allow write: if isSuperAdmin() && isSameCompanyAsRequestingUser(companyId);
+    }
+
+    match /brands/{brandId} {
+        allow get: if true;
+        allow write: if isSuperAdmin() || isRole('Manager');
+    }
+
+    match /statuses/{statusId} {
+        allow get: if true;
+        allow write: if isSuperAdmin();
+    }
+
+    match /navigationItems/{navItemId} {
+        allow get: if true;
+        allow write: if isSuperAdmin();
     }
     
     match /users/{userId} {
@@ -95,7 +110,8 @@ service cloud.firestore {
     }
     
     match /tasks/{taskId} {
-      allow get, list: if true;
+      allow get: if true;
+      allow list: if true;
 
       allow create: if isSuperAdmin() ||
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
@@ -121,31 +137,16 @@ service cloud.firestore {
       }
     }
     
-    match /brands/{brandId} {
-        allow get: if true;
-        allow write: if isSuperAdmin() || isRole('Manager');
-    }
+    // --- Authenticated-Only Rules ---
 
-    match /statuses/{statusId} {
-        allow get: if true;
-        allow write: if isSuperAdmin();
-    }
-    
     match /socialMediaPosts/{postId} {
-        allow get: if true;
+        allow get: if true; // Public read for share links
         allow create: if isSignedIn();
         allow update, delete: if isSuperAdmin() || 
                                  (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
                                  (isOwnRecord(resource.data.createdBy) && resource.data.status == 'Draft');
     }
     
-    match /navigationItems/{navItemId} {
-        allow get: if true;
-        allow write: if isSuperAdmin();
-    }
-
-    // --- Authenticated-Only Rules ---
-
     match /permissions/{docId} {
       allow read, write: if isSuperAdmin();
     }
