@@ -32,7 +32,6 @@ import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
 import { collection, query, orderBy } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
-import { AppProviders } from '@/components/app-providers';
 import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
 import { Button } from '@/components/ui/button';
@@ -191,7 +190,7 @@ function MainAppLayout({
   );
 }
 
-function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
+export default function MainLayout({ children }: { children: React.ReactNode }) {
   const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const auth = useAuth();
   const router = useRouter();
@@ -262,12 +261,4 @@ function MainLayoutWrapper({ children }: { children: React.ReactNode }) {
   }
 
   return <MainAppLayout finalNavItems={finalNavItems}>{children}</MainAppLayout>;
-}
-
-export default function MainLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AppProviders>
-      <MainLayoutWrapper>{children}</MainLayoutWrapper>
-    </AppProviders>
-  );
 }

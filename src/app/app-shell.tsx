@@ -2,7 +2,6 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { AppProviders } from '@/components/app-providers';
 
 // This list defines which routes are part of the main authenticated application.
 const APP_ROUTES = [
@@ -24,11 +23,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // Check if the current path starts with any of the defined app routes.
   const isAppPage = APP_ROUTES.some(route => pathname.startsWith(route));
-
-  // If it's an app page, it needs the full suite of providers for an authenticated user.
-  if (isAppPage) {
-    return <AppProviders>{children}</AppProviders>;
-  }
 
   // For any other page (e.g., /login, /, /force-password-change, or the isolated /share route),
   // return the children directly. These routes manage their own, simpler provider setups

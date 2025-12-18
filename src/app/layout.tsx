@@ -1,10 +1,8 @@
 'use client';
 
 import './globals.css';
-import { AppShell } from './app-shell';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { useEffect, useState } from 'react';
+import { AppProviders } from '@/components/app-providers';
 
 export default function RootLayout({
   children,
@@ -17,6 +15,7 @@ export default function RootLayout({
     setIsMounted(true);
   }, []);
 
+  // Prevent hydration errors by not rendering on the server.
   if (!isMounted) {
     return (
       <html lang="en" suppressHydrationWarning>
@@ -44,12 +43,9 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-        <TooltipProvider>
-          <AppShell>
+          <AppProviders>
             {children}
-          </AppShell>
-          <Toaster />
-        </TooltipProvider>
+          </AppProviders>
       </body>
     </html>
   );
