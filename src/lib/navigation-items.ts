@@ -50,15 +50,6 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: null,
   },
   {
-    id: 'nav_task_calendar',
-    label: 'nav.task_calendar',
-    path: '/calendar',
-    icon: 'Calendar',
-    order: 5,
-    roles: ['Super Admin', 'Manager', 'Employee'],
-    parentId: null,
-  },
-  {
     id: 'nav_social_media',
     label: 'nav.social_media',
     path: '', // This is now a folder
