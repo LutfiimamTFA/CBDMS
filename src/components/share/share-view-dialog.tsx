@@ -19,11 +19,16 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
 import type { SharedLink, Brand } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar, Users, Star, KanbanSquare, ClipboardList } from 'lucide-react';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Users, Star, KanbanSquare, ClipboardList, Clock } from 'lucide-react';
 import { MultiSelect } from '../ui/multi-select';
 import { usePathname } from 'next/navigation';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar } from '../ui/calendar';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+
 
 // The shareable views are now static and always included.
 const includedNavItems = ['nav_task_board', 'nav_list', 'nav_calendar', 'nav_schedule'];
@@ -45,6 +50,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [linkName, setLinkName] = useState('');
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
+  const [expiresAt, setExpiresAt] = useState<Date | undefined>();
   const [permissions, setPermissions] = useState({
     canViewDetails: true,
     canComment: false,
@@ -84,11 +90,12 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
       name: linkName || 'Shared View',
       companyId: profile.companyId,
       creatorRole: profile.role,
-      allowedNavItems: includedNavItems, // Always include all task-related views
+      allowedNavItems: includedNavItems, 
       permissions,
       brandIds: selectedBrandIds.length > 0 ? selectedBrandIds : profile.brandIds,
       createdBy: profile.id,
       ...(usePassword && { password }),
+      ...(expiresAt && { expiresAt }),
     };
 
     try {
@@ -120,6 +127,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
       setUsePassword(false);
       setPassword('');
       setLinkName('');
+      setExpiresAt(undefined);
       setPermissions({ canViewDetails: true, canComment: false, canChangeStatus: false, canEditContent: false, canAssignUsers: false });
     }
   }, [isOpen]);
@@ -173,18 +181,47 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                   </div>
               </div>
 
-              <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword} />
-                    <Label htmlFor="use-password">Protect with password</Label>
-                  </div>
-                  {usePassword && (
-                    <div className="flex items-center gap-2">
-                      <KeyRound className="h-4 w-4 text-muted-foreground" />
-                      <Input type="password" placeholder="Enter a password" value={password} onChange={(e) => setPassword(e.target.value)} />
+             <div className="space-y-4 rounded-md border p-4">
+                <h4 className="text-sm font-medium">Access Control</h4>
+                <div className="space-y-3">
+                    <div className="flex items-center space-x-2">
+                        <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword} />
+                        <Label htmlFor="use-password">Protect with password</Label>
                     </div>
-                  )}
-              </div>
+                    {usePassword && (
+                        <div className="flex items-center gap-2">
+                            <KeyRound className="h-4 w-4 text-muted-foreground" />
+                            <Input type="password" placeholder="Enter a password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                       <Clock className="h-4 w-4 text-muted-foreground" />
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                variant={"outline"}
+                                className={cn(
+                                    "w-[240px] justify-start text-left font-normal",
+                                    !expiresAt && "text-muted-foreground"
+                                )}
+                                >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {expiresAt ? format(expiresAt, "PPP") : <span>Set expiration date</span>}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                mode="single"
+                                selected={expiresAt}
+                                onSelect={setExpiresAt}
+                                disabled={(date) => date < new Date()}
+                                initialFocus
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                </div>
+            </div>
           </div>
          </ScrollArea>
         ) : (
