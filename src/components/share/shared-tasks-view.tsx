@@ -24,6 +24,11 @@ export function SharedTasksView({ session }: SharedTasksViewProps) {
     // If the link is scoped to specific brands, we MUST filter by them.
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
+    } else if (session.creatorRole !== 'Super Admin') {
+       // A non-admin MUST scope by brand. If they create a link without a brand,
+       // it should show no tasks to prevent accidental data leakage.
+       // This is a failsafe; the dialog should enforce brand selection.
+       return null;
     }
 
     return q;

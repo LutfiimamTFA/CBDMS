@@ -41,9 +41,10 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
     
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
     
-    // This is the critical security filter.
     if (session.brandIds && session.brandIds.length > 0) {
         q = query(q, where('brandId', 'in', session.brandIds));
+    } else if (session.creatorRole !== 'Super Admin') {
+        return null;
     }
     
     return q;

@@ -24,6 +24,10 @@ export function SharedDashboardView({ session }: SharedDashboardViewProps) {
     // If the link is scoped to specific brands, we MUST filter by them.
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
+    } else if (session.creatorRole !== 'Super Admin') {
+        // If a non-admin creator didn't scope to a brand, show no brand-specific data.
+        // This is a safeguard. The ShareDialog should enforce brand selection for Managers.
+        return null;
     }
     
     return q;

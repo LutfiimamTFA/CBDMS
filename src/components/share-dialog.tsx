@@ -89,15 +89,21 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   const brandsQuery = useMemo(() => {
     if (!firestore || !profile) return null;
 
-    let q = query(collection(firestore, 'brands'), orderBy('name'));
-
+    // For Managers, they can only share brands they are assigned to.
     if (profile.role === 'Manager') {
         if (!profile.brandIds || profile.brandIds.length === 0) return null;
-        q = query(q, where('__name__', 'in', profile.brandIds));
-    } else {
-        q = query(q, where('companyId', '==', profile.companyId));
+        return query(collection(firestore, 'brands'), where('__name__', 'in', profile.brandIds), orderBy('name'));
     }
-    return q;
+    
+    // For other roles like Employee or PIC, they might not have direct brand assignments.
+    // They share based on the context of their own work, so we show all company brands
+    // for now, but their actual shared data will be implicitly filtered by their tasks.
+    // Note: A better approach might be to derive brands from the user's assigned tasks.
+    if (profile.companyId) {
+        return query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId), orderBy('name'));
+    }
+
+    return null;
   }, [firestore, profile]);
   const { data: manageableBrands } = useCollection<Brand>(brandsQuery);
   const brandOptions = useMemo(() => (manageableBrands || []).map(b => ({ value: b.id, label: b.name })), [manageableBrands]);
@@ -195,8 +201,8 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
         return;
     }
     
-    if (selectableSharePages.length === 0) {
-        toast({ variant: 'destructive', title: 'Action Blocked', description: 'Your role does not have access to any shareable pages.' });
+    if (profile.role !== 'Super Admin' && brandIds.length === 0) {
+        toast({ variant: 'destructive', title: 'Brand Required', description: 'Please select at least one brand to scope the data for this share link.' });
         return;
     }
 
@@ -358,12 +364,12 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                         <Input id="link-name" value={linkName || ''} onChange={e => setLinkName(e.target.value)} placeholder="e.g. Q3 Report for Client" />
                       </div>
 
-                      {profile?.role !== 'Super Admin' && (
+                      {profile?.role === 'Manager' && (
                         <Card>
                             <CardHeader>
                                 <h3 className="font-semibold">Data Scope</h3>
                                 <p className="text-sm text-muted-foreground">
-                                    Choose which brands' data to include in this link.
+                                    Choose which brands' data to include in this link. This is mandatory.
                                 </p>
                             </CardHeader>
                             <CardContent>
@@ -373,7 +379,6 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                                     defaultValue={brandIds}
                                     placeholder="Select brands to share..."
                                 />
-                                <p className="text-xs text-muted-foreground mt-2">If no brands are selected, the link will not show any brand-specific data.</p>
                             </CardContent>
                         </Card>
                       )}
@@ -459,7 +464,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                   </Button>
                 )}
               </div>
-              <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything || allowedNavItems.length === 0 || (profile?.role !== 'Super Admin' && brandIds.length === 0)}>
+              <Button onClick={handleCreateOrUpdateLink} disabled={isLoadingAnything || allowedNavItems.length === 0 || (profile?.role === 'Manager' && brandIds.length === 0)}>
                   {isLoadingAnything && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                   {activeLink ? 'Update Link' : 'Create Link'}
               </Button>
