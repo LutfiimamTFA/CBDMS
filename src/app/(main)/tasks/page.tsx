@@ -5,11 +5,9 @@ import React, { useMemo, useState } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { Task, WorkflowStatus, Brand, User } from '@/lib/types';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { usePermissions } from '@/context/permissions-provider';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { AddTaskDialog } from '@/components/tasks/add-task-dialog';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function TasksPage() {
   const { t } = useI18n();
@@ -103,15 +101,6 @@ export default function TasksPage() {
   const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading || (profile?.role === 'Manager' && isTeamUsersLoading);
   
   const canDelegate = profile?.role === 'Super Admin' || profile?.role === 'Manager';
-  
-  const canCreateTasks = React.useMemo(() => {
-    if (arePermsLoading || !profile || !permissions) return false;
-    if (profile.role === 'Super Admin') return true;
-    if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
-    if (profile.role === 'Employee') return permissions.Employee.canCreateTasks;
-    return false;
-  }, [profile, permissions, arePermsLoading]);
-
 
   return (
     <div className="flex h-svh flex-col bg-background">
@@ -125,14 +114,6 @@ export default function TasksPage() {
               {profile?.role === 'Manager' && <TabsTrigger value="team_tasks">My Team's Tasks</TabsTrigger>}
             </TabsList>
           </Tabs>
-           {canCreateTasks && (
-              <AddTaskDialog>
-                <Button size="sm">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Task
-                </Button>
-              </AddTaskDialog>
-            )}
         </div>
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
