@@ -1,5 +1,4 @@
-
-"use client"
+'use client';
 
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
@@ -105,7 +104,10 @@ const SidebarProvider = React.forwardRef<
     )
 
     const toggleSidebar = React.useCallback(() => {
-      if (isSharedView) return; 
+      if (isSharedView) {
+        setOpenMobile((open) => !open);
+        return;
+      }; 
       return isMobile
         ? setOpenMobile((open) => !open)
         : setOpen((open) => !open)
@@ -188,7 +190,7 @@ const Sidebar = React.forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+    const { isMobile, state, openMobile, setOpenMobile, isSharedView } = useSidebar()
 
     if (collapsible === "none") {
       return (
@@ -205,7 +207,7 @@ const Sidebar = React.forwardRef<
       )
     }
 
-    if (isMobile) {
+    if (isMobile || isSharedView) {
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
           <SheetContent

@@ -1,15 +1,15 @@
-
 'use client';
 
 import React, { createContext, useContext, useMemo } from 'react';
 import { useDoc, useCollection, useFirestore } from '@/firebase';
-import type { SharedLink, NavigationItem } from '@/lib/types';
+import type { SharedLink, NavigationItem, Company } from '@/lib/types';
 import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 
 interface SharedSessionContextType {
   session: SharedLink | null;
   navItems: NavigationItem[] | null;
+  company: Company | null;
   isLoading: boolean;
   error: Error | null;
 }
@@ -43,17 +43,25 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
 
   const { data: navItems, isLoading: isNavItemsLoading, error: navItemsError } = useCollection<NavigationItem>(navItemsQuery);
 
-  const isLoading = isSessionLoading || isNavItemsLoading;
-  const error = sessionError || navItemsError;
+  const companyDocRef = useMemo(() => {
+    if (!firestore || !session?.companyId) return null;
+    return doc(firestore, 'companies', session.companyId);
+  }, [firestore, session?.companyId]);
+  
+  const { data: company, isLoading: isCompanyLoading, error: companyError } = useDoc<Company>(companyDocRef);
+
+  const isLoading = isSessionLoading || isNavItemsLoading || isCompanyLoading;
+  const error = sessionError || navItemsError || companyError;
 
   const value = useMemo(
     () => ({
       session: session || null,
       navItems: navItems || null,
+      company: company || null,
       isLoading,
       error,
     }),
-    [session, navItems, isLoading, error]
+    [session, navItems, company, isLoading, error]
   );
 
   return (

@@ -1,8 +1,7 @@
-
 'use client';
 
 import './globals.css';
-import { AppShell } from '@/components/app-shell';
+import { AppShell } from './app-shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useEffect, useState } from 'react';

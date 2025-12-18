@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -19,8 +18,7 @@ import { Button } from '@/components/ui/button';
 import { PublicLogo } from '@/components/share/public-logo';
 import { Badge } from '@/components/ui/badge';
 import type { SharedLink, Company, NavigationItem } from '@/lib/types';
-import { useDoc, useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof lucideIcons.Icon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -33,21 +31,10 @@ const getScopeFromPath = (path: string): string => {
     return path.startsWith('/') ? path.substring(1) : path;
 };
 
-interface ShareSidebarProps {
-    session: SharedLink | null;
-    navItems: NavigationItem[];
-}
 
-export function ShareSidebar({ session, navItems }: ShareSidebarProps) {
+export function ShareSidebar() {
   const pathname = usePathname();
-  const firestore = useFirestore();
-
-  const {data: company, isLoading: isCompanyLoading } = useDoc<Company>(useMemo(() => {
-    if (!firestore || !session?.companyId) return null;
-    return doc(firestore, 'companies', session.companyId);
-  }, [firestore, session?.companyId]));
-  
-  const isLoading = !session || isCompanyLoading;
+  const { session, navItems, company, isLoading } = useSharedSession();
   
   const handleExit = () => {
     if (session) {
@@ -57,7 +44,7 @@ export function ShareSidebar({ session, navItems }: ShareSidebarProps) {
   };
 
   const allowedNavIds = new Set(session?.allowedNavItems || []);
-  const visibleNavItems = navItems
+  const visibleNavItems = (navItems || [])
     .filter(item => allowedNavIds.has(item.id) && item.path)
     .sort((a, b) => a.order - b.order);
 

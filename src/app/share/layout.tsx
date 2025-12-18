@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -23,7 +22,7 @@ export default function ShareLayout({
     >
       <FirebaseClientProvider>
         <SharedSessionProvider>
-          <SidebarProvider>
+          <SidebarProvider isSharedView={true}>
             {children}
           </SidebarProvider>
         </SharedSessionProvider>
