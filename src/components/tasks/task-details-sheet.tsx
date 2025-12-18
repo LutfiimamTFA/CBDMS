@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -256,7 +255,9 @@ export function TaskDetailsSheet({
 
   const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
   
-  const canChangeStatus = false; 
+  const canChangeStatus = isSharedView 
+    ? (permissions.canChangeStatus || false)
+    : (currentUser && (isManagerOrAdmin || isAssignee));
   
   const canAssignUsers = isSharedView ? (permissions.canAssignUsers || false) : canEditContent;
   
@@ -276,8 +277,10 @@ export function TaskDetailsSheet({
   }, [isSharedView, permissions, currentUser, isAssignee, isManagerOrAdmin, currentFormStatus]);
   
   const showTimeTracker = useMemo(() => {
-      return isAssignee && !isSharedView && ['To Do', 'Doing', 'Revisi'].includes(currentFormStatus);
-  }, [isAssignee, isSharedView, currentFormStatus]);
+      if (isSharedView) return false;
+      if (!isAssignee) return false;
+      return ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
+  }, [isAssignee, isSharedView, form.watch('status')]);
 
   useEffect(() => {
     if (initialTask && open) {
@@ -1308,14 +1311,14 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
                 <ScrollArea className="col-span-1 h-full border-l">
                   <div className="p-6 space-y-6">
-                    {isAssignee && !isManagerOrAdmin && !isSharedView && initialTask.status === 'Doing' && (
+                    {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && (
                          <div className="space-y-2">
                            <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                                Submit for Review
                            </Button>
                            {!canSubmit && (
-                               <p className="text-xs text-center text-destructive">Selesaikan semua sub-tugas dan poin revisi untuk melanjutkan.</p>
+                               <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan poin revisi untuk melanjutkan.</p>
                            )}
                          </div>
                     )}
@@ -1379,19 +1382,36 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               <FormField control={form.control} name="status" render={({ field }) => {
-                                 const statusDetails = allStatuses?.find(s => s.name === field.value);
-                                  return (
-                                     <Badge variant="outline" style={{
-                                          backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent',
-                                          borderColor: statusDetails?.color,
-                                          color: statusDetails?.color,
-                                          borderWidth: '1.5px'
-                                      }}>
-                                          {field.value}
-                                      </Badge>
-                                  );
-                               }}/>
+                               {currentUser?.role !== 'Employee' && currentUser?.role !== 'PIC' && canChangeStatus ? (
+                                   <FormField control={form.control} name="status" render={({ field }) => (
+                                     <Select onValueChange={(value) => handleStatusChange(value)} value={field.value}>
+                                        <FormControl>
+                                          <SelectTrigger>
+                                            <SelectValue placeholder="Select status" />
+                                          </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                          {(allStatuses || []).map(status => (
+                                            <SelectItem key={status.id} value={status.name}>{status.name}</SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                   )}/>
+                               ) : (
+                                   <FormField control={form.control} name="status" render={({ field }) => {
+                                     const statusDetails = allStatuses?.find(s => s.name === field.value);
+                                      return (
+                                         <Badge variant="outline" style={{
+                                              backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent',
+                                              borderColor: statusDetails?.color,
+                                              color: statusDetails?.color,
+                                              borderWidth: '1.5px'
+                                          }}>
+                                              {field.value}
+                                          </Badge>
+                                      );
+                                   }}/>
+                               )}
                             </div>
                         </FormItem>
                        <FormField control={form.control} name="priority" render={({ field }) => {
