@@ -21,7 +21,7 @@ import { SharedRecurringTasksView } from '@/components/share/shared-recurring-ta
 import { SharedScheduleView } from '@/components/share/shared-schedule-view';
 
 const AccessDeniedComponent = () => (
-    <div className="flex h-full items-center justify-center p-8">
+    <div className="flex h-full items-center justify-center p-8 w-full">
       <Card className="w-full max-w-md text-center">
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2">
@@ -39,7 +39,7 @@ const AccessDeniedComponent = () => (
 );
 
 const LinkNotFoundComponent = () => (
-    <div className="flex h-full items-center justify-center p-8">
+    <div className="flex h-full items-center justify-center p-8 w-full">
       <Card className="w-full max-w-md text-center">
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2">
@@ -64,7 +64,7 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
   'schedule': SharedScheduleView,
   'reports': SharedReportsView,
   'my-work': SharedMyWorkView,
-  'social-media': SharedSocialMediaView,
+  'social-media': SharedSocialMediaView, // Base path for social media calendar
   'social-media/analytics': SharedSocialMediaView,
   'daily-report': SharedDailyReportView,
   'admin/settings/recurring': SharedRecurringTasksView,
@@ -77,7 +77,7 @@ export default function ShareScopePage() {
   
   if (isLoading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center w-full">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
@@ -88,10 +88,11 @@ export default function ShareScopePage() {
   }
 
   const navItemForScope = (navItems || []).find(item => {
+    // Normalize the path by removing the leading slash if it exists
     const itemScope = item.path.startsWith('/') ? item.path.substring(1) : item.path;
     return itemScope === scope;
   });
-
+  
   if (!navItemForScope || !session.allowedNavItems.includes(navItemForScope.id)) {
       return <AccessDeniedComponent />;
   }
@@ -108,9 +109,9 @@ export default function ShareScopePage() {
   };
 
   return (
-    <div className='flex h-svh'>
+    <div className='flex h-svh w-full'>
         <ShareSidebar session={session} navItems={navItems || []} />
-        <main className='flex-1 overflow-auto flex'>
+        <main className='flex-1 overflow-auto flex w-full'>
             <PageComponent {...viewProps} />
         </main>
     </div>

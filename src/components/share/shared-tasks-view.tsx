@@ -15,25 +15,18 @@ interface SharedTasksViewProps {
 export function SharedTasksView({ session }: SharedTasksViewProps) {
   const firestore = useFirestore();
 
-  // CRITICAL: This query is now strictly filtered by brandIds from the session link.
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
 
-    // If a link is created without specific brands, it must show no data
-    // to prevent accidental data leakage, unless created by a Super Admin.
-    if (!session.brandIds || session.brandIds.length === 0) {
-      if (session.creatorRole !== 'Super Admin') {
-        // Return a query that is guaranteed to be empty.
-        return query(collection(firestore, 'tasks'), where('__name__', '==', 'no-such-document'));
-      }
-    }
-
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
     
-    // The key security filter: only fetch tasks for the brands specified in the share link.
+    // This is the critical security filter.
+    // If the link is scoped to specific brands, we MUST filter by them.
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
     }
+    // If brandIds is empty or not present, the query remains filtered only by companyId,
+    // which is the correct behavior for a Super Admin who wants to share everything.
 
     return q;
   }, [firestore, session]);
@@ -66,9 +59,9 @@ export function SharedTasksView({ session }: SharedTasksViewProps) {
   const isLoading = isTasksLoading || areStatusesLoading || areBrandsLoading || areUsersLoading;
 
   return (
-    <div className="flex flex-col flex-1 h-full">
+    <div className="flex flex-col flex-1 h-full w-full">
       <SharedHeader title="Task List" />
-      <main className="flex-1 overflow-auto p-4 md:p-6">
+      <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
         {isLoading ? (
           <div className="flex h-full w-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />

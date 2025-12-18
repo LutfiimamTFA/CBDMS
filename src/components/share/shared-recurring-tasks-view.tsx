@@ -7,7 +7,7 @@ import { SharedHeader } from './shared-header';
 
 export function SharedRecurringTasksView() {
   return (
-    <div className="flex h-svh flex-col bg-background">
+    <div className="flex flex-col flex-1 h-full w-full">
       <SharedHeader title="Recurring Tasks" />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <Card>

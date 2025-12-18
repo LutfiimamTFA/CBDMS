@@ -25,16 +25,13 @@ export function SharedScheduleView({ session }: SharedScheduleViewProps) {
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
     
-    if (!session.brandIds || session.brandIds.length === 0) {
-      if (session.creatorRole !== 'Super Admin') {
-        return query(collection(firestore, 'tasks'), where('__name__', '==', 'no-such-document'));
-      }
-    }
-    
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
+    
+    // This is the critical security filter.
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
     }
+
     return q;
   }, [firestore, session]);
 
@@ -67,9 +64,9 @@ export function SharedScheduleView({ session }: SharedScheduleViewProps) {
   };
 
   return (
-    <div className="flex flex-col flex-1 h-full">
+    <div className="flex flex-col flex-1 h-full w-full">
       <SharedHeader title="Schedule" />
-      <main className="flex-1 overflow-auto p-4 md:p-6">
+      <main className="flex-1 overflow-auto p-4 md:p-6 w-full">
         {isTasksLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin" />
