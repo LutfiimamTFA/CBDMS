@@ -56,7 +56,6 @@ import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ShareViewDialog } from '../share/share-view-dialog';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -240,16 +239,6 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         setPendingPriorityChange(null);
     }
   };
-
-  const canCreateTasks = React.useMemo(() => {
-    if (sharedPermissions) return false;
-    if (arePermsLoading || !profile || !permissions) return false;
-    if (profile.role === 'Super Admin') return true;
-    if (profile.role === 'Manager') return permissions.Manager.canCreateTasks;
-    if (profile.role === 'Employee') return permissions.Employee.canCreateTasks;
-    return false;
-  }, [profile, permissions, arePermsLoading, sharedPermissions]);
-
 
   const columns: ColumnDef<Task>[] = [
     {
@@ -501,12 +490,10 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         pagination: {
             pageSize: 10,
         },
-        sorting: [
-            {
-                id: 'priority',
-                desc: true
-            }
-        ]
+        sorting: [{
+            id: 'priority',
+            desc: true
+        }]
     },
     state: {
       sorting,
@@ -563,25 +550,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
               </Button>
             )}
           </div>
-          <div className="flex items-center gap-2">
-              <DataTableViewOptions table={table}/>
-            {profile?.role !== 'Super Admin' && !isShareView && (
-              <ShareViewDialog allowedNavItems={['nav_list', 'nav_task_board', 'nav_calendar']} viewFilters={{ brandIds: filteredBrandIds }}>
-                <Button size="sm" className="h-8">
-                  <Share2 className="mr-2 h-4 w-4" />
-                  Share View
-                </Button>
-              </ShareViewDialog>
-            )}
-            {canCreateTasks && !isShareView && (
-              <AddTaskDialog>
-                <Button size="sm" className="h-8">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Task
-                </Button>
-              </AddTaskDialog>
-            )}
-          </div>
+          <DataTableViewOptions table={table} />
         </div>
         <div className="rounded-md border">
           <Table>
