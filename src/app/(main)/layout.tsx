@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -181,10 +182,12 @@ function MainAppLayout({
             </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset>
-         <Header title={headerTitle} navItems={finalNavItems} />
-         {children}
-      </SidebarInset>
+      <div className="flex flex-1 flex-col h-svh">
+        <Header title={headerTitle} navItems={finalNavItems} />
+        <SidebarInset>
+          {children}
+        </SidebarInset>
+      </div>
     </SidebarProvider>
   );
 }

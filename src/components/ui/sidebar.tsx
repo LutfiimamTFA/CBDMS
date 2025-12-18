@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -330,34 +331,17 @@ SidebarRail.displayName = "SidebarRail"
 const SidebarInset = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => {
-  const header = React.Children.toArray(children).find(
-    (child) => React.isValidElement(child) && child.type === React.Fragment && (child.props as any).name === "Header"
-  );
-  const content = React.Children.toArray(children).find(
-    (child) => !(React.isValidElement(child) && child.type === React.Fragment && (child.props as any).name === "Header")
-  );
-
-  return (
-    <div
-      ref={ref}
-      className={cn(
-        "relative flex h-svh flex-1 flex-col bg-background",
-        "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
-        className
-      )}
-      {...props}
-    >
-      {React.Children.map(children, (child) =>
-        React.isValidElement(child) && child.props.title ? (
-          child
-        ) : (
-          <div className="flex-1 overflow-y-auto">{child}</div>
-        )
-      )}
-    </div>
-  );
-});
+>(({ className, ...props }, ref) => (
+  <main
+    ref={ref}
+    className={cn(
+      "flex-1 overflow-y-auto bg-background",
+      "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
+      className
+    )}
+    {...props}
+  />
+));
 SidebarInset.displayName = "SidebarInset"
 
 const SidebarInput = React.forwardRef<
