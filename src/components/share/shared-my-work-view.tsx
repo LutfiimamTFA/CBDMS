@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useMemo } from 'react';
-import { Header } from '@/components/layout/header';
 import { Loader2, HelpCircle, Eye, ClipboardList, Calendar } from 'lucide-react';
 import { ActionItems } from '@/components/my-work/action-items';
 import { TodaysFocus } from '@/components/my-work/todays-focus';
@@ -34,7 +33,6 @@ export function SharedMyWorkView({ name, tasks, teamUsers, profile }: SharedMyWo
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <Header title="My Work" isSharedView={true} />
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mb-6">
           <h2 className="text-2xl font-bold tracking-tight">
@@ -115,4 +113,3 @@ export function SharedMyWorkView({ name, tasks, teamUsers, profile }: SharedMyWo
     </div>
   );
 }
-
