@@ -68,7 +68,7 @@ service cloud.firestore {
     // Write access remains protected.
     match /sharedLinks/{linkId} {
       allow get: if true;
-      allow list, write, update, delete: if isSignedIn() && (isSuperAdmin() || isRole('Manager'));
+      allow write: if isSignedIn() && (isSuperAdmin() || isRole('Manager'));
     }
     
     match /companies/{companyId} {
@@ -137,8 +137,6 @@ service cloud.firestore {
       }
     }
     
-    // --- Authenticated-Only Rules ---
-
     match /socialMediaPosts/{postId} {
         allow get: if true; // Public read for share links
         allow create: if isSignedIn();
@@ -167,7 +165,6 @@ service cloud.firestore {
         allow write: if (isRole('Employee') || isRole('PIC')) && isOwnRecord(resource.data.userId);
     }
     
-    // Default deny all other access
     match /{document=**} {
       allow read, write: if false;
     }
