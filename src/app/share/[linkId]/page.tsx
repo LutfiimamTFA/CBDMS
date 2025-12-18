@@ -3,10 +3,10 @@
 
 import React, { useMemo, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useDoc, useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useDoc, useFirestore, useCollection } from '@/firebase';
+import { doc, collection, query, orderBy } from 'firebase/firestore';
 import { Loader2, FileWarning, Clock } from 'lucide-react';
-import type { SharedLink, Company } from '@/lib/types';
+import type { SharedLink, Company, NavigationItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -146,7 +146,7 @@ export default function SharedLinkRedirectorPage() {
         if (!firestore) return null;
         return query(collection(firestore, 'navigationItems'), orderBy('order'));
     }, [firestore]);
-    const { data: navItems, isLoading: isNavItemsLoading } = useCollection<any>(navItemsQuery);
+    const { data: navItems, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsQuery);
 
 
     useEffect(() => {
