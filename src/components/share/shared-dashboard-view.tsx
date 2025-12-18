@@ -25,9 +25,7 @@ export function SharedDashboardView({ session }: SharedDashboardViewProps) {
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
     }
-    // If brandIds is empty or not present, the query remains filtered only by companyId,
-    // which is the correct behavior for a Super Admin who wants to share everything.
-
+    
     return q;
   }, [firestore, session]);
 
