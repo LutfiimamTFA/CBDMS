@@ -185,39 +185,42 @@ export default function SchedulePage() {
       <main className="flex flex-1 flex-col p-4 md:p-6 overflow-hidden">
         <div className="flex items-center justify-between mb-4">
             <h2 className="text-2xl font-bold tracking-tight">Project Schedule</h2>
+            <p className="text-muted-foreground">High-level overview of all project timelines.</p>
         </div>
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 relative">
              <Popover open={popoverState.open} onOpenChange={onPopoverOpenChange}>
                 <PopoverTrigger asChild>
                     {/* This is a virtual trigger. The actual trigger is setting the popover state in handleEventClick */}
                     <div style={{ position: 'fixed', top: popoverState.target?.getBoundingClientRect().bottom, left: popoverState.target?.getBoundingClientRect().left }}></div>
                 </PopoverTrigger>
-                <FullCalendar
-                    plugins={[dayGridPlugin, interactionPlugin]}
-                    initialView="dayGridMonth"
-                    headerToolbar={{
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,dayGridWeek,dayGridDay'
-                    }}
-                    events={calendarEvents}
-                    eventClick={handleEventClick}
-                    height="100%"
-                    eventTimeFormat={{
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        meridiem: 'short'
-                    }}
-                    eventDisplay="block"
-                    dayHeaderClassNames="bg-muted"
-                    viewClassNames="bg-card"
-                    eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
-                />
+                <div className="absolute inset-0">
+                    <FullCalendar
+                        plugins={[dayGridPlugin, interactionPlugin]}
+                        initialView="dayGridMonth"
+                        headerToolbar={{
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth,dayGridWeek,dayGridDay'
+                        }}
+                        events={calendarEvents}
+                        eventClick={handleEventClick}
+                        height="100%"
+                        eventTimeFormat={{
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            meridiem: 'short'
+                        }}
+                        eventDisplay="block"
+                        dayHeaderClassNames="bg-muted"
+                        viewClassNames="bg-card"
+                        eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
+                    />
+                </div>
                 <PopoverContentDetails />
             </Popover>
           </div>

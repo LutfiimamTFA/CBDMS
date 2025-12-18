@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
@@ -47,34 +48,36 @@ export function SharedScheduleView({ session, tasks, isLoading }: SharedSchedule
 
   return (
      <div className="flex h-full flex-col bg-background">
-      <main className="flex flex-col flex-1 overflow-hidden">
+      <main className="flex flex-col flex-1 overflow-hidden p-4 md:p-6">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <div className="flex-1 min-h-0">
-                <FullCalendar
-                    plugins={[dayGridPlugin, interactionPlugin]}
-                    initialView="dayGridMonth"
-                    headerToolbar={{
-                        left: 'prev,next today',
-                        center: 'title',
-                        right: 'dayGridMonth,dayGridWeek,dayGridDay'
-                    }}
-                    events={calendarEvents}
-                    eventClick={handleEventClick}
-                    height="100%"
-                    eventTimeFormat={{
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        meridiem: 'short'
-                    }}
-                    eventDisplay="block"
-                    dayHeaderClassNames="bg-muted"
-                    viewClassNames="bg-card"
-                    eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
-                />
+          <div className="flex-1 relative">
+                <div className="absolute inset-0">
+                    <FullCalendar
+                        plugins={[dayGridPlugin, interactionPlugin]}
+                        initialView="dayGridMonth"
+                        headerToolbar={{
+                            left: 'prev,next today',
+                            center: 'title',
+                            right: 'dayGridMonth,dayGridWeek,dayGridDay'
+                        }}
+                        events={calendarEvents}
+                        eventClick={handleEventClick}
+                        height="100%"
+                        eventTimeFormat={{
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            meridiem: 'short'
+                        }}
+                        eventDisplay="block"
+                        dayHeaderClassNames="bg-muted"
+                        viewClassNames="bg-card"
+                        eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
+                    />
+                </div>
           </div>
         )}
       </main>
