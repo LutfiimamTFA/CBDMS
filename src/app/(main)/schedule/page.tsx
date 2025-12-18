@@ -191,7 +191,7 @@ export default function SchedulePage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <div className="flex-1">
+          <div className="flex-1 min-h-0">
              <Popover open={popoverState.open} onOpenChange={onPopoverOpenChange}>
                 <PopoverTrigger asChild>
                     {/* This is a virtual trigger. The actual trigger is setting the popover state in handleEventClick */}

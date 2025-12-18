@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -86,7 +87,7 @@ export default function SocialMediaPage() {
     posts.forEach(post => {
       if (post.scheduledAt) {
         const postDate = parseISO(post.scheduledAt);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarEnd })) {
           const dayKey = format(postDate, 'yyyy-MM-dd');
           if (!map.has(dayKey)) {
             map.set(dayKey, []);
@@ -164,38 +165,40 @@ export default function SocialMediaPage() {
                 </div>
             ))}
         </div>
-        <ScrollArea className="flex-1 border-b border-x rounded-b-lg">
+        <div className="flex-1 min-h-0 border-b border-x rounded-b-lg">
         {postsLoading ? (
-          <div className="flex items-center justify-center h-full min-h-[50vh]">
+          <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-        <div className="grid grid-cols-7 auto-rows-fr">
-          {calendarGrid.days.map((day) => {
-            const dayKey = format(day, 'yyyy-MM-dd');
-            const postsForDay = postsByDay.get(dayKey) || [];
-            return (
-              <div 
-                  key={day.toString()} 
-                  className={cn(
-                      "relative flex flex-col border-r border-t min-h-[120px]",
-                      !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50"
-                  )}
-              >
-                  <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-xs", isSameDay(day, new Date()) && "flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground")}>
-                      {format(day, 'd')}
-                  </span>
-                    <div className="flex flex-col gap-1.5 p-1 pt-8">
-                      {postsForDay.map(post => (
-                        <SocialPostCard key={post.id} post={post} />
-                      ))}
-                    </div>
-              </div>
-            )
-          })}
-        </div>
-        )}
+        <ScrollArea className="h-full">
+          <div className="grid grid-cols-7 auto-rows-fr">
+            {calendarGrid.days.map((day) => {
+              const dayKey = format(day, 'yyyy-MM-dd');
+              const postsForDay = postsByDay.get(dayKey) || [];
+              return (
+                <div 
+                    key={day.toString()} 
+                    className={cn(
+                        "relative flex flex-col border-r border-t min-h-[120px]",
+                        !isSameMonth(day, currentDate) && "bg-muted/30 text-muted-foreground/50"
+                    )}
+                >
+                    <span className={cn( "absolute top-1.5 right-1.5 font-semibold text-xs", isSameDay(day, new Date()) && "flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground")}>
+                        {format(day, 'd')}
+                    </span>
+                      <div className="flex flex-col gap-1.5 p-1 pt-8">
+                        {postsForDay.map(post => (
+                          <SocialPostCard key={post.id} post={post} />
+                        ))}
+                      </div>
+                </div>
+              )
+            })}
+          </div>
         </ScrollArea>
+        )}
+        </div>
       </main>
     </div>
   );
