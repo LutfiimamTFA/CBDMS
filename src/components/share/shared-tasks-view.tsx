@@ -1,6 +1,6 @@
 'use client';
 import { SharedHeader } from '@/components/share/shared-header';
-import { TasksDataTable } from '@/components/tasks/tasks-data-table';
+import { SharedTasksTable } from '@/components/share/shared-tasks-table';
 import type { Task, WorkflowStatus, Brand, User, SharedLink } from '@/lib/types';
 import React from 'react';
 import { Loader2 } from 'lucide-react';
@@ -24,7 +24,7 @@ export function SharedTasksView({ session, tasks, statuses, brands, users, isLoa
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <TasksDataTable 
+          <SharedTasksTable 
               tasks={tasks || []}
               statuses={statuses || []}
               brands={brands || []}
