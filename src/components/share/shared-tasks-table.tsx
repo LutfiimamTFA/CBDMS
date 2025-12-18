@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -26,7 +25,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Priority, User, WorkflowStatus, Brand, SharedLink } from '@/lib/types';
+import type { Task, Priority, User, WorkflowStatus, Brand, SharedLink, Activity } from '@/lib/types';
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -41,12 +40,13 @@ import { useRouter } from 'next/navigation';
 interface SharedTasksTableProps {
     tasks: Task[];
     statuses: WorkflowStatus[];
+    brands: Brand[];
     users: User[];
     permissions: SharedLink['permissions'];
     isShareView: boolean;
 }
 
-export function SharedTasksTable({ tasks, statuses, users, permissions, isShareView }: SharedTasksTableProps) {
+export function SharedTasksTable({ tasks, statuses, brands, users, permissions, isShareView }: SharedTasksTableProps) {
   const router = useRouter();
   const [data, setData] = React.useState<Task[]>(tasks);
   React.useEffect(() => {
@@ -76,6 +76,10 @@ export function SharedTasksTable({ tasks, statuses, users, permissions, isShareV
     return (users || []).map(u => ({ value: u.id, label: u.name }));
   }, [users]);
   
+  const brandOptions = React.useMemo(() => {
+    return (brands || []).map(b => ({ value: b.id, label: b.name, icon: Building2 }));
+  }, [brands]);
+
   const columns: ColumnDef<Task>[] = [
     {
       accessorKey: 'title',
@@ -128,7 +132,11 @@ export function SharedTasksTable({ tasks, statuses, users, permissions, isShareV
     {
       accessorKey: 'brandId',
       header: 'Brand',
-      cell: ({ row }) => null, // Column is hidden but can be used for filtering
+      cell: ({ row }) => {
+        const brandId = row.getValue('brandId') as string;
+        const brand = brands?.find(b => b.id === brandId);
+        return brand ? <Badge variant="outline" className="font-normal bg-secondary/50"><Building2 className='mr-2 h-4 w-4'/>{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
+      },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
       },
@@ -245,27 +253,26 @@ export function SharedTasksTable({ tasks, statuses, users, permissions, isShareV
 
   return (
     <div className="space-y-4">
-       {!isShareView && (
-            <div className="flex items-center justify-between">
-                <div className="flex flex-1 items-center space-x-2">
-                <Input
-                    placeholder="Filter tasks by title..."
-                    value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
-                    onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
-                    className="h-8 w-[150px] lg:w-[250px]"
-                />
-                {statusOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("status")} title="Status" options={statusOptions} />}
-                {priorityOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("priority")} title="Priority" options={priorityOptions} />}
-                {assigneeOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("assigneeIds")} title="Assignees" options={assigneeOptions} />}
-                {isFiltered && (
-                    <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-8 px-2 lg:px-3">
-                    Reset <XIcon className="ml-2 h-4 w-4" />
-                    </Button>
-                )}
-                </div>
-                <DataTableViewOptions table={table} />
+        <div className="flex items-center justify-between">
+            <div className="flex flex-1 items-center space-x-2">
+            <Input
+                placeholder="Filter tasks by title..."
+                value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
+                onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
+                className="h-8 w-[150px] lg:w-[250px]"
+            />
+            {brandOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("brandId")} title="Brand" options={brandOptions} />}
+            {statusOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("status")} title="Status" options={statusOptions} />}
+            {priorityOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("priority")} title="Priority" options={priorityOptions} />}
+            {assigneeOptions.length > 0 && <DataTableFacetedFilter column={table.getColumn("assigneeIds")} title="Assignees" options={assigneeOptions} />}
+            {isFiltered && (
+                <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-8 px-2 lg:px-3">
+                Reset <XIcon className="ml-2 h-4 w-4" />
+                </Button>
+            )}
             </div>
-       )}
+            <DataTableViewOptions table={table} />
+        </div>
       <div className="rounded-md border">
         <Table>
           <TableHeader>

@@ -8,6 +8,7 @@ interface SharedTasksViewProps {
   session: SharedLink;
   tasks: Task[] | null;
   statuses: WorkflowStatus[] | null;
+  brands: Brand[] | null;
   users: User[] | null;
   isLoading: boolean;
 }

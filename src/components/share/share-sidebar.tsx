@@ -28,13 +28,17 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 
 const getScopeFromPath = (path: string): string => {
     if (!path) return '';
-    return path.startsWith('/') ? path.substring(1) : path;
+    const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+    // Don't generate a scope for paths that are just group folders
+    if (cleanPath === 'admin' || cleanPath === 'admin/settings' || cleanPath === 'social-media') {
+        return '';
+    }
+    return cleanPath;
 };
-
 
 export function ShareSidebar() {
   const pathname = usePathname();
-  const { session, navItems, company, isLoading } = useSharedSession();
+  const { session, company, isLoading } = useSharedSession();
   
   const handleExit = () => {
     if (session) {
@@ -43,10 +47,16 @@ export function ShareSidebar() {
     window.location.href = '/login';
   };
 
-  const allowedNavIds = new Set(session?.allowedNavItems || []);
-  const visibleNavItems = (navItems || [])
-    .filter(item => allowedNavIds.has(item.id) && item.path)
-    .sort((a, b) => a.order - b.order);
+  const visibleNavItems = useMemo(() => {
+    if (!session || !session.navItems) return [];
+
+    const allowedIds = new Set(session.allowedNavItems || []);
+
+    return session.navItems
+        .filter(item => item.path && allowedIds.has(item.id))
+        .sort((a, b) => a.order - b.order);
+
+  }, [session]);
 
   return (
     <Sidebar>

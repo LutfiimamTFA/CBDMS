@@ -1,4 +1,3 @@
-
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -129,7 +128,9 @@ export type SharedLink = {
   name: string;
   companyId: string;
   creatorRole: User['role'];
-  allowedNavItems: string[];
+  allowedNavItems: string[]; // The IDs of the nav items the user selected to share
+  navItems: NavigationItem[]; // A full snapshot of the creator's nav items at the time of sharing
+  brandIds?: string[];
   password?: string;
   expiresAt?: any;
   permissions: {

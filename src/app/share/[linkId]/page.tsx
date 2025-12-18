@@ -2,10 +2,10 @@
 
 import React, { useMemo, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, collection, query, orderBy, getFirestore, getDoc, getDocs, type Firestore } from 'firebase/firestore';
+import { doc, getFirestore, getDoc, type Firestore } from 'firebase/firestore';
 import { initializeFirebase } from '@/firebase';
 import { Loader2, FileWarning, Clock } from 'lucide-react';
-import type { SharedLink, Company, NavigationItem } from '@/lib/types';
+import type { SharedLink, Company } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -138,7 +138,6 @@ export default function SharedLinkRedirectorPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [sharedLink, setSharedLink] = useState<SharedLink | null>(null);
     const [company, setCompany] = useState<Company | null>(null);
-    const [navItems, setNavItems] = useState<NavigationItem[]>([]);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -152,7 +151,6 @@ export default function SharedLinkRedirectorPage() {
             try {
                 const db = getFirestore(initializeFirebase().firebaseApp);
                 
-                // 1. Fetch Shared Link
                 const linkDocRef = doc(db, 'sharedLinks', linkId);
                 const linkSnap = await getDoc(linkDocRef);
 
@@ -162,7 +160,6 @@ export default function SharedLinkRedirectorPage() {
                 const linkData = { ...linkSnap.data(), id: linkSnap.id } as SharedLink;
                 setSharedLink(linkData);
 
-                // 2. Fetch Company if needed
                 if (linkData.companyId) {
                     const companyDocRef = doc(db, 'companies', linkData.companyId);
                     const companySnap = await getDoc(companyDocRef);
@@ -170,13 +167,6 @@ export default function SharedLinkRedirectorPage() {
                         setCompany({ ...companySnap.data(), id: companySnap.id } as Company);
                     }
                 }
-
-                // 3. Fetch all NavItems
-                const navItemsQuery = query(collection(db, 'navigationItems'), orderBy('order'));
-                const navItemsSnap = await getDocs(navItemsQuery);
-                const allNavItems = navItemsSnap.docs.map(doc => ({ ...doc.data(), id: doc.id } as NavigationItem));
-                setNavItems(allNavItems);
-
             } catch (e: any) {
                 console.error("Error fetching shared link data:", e);
                 setError(e.message || "An unknown error occurred.");
@@ -191,11 +181,7 @@ export default function SharedLinkRedirectorPage() {
 
 
     useEffect(() => {
-        if (isLoading || !linkId) return;
-
-        if (!sharedLink || error) {
-            return; 
-        }
+        if (isLoading || !linkId || !sharedLink || error) return;
 
         if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
             return;
@@ -206,12 +192,13 @@ export default function SharedLinkRedirectorPage() {
             return;
         }
         
-        const allowedNavIds = sharedLink.allowedNavItems || [];
-        const availableNavItems = navItems || [];
+        const allowedNavIds = new Set(sharedLink.allowedNavItems || []);
+        const availableNavItems = sharedLink.navItems || [];
 
+        // Find the first valid, allowed, and shareable page to redirect to
         const firstValidItem = availableNavItems
-            .filter(item => allowedNavIds.includes(item.id))
-            .sort((a, b) => a.order - b.order)[0];
+            .sort((a, b) => a.order - b.order)
+            .find(item => allowedNavIds.has(item.id) && getScopeFromPath(item.path));
 
         if (firstValidItem) {
             const scope = getScopeFromPath(firstValidItem.path);
@@ -219,7 +206,7 @@ export default function SharedLinkRedirectorPage() {
                 router.replace(`/share/${linkId}/${scope}`);
             }
         }
-    }, [sharedLink, isLoading, error, linkId, router, navItems]);
+    }, [sharedLink, isLoading, error, linkId, router]);
 
 
     if (isLoading) {
@@ -242,9 +229,10 @@ export default function SharedLinkRedirectorPage() {
         return <PasswordFormComponent company={company} linkId={linkId} />;
     }
 
-    const allowedNavIds = sharedLink.allowedNavItems || [];
-    const availableNavItems = navItems || [];
-    const hasValidPages = availableNavItems.some(item => allowedNavIds.includes(item.id) && getScopeFromPath(item.path));
+    const hasValidPages = (sharedLink.allowedNavItems || []).some(id => {
+        const item = sharedLink.navItems?.find(nav => nav.id === id);
+        return item && getScopeFromPath(item.path);
+    });
     
     if (!hasValidPages) {
         return <LinkNotFoundComponent isMisconfigured={true} />;

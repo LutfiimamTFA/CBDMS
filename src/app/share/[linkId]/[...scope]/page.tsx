@@ -6,11 +6,8 @@ import { useSharedSession } from '@/context/shared-session-provider';
 import { Loader2, ShieldAlert, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-
-// Import the new simplified view and other necessary components
 import { ShareSidebar } from '@/components/share/share-sidebar';
 import { SharedSimpleTasksView } from '@/components/share/shared-simple-tasks-view';
-import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -50,7 +47,7 @@ const LinkNotFoundComponent = () => (
 );
 
 export default function ShareScopePage() {
-  const { session, navItems, isLoading, error, ...restOfData } = useSharedSession();
+  const { session, isLoading, error, ...snapshotData } = useSharedSession();
   const params = useParams();
   const scope = Array.isArray(params.scope) ? params.scope.join('/') : params.scope;
   
@@ -66,47 +63,28 @@ export default function ShareScopePage() {
     return <LinkNotFoundComponent />;
   }
 
-  const navItemForScope = (navItems || []).find(item => {
+  const navItemForScope = (session.navItems || []).find(item => {
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
     return itemPath === scope;
   });
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
   
-  // Define which component to render based on the scope
-  let PageComponent: React.ComponentType<any> | null = null;
-  if (isPageAllowed) {
-    if (scope.startsWith('social-media')) {
-      PageComponent = SharedSocialMediaView;
-    } else {
-      PageComponent = SharedSimpleTasksView;
-    }
-  }
-
-
-  if (!PageComponent) {
-      return (
-          <div className='flex h-svh w-full'>
-              <ShareSidebar />
-              <main className='flex-1 overflow-auto flex w-full'>
-                 <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />
-              </main>
-          </div>
-      );
-  }
-  
   const viewProps = {
     session,
     isLoading,
-    isAnalyticsView: scope === 'social-media/analytics',
-    ...restOfData,
+    ...snapshotData,
   };
 
   return (
     <div className='flex h-svh w-full'>
         <ShareSidebar />
         <main className='flex-1 overflow-auto flex w-full'>
-            <PageComponent {...viewProps} />
+            {isPageAllowed ? (
+                <SharedSimpleTasksView {...viewProps} />
+            ) : (
+                <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />
+            )}
         </main>
     </div>
   );

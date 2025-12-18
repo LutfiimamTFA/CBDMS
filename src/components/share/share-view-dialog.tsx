@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -17,18 +16,32 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
-import { collection, addDoc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
-import type { SharedLink } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
+import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User } from '@/lib/types';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon } from 'lucide-react';
+import * as lucideIcons from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/context/i18n-provider';
+import { defaultNavItems } from '@/lib/navigation-items';
+
+const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
+  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
+  if (!LucideIconComponent) return null;
+  return <LucideIconComponent {...props} />;
+};
 
 
-const includedNavItems = ['nav_task_board', 'nav_list', 'nav_calendar', 'nav_schedule'];
+// Define which nav items are shareable
+const isShareable = (item: NavigationItem) => {
+    const shareablePaths = ['/dashboard', '/tasks', '/calendar', '/schedule', '/social-media'];
+    return shareablePaths.includes(item.path);
+};
+
 
 interface ShareViewDialogProps {
   children?: React.ReactNode;
@@ -41,6 +54,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   
   const firestore = useFirestore();
   const { profile } = useUserProfile();
+  const { t } = useI18n();
   const { toast } = useToast();
   
   const [linkName, setLinkName] = useState('');
@@ -54,7 +68,27 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     canEditContent: false,
     canAssignUsers: false,
   });
+
+  // Get all navigation items relevant to the current user's role
+  const userNavItems = useMemo(() => {
+    if (!profile) return [];
+    return defaultNavItems.filter(item => item.roles.includes(profile.role));
+  }, [profile]);
   
+  const shareableNavItems = useMemo(() => userNavItems.filter(isShareable), [userNavItems]);
+  
+  const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    // Default selection logic when the dialog opens
+    if (isOpen) {
+      const defaultIds = shareableNavItems
+        .filter(item => item.path === '/dashboard') // Always select dashboard by default if available
+        .map(item => item.id);
+      setSelectedNavIds(defaultIds);
+    }
+  }, [isOpen, shareableNavItems]);
+
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
@@ -66,30 +100,57 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     setIsLoading(true);
     setGeneratedLink(null);
 
-    const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
-      name: linkName || 'Shared View',
-      companyId: profile.companyId,
-      creatorRole: profile.role,
-      allowedNavItems: includedNavItems, 
-      permissions,
-      createdBy: profile.id,
-      ...(usePassword && { password }),
-      ...(expiresAt && { expiresAt }),
-    };
-
     try {
-      const docRef = await addDoc(collection(firestore, 'sharedLinks'), {
-        ...linkData,
-        createdAt: serverTimestamp(),
-      });
-      const newLink = `${window.location.origin}/share/${docRef.id}`;
-      setGeneratedLink(newLink);
-      toast({ title: 'Share link created!' });
+        // --- Create Data Snapshot ---
+        let tasksQuery;
+        if (profile.role === 'Manager') {
+            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds || []));
+        } else { // Employee, PIC, Client
+            tasksQuery = query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+        }
+        
+        const [tasksSnap, statusesSnap, usersSnap, brandsSnap] = await Promise.all([
+            getDocs(tasksQuery),
+            getDocs(query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId))),
+            getDocs(query(collection(firestore, 'users'), where('companyId', '==', profile.companyId))),
+            getDocs(query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId)))
+        ]);
+
+        const snapshot = {
+            tasks: tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)),
+            statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
+            users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
+            brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
+        };
+
+        // --- Create Link Data ---
+        const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
+          name: linkName || 'Shared View',
+          companyId: profile.companyId,
+          creatorRole: profile.role,
+          brandIds: profile.brandIds || [],
+          allowedNavItems: selectedNavIds, 
+          navItems: userNavItems.map(item => ({...item, label: t(item.label as any)})), // Snapshot of translated nav items
+          permissions,
+          snapshot,
+          createdBy: profile.id,
+          ...(usePassword && { password }),
+          ...(expiresAt && { expiresAt }),
+        };
+
+        const docRef = await addDoc(collection(firestore, 'sharedLinks'), {
+            ...linkData,
+            createdAt: serverTimestamp(),
+        });
+
+        const newLink = `${window.location.origin}/share/${docRef.id}`;
+        setGeneratedLink(newLink);
+        toast({ title: 'Share link created!' });
     } catch (error: any) {
-      console.error(error);
-      toast({ variant: 'destructive', title: 'Operation Failed', description: error.message });
+        console.error(error);
+        toast({ variant: 'destructive', title: 'Operation Failed', description: error.message });
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
   };
 
@@ -130,6 +191,29 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                 <Input id="link-name" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="e.g., Q3 Client Preview" />
               </div>
               
+              <div className="space-y-4 rounded-md border p-4">
+                <h4 className="text-sm font-medium">Available Views</h4>
+                <div className="space-y-2">
+                    {shareableNavItems.map(item => (
+                        <div key={item.id} className="flex items-center space-x-2">
+                            <Checkbox
+                                id={item.id}
+                                checked={selectedNavIds.includes(item.id)}
+                                onCheckedChange={(checked) => {
+                                    setSelectedNavIds(prev => 
+                                        checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
+                                    );
+                                }}
+                            />
+                            <label htmlFor={item.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
+                                {t(item.label as any)}
+                            </label>
+                        </div>
+                    ))}
+                </div>
+              </div>
+
               <div className="space-y-4 rounded-md border p-4">
                   <h4 className="text-sm font-medium">Permissions for Viewer</h4>
                   <div className="space-y-3">
@@ -209,7 +293,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateLink} disabled={isLoading}>
+              <Button onClick={handleCreateLink} disabled={isLoading || selectedNavIds.length === 0}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
                 Create Link
               </Button>

@@ -1,10 +1,9 @@
-
 'use client';
 
 import React, { createContext, useContext, useMemo, useEffect, useState } from 'react';
-import { useDoc, useCollection, initializeFirebase } from '@/firebase';
+import { initializeFirebase } from '@/firebase';
 import type { SharedLink, NavigationItem, Company, Task, WorkflowStatus, Brand, User } from '@/lib/types';
-import { doc, collection, query, orderBy, getFirestore, type Firestore, where, type Query } from 'firebase/firestore';
+import { doc, getFirestore, type Firestore, onSnapshot } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 
 interface SharedSessionContextType {
@@ -12,6 +11,9 @@ interface SharedSessionContextType {
   navItems: NavigationItem[] | null;
   company: Company | null;
   tasks: Task[] | null;
+  users: User[] | null;
+  statuses: WorkflowStatus[] | null;
+  brands: Brand[] | null;
   isLoading: boolean;
   error: Error | null;
 }
@@ -26,7 +28,6 @@ export function useSharedSession() {
   return context;
 }
 
-// A lightweight, self-contained Firestore instance for the public share view.
 let publicFirestore: Firestore | null = null;
 function getPublicFirestore() {
     if (!publicFirestore) {
@@ -37,65 +38,68 @@ function getPublicFirestore() {
 
 export function SharedSessionProvider({ children }: { children: React.ReactNode }) {
   const params = useParams();
-  const [firestore, setFirestore] = useState<Firestore | null>(null);
-  
-  useEffect(() => {
-    setFirestore(getPublicFirestore());
-  }, []);
-
   const linkId = params.linkId as string | undefined;
 
-  const linkDocRef = useMemo(() => {
-    if (!firestore || !linkId) return null;
-    return doc(firestore, 'sharedLinks', linkId);
-  }, [firestore, linkId]);
-
-  const { data: session, isLoading: isSessionLoading, error: sessionError } = useDoc<SharedLink>(linkDocRef);
-
-  const navItemsQuery = useMemo(() => {
-    if (!firestore) return null;
-    return query(collection(firestore, 'navigationItems'), orderBy('order'));
-  }, [firestore]);
-
-  const { data: navItems, isLoading: isNavItemsLoading, error: navItemsError } = useCollection<NavigationItem>(navItemsQuery);
-
-  const companyDocRef = useMemo(() => {
-    if (!firestore || !session?.companyId) return null;
-    return doc(firestore, 'companies', session.companyId);
-  }, [firestore, session?.companyId]);
+  const [session, setSession] = useState<SharedLink | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   
-  const { data: company, isLoading: isCompanyLoading, error: companyError } = useDoc<Company>(companyDocRef);
+  const firestore = useMemo(() => getPublicFirestore(), []);
 
-  // --- Data queries that depend on the session ---
-  const tasksQuery = useMemo(() => {
-    if (!firestore || !session?.companyId) return null;
-    let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
+  useEffect(() => {
+    if (!firestore || !linkId) {
+      setIsLoading(false);
+      return;
+    }
     
-    return q;
-  }, [firestore, session]);
-  const { data: tasks, isLoading: isTasksLoading, error: tasksError } = useCollection<Task>(tasksQuery);
+    setIsLoading(true);
+    const linkDocRef = doc(firestore, 'sharedLinks', linkId);
 
+    const unsubscribe = onSnapshot(linkDocRef, 
+      async (docSnap) => {
+        if (docSnap.exists()) {
+          const sessionData = { ...docSnap.data(), id: docSnap.id } as SharedLink;
+          setSession(sessionData);
 
-  // --- Combined loading and error states ---
-  const isLoading = 
-    !firestore || 
-    isSessionLoading || 
-    isNavItemsLoading || 
-    isCompanyLoading || 
-    isTasksLoading;
-    
-  const error = sessionError || navItemsError || companyError || tasksError;
+          if (sessionData.companyId) {
+            const companyDocRef = doc(firestore, 'companies', sessionData.companyId);
+            onSnapshot(companyDocRef, (companySnap) => {
+                if (companySnap.exists()) {
+                    setCompany({ ...companySnap.data(), id: companySnap.id } as Company);
+                }
+            });
+          }
+          setError(null);
+        } else {
+          setError(new Error("Share link not found or has been disabled."));
+          setSession(null);
+        }
+        setIsLoading(false);
+      }, 
+      (err) => {
+        console.error("Error fetching shared link:", err);
+        setError(err);
+        setIsLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [firestore, linkId]);
 
   const value = useMemo(
     () => ({
-      session: session || null,
-      navItems: navItems || null,
+      session,
+      navItems: session?.navItems || [],
       company: company || null,
-      tasks: tasks || null,
+      tasks: session?.snapshot?.tasks || [],
+      users: session?.snapshot?.users || [],
+      statuses: session?.snapshot?.statuses || [],
+      brands: session?.snapshot?.brands || [],
       isLoading,
       error,
     }),
-    [session, navItems, company, tasks, isLoading, error]
+    [session, company, isLoading, error]
   );
 
   return (
