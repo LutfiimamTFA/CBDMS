@@ -25,7 +25,7 @@ import { useRouter } from 'next/navigation';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SharedHeader } from './shared-header';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, type Query } from 'firebase/firestore';
 
 interface SharedCalendarViewProps {
   session: SharedLink;
@@ -38,8 +38,12 @@ export function SharedCalendarView({ session }: SharedCalendarViewProps) {
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
-    return query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
-  }, [firestore, session.companyId]);
+    let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
+    if (session.brandIds && session.brandIds.length > 0) {
+        q = query(q, where('brandId', 'in', session.brandIds));
+    }
+    return q;
+  }, [firestore, session]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 

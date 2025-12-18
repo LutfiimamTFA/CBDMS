@@ -125,7 +125,6 @@ export type DailyReport = {
   companyId: string;
 };
 
-// This type is now a pure context/permission object, not a data snapshot.
 export type SharedLink = {
   id: string;
   name: string;
@@ -139,15 +138,11 @@ export type SharedLink = {
     canEditContent: boolean;
     canAssignUsers: boolean;
   };
-  viewConfig?: {
-    currentRoute: string;
-    filters?: any;
-    activeTab?: string;
-  };
   createdBy: string;
   createdAt: any;
   updatedAt?: any;
   allowedNavItems: string[];
+  brandIds?: string[];
 };
 
 

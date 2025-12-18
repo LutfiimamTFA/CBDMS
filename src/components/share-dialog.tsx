@@ -19,8 +19,8 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField } from 'firebase/firestore';
-import type { SharedLink, NavigationItem } from '@/lib/types';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, where, query, orderBy, deleteDoc, deleteField, arrayUnion } from 'firebase/firestore';
+import type { SharedLink, NavigationItem, Brand } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, Settings, CalendarIcon, KeyRound, Loader2, X, Plus, Trash2, Shield, Eye, MessageSquare, Edit, UsersIcon, History } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -30,6 +30,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Badge } from './ui/badge';
 import { usePathname } from 'next/navigation';
 import { Checkbox } from './ui/checkbox';
+import { MultiSelect } from './ui/multi-select';
 
 const defaultPermissions = {
   canViewDetails: true,
@@ -61,18 +62,32 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   // Permissions State
   const [permissions, setPermissions] = useState(defaultPermissions);
   const [allowedNavItems, setAllowedNavItems] = useState<string[]>([]);
+  const [brandIds, setBrandIds] = useState<string[]>([]);
   const [historyLink, setHistoryLink] = useState<SharedLink | null>(null);
 
   const firestore = useFirestore();
   const { profile, isLoading: isProfileLoading } = useUserProfile();
   const { toast } = useToast();
-  const pathname = usePathname();
   
   const linksQuery = useMemo(() => {
     if (!firestore || !profile?.companyId) return null;
     return query(collection(firestore, 'sharedLinks'), where('companyId', '==', profile.companyId));
   }, [firestore, profile?.companyId]);
   const { data: existingLinks, isLoading: isLinksLoading } = useCollection<SharedLink>(linksQuery);
+
+  const brandsQuery = useMemo(() => {
+    if (!firestore || !profile?.brandIds) return null;
+    if (profile.role === 'Manager' && profile.brandIds.length === 0) return null;
+
+    let q = query(collection(firestore, 'brands'), orderBy('name'));
+    if (profile.role === 'Manager') {
+        q = query(q, where('__name__', 'in', profile.brandIds));
+    }
+    return q;
+  }, [firestore, profile]);
+  const { data: manageableBrands } = useCollection<Brand>(brandsQuery);
+  const brandOptions = useMemo(() => (manageableBrands || []).map(b => ({ value: b.id, label: b.name })), [manageableBrands]);
+
 
   const selectableSharePages = useMemo(() => {
     return creatorNavItems.filter(item => !!item.path && item.id !== 'nav_guide'); // Exclude Guide page
@@ -115,6 +130,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
     setExpiresAtTime('00:00');
     setPermissions(defaultPermissions);
     setAllowedNavItems([]);
+    setBrandIds([]);
   };
   
   const loadLinkDetails = (link: SharedLink) => {
@@ -142,6 +158,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
 
     setPermissions(link.permissions || defaultPermissions);
     setAllowedNavItems(link.allowedNavItems || []);
+    setBrandIds(link.brandIds || []);
   };
 
   const getCombinedExpiration = () => {
@@ -167,18 +184,12 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
 
     const isCreating = !activeLink;
     
-    const viewConfig = {
-        currentRoute: pathname,
-        filters: [],
-        activeTab: 'all',
-    };
-    
     const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt' | 'createdBy'>> = {
         name: linkName,
         permissions,
         allowedNavItems,
         companyId: profile.companyId,
-        viewConfig,
+        brandIds: brandIds,
     };
 
     if (usePassword && password) {
@@ -325,12 +336,32 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                         <Label htmlFor="link-name">Link Name</Label>
                         <Input id="link-name" value={linkName || ''} onChange={e => setLinkName(e.target.value)} placeholder="e.g. Q3 Report for Client" />
                       </div>
+
+                      {profile?.role === 'Manager' && (
+                        <Card>
+                            <CardHeader>
+                                <h3 className="font-semibold">Data Scope</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Choose which brands' data to include in this link.
+                                </p>
+                            </CardHeader>
+                            <CardContent>
+                                <MultiSelect 
+                                    options={brandOptions}
+                                    onValueChange={setBrandIds}
+                                    defaultValue={brandIds}
+                                    placeholder="Select brands to share..."
+                                />
+                                <p className="text-xs text-muted-foreground mt-2">If no brands are selected, all brands you manage will be included.</p>
+                            </CardContent>
+                        </Card>
+                      )}
                       
                       <Card>
                         <CardHeader>
                           <h3 className="font-semibold">Visible Pages</h3>
                            <p className="text-sm text-muted-foreground">
-                            Select which pages the recipient can access. Only pages visible to your role are shown.
+                            Select which pages the recipient can access.
                           </p>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -435,10 +466,6 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                 <span className="font-medium">{historyLink?.updatedAt ? formatDate(historyLink?.updatedAt) : 'Never'}</span>
              </div>
               <Separator />
-               <div>
-                <h4 className="font-medium mb-2">View Context</h4>
-                <Badge variant="secondary">{historyLink?.viewConfig?.currentRoute || 'N/A'}</Badge>
-              </div>
                <div>
                 <h4 className="font-medium mb-2">Enabled Permissions</h4>
                 <ul className="list-disc list-inside space-y-1">

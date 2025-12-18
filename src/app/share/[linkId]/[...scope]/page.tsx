@@ -18,6 +18,7 @@ import { SharedMyWorkView } from '@/components/share/shared-my-work-view';
 import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 import { SharedDailyReportView } from '@/components/share/shared-daily-report-view';
 import { SharedRecurringTasksView } from '@/components/share/shared-recurring-tasks-view';
+import { SharedScheduleView } from '@/components/share/shared-schedule-view';
 
 const AccessDeniedComponent = () => (
     <div className="flex h-full items-center justify-center p-8">
@@ -60,6 +61,7 @@ const pageComponents: { [key: string]: React.ComponentType<any> } = {
   'dashboard': SharedDashboardView,
   'tasks': SharedTasksView,
   'calendar': SharedCalendarView,
+  'schedule': SharedScheduleView,
   'reports': SharedReportsView,
   'my-work': SharedMyWorkView,
   'social-media': SharedSocialMediaView,
@@ -108,7 +110,7 @@ export default function ShareScopePage() {
   return (
     <div className='flex h-svh'>
         <ShareSidebar session={session} navItems={navItems || []} />
-        <main className='flex-1 overflow-auto'>
+        <main className='flex-1 overflow-auto flex'>
             <PageComponent {...viewProps} />
         </main>
     </div>

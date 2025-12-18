@@ -5,7 +5,7 @@ import { KanbanBoard } from '@/components/tasks/kanban-board';
 import type { Task, SharedLink } from '@/lib/types';
 import { SharedHeader } from './shared-header';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, type Query } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
 interface SharedDashboardViewProps {
@@ -17,24 +17,29 @@ export function SharedDashboardView({ session }: SharedDashboardViewProps) {
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
-    return query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
-  }, [firestore, session.companyId]);
+    let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
+    
+    // Apply brand filtering if specified in the shared link
+    if (session.brandIds && session.brandIds.length > 0) {
+      q = query(q, where('brandId', 'in', session.brandIds));
+    }
+
+    return q;
+  }, [firestore, session]);
 
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
-  if (isTasksLoading) {
-    return (
-      <div className="flex h-full w-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
   return (
-    <div className="flex h-svh flex-col bg-background">
+    <div className="flex flex-col flex-1 h-full">
       <SharedHeader title="Task Board" />
       <main className="flex-1 overflow-hidden p-4 md:p-6">
-        <KanbanBoard tasks={tasks || []} permissions={session.permissions} isSharedView={true} linkId={session.id} />
+        {isTasksLoading ? (
+            <div className="flex h-full w-full items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+        ) : (
+            <KanbanBoard tasks={tasks || []} permissions={session.permissions} isSharedView={true} linkId={session.id} />
+        )}
       </main>
     </div>
   );
