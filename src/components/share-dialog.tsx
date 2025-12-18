@@ -40,6 +40,17 @@ const defaultPermissions = {
   canAssignUsers: false,
 };
 
+// Explicitly define which pages are allowed in share mode to prevent leakage.
+const SHAREABLE_NAV_IDS = new Set([
+  'nav_task_board',
+  'nav_list',
+  'nav_schedule',
+  'nav_calendar',
+  'nav_social_media_calendar',
+  'nav_social_media_analytics',
+]);
+
+
 interface ShareDialogProps {
   creatorNavItems: NavigationItem[];
 }
@@ -89,8 +100,9 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
   const brandOptions = useMemo(() => (manageableBrands || []).map(b => ({ value: b.id, label: b.name })), [manageableBrands]);
 
 
+  // Filter creator's nav items to only show those that are explicitly shareable.
   const selectableSharePages = useMemo(() => {
-    return creatorNavItems.filter(item => !!item.path && item.id !== 'nav_guide'); // Exclude Guide page
+    return creatorNavItems.filter(item => SHAREABLE_NAV_IDS.has(item.id));
   }, [creatorNavItems]);
 
 
@@ -184,12 +196,14 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
 
     const isCreating = !activeLink;
     
-    const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt' | 'createdBy'>> = {
+    const linkData: Partial<Omit<SharedLink, 'id' | 'createdAt'>> = {
         name: linkName,
         permissions,
         allowedNavItems,
         companyId: profile.companyId,
         brandIds: brandIds,
+        // Store the role of the creator to enforce data scoping in share views
+        creatorRole: profile.role,
     };
 
     if (usePassword && password) {
@@ -352,7 +366,7 @@ export function ShareDialog({ creatorNavItems }: ShareDialogProps) {
                                     defaultValue={brandIds}
                                     placeholder="Select brands to share..."
                                 />
-                                <p className="text-xs text-muted-foreground mt-2">If no brands are selected, all brands you manage will be included.</p>
+                                <p className="text-xs text-muted-foreground mt-2">If no brands are selected, the link will not show any brand-specific data.</p>
                             </CardContent>
                         </Card>
                       )}

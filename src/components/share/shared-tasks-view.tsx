@@ -5,7 +5,7 @@ import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import type { Task, WorkflowStatus, Brand, User, SharedLink } from '@/lib/types';
 import React, { useMemo } from 'react';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, query, where, type Query } from 'firebase/firestore';
+import { collection, query, where, type Query, orderBy } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 
 interface SharedTasksViewProps {
@@ -15,13 +15,22 @@ interface SharedTasksViewProps {
 export function SharedTasksView({ session }: SharedTasksViewProps) {
   const firestore = useFirestore();
 
+  // CRITICAL: This query is now strictly filtered by brandIds from the session link, if they exist.
+  // It no longer relies on the viewer's context.
   const tasksQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
     let q: Query = query(collection(firestore, 'tasks'), where('companyId', '==', session.companyId));
     
-    // Apply brand filtering if specified in the shared link
+    // This is the key security fix: only fetch tasks for the brands specified in the share link.
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('brandId', 'in', session.brandIds));
+    } else {
+      // If a non-admin creates a link without specific brands, it should show nothing
+      // to prevent accidentally sharing all company data.
+      // We can simulate an empty query by asking for a non-existent ID.
+      if (session.creatorRole !== 'Super Admin') {
+         q = query(q, where('__name__', '==', 'no-tasks'));
+      }
     }
 
     return q;
@@ -31,14 +40,14 @@ export function SharedTasksView({ session }: SharedTasksViewProps) {
 
   const statusesQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
-    return query(collection(firestore, 'statuses'), where('companyId', '==', session.companyId));
+    return query(collection(firestore, 'statuses'), where('companyId', '==', session.companyId), orderBy('order'));
   }, [firestore, session.companyId]);
   const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
   const brandsQuery = useMemo(() => {
     if (!firestore || !session.companyId) return null;
-    let q: Query = query(collection(firestore, 'brands'), where('companyId', '==', session.companyId));
-     // Apply brand filtering if specified in the shared link
+    let q: Query = query(collection(firestore, 'brands'), where('companyId', '==', session.companyId), orderBy('name'));
+     // Also filter the available brands in the filter dropdown by the shared scope
     if (session.brandIds && session.brandIds.length > 0) {
       q = query(q, where('__name__', 'in', session.brandIds));
     }
@@ -69,7 +78,6 @@ export function SharedTasksView({ session }: SharedTasksViewProps) {
               brands={brands || []}
               users={users || []}
               permissions={session.permissions}
-              viewConfig={session.viewConfig}
           />
         )}
       </main>

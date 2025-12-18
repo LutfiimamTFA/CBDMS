@@ -131,6 +131,7 @@ export type SharedLink = {
   companyId: string;
   password?: string;
   expiresAt?: any;
+  creatorRole?: 'Super Admin' | 'Manager' | 'Employee';
   permissions: {
     canViewDetails: boolean;
     canComment: boolean;
