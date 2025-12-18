@@ -182,10 +182,10 @@ function MainAppLayout({
             </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <div className="flex flex-1 flex-col">
+      <SidebarInset>
         <Header title={headerTitle} navItems={finalNavItems} />
-        <SidebarInset>{children}</SidebarInset>
-      </div>
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   );
 }
