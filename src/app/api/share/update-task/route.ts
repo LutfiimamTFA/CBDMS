@@ -54,10 +54,10 @@ export async function POST(request: Request) {
         const linkSnap = await transaction.get(linkRef);
         const taskSnap = await transaction.get(taskRef);
 
-        if (!linkSnap.exists) {
+        if (!linkSnap.exists()) {
             throw new Error('Share link not found.');
         }
-        if (!taskSnap.exists) {
+        if (!taskSnap.exists()) {
             throw new Error('Task not found.');
         }
 
