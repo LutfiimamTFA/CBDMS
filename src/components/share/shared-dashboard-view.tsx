@@ -20,9 +20,9 @@ export function SharedDashboardView({ session, tasks, statuses, isLoading }: Sha
           </div>
         ) : (
           <SharedKanbanBoard
-            initialTasks={tasks || []} 
+            initialTasks={tasks || []}
             statuses={statuses || []}
-            permissions={session.permissions} 
+            accessLevel={session.accessLevel}
             linkId={session.id}
           />
         )}

@@ -5,29 +5,32 @@ import type { Task, WorkflowStatus, SharedLink, User } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from '../tasks/kanban-column';
+import { useRouter } from 'next/navigation';
 
 interface SharedKanbanBoardProps {
   initialTasks: Task[];
   statuses: WorkflowStatus[];
-  permissions: SharedLink['accessLevel'];
+  accessLevel: SharedLink['accessLevel'];
   linkId: string;
 }
 
 export function SharedKanbanBoard({
   initialTasks,
   statuses,
-  permissions,
+  accessLevel,
   linkId,
 }: SharedKanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const { toast } = useToast();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const router = useRouter();
+
 
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
 
-  const canDrag = permissions === 'status' || permissions === 'limited-edit';
+  const canDrag = accessLevel === 'status' || accessLevel === 'limited-edit';
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
@@ -84,6 +87,16 @@ export function SharedKanbanBoard({
     }
   };
   
+  const handleCardClick = (taskId: string) => {
+    const canViewDetails = accessLevel === 'status' || accessLevel === 'limited-edit';
+    if (!canViewDetails) {
+        toast({ variant: 'destructive', title: 'Permission Denied', description: 'Viewing task details is not allowed with this link.' });
+        return;
+    }
+    const path = `/share/${linkId}/tasks/${taskId}`;
+    router.push(path);
+  };
+  
   if (!statuses || statuses.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -103,10 +116,9 @@ export function SharedKanbanBoard({
             onDrop={handleDrop}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onCardClick={handleCardClick}
             canDrag={canDrag}
             draggingTaskId={draggingTaskId}
-            isSharedView={true}
-            permissions={permissions}
           />
         ))}
       </div>
