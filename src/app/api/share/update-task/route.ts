@@ -15,7 +15,7 @@ function initializeAdminApp(): App {
   });
 }
 
-const createActivity = (user: User, action: string): Activity => {
+const createActivity = (user: {id: string, name: string, avatarUrl: string}, action: string): Activity => {
     return {
       id: `act-${crypto.randomUUID()}`,
       user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
@@ -77,12 +77,12 @@ export async function POST(request: Request) {
     }
     const oldTask = taskSnap.data() as Task;
     
-    const creatorRef = db.collection('users').doc(sharedLink.createdBy);
-    const creatorSnap = await creatorRef.get();
-    if (!creatorSnap.exists()) {
-        return NextResponse.json({ message: 'Link creator not found.' }, { status: 404 });
-    }
-    const linkCreator = creatorSnap.data() as User;
+    // Create a generic actor for this shared action
+    const sharedActor = {
+        id: `share_${sharedLink.id}`,
+        name: `Guest (${sharedLink.name})`,
+        avatarUrl: '', // No avatar for guest
+    };
 
     const finalUpdates: any = {
       ...updates,
@@ -97,18 +97,22 @@ export async function POST(request: Request) {
     }
     
     if (actionDescription) {
-        const newActivity = createActivity(linkCreator, actionDescription);
+        const newActivity = createActivity(sharedActor, actionDescription);
         finalUpdates.lastActivity = newActivity;
         finalUpdates.activities = [...(oldTask.activities || []), newActivity];
 
         const notificationTitle = `Status Changed: ${oldTask.title}`;
-        const notificationMessage = `${linkCreator.name} (via share link) changed status to ${updates.status}.`;
+        const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
         
         const notifiedUserIds = new Set<string>();
+        // Notify assignees
         oldTask.assigneeIds.forEach(assigneeId => {
-            if (assigneeId !== linkCreator.id) notifiedUserIds.add(assigneeId);
+            notifiedUserIds.add(assigneeId);
         });
-        if (oldTask.createdBy.id !== linkCreator.id) notifiedUserIds.add(oldTask.createdBy.id);
+        // Notify creator
+        if (oldTask.createdBy?.id) {
+            notifiedUserIds.add(oldTask.createdBy.id);
+        }
 
         notifiedUserIds.forEach(userId => {
             const notifRef = db.collection(`users/${userId}/notifications`).doc();
