@@ -134,6 +134,11 @@ export function TaskDetailsSheet({
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
+  
+  const form = useForm<TaskDetailsFormValues>({
+    resolver: zodResolver(taskDetailsSchema),
+  });
+
   const [isUploading, setIsUploading] = React.useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -279,26 +284,22 @@ export function TaskDetailsSheet({
 
   const canComment = !isSharedView && !!currentUser;
   
+  const currentFormStatus = form.watch('status');
+
   const canChangeStatus = useMemo(() => {
     if (isSharedView) {
       if (accessLevel === 'view') return false;
       if (accessLevel === 'status' && (creatorRole === 'Employee' || creatorRole === 'PIC')) {
-        return !['Done', 'Revisi'].includes(form.getValues('status'));
+        return !['Done', 'Revisi'].includes(currentFormStatus);
       }
       return true;
     }
     if (!currentUser) return false;
     return isManagerOrAdmin || isAssignee;
-  }, [isSharedView, accessLevel, creatorRole, form.watch('status'), currentUser, isManagerOrAdmin, isAssignee]);
+  }, [isSharedView, accessLevel, creatorRole, currentFormStatus, currentUser, isManagerOrAdmin, isAssignee]);
 
   const canAssignUsers = isSharedView ? false : canEditContent;
   
-  const form = useForm<TaskDetailsFormValues>({
-    resolver: zodResolver(taskDetailsSchema),
-  });
-  
-  const currentFormStatus = form.watch('status');
-
   const canManageSubtasks = useMemo(() => {
     if (isSharedView) return accessLevel === 'limited-edit';
     if (!currentUser) return false;
