@@ -67,7 +67,7 @@ const LinkExpiredComponent = () => (
     </div>
 );
 
-const PasswordFormComponent = ({ company, linkId }: { company: Company | null, linkId: string }) => {
+const PasswordFormComponent = ({ company, linkId, onAuthenticated }: { company: Company | null, linkId: string, onAuthenticated: () => void }) => {
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState<string | null>(null);
     const [isChecking, setIsChecking] = useState(false);
@@ -90,7 +90,7 @@ const PasswordFormComponent = ({ company, linkId }: { company: Company | null, l
                 if (typeof window !== 'undefined') {
                     sessionStorage.setItem(`share_token_${linkId}`, 'true');
                 }
-                router.refresh(); 
+                onAuthenticated(); // Signal successful authentication
             } else {
                 setAuthError('Invalid password.');
             }
@@ -140,6 +140,12 @@ export default function SharedLinkRedirectorPage() {
     const [sharedLink, setSharedLink] = useState<SharedLink | null>(null);
     const [company, setCompany] = useState<Company | null>(null);
     const [error, setError] = useState<string | null>(null);
+    
+    // New state to track authentication status
+    const [isAuthenticated, setIsAuthenticated] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return sessionStorage.getItem(`share_token_${linkId}`) === 'true';
+    });
 
     useEffect(() => {
         if (!linkId) {
@@ -160,6 +166,11 @@ export default function SharedLinkRedirectorPage() {
                 }
                 const linkData = { ...linkSnap.data(), id: linkSnap.id } as SharedLink;
                 setSharedLink(linkData);
+
+                // If link doesn't require a password, it's authenticated by default
+                if (!linkData.password) {
+                    setIsAuthenticated(true);
+                }
 
                 if (linkData.companyId) {
                     const companyDocRef = doc(db, 'companies', linkData.companyId);
@@ -182,25 +193,19 @@ export default function SharedLinkRedirectorPage() {
 
 
     useEffect(() => {
-        if (isLoading || !linkId || !sharedLink || error) return;
+        // Now depends on isAuthenticated state
+        if (isLoading || !linkId || !sharedLink || error || !isAuthenticated) return;
 
         if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
             return;
         }
         
-        const isAuthenticated = typeof window !== 'undefined' && sessionStorage.getItem(`share_token_${linkId}`) === 'true';
-        if (sharedLink.password && !isAuthenticated) {
-            return;
-        }
-        
         const allowedNavIds = new Set(sharedLink.allowedNavItems || []);
         
-        // Filter the creator's nav items to only include those that were explicitly allowed.
         const redirectableItems = (sharedLink.navItems || [])
             .filter(item => allowedNavIds.has(item.id) && getScopeFromPath(item.path))
             .sort((a, b) => a.order - b.order);
 
-        // Find the first valid item from the *allowed* list.
         const firstValidItem = redirectableItems[0];
         
         if (firstValidItem) {
@@ -209,7 +214,7 @@ export default function SharedLinkRedirectorPage() {
                 router.replace(`/share/${linkId}/${scope}`);
             }
         }
-    }, [sharedLink, isLoading, error, linkId, router]);
+    }, [sharedLink, isLoading, error, linkId, router, isAuthenticated]); // Added isAuthenticated dependency
 
 
     if (isLoading) {
@@ -228,8 +233,8 @@ export default function SharedLinkRedirectorPage() {
         return <LinkExpiredComponent />;
     }
     
-    if (sharedLink.password && (typeof window === 'undefined' || sessionStorage.getItem(`share_token_${linkId}`) !== 'true')) {
-        return <PasswordFormComponent company={company} linkId={linkId} />;
+    if (sharedLink.password && !isAuthenticated) {
+        return <PasswordFormComponent company={company} linkId={linkId} onAuthenticated={() => setIsAuthenticated(true)} />;
     }
 
     const hasValidPages = (sharedLink.allowedNavItems || []).some(id => {
