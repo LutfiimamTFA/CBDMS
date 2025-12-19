@@ -58,6 +58,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
+import { ShareTaskDialog } from './share-task-dialog';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -81,8 +82,6 @@ interface TasksDataTableProps {
     statuses: WorkflowStatus[];
     brands: Brand[];
     users: User[];
-    permissions?: SharedLink['permissions'] | null;
-    isShareView?: boolean;
 }
 
 const formatDate = (date: any): string => {
@@ -93,12 +92,11 @@ const formatDate = (date: any): string => {
     return format(dateObj, 'PP, p');
 };
 
-export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null, isShareView = false }: TasksDataTableProps) {
+export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTableProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   
-  // Conditionally use internal permissions hook only when not in share view
-  const { permissions, isLoading: arePermsLoading } = !isShareView ? usePermissions() : { permissions: null, isLoading: false };
+  const { permissions, isLoading: arePermsLoading } = usePermissions();
   
   const router = useRouter();
   
@@ -124,12 +122,12 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
   
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
+  const [shareTask, setShareTask] = React.useState<Task | null>(null);
 
   const canChangePriority = React.useMemo(() => {
-      if (sharedPermissions) return false;
       if (!profile) return false;
       return profile.role === 'Super Admin' || profile.role === 'Manager';
-  }, [profile, sharedPermissions]);
+  }, [profile]);
 
   const statusOptions = React.useMemo(() => {
     const getIcon = (statusName: string) => {
@@ -419,10 +417,6 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         const task = row.original;
         const dueDate = task.dueDate;
         
-        if (isShareView && sharedPermissions?.accessLevel !== 'limited-edit') {
-            return dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>;
-        }
-        
         return (
            <Popover>
             <PopoverTrigger asChild>
@@ -439,12 +433,8 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                 mode="single"
                 selected={dueDate ? parseISO(dueDate) : undefined}
                 onSelect={(date) => {
-                  if (isShareView) {
-                    // Logic to update shared task will be here
-                  } else {
                     const taskRef = doc(firestore!, 'tasks', task.id);
                     updateDocumentNonBlocking(taskRef, { dueDate: date?.toISOString() });
-                  }
                 }}
                 initialFocus
               />
@@ -493,7 +483,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
             return false;
         }, [profile, permissions, task]);
 
-        if (isShareView) return null;
+        const isCreator = profile?.id === task.createdBy.id;
 
         return (
           <DropdownMenu>
@@ -512,10 +502,12 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                   <History className="mr-2 h-4 w-4" />
                   View History
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyTaskLink(task.id)}}>
-                <LinkIcon className="mr-2 h-4 w-4" />
-                Copy Link
-              </DropdownMenuItem>
+              {isCreator && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShareTask(task) }}>
+                    <Share2 className="mr-2 h-4 w-4" />
+                    Share Task
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               {canDelete && (
                 <DropdownMenuItem
@@ -636,7 +628,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                     className="group cursor-pointer"
                     onClick={() => {
                         const task = row.original;
-                        const path = isShareView ? `/tasks/${task.id}?shared=true` : `/tasks/${task.id}`;
+                        const path = `/tasks/${task.id}`;
                         router.push(path);
                     }}
                   >
@@ -714,6 +706,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
           </div>
         </div>
       </div>
+      {shareTask && <ShareTaskDialog open={!!shareTask} onOpenChange={() => setShareTask(null)} task={shareTask} />}
       <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
         <AlertDialogContent>
             <AlertDialogHeader>

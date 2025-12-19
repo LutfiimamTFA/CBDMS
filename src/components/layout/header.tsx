@@ -1,3 +1,4 @@
+
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -27,7 +28,7 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
   const isPathShareable = shareableViews.some(p => pathname.startsWith(p));
   
-  const canShowShareButton = !isSharedView && profile && isPathShareable;
+  const canShowShareButton = !isSharedView && profile && (profile.role === 'Manager' || profile.role === 'Super Admin') && isPathShareable;
 
 
   return (
