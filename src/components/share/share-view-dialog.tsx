@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -122,13 +120,19 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
             tasksQuery = query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
         }
         
+        const statusesQuery = query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId), orderBy('order'));
+        
         const [tasksSnap, statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([
             getDocs(tasksQuery),
-            getDocs(query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId))),
+            getDocs(statusesQuery),
             getDocs(query(collection(firestore, 'users'), where('companyId', '==', profile.companyId))),
             getDocs(query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId))),
             getDocs(query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId)))
         ]);
+
+        if (statusesSnap.empty) {
+            throw new Error("Cannot create share link: No workflow statuses found for this company. Please configure them in the admin settings.");
+        }
 
         const snapshot = {
             tasks: tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)),
@@ -149,6 +153,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           createdBy: profile.id,
           password: usePassword ? password : undefined,
           expiresAt: expiresAt || undefined,
+          brandIds: profile.role === 'Manager' ? profile.brandIds : undefined,
         };
         
         const cleanedData = removeUndefined(linkData);

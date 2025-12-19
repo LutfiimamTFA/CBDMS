@@ -97,6 +97,7 @@ export function SharedKanbanBoard({
     router.push(path);
   };
   
+  // This is the key fix: Ensure we render columns from the props, not a separate fetch.
   if (!statuses || statuses.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
