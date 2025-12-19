@@ -120,6 +120,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
             tasksQuery = query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
         }
         
+        // The source of truth for workflow is the statuses for the entire company.
         const statusesQuery = query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId), orderBy('order'));
         
         const [tasksSnap, statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([

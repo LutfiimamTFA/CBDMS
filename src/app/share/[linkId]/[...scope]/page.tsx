@@ -104,7 +104,7 @@ export default function ShareScopePage() {
     statuses: snapshotData.statuses || [],
     brands: snapshotData.brands || [],
     users: snapshotData.users || [],
-    socialMediaPosts: (snapshotData as any).socialMediaPosts || [],
+    socialMediaPosts: snapshotData.socialMediaPosts || [],
   };
 
   const renderContent = () => {

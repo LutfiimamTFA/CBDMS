@@ -89,8 +89,7 @@ export function SharedKanbanBoard({
   };
   
   const handleCardClick = (taskId: string) => {
-    const canViewDetails = accessLevel === 'status' || accessLevel === 'limited-edit';
-    if (!canViewDetails) {
+    if (accessLevel === 'view') {
         toast({ variant: 'destructive', title: 'Permission Denied', description: 'Viewing task details is not allowed with this link.' });
         return;
     }
@@ -103,7 +102,8 @@ export function SharedKanbanBoard({
       <div className="flex h-full items-center justify-center p-8 w-full">
         <Card className="w-full max-w-md text-center">
             <CardContent className="p-6">
-                <p className="text-muted-foreground">The workflow for this shared view is incomplete. The Kanban board cannot be displayed.</p>
+                <h3 className="text-lg font-semibold">Incomplete Configuration</h3>
+                <p className="text-muted-foreground mt-2">The workflow for this shared view is incomplete. The Kanban board cannot be displayed.</p>
             </CardContent>
         </Card>
       </div>

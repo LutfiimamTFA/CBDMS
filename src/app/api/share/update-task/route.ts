@@ -64,7 +64,7 @@ export async function POST(request: Request) {
     if (updates.status) {
         const snapshotStatuses = sharedLink.snapshot.statuses?.map(s => s.name) || [];
         if (!snapshotStatuses.includes(updates.status)) {
-            return NextResponse.json({ message: 'Invalid status for this shared link.' }, { status: 403 });
+            return NextResponse.json({ message: `Invalid status "${updates.status}" for this shared link.` }, { status: 403 });
         }
     }
 
@@ -82,7 +82,7 @@ export async function POST(request: Request) {
     if (!creatorSnap.exists()) {
         return NextResponse.json({ message: 'Link creator not found.' }, { status: 404 });
     }
-    const creator = creatorSnap.data() as User;
+    const linkCreator = creatorSnap.data() as User;
 
     const finalUpdates: any = {
       ...updates,
@@ -97,18 +97,18 @@ export async function POST(request: Request) {
     }
     
     if (actionDescription) {
-        const newActivity = createActivity(creator, actionDescription);
+        const newActivity = createActivity(linkCreator, actionDescription);
         finalUpdates.lastActivity = newActivity;
         finalUpdates.activities = [...(oldTask.activities || []), newActivity];
 
         const notificationTitle = `Status Changed: ${oldTask.title}`;
-        const notificationMessage = `${creator.name} (via share link) changed status to ${updates.status}.`;
+        const notificationMessage = `${linkCreator.name} (via share link) changed status to ${updates.status}.`;
         
         const notifiedUserIds = new Set<string>();
         oldTask.assigneeIds.forEach(assigneeId => {
-            if (assigneeId !== creator.id) notifiedUserIds.add(assigneeId);
+            if (assigneeId !== linkCreator.id) notifiedUserIds.add(assigneeId);
         });
-        if (oldTask.createdBy.id !== creator.id) notifiedUserIds.add(oldTask.createdBy.id);
+        if (oldTask.createdBy.id !== linkCreator.id) notifiedUserIds.add(oldTask.createdBy.id);
 
         notifiedUserIds.forEach(userId => {
             const notifRef = db.collection(`users/${userId}/notifications`).doc();
