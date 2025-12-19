@@ -54,23 +54,10 @@ const LinkNotFoundComponent = () => (
 );
 
 export default function ShareScopePage() {
-  const { session, isLoading, error, ...snapshotData } = useSharedSession();
+  const { session, isLoading, error } = useSharedSession();
   const params = useParams();
   const scope = Array.isArray(params.scope) ? params.scope.join('/') : params.scope;
-  const taskId = Array.isArray(params.scope) && params.scope[0] === 'tasks' ? params.scope[1] : null;
-
-  const [sheetTask, setSheetTask] = React.useState(taskId ? snapshotData.tasks?.find(t => t.id === taskId) : null);
-
-  React.useEffect(() => {
-    if (taskId) {
-      const task = snapshotData.tasks?.find(t => t.id === taskId);
-      setSheetTask(task || null);
-    } else {
-      setSheetTask(null);
-    }
-  }, [taskId, snapshotData.tasks]);
-
-
+  
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center w-full">
@@ -82,10 +69,12 @@ export default function ShareScopePage() {
   if (error || !session) {
     return <LinkNotFoundComponent />;
   }
+  
+  const snapshotData = session.snapshot;
 
   const navItemForScope = (session.navItems || []).find(item => {
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
-    return itemPath === scope;
+    return itemPath === scope.split('/')[0]; // Compare with base path
   });
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
@@ -93,11 +82,15 @@ export default function ShareScopePage() {
   const viewProps = {
     session,
     isLoading,
-    ...snapshotData,
+    tasks: snapshotData.tasks || [],
+    statuses: snapshotData.statuses || [],
+    brands: snapshotData.brands || [],
+    users: snapshotData.users || [],
+    socialMediaPosts: (snapshotData as any).socialMediaPosts || [],
   };
 
   const renderContent = () => {
-    if (!isPageAllowed && !taskId) {
+    if (!isPageAllowed) {
         return <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />;
     }
 
@@ -106,10 +99,6 @@ export default function ShareScopePage() {
         case '/dashboard':
             return <SharedDashboardView {...viewProps} />;
         case '/tasks':
-             if (taskId) {
-                // If there's a taskId, the main view is the task list, with the sheet open
-                return <SharedTasksView {...viewProps} />;
-            }
             return <SharedTasksView {...viewProps} />;
         case '/calendar':
             return <SharedCalendarView {...viewProps} />;
@@ -129,21 +118,6 @@ export default function ShareScopePage() {
       <SidebarInset>
         <SharedHeader title={navItemForScope?.label || 'Shared View'} />
         {renderContent()}
-         {sheetTask && (
-          <TaskDetailsSheet
-            task={sheetTask}
-            open={!!sheetTask}
-            onOpenChange={(open) => {
-              if (!open) {
-                // Navigate back to the base share URL for that section
-                const baseScope = scope.split('/')[0];
-                window.history.pushState({}, '', `/share/${session.id}/${baseScope}`);
-                setSheetTask(null);
-              }
-            }}
-            permissions={session.permissions}
-          />
-        )}
       </SidebarInset>
     </>
   );

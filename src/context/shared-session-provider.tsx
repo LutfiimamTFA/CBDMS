@@ -2,18 +2,13 @@
 
 import React, { createContext, useContext, useMemo, useEffect, useState } from 'react';
 import { initializeFirebase } from '@/firebase';
-import type { SharedLink, NavigationItem, Company, Task, WorkflowStatus, Brand, User } from '@/lib/types';
+import type { SharedLink, NavigationItem, Company } from '@/lib/types';
 import { doc, getFirestore, type Firestore, onSnapshot } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 
 interface SharedSessionContextType {
   session: SharedLink | null;
-  navItems: NavigationItem[] | null;
   company: Company | null;
-  tasks: Task[] | null;
-  users: User[] | null;
-  statuses: WorkflowStatus[] | null;
-  brands: Brand[] | null;
   isLoading: boolean;
   error: Error | null;
 }
@@ -53,6 +48,14 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
       return;
     }
     
+    const token = sessionStorage.getItem(`share_token_${linkId}`);
+    if (!token && session?.password) {
+        // If there's a password but no token, we should not proceed.
+        // The password page will handle authentication.
+        setIsLoading(false);
+        return;
+    }
+    
     setIsLoading(true);
     const linkDocRef = doc(firestore, 'sharedLinks', linkId);
 
@@ -60,6 +63,15 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
       async (docSnap) => {
         if (docSnap.exists()) {
           const sessionData = { ...docSnap.data(), id: docSnap.id } as SharedLink;
+
+          // Password check for direct access
+          if (sessionData.password && !sessionStorage.getItem(`share_token_${linkId}`)) {
+              setError(new Error("Authentication required."));
+              setSession(null);
+              setIsLoading(false);
+              return;
+          }
+
           setSession(sessionData);
 
           if (sessionData.companyId) {
@@ -85,17 +97,12 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
     );
 
     return () => unsubscribe();
-  }, [firestore, linkId]);
+  }, [firestore, linkId, session?.password]);
 
   const value = useMemo(
     () => ({
       session,
-      navItems: session?.navItems || [],
       company: company || null,
-      tasks: session?.snapshot?.tasks || [],
-      users: session?.snapshot?.users || [],
-      statuses: session?.snapshot?.statuses || [],
-      brands: session?.snapshot?.brands || [],
       isLoading,
       error,
     }),

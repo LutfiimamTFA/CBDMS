@@ -7,12 +7,10 @@ interface SharedDashboardViewProps {
   session: SharedLink;
   tasks: Task[] | null;
   statuses: WorkflowStatus[] | null;
-  brands: Brand[] | null;
-  users: User[] | null;
   isLoading: boolean;
 }
 
-export function SharedDashboardView({ session, tasks, statuses, brands, users, isLoading }: SharedDashboardViewProps) {
+export function SharedDashboardView({ session, tasks, statuses, isLoading }: SharedDashboardViewProps) {
   return (
     <div className="flex flex-col flex-1 h-full w-full">
       <main className="flex-1 overflow-auto p-4 md:p-6">
