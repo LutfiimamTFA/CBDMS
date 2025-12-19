@@ -47,6 +47,7 @@ const isShareable = (item: NavigationItem) => {
 
 interface ShareViewDialogProps {
   children?: React.ReactNode;
+  navItems: NavigationItem[];
 }
 
 // Function to recursively remove undefined values from any object
@@ -69,7 +70,7 @@ const removeUndefined = (obj: any): any => {
 };
 
 
-export function ShareViewDialog({ children }: ShareViewDialogProps) {
+export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
@@ -85,13 +86,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
   const [accessLevel, setAccessLevel] = useState<SharedLink['accessLevel']>('view');
 
-  // Get all navigation items relevant to the current user's role
-  const userNavItems = useMemo(() => {
-    if (!profile) return [];
-    return defaultNavItems.filter(item => item.roles.includes(profile.role));
-  }, [profile]);
-  
-  const shareableNavItems = useMemo(() => userNavItems.filter(isShareable), [userNavItems]);
+  const shareableNavItems = useMemo(() => navItems.filter(isShareable), [navItems]);
   
   const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
 
@@ -153,7 +148,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           companyId: profile.companyId,
           creatorRole: profile.role,
           allowedNavItems: selectedNavIds, 
-          navItems: userNavItems.map(item => ({...item, label: t(item.label as any)})),
+          navItems: navItems.map(item => ({...item, label: t(item.label as any)})),
           accessLevel: accessLevel,
           snapshot,
           createdBy: profile.id,

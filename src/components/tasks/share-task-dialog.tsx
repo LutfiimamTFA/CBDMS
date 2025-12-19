@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
-import { collection, addDoc, serverTimestamp, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
 import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, Eye, Edit, ListTodo } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
@@ -76,6 +76,8 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
   const { data: brands } = useCollection<Brand>(useMemo(() => firestore ? query(collection(firestore, 'brands'), where('companyId', '==', profile?.companyId)) : null, [firestore, profile]));
   const { data: users } = useCollection<User>(useMemo(() => firestore ? query(collection(firestore, 'users'), where('companyId', '==', profile?.companyId)) : null, [firestore, profile]));
 
+  const isCreatorEmployee = profile?.role === 'Employee' || profile?.role === 'PIC';
+  const isCreatorManagerOrAdmin = profile?.role === 'Manager' || profile?.role === 'Super Admin';
 
   useEffect(() => {
     if (open) {
@@ -140,7 +142,6 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  const isCreatorEmployee = profile?.role === 'Employee' || profile?.role === 'PIC';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -179,7 +180,7 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
                             </span>
                         </Label>
                       </div>
-                       {!isCreatorEmployee && (
+                       {isCreatorManagerOrAdmin && (
                         <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
                           <RadioGroupItem value="limited-edit" id="perm-edit-task" />
                           <Label htmlFor="perm-edit-task" className="flex flex-col gap-1 leading-normal cursor-pointer">

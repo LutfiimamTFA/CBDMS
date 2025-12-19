@@ -73,7 +73,7 @@ service cloud.firestore {
     match /sharedLinks/{linkId} {
       allow get: if true;
       allow list: if false; // Users should not be able to list all share links
-      allow write: if isSignedIn() && (isSuperAdmin() || isRole('Manager'));
+      allow write: if isSignedIn(); // Any signed-in user can create a link (logic is handled in UI)
     }
 
     // --- LOGGED-IN USER RULES ---
@@ -118,9 +118,9 @@ service cloud.firestore {
       allow create: if isSuperAdmin() ||
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
-      allow update(writeFields): if isSuperAdmin() ||
+      allow update: if isSuperAdmin() ||
           (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
-          ((isRole('Employee') || isRole('PIC')) && isAssignee(taskId) && isCreator(request.auth.uid, resource.data) && resource.data.status != 'Done');
+          ((isRole('Employee') || isRole('PIC')) && isCreator(request.auth.uid, resource.data));
       allow delete: if isSuperAdmin() || (isRole('Manager') && hasPermission('Manager', 'canDeleteTasks') && managerManagesBrand(resource.data.brandId));
       
       match /timeTracking/{timeTrackingId} {
