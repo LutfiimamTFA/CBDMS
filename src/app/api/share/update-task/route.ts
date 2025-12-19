@@ -107,26 +107,17 @@ export async function POST(request: Request) {
         const notificationTitle = `Status Changed: ${oldTask.title}`;
         const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
         
-        const notifiedUserIds = new Set<string>();
-        // Notify assignees
+        // Notify only the assignees of the task.
         oldTask.assigneeIds.forEach(assigneeId => {
-            notifiedUserIds.add(assigneeId);
-        });
-        // Notify creator
-        if (oldTask.createdBy?.id) {
-            notifiedUserIds.add(oldTask.createdBy.id);
-        }
-
-        notifiedUserIds.forEach(userId => {
-            const notifRef = db.collection(`users/${userId}/notifications`).doc();
+            const notifRef = db.collection(`users/${assigneeId}/notifications`).doc();
             const newNotification: Omit<Notification, 'id'> = {
-                userId, 
+                userId: assigneeId, 
                 title: notificationTitle, 
                 message: notificationMessage, 
                 taskId: oldTask.id, 
                 isRead: false,
                 createdAt: Timestamp.now() as any, 
-                createdBy: newActivity.user,
+                createdBy: newActivity.user, // Use the consistent sharedActor object
             };
             batch.set(notifRef, newNotification);
         });
