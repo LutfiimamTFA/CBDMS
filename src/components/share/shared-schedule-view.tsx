@@ -9,7 +9,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import { parseISO } from 'date-fns';
 import { getBrandColor } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 
 interface SharedScheduleViewProps {
   session: SharedLink;
@@ -19,6 +19,8 @@ interface SharedScheduleViewProps {
 
 export function SharedScheduleView({ session, tasks, isLoading }: SharedScheduleViewProps) {
     const router = useRouter();
+    const params = useParams();
+    const linkId = params.linkId as string;
 
     const calendarEvents = useMemo(() => {
         if (!tasks) return [];
@@ -41,7 +43,7 @@ export function SharedScheduleView({ session, tasks, isLoading }: SharedSchedule
 
     const handleEventClick = (clickInfo: any) => {
         if (session?.permissions?.canViewDetails) {
-            router.push(`/tasks/${clickInfo.event.id}?shared=true`);
+            router.push(`/share/${linkId}/tasks/${clickInfo.event.id}`);
         }
     }
 
@@ -73,7 +75,7 @@ export function SharedScheduleView({ session, tasks, isLoading }: SharedSchedule
                 eventDisplay="block"
                 dayHeaderClassNames="bg-muted"
                 viewClassNames="bg-card"
-                eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
+                eventClassNames={session?.permissions?.canViewDetails ? "cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium" : "border-none px-2 py-0.5 text-xs rounded-md font-medium"}
             />
           </div>
         )}

@@ -30,12 +30,16 @@ import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO, isAfter } from 'date-fns';
-import { MoreHorizontal, X as XIcon, Link as LinkIcon, CheckCircle2, Circle, CircleDashed, Eye, AlertCircle, FileText, Building2 } from 'lucide-react';
+import { X as XIcon, Link as LinkIcon, CheckCircle2, Circle, CircleDashed, Eye, AlertCircle, FileText, Building2, Calendar, Loader2 } from 'lucide-react';
 import { DataTableFacetedFilter } from '../tasks/data-table-faceted-filter';
 import { DataTableViewOptions } from '../tasks/data-table-view-options';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '../ui/badge';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar as CalendarComponent } from '../ui/calendar';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 interface SharedTasksTableProps {
     tasks: Task[];
@@ -43,11 +47,14 @@ interface SharedTasksTableProps {
     brands: Brand[];
     users: User[];
     permissions: SharedLink['permissions'];
-    isShareView: boolean;
 }
 
-export function SharedTasksTable({ tasks, statuses, brands, users, permissions, isShareView }: SharedTasksTableProps) {
+export function SharedTasksTable({ tasks, statuses, brands, users, permissions }: SharedTasksTableProps) {
   const router = useRouter();
+  const params = useParams();
+  const linkId = params.linkId as string;
+  const { setSharedTasks } = useSharedSession();
+  
   const [data, setData] = React.useState<Task[]>(tasks);
   React.useEffect(() => {
     setData(tasks || []);
@@ -58,7 +65,45 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions, 
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({})
   const { toast } = useToast();
-  
+
+  const [updatingCells, setUpdatingCells] = React.useState<Record<string, boolean>>({});
+
+  const canUpdateStatus = permissions.canChangeStatus;
+  const canEditLimited = permissions.canEditContent;
+
+  const handleCellUpdate = async (taskId: string, updates: Partial<Task>) => {
+    setUpdatingCells(prev => ({...prev, [taskId]: true}));
+
+    // Optimistic UI Update
+    const updatedTasks = data.map(t => t.id === taskId ? { ...t, ...updates } : t);
+    setData(updatedTasks);
+    if(setSharedTasks) setSharedTasks(updatedTasks);
+
+    try {
+        const response = await fetch('/api/share/update-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ linkId, taskId, updates }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update task from server.');
+        }
+
+    } catch (error) {
+        // Revert UI on failure
+        setData(tasks);
+        if(setSharedTasks) setSharedTasks(tasks);
+        toast({
+            variant: "destructive",
+            title: "Update Failed",
+            description: "Your changes could not be saved.",
+        });
+    } finally {
+      setUpdatingCells(prev => ({...prev, [taskId]: false}));
+    }
+  }
+
   const statusOptions = React.useMemo(() => {
     const getIcon = (statusName: string) => {
         if (statusName === 'To Do') return Circle;
@@ -145,15 +190,44 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions, 
       accessorKey: 'priority',
       header: 'Priority',
       cell: ({ row }) => {
+        const task = row.original;
         const currentPriority = row.getValue('priority') as Priority;
         const priority = priorityInfo[currentPriority];
         if (!priority) return null;
+
+        if (!canEditLimited) {
+            return (
+              <Badge variant="outline" className='font-normal'>
+                  <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
+                  <span>{priority.label}</span>
+              </Badge>
+            )
+        }
+        
         return (
-            <Badge variant="outline" className='font-normal'>
-                <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
-                <span>{priority.label}</span>
-            </Badge>
-        )
+             <Select
+              value={currentPriority}
+              onValueChange={(newPriority: Priority) => handleCellUpdate(task.id, { priority: newPriority })}
+              disabled={updatingCells[task.id]}
+            >
+              <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
+                 <div className="flex items-center gap-2">
+                    <priority.icon className={`h-4 w-4 ${priority.color}`} />
+                    <span>{priority.label}</span>
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(priorityInfo).map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    <div className="flex items-center gap-2">
+                      <p.icon className={`h-4 w-4 ${p.color}`} />
+                      <span>{p.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+        );
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id));
@@ -208,19 +282,83 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions, 
       },
     },
     {
+      accessorKey: 'dueDate',
+      header: 'Due Date',
+      cell: ({ row }) => {
+        const task = row.original;
+        const dueDate = task.dueDate;
+
+        if (!canEditLimited) {
+          return dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>;
+        }
+
+        return (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"ghost"}
+                className="w-[150px] justify-start text-left font-normal"
+                disabled={updatingCells[task.id]}
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span>Set date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <CalendarComponent
+                mode="single"
+                selected={dueDate ? parseISO(dueDate) : undefined}
+                onSelect={(date) => handleCellUpdate(task.id, { dueDate: date?.toISOString() })}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        );
+      }
+    },
+    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
+        const task = row.original;
         const statusName = row.getValue('status') as string;
         const statusDetails = statuses?.find(s => s.name === statusName);
         const Icon = statusOptions.find(s => s.value === statusName)?.icon || Circle;
+
+        if (!canUpdateStatus) {
+           return (
+              <Badge variant="outline" className="font-medium" style={{ backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent', borderColor: statusDetails?.color, color: statusDetails?.color }}>
+                  <div className="flex items-center gap-2">
+                      <Icon className="h-3 w-3" />
+                      <span>{statusName}</span>
+                  </div>
+              </Badge>
+            );
+        }
+
         return (
-          <Badge variant="outline" className="font-medium" style={{ backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent', borderColor: statusDetails?.color, color: statusDetails?.color }}>
-              <div className="flex items-center gap-2">
-                  <Icon className="h-3 w-3" />
-                  <span>{statusName}</span>
-              </div>
-          </Badge>
+            <Select 
+                value={statusName} 
+                onValueChange={(newStatus) => handleCellUpdate(task.id, { status: newStatus })}
+                disabled={updatingCells[task.id]}
+            >
+                <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-3 w-3" style={{ color: statusDetails?.color }} />
+                      <span>{statusName}</span>
+                    </div>
+                </SelectTrigger>
+                <SelectContent>
+                    {statuses.map(s => (
+                        <SelectItem key={s.id} value={s.name}>
+                            <div className="flex items-center gap-2">
+                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }}></div>
+                                {s.name}
+                            </div>
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         );
       },
       filterFn: (row, id, value) => {
@@ -297,7 +435,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions, 
                         return;
                       }
                       const task = row.original;
-                      const path = `/tasks/${task.id}?shared=true`;
+                      const path = `/share/${linkId}/tasks/${task.id}`;
                       router.push(path);
                   }}
                 >

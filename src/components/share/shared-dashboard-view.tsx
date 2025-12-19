@@ -1,7 +1,7 @@
 'use client';
 import type { Task, SharedLink, WorkflowStatus, Brand, User } from '@/lib/types';
-import { KanbanBoard } from '../tasks/kanban-board';
 import { Loader2 } from 'lucide-react';
+import { SharedKanbanBoard } from './shared-kanban-board';
 
 interface SharedDashboardViewProps {
   session: SharedLink;
@@ -21,7 +21,12 @@ export function SharedDashboardView({ session, tasks, statuses, brands, users, i
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <KanbanBoard tasks={tasks || []} permissions={session.permissions} isSharedView={true} />
+          <SharedKanbanBoard 
+            tasks={tasks || []} 
+            statuses={statuses || []}
+            permissions={session.permissions} 
+            linkId={session.id}
+          />
         )}
       </main>
     </div>

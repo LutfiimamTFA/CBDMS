@@ -38,7 +38,6 @@ export function SharedTasksView({ session, tasks, statuses, brands, users, isLoa
             brands={brands || []}
             users={users || []}
             permissions={session.permissions}
-            isShareView={true}
           />
         )}
       </main>
