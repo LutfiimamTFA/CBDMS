@@ -58,7 +58,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
-import { ShareTaskDialog } from './share-task-dialog';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -122,7 +121,6 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
   
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
-  const [shareTask, setShareTask] = React.useState<Task | null>(null);
 
   const canChangePriority = React.useMemo(() => {
       if (!profile) return false;
@@ -178,15 +176,6 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
       const taskRef = doc(firestore, 'tasks', taskId);
       deleteDocumentNonBlocking(taskRef);
   };
-
-  const copyTaskLink = (taskId: string) => {
-    const link = `${window.location.origin}/tasks/${taskId}`;
-    navigator.clipboard.writeText(link);
-    toast({
-        title: "Link Copied!",
-        description: "Task link has been copied to your clipboard.",
-    });
-  }
   
   const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
     if (!firestore || !profile) return;
@@ -483,8 +472,6 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
             return false;
         }, [profile, permissions, task]);
 
-        const isCreator = profile?.id === task.createdBy.id;
-
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -502,12 +489,6 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                   <History className="mr-2 h-4 w-4" />
                   View History
               </DropdownMenuItem>
-              {isCreator && (
-                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setShareTask(task) }}>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    Share Task
-                </DropdownMenuItem>
-              )}
               <DropdownMenuSeparator />
               {canDelete && (
                 <DropdownMenuItem
@@ -706,7 +687,6 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
           </div>
         </div>
       </div>
-      {shareTask && <ShareTaskDialog open={!!shareTask} onOpenChange={() => setShareTask(null)} task={shareTask} />}
       <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
         <AlertDialogContent>
             <AlertDialogHeader>
@@ -772,5 +752,3 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     </>
   );
 }
-
-    

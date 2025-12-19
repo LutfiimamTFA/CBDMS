@@ -28,36 +28,15 @@ import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
-import { defaultNavItems } from '@/lib/navigation-items';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import { Badge } from '../ui/badge';
+import { priorityInfo } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
-  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
-  if (!LucideIconComponent) return null;
-  return <LucideIconComponent {...props} />;
-};
-
-
-// Define which nav items are shareable
-const isShareable = (item: NavigationItem) => {
-    const shareablePaths = ['/dashboard', '/tasks', '/calendar', '/schedule', '/social-media', '/social-media/analytics'];
-    return shareablePaths.includes(item.path);
-};
-
-
-interface ShareViewDialogProps {
-  children?: React.ReactNode;
-  navItems: NavigationItem[];
-}
-
-// Function to recursively remove undefined values from any object
 const removeUndefined = (obj: any): any => {
-    if (obj === undefined) {
-        return null; // Firestore cannot handle undefined
-    }
-    if (Array.isArray(obj)) {
-        return obj.map(removeUndefined);
-    } else if (obj !== null && typeof obj === 'object' && !(obj instanceof Date) && !(typeof obj.toDate === 'function')) { // Exclude Timestamps
+    if (obj === undefined) return null;
+    if (Array.isArray(obj)) return obj.map(removeUndefined);
+    if (obj !== null && typeof obj === 'object' && !(obj instanceof Date) && !(typeof obj.toDate === 'function')) {
         return Object.keys(obj).reduce((acc, key) => {
             const value = obj[key];
             if (value !== undefined) {
@@ -69,6 +48,10 @@ const removeUndefined = (obj: any): any => {
     return obj;
 };
 
+interface ShareViewDialogProps {
+  children?: React.ReactNode;
+  navItems: NavigationItem[];
+}
 
 export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -85,71 +68,89 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
   const [password, setPassword] = useState('');
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
   const [accessLevel, setAccessLevel] = useState<SharedLink['accessLevel']>('view');
-
-  const shareableNavItems = useMemo(() => navItems.filter(isShareable), [navItems]);
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   
-  const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
-
-  const isManagerOrAdmin = useMemo(() => profile?.role === 'Manager' || profile?.role === 'Super Admin', [profile]);
   const isEmployeeOrPIC = useMemo(() => profile?.role === 'Employee' || profile?.role === 'PIC', [profile]);
+  const isManagerOrAdmin = useMemo(() => profile?.role === 'Manager' || profile?.role === 'Super Admin', [profile]);
+  
+  const delegatedTasksQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    return query(
+      collection(firestore, 'tasks'), 
+      where('assigneeIds', 'array-contains', profile.id),
+      where('companyId', '==', profile.companyId)
+      // We will filter out tasks created by self on the client-side
+    );
+  }, [firestore, profile]);
+
+  const { data: delegatedTasks, isLoading: tasksLoading } = useCollection<Task>(delegatedTasksQuery);
+
+  const tasksToShow = useMemo(() => {
+    if (!delegatedTasks || !profile) return [];
+    // Only show tasks that are NOT created by the current user.
+    return delegatedTasks.filter(task => task.createdBy.id !== profile.id);
+  }, [delegatedTasks, profile]);
+
 
   useEffect(() => {
     if (isOpen) {
-      const dashboardItem = shareableNavItems.find(item => item.path === '/dashboard');
-      setSelectedNavIds(dashboardItem ? [dashboardItem.id] : []);
+      setIsLoading(false);
+      setGeneratedLink(null);
+      setUsePassword(false);
+      setPassword('');
+      setLinkName('');
+      setExpiresAt(undefined);
       setAccessLevel('view');
+      setSelectedTaskIds([]);
     }
-  }, [isOpen, shareableNavItems]);
-
+  }, [isOpen]);
 
   const handleCreateLink = async () => {
-    if (!firestore || !profile) return;
+    if (!firestore || !profile || selectedTaskIds.length === 0) {
+        toast({ variant: 'destructive', title: 'No Tasks Selected', description: 'Please select at least one task to share.' });
+        return;
+    }
     
     setIsLoading(true);
     setGeneratedLink(null);
 
     try {
-        let tasksQuery;
-        if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
-            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds));
-        } else { // Employee, PIC, Client, or Manager with no brands
-            tasksQuery = query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
-        }
-        
+        const selectedTasks = delegatedTasks?.filter(task => selectedTaskIds.includes(task.id)) || [];
         const statusesQuery = query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId), orderBy('order'));
         
-        const [tasksSnap, statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([
-            getDocs(tasksQuery),
+        const [statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([
             getDocs(statusesQuery),
             getDocs(query(collection(firestore, 'users'), where('companyId', '==', profile.companyId))),
             getDocs(query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId))),
             getDocs(query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId)))
         ]);
 
-        if (statusesSnap.empty || statusesSnap.docs.length < 2) {
-            throw new Error("Cannot create share link: A valid workflow (with at least 2 statuses) was not found for this company. Please configure it in the admin settings.");
+        if (statusesSnap.empty) {
+            throw new Error("Cannot create share link: A valid workflow was not found for this company.");
         }
 
         const snapshot = {
-            tasks: tasksSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Task)),
+            tasks: selectedTasks,
             statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
             users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
             socialMediaPosts: socialPostsSnap.docs.map(doc => ({ id: doc.id, ...doc.data()} as SocialMediaPost)),
         };
+        
+        // For a link sharing specific tasks, the only relevant nav item is the task list
+        const allowedNavItems = navItems.filter(item => item.path === '/tasks');
 
         const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
-          name: linkName || 'Shared View',
+          name: linkName || 'Shared Tasks',
           companyId: profile.companyId,
           creatorRole: profile.role,
-          allowedNavItems: selectedNavIds, 
+          allowedNavItems: allowedNavItems.map(item => item.id), 
           navItems: navItems.map(item => ({...item, label: t(item.label as any)})),
           accessLevel: accessLevel,
           snapshot,
           createdBy: profile.id,
           password: usePassword ? password : undefined,
           expiresAt: expiresAt || undefined,
-          brandIds: profile.role === 'Manager' ? profile.brandIds : undefined,
         };
         
         const cleanedData = removeUndefined(linkData);
@@ -176,26 +177,14 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  React.useEffect(() => {
-    if (isOpen) {
-      setIsLoading(false);
-      setGeneratedLink(null);
-      setUsePassword(false);
-      setPassword('');
-      setLinkName('');
-      setExpiresAt(undefined);
-      setAccessLevel('view');
-    }
-  }, [isOpen]);
-
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Share View</DialogTitle>
+          <DialogTitle>Share Delegated Tasks</DialogTitle>
           <DialogDescription>
-            Create a public link to share a filtered view of your work.
+            Create a public link to share specific tasks assigned to you by your manager.
           </DialogDescription>
         </DialogHeader>
 
@@ -208,27 +197,35 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
               </div>
               
               <div className="space-y-4 rounded-md border p-4">
-                <h4 className="text-sm font-medium">Available Pages</h4>
-                <p className="text-xs text-muted-foreground">Select which pages the recipient can view.</p>
-                <div className="space-y-2">
-                    {shareableNavItems.map(item => (
-                        <div key={item.id} className="flex items-center space-x-2">
-                            <Checkbox
-                                id={item.id}
-                                checked={selectedNavIds.includes(item.id)}
-                                onCheckedChange={(checked) => {
-                                    setSelectedNavIds(prev => 
-                                        checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
-                                    );
-                                }}
-                            />
-                            <label htmlFor={item.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
-                                <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
-                                {t(item.label as any) || item.label}
-                            </label>
-                        </div>
-                    ))}
-                </div>
+                <h4 className="text-sm font-medium">Select Tasks to Share</h4>
+                <p className="text-xs text-muted-foreground">Only tasks assigned to you by others are shown.</p>
+                <ScrollArea className="h-48">
+                    <div className="space-y-2 pr-4">
+                        {tasksLoading && <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin" /></div>}
+                        {!tasksLoading && tasksToShow.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No delegated tasks found.</p>}
+                        {tasksToShow.map(task => {
+                            const PriorityIcon = priorityInfo[task.priority].icon;
+                            return (
+                                <div key={task.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent has-[:checked]:bg-accent">
+                                    <Checkbox
+                                        id={task.id}
+                                        checked={selectedTaskIds.includes(task.id)}
+                                        onCheckedChange={(checked) => {
+                                            setSelectedTaskIds(prev => 
+                                                checked ? [...prev, task.id] : prev.filter(id => id !== task.id)
+                                            );
+                                        }}
+                                    />
+                                    <label htmlFor={task.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer">
+                                        <PriorityIcon className={cn("h-4 w-4", priorityInfo[task.priority].color)} />
+                                        <span className="flex-1 truncate">{task.title}</span>
+                                        <Badge variant="secondary">{task.status}</Badge>
+                                    </label>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </ScrollArea>
               </div>
 
                <div className="space-y-4 rounded-md border p-4">
@@ -307,13 +304,21 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
           </div>
          </ScrollArea>
         ) : (
-          <div className="space-y-2 py-4">
-            <Label htmlFor="share-link">Your Shareable Link</Label>
-            <div className="flex items-center gap-2">
-              <Input id="share-link" value={generatedLink} readOnly />
-              <Button size="icon" variant="secondary" onClick={copyToClipboard}>
-                <Copy className="h-4 w-4" />
-              </Button>
+          <div className="space-y-4 py-4">
+            <Alert>
+              <AlertTitle>Link Created Successfully!</AlertTitle>
+              <AlertDescription>
+                Anyone with this link can now view the tasks you selected with the permissions you've set.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="share-link">Your Shareable Link</Label>
+              <div className="flex items-center gap-2">
+                <Input id="share-link" value={generatedLink} readOnly />
+                <Button size="icon" variant="secondary" onClick={copyToClipboard}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -324,7 +329,7 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateLink} disabled={isLoading || selectedNavIds.length === 0}>
+              <Button onClick={handleCreateLink} disabled={isLoading || selectedTaskIds.length === 0}>
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
                 Create Link
               </Button>

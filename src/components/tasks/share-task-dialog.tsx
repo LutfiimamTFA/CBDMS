@@ -26,6 +26,8 @@ import { cn } from '@/lib/utils';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { useI18n } from '@/context/i18n-provider';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
 
 // Function to recursively remove undefined values from any object
 const removeUndefined = (obj: any): any => {
@@ -154,7 +156,7 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
         <DialogHeader>
           <DialogTitle>Share Task: {task.title}</DialogTitle>
           <DialogDescription>
-            Create a specific link for this task.
+            Create a specific link for this task. As the creator, you have full control over permissions for this specific share.
           </DialogDescription>
         </DialogHeader>
 
@@ -181,19 +183,16 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
                             <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
                             <span className="font-normal text-xs text-muted-foreground">
                                 Can change task status.
-                                {isCreatorEmployee && <span className="font-bold text-destructive"> Cannot move tasks to "Done" or "Revisi".</span>}
                             </span>
                         </Label>
                       </div>
-                       {isCreatorOfTask && (
-                        <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                       <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
                           <RadioGroupItem value="limited-edit" id="perm-edit-task" />
                           <Label htmlFor="perm-edit-task" className="flex flex-col gap-1 leading-normal cursor-pointer">
                               <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
                               <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority.</span>
                           </Label>
                         </div>
-                       )}
                     </RadioGroup>
               </div>
 
@@ -240,13 +239,21 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
             </div>
           </div>
         ) : (
-          <div className="space-y-2 py-4">
-            <Label htmlFor="share-link-task">Your Shareable Link</Label>
-            <div className="flex items-center gap-2">
-              <Input id="share-link-task" value={generatedLink} readOnly />
-              <Button size="icon" variant="secondary" onClick={copyToClipboard}>
-                <Copy className="h-4 w-4" />
-              </Button>
+          <div className="space-y-4 py-4">
+             <Alert>
+              <AlertTitle>Link Created Successfully!</AlertTitle>
+              <AlertDescription>
+                Anyone with this link can now view and interact with this specific task.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="share-link-task">Your Shareable Link</Label>
+              <div className="flex items-center gap-2">
+                <Input id="share-link-task" value={generatedLink} readOnly />
+                <Button size="icon" variant="secondary" onClick={copyToClipboard}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         )}

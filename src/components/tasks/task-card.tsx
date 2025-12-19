@@ -1,6 +1,6 @@
 
 'use client';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { Task, User } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,8 +10,6 @@ import { format, parseISO, isAfter, formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRouter } from 'next/navigation';
 import { useUserProfile } from '@/firebase';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
-import { ShareTaskDialog } from './share-task-dialog';
 
 
 interface TaskCardProps {
@@ -22,7 +20,6 @@ interface TaskCardProps {
 export function TaskCard({ task, draggable = false }: TaskCardProps) {
   const router = useRouter();
   const { profile: currentUser } = useUserProfile();
-  const [isShareOpen, setIsShareOpen] = useState(false);
 
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
@@ -45,8 +42,6 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       return `${user.name} ${action} ${timeAgo}`;
   }, [task.lastActivity]);
 
-  const isCreator = currentUser?.id === task.createdBy.id;
-
   return (
       <>
       <Card
@@ -58,22 +53,6 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       >
         <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg", brandColor)}></div>
         
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                    <MoreHorizontal className="h-4 w-4" />
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                 {isCreator && (
-                    <DropdownMenuItem onSelect={() => setIsShareOpen(true)}>
-                       <Share2 className="mr-2 h-4 w-4" />
-                       Share Task
-                    </DropdownMenuItem>
-                 )}
-            </DropdownMenuContent>
-        </DropdownMenu>
-
         <CardContent className="p-4 pl-6 space-y-3">
           <div className="flex items-start justify-between">
             <div className="font-medium cursor-pointer pr-8">
@@ -198,7 +177,6 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
         </div>
         </CardContent>
       </Card>
-      <ShareTaskDialog open={isShareOpen} onOpenChange={setIsShareOpen} task={task} />
       </>
   );
 }

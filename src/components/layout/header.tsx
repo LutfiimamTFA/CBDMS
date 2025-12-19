@@ -25,10 +25,12 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
   const pathname = usePathname();
   const { profile } = useUserProfile();
 
+  // "Share View" is available on shareable paths for any logged-in user.
+  // The dialog itself will handle role-based permissions.
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
   const isPathShareable = shareableViews.some(p => pathname.startsWith(p));
   
-  const canShowShareButton = !isSharedView && profile && (profile.role === 'Manager' || profile.role === 'Super Admin') && isPathShareable;
+  const canShowShareButton = !isSharedView && profile && isPathShareable;
 
 
   return (
