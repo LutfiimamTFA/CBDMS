@@ -85,6 +85,7 @@ interface TasksDataTableProps {
 
 const formatDate = (date: any): string => {
     if (!date) return 'N/A';
+    // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
     const dateObj = date.toDate ? date.toDate() : new Date(date);
     if (isNaN(dateObj.getTime())) return 'Invalid date';
     return format(dateObj, 'PP, p');
@@ -440,9 +441,16 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       cell: ({ row }) => {
         const task = row.original;
         
-        const canPerformActions = !sharedPermissions;
+        const canDelete = React.useMemo(() => {
+            if (!profile || !permissions) return false;
+            if (profile.role === 'Super Admin') return true;
+            if (profile.role === 'Manager') {
+                return permissions.Manager.canDeleteTasks && (profile.brandIds || []).includes(task.brandId);
+            }
+            return false;
+        }, [profile, permissions, task]);
 
-        if (!canPerformActions) return null;
+        if (isShareView) return null;
 
         return (
           <DropdownMenu>
@@ -466,13 +474,15 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                 Copy Link
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem
-                className='text-destructive focus:text-destructive focus:bg-destructive/10'
-                onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id)}}
-              >
-                <Trash2 className='mr-2 h-4 w-4' />
-                Delete Task
-              </DropdownMenuItem>
+              {canDelete && (
+                <DropdownMenuItem
+                    className='text-destructive focus:text-destructive focus:bg-destructive/10'
+                    onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id)}}
+                >
+                    <Trash2 className='mr-2 h-4 w-4' />
+                    Delete Task
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )

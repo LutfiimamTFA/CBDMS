@@ -114,7 +114,6 @@ const createActivity = (user: User, action: string): Activity => {
 
 const formatDate = (date: any): string => {
     if (!date) return 'N/A';
-    // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
     const dateObj = date.toDate ? date.toDate() : new Date(date);
     if (isNaN(dateObj.getTime())) return 'Invalid date';
     return format(dateObj, 'PP, p');
@@ -245,7 +244,7 @@ export function TaskDetailsSheet({
   const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
 
   const canEditContent = isSharedView 
-    ? (accessLevel === 'limited-edit') 
+    ? false
     : (currentUser && (
         currentUser.role === 'Super Admin' || 
         isManagerOfBrand ||
@@ -390,7 +389,7 @@ export function TaskDetailsSheet({
             fetch('/api/create-activity', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ taskId: initialTask.id, actionText }),
+                body: JSON.stringify({ taskId: initialTask.id, actionText, linkCreatorId: initialTask.createdBy.id }),
             });
 
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
@@ -479,7 +478,7 @@ export function TaskDetailsSheet({
           fetch('/api/create-activity', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: initialTask.id, actionText }),
+            body: JSON.stringify({ taskId: initialTask.id, actionText, linkCreatorId: initialTask.createdBy.id }),
           });
 
           toast({ title: 'Priority Updated' });
