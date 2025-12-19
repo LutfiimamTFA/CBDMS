@@ -26,7 +26,7 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
   const { profile } = useUserProfile();
 
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
-  const canShareView = !isSharedView && profile && shareableViews.includes(pathname);
+  const canShowShareButton = !isSharedView && profile && shareableViews.includes(pathname);
 
 
   return (
@@ -42,7 +42,7 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
         <div className="flex items-center gap-2">
             {!isSharedView ? (
               <>
-                {canShareView && (
+                {canShowShareButton && (
                   <ShareViewDialog navItems={navItems}>
                     <Button variant="outline" size="sm">
                       <Share2 className="mr-2" /> Share View

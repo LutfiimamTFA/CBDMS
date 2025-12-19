@@ -78,6 +78,8 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
 
   const isCreatorEmployee = profile?.role === 'Employee' || profile?.role === 'PIC';
   const isCreatorManagerOrAdmin = profile?.role === 'Manager' || profile?.role === 'Super Admin';
+  const isCreatorOfTask = profile?.id === task.createdBy.id;
+
 
   useEffect(() => {
     if (open) {
@@ -105,11 +107,14 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
             socialMediaPosts: [], // Not relevant for single task share
         };
 
+        // For "Share Task", we only allow the list view.
+        const allowedNavItems = defaultNavItems.filter(item => item.path === '/tasks');
+
         const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
           name: linkName || 'Shared Task',
           companyId: profile.companyId,
           creatorRole: profile.role,
-          allowedNavItems: ['nav_list'], // A single task is just a task list view
+          allowedNavItems: allowedNavItems.map(item => item.id),
           navItems: defaultNavItems.map(item => ({...item, label: t(item.label as any)})),
           accessLevel: accessLevel,
           snapshot,
@@ -180,7 +185,7 @@ export function ShareTaskDialog({ open, onOpenChange, task }: ShareTaskDialogPro
                             </span>
                         </Label>
                       </div>
-                       {isCreatorManagerOrAdmin && (
+                       {isCreatorOfTask && (
                         <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
                           <RadioGroupItem value="limited-edit" id="perm-edit-task" />
                           <Label htmlFor="perm-edit-task" className="flex flex-col gap-1 leading-normal cursor-pointer">

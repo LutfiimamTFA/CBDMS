@@ -48,6 +48,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   const isCreator = currentUser?.id === task.createdBy.id;
 
   return (
+      <>
       <Card
         className={cn(
           "transition-shadow duration-200 hover:shadow-lg w-full relative group/card",
@@ -196,7 +197,8 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
             </div>
         </div>
         </CardContent>
-         <ShareTaskDialog open={isShareOpen} onOpenChange={setIsShareOpen} task={task} />
       </Card>
+      <ShareTaskDialog open={isShareOpen} onOpenChange={setIsShareOpen} task={task} />
+      </>
   );
 }

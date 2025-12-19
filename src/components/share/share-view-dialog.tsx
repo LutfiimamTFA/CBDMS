@@ -91,12 +91,12 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
   const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
 
   const isManagerOrAdmin = useMemo(() => profile?.role === 'Manager' || profile?.role === 'Super Admin', [profile]);
+  const isEmployeeOrPIC = useMemo(() => profile?.role === 'Employee' || profile?.role === 'PIC', [profile]);
 
   useEffect(() => {
     if (isOpen) {
-      const dashboardItem = shareableNavItems.find(item => item.id === 'nav_task_board');
+      const dashboardItem = shareableNavItems.find(item => item.path === '/dashboard');
       setSelectedNavIds(dashboardItem ? [dashboardItem.id] : []);
-      // Reset access level to the most restrictive option when dialog opens
       setAccessLevel('view');
     }
   }, [isOpen, shareableNavItems]);
@@ -104,24 +104,19 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
-    if (profile.role === 'Super Admin') {
-        toast({ variant: 'destructive', title: 'Action Not Allowed', description: 'Super Admins cannot create share links.' });
-        return;
-    }
-
+    
     setIsLoading(true);
     setGeneratedLink(null);
 
     try {
         let tasksQuery;
-        if (profile.role === 'Manager') {
-            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds || ['__dummy_id__']));
-        } else { // Employee, PIC, Client
+        if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
+            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds));
+        } else { // Employee, PIC, Client, or Manager with no brands
             tasksQuery = query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
         }
         
-        // The source of truth for workflow is the statuses for the entire company.
-        const statusesQuery = query(collection(firestore, 'statuses'), orderBy('order'));
+        const statusesQuery = query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId), orderBy('order'));
         
         const [tasksSnap, statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([
             getDocs(tasksQuery),
@@ -252,7 +247,7 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
                             <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
                             <span className="font-normal text-xs text-muted-foreground">
                                 Can view pages and change task statuses.
-                                {!isManagerOrAdmin && <span className="font-bold text-destructive"> Cannot move tasks to "Done" or "Revisi".</span>}
+                                {isEmployeeOrPIC && <span className="font-bold text-destructive"> Cannot move tasks to "Done" or "Revisi".</span>}
                             </span>
                         </Label>
                       </div>
