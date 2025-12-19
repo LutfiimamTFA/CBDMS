@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useEffect, useState } from 'react';
@@ -193,13 +194,15 @@ export default function SharedLinkRedirectorPage() {
         }
         
         const allowedNavIds = new Set(sharedLink.allowedNavItems || []);
-        const availableNavItems = sharedLink.navItems || [];
+        
+        // Filter the creator's nav items to only include those that were explicitly allowed.
+        const redirectableItems = (sharedLink.navItems || [])
+            .filter(item => allowedNavIds.has(item.id) && getScopeFromPath(item.path))
+            .sort((a, b) => a.order - b.order);
 
-        // Find the first valid, allowed, and shareable page to redirect to
-        const firstValidItem = availableNavItems
-            .sort((a, b) => a.order - b.order)
-            .find(item => allowedNavIds.has(item.id) && getScopeFromPath(item.path));
-
+        // Find the first valid item from the *allowed* list.
+        const firstValidItem = redirectableItems[0];
+        
         if (firstValidItem) {
             const scope = getScopeFromPath(firstValidItem.path);
             if (scope) {
