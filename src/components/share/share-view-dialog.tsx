@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -121,7 +122,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         }
         
         // The source of truth for workflow is the statuses for the entire company.
-        const statusesQuery = query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId), orderBy('order'));
+        const statusesQuery = query(collection(firestore, 'statuses'), orderBy('order'));
         
         const [tasksSnap, statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([
             getDocs(tasksQuery),
