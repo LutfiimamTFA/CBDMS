@@ -88,10 +88,12 @@ export async function POST(request: Request) {
             }
         }
 
+        const serverTimestamp = Timestamp.now();
+
         // --- Prepare Updates for the Original Task Document ---
         const finalUpdates: any = {
             ...updates,
-            updatedAt: Timestamp.now(),
+            updatedAt: serverTimestamp,
         };
 
         let actionDescription: string | null = null;
@@ -108,7 +110,7 @@ export async function POST(request: Request) {
         // 2. Update the snapshot within the sharedLink document
         const snapshotTasks = sharedLink.snapshot.tasks || [];
         const updatedSnapshotTasks = snapshotTasks.map(task => 
-            task.id === taskId ? { ...task, ...updates } : task
+            task.id === taskId ? { ...task, ...updates, updatedAt: serverTimestamp.toDate().toISOString() } : task
         );
         transaction.update(linkRef, { 'snapshot.tasks': updatedSnapshotTasks });
 
@@ -117,14 +119,13 @@ export async function POST(request: Request) {
             const notificationTitle = `Status Changed: ${oldTask.title}`;
             const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
             
-            // Notify all assignees of the task
             const notifiedUserIds = new Set<string>(oldTask.assigneeIds);
              
             notifiedUserIds.forEach(userId => {
                 const notifRef = db.collection(`users/${userId}/notifications`).doc();
                 const newNotification: Omit<Notification, 'id'> = {
                     userId, title: notificationTitle, message: notificationMessage, taskId: oldTask.id, isRead: false,
-                    createdAt: Timestamp.now() as any,
+                    createdAt: serverTimestamp,
                     createdBy: {
                         id: sharedActor.id,
                         name: sharedActor.name,
@@ -140,6 +141,6 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Error updating shared task:', error);
-    return NextResponse.json({ message: 'An internal server error occurred.', error: error.message }, { status: 500 });
+    return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: 500 });
   }
 }
