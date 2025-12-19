@@ -1,6 +1,6 @@
 
 'use client';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Task, User } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,6 +10,9 @@ import { format, parseISO, isAfter, formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRouter } from 'next/navigation';
 import { useUserProfile } from '@/firebase';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { Button } from '../ui/button';
+import { ShareTaskDialog } from './share-task-dialog';
 
 
 interface TaskCardProps {
@@ -20,6 +23,7 @@ interface TaskCardProps {
 export function TaskCard({ task, draggable = false }: TaskCardProps) {
   const router = useRouter();
   const { profile: currentUser } = useUserProfile();
+  const [isShareTaskOpen, setIsShareTaskOpen] = useState(false);
 
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
@@ -41,6 +45,9 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       const timeAgo = timestamp ? formatDistanceToNow(timestamp.toDate ? timestamp.toDate() : new Date(timestamp), { addSuffix: true }) : '';
       return `${user.name} ${action} ${timeAgo}`;
   }, [task.lastActivity]);
+  
+  const isCreatorEmployeeOrPIC = ['Employee', 'PIC', 'Client'].includes(task.createdBy.role);
+
 
   return (
       <>
@@ -49,11 +56,10 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
           "transition-shadow duration-200 hover:shadow-lg w-full relative group/card",
           draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
         )}
-         onClick={() => router.push(`/tasks/${task.id}`)}
       >
         <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg", brandColor)}></div>
         
-        <CardContent className="p-4 pl-6 space-y-3">
+        <CardContent className="p-4 pl-6 space-y-3" onClick={() => router.push(`/tasks/${task.id}`)}>
           <div className="flex items-start justify-between">
             <div className="font-medium cursor-pointer pr-8">
               <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
@@ -81,6 +87,23 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                       </TooltipContent>
                   </Tooltip>
               </TooltipProvider>
+               <DropdownMenu onOpenChange={(e) => e.stopPropagation()}>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent onClick={(e) => e.stopPropagation()}>
+                     {isCreatorEmployeeOrPIC && (
+                        <ShareTaskDialog task={task} open={isShareTaskOpen} onOpenChange={setIsShareTaskOpen}>
+                          <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                            <Share2 className="mr-2 h-4 w-4"/> Share Task
+                          </DropdownMenuItem>
+                        </ShareTaskDialog>
+                     )}
+                    <DropdownMenuItem>View Details</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
             </div>
           </div>
         
