@@ -57,6 +57,7 @@ import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
+import { Calendar } from '../ui/calendar';
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -260,6 +261,11 @@ export function TaskDetailsSheet({
       }
       return false;
   }, [currentUser, isSharedView, accessLevel]);
+  
+  const canEditDueDate = useMemo(() => {
+    if (isSharedView) return accessLevel === 'limited-edit';
+    return canEditContent;
+  }, [isSharedView, accessLevel, canEditContent]);
 
   const canComment = !isSharedView && !!currentUser;
   
@@ -384,14 +390,6 @@ export function TaskDetailsSheet({
             });
             if (!response.ok) throw new Error('Failed to update status');
 
-            // Fire and forget activity logging
-            const actionText = `changed status from "${oldStatus}" to "${newStatus}"`;
-            fetch('/api/create-activity', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ taskId: initialTask.id, actionText, linkCreatorId: initialTask.createdBy.id }),
-            });
-
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
         } catch (error) {
             form.setValue('status', oldStatus); // Revert
@@ -473,13 +471,6 @@ export function TaskDetailsSheet({
           });
           if (!response.ok) throw new Error('Failed to update priority');
           
-          // Fire-and-forget activity logging for shared view
-          const actionText = `set priority from "${currentPriority}" to "${priority}"`;
-          fetch('/api/create-activity', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: initialTask.id, actionText, linkCreatorId: initialTask.createdBy.id }),
-          });
 
           toast({ title: 'Priority Updated' });
         } catch (error) {
@@ -1514,12 +1505,26 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                             <FormItem className="grid grid-cols-3 items-center gap-2">
                                <FormLabel className="text-muted-foreground">Due Date</FormLabel>
                                <div className="col-span-2">
-                                 {!canEditContent ? (
+                                 {!canEditDueDate ? (
                                      <div className="text-sm font-medium">
                                          {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}
                                      </div>
                                  ) : (
-                                     <Input type="date" {...field} value={field.value || ''} />
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button variant="ghost" className="w-full justify-start p-0 font-normal">
+                                        {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : <span className='text-muted-foreground'>Set date</span>}
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                      <Calendar
+                                        mode="single"
+                                        selected={field.value ? parseISO(field.value) : undefined}
+                                        onSelect={(date) => form.setValue('dueDate', date?.toISOString())}
+                                        initialFocus
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
                                  )}
                                </div>
                             </FormItem>

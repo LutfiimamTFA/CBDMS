@@ -31,7 +31,7 @@ import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO, isAfter } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2 } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2, Calendar } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
 import { DataTableViewOptions } from './data-table-view-options';
@@ -56,6 +56,8 @@ import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { Calendar as CalendarComponent } from '../ui/calendar';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -409,6 +411,47 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         const assigneeIds = row.original.assigneeIds;
         return value.some((val: string) => assigneeIds.includes(val));
       },
+    },
+    {
+      accessorKey: 'dueDate',
+      header: 'Due Date',
+      cell: ({ row }) => {
+        const task = row.original;
+        const dueDate = task.dueDate;
+        
+        if (isShareView && sharedPermissions?.accessLevel !== 'limited-edit') {
+            return dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>;
+        }
+        
+        return (
+           <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"ghost"}
+                className="w-[150px] justify-start text-left font-normal"
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span>Set date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <CalendarComponent
+                mode="single"
+                selected={dueDate ? parseISO(dueDate) : undefined}
+                onSelect={(date) => {
+                  if (isShareView) {
+                    // Logic to update shared task will be here
+                  } else {
+                    const taskRef = doc(firestore!, 'tasks', task.id);
+                    updateDocumentNonBlocking(taskRef, { dueDate: date?.toISOString() });
+                  }
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        )
+      }
     },
     {
       accessorKey: 'status',
