@@ -99,7 +99,8 @@ export async function POST(request: Request) {
         if (updates.dueDate || updates.priority) {
             const creatorIsManagerOrAdmin = sharedLink.creatorRole === 'Manager' || sharedLink.creatorRole === 'Super Admin';
             const creatorIsTaskOwner = sharedLink.createdBy === initialTask.createdBy.id;
-
+            
+            // Allow if creator is Manager/Admin OR if creator is the owner of the task (for Employee-created tasks)
             if (!creatorIsManagerOrAdmin && !creatorIsTaskOwner) {
                 throw new Error("The link creator does not have permission to change the due date or priority for this task.");
             }

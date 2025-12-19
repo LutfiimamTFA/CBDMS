@@ -276,11 +276,12 @@ export function TaskDetailsSheet({
     if (isSharedView) {
         if (accessLevel !== 'limited-edit') return false;
         const creatorIsManagerOrAdmin = creatorRole === 'Manager' || creatorRole === 'Super Admin';
-        const creatorIsTaskOwner = initialTask.createdBy.id === params.linkId; // Simplified check
-        return creatorIsManagerOrAdmin || creatorIsTaskOwner;
+        // For shared tasks created by employees/pics, they can also edit the due date
+        return creatorIsManagerOrAdmin || ['Employee', 'PIC'].includes(creatorRole || '');
     }
-    return canEditContent;
-  }, [isSharedView, accessLevel, canEditContent, creatorRole, initialTask.createdBy.id, params.linkId]);
+    // For non-shared view, if user is creator, they can edit due date.
+    return canEditContent || isCreator;
+  }, [isSharedView, accessLevel, creatorRole, canEditContent, isCreator]);
 
   const canComment = !isSharedView && !!currentUser;
   
