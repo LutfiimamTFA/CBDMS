@@ -95,10 +95,14 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   
   const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
 
+  const isManagerOrAdmin = useMemo(() => profile?.role === 'Manager' || profile?.role === 'Super Admin', [profile]);
+
   useEffect(() => {
     if (isOpen) {
       const dashboardItem = shareableNavItems.find(item => item.id === 'nav_task_board');
       setSelectedNavIds(dashboardItem ? [dashboardItem.id] : []);
+      // Reset access level to the most restrictive option when dialog opens
+      setAccessLevel('view');
     }
   }, [isOpen, shareableNavItems]);
 
@@ -251,16 +255,21 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                         <RadioGroupItem value="status" id="perm-status" />
                         <Label htmlFor="perm-status" className="flex flex-col gap-1 leading-normal cursor-pointer">
                             <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
-                            <span className="font-normal text-xs text-muted-foreground">Can view pages and change task statuses (including drag & drop).</span>
+                            <span className="font-normal text-xs text-muted-foreground">
+                                Can view pages and change task statuses.
+                                {!isManagerOrAdmin && <span className="font-bold text-destructive"> Cannot move tasks to "Done" or "Revisi".</span>}
+                            </span>
                         </Label>
                       </div>
-                       <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                        <RadioGroupItem value="limited-edit" id="perm-edit" />
-                        <Label htmlFor="perm-edit" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                            <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
-                            <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority. Cannot edit content.</span>
-                        </Label>
-                      </div>
+                       {isManagerOrAdmin && (
+                        <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                          <RadioGroupItem value="limited-edit" id="perm-edit" />
+                          <Label htmlFor="perm-edit" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                              <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
+                              <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority. Cannot edit content.</span>
+                          </Label>
+                        </div>
+                       )}
                     </RadioGroup>
               </div>
 

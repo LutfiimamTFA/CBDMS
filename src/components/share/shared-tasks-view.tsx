@@ -1,3 +1,4 @@
+
 'use client';
 import type { Task, WorkflowStatus, Brand, User, SharedLink } from '@/lib/types';
 import React from 'react';
@@ -78,6 +79,7 @@ export function SharedTasksView({ session, tasks, statuses, brands, users, isLoa
             open={sheetOpen}
             onOpenChange={handleSheetOpenChange}
             accessLevel={session.accessLevel}
+            creatorRole={session.creatorRole}
           />
       )}
     </div>

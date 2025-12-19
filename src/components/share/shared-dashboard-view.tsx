@@ -1,3 +1,4 @@
+
 'use client';
 import type { Task, SharedLink, WorkflowStatus, Brand, User } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
@@ -24,6 +25,7 @@ export function SharedDashboardView({ session, tasks, statuses, isLoading }: Sha
             statuses={statuses || []}
             accessLevel={session.accessLevel}
             linkId={session.id}
+            creatorRole={session.creatorRole}
           />
         )}
       </main>

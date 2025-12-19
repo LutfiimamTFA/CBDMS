@@ -15,13 +15,25 @@ function initializeAdminApp(): App {
   });
 }
 
-const createActivity = (user: User, action: string): Activity => {
+// This is a simplified "guest" user object for logging activities from a shared link.
+const createSharedActor = (session: SharedLink): User => {
     return {
-      id: `act-${crypto.randomUUID()}`,
-      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-      action: action,
-      timestamp: Timestamp.now() as any,
+        id: 'guest',
+        name: `Guest (${session.name})`,
+        avatarUrl: '', // No avatar for guests
+        email: '',
+        role: 'Client', // Treat guests as clients for simplicity
+        companyId: session.companyId,
     };
+};
+
+const createActivity = (user: User, action: string): Activity => {
+  return {
+    id: `act-${crypto.randomUUID()}`,
+    user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+    action: action,
+    timestamp: Timestamp.now() as any,
+  };
 };
 
 export async function POST(request: Request) {
@@ -36,97 +48,118 @@ export async function POST(request: Request) {
     }
 
     const linkRef = db.collection('sharedLinks').doc(linkId);
-    const linkSnap = await linkRef.get();
-
-    if (!linkSnap.exists) {
-      return NextResponse.json({ message: 'Share link not found.' }, { status: 404 });
-    }
-
-    const sharedLink = linkSnap.data() as SharedLink;
-
-    // --- Permission Validation ---
-    const allowedUpdates: Record<string, string[]> = {
-      'view': [],
-      'status': ['status'],
-      'limited-edit': ['status', 'dueDate', 'priority', 'revisionItems'],
-    };
-
-    const requestedUpdateKeys = Object.keys(updates);
-    const permittedFields = allowedUpdates[sharedLink.accessLevel] || [];
-
-    const isUpdateAllowed = requestedUpdateKeys.every(key => permittedFields.includes(key));
-
-    if (!isUpdateAllowed) {
-      return NextResponse.json({ message: 'You do not have permission to perform this update.' }, { status: 403 });
-    }
-    
-    // --- Workflow Status Identity Locking ---
-    if (updates.status) {
-        const snapshotStatuses = sharedLink.snapshot.statuses?.map(s => s.name) || [];
-        if (!snapshotStatuses.includes(updates.status)) {
-            return NextResponse.json({ message: 'Invalid status for this shared link.' }, { status: 403 });
-        }
-    }
-
-
-    // --- Update Logic ---
     const taskRef = db.collection('tasks').doc(taskId);
-    const taskSnap = await taskRef.get();
-    if (!taskSnap.exists) {
-        return NextResponse.json({ message: 'Task not found.' }, { status: 404 });
-    }
-    const oldTask = taskSnap.data() as Task;
-    
-    const creatorRef = db.collection('users').doc(sharedLink.createdBy);
-    const creatorSnap = await creatorRef.get();
-    if (!creatorSnap.exists()) {
-        return NextResponse.json({ message: 'Link creator not found.' }, { status: 404 });
-    }
-    const creator = creatorSnap.data() as User;
 
-    const finalUpdates: any = {
-      ...updates,
-      updatedAt: Timestamp.now(),
-    };
-    
-    const batch = db.batch();
-    
-    let actionDescription: string | null = null;
-    if (updates.status && updates.status !== oldTask.status) {
-        actionDescription = `changed status from "${oldTask.status}" to "${updates.status}" via share link`;
-    }
-    
-    if (actionDescription) {
-        const newActivity = createActivity(creator, actionDescription);
-        finalUpdates.lastActivity = newActivity;
-        finalUpdates.activities = [...(oldTask.activities || []), newActivity];
+    // Use a transaction to ensure atomicity
+    await db.runTransaction(async (transaction) => {
+        const linkSnap = await transaction.get(linkRef);
+        const taskSnap = await transaction.get(taskRef);
 
-        const notificationTitle = `Status Changed: ${oldTask.title}`;
-        const notificationMessage = `${creator.name} (via share link) changed status to ${updates.status}.`;
-        
-        const notifiedUserIds = new Set<string>();
-        oldTask.assigneeIds.forEach(assigneeId => {
-            if (assigneeId !== creator.id) notifiedUserIds.add(assigneeId);
-        });
-        if (oldTask.createdBy.id !== creator.id) notifiedUserIds.add(oldTask.createdBy.id);
+        if (!linkSnap.exists) {
+            throw new Error('Share link not found.');
+        }
+        if (!taskSnap.exists) {
+            throw new Error('Task not found.');
+        }
 
-        notifiedUserIds.forEach(userId => {
-            const notifRef = db.collection(`users/${userId}/notifications`).doc();
-            const newNotification: Omit<Notification, 'id'> = {
-                userId, title: notificationTitle, message: notificationMessage, taskId: oldTask.id, isRead: false,
-                createdAt: Timestamp.now() as any, createdBy: newActivity.user,
-            };
-            batch.set(notifRef, newNotification);
-        });
-    }
+        const sharedLink = linkSnap.data() as SharedLink;
+        const initialTask = taskSnap.data() as Task;
+        const sharedActor = createSharedActor(sharedLink);
 
-    batch.update(taskRef, finalUpdates);
-    await batch.commit();
+        // --- Permission Validation ---
+        const allowedUpdates: Record<string, string[]> = {
+            'view': [],
+            'status': ['status'],
+            'limited-edit': ['status', 'dueDate', 'priority', 'revisionItems'],
+        };
+
+        const requestedUpdateKeys = Object.keys(updates);
+        const permittedFields = allowedUpdates[sharedLink.accessLevel] || [];
+
+        const isUpdateAllowed = requestedUpdateKeys.every(key => permittedFields.includes(key));
+        if (!isUpdateAllowed) {
+            throw new Error('You do not have permission to perform this update.');
+        }
+
+        // --- Workflow Status Identity Locking & Role-based Restrictions ---
+        if (updates.status) {
+            const snapshotStatuses = sharedLink.snapshot.statuses?.map(s => s.name) || [];
+            if (!snapshotStatuses.includes(updates.status)) {
+                throw new Error(`Invalid status "${updates.status}" for this shared link.`);
+            }
+
+            // Prevent link created by Employee/PIC from moving task to 'Done' or 'Revisi'
+            const isRestrictedRole = sharedLink.creatorRole === 'Employee' || sharedLink.creatorRole === 'PIC';
+            if (isRestrictedRole && (updates.status === 'Done' || updates.status === 'Revisi')) {
+                throw new Error(`You do not have permission to move tasks to "${updates.status}".`);
+            }
+        }
+
+        // --- Due Date & Priority Change Validation based on Creator's Role ---
+        if (updates.dueDate || updates.priority) {
+            const creatorIsManagerOrAdmin = sharedLink.creatorRole === 'Manager' || sharedLink.creatorRole === 'Super Admin';
+            const creatorIsTaskOwner = sharedLink.createdBy === initialTask.createdBy.id;
+
+            if (!creatorIsManagerOrAdmin && !creatorIsTaskOwner) {
+                throw new Error("The link creator does not have permission to change the due date or priority for this task.");
+            }
+        }
+
+
+        const serverTimestamp = Timestamp.now();
+
+        // --- Prepare Updates for the Original Task Document ---
+        const finalUpdates: any = {
+            ...updates,
+            updatedAt: serverTimestamp,
+        };
+
+        let actionDescription: string | null = null;
+        if (updates.status && updates.status !== initialTask.status) {
+            actionDescription = `changed status from "${initialTask.status}" to "${updates.status}" via share link`;
+            const newActivity = createActivity(sharedActor, actionDescription);
+            const currentActivities = Array.isArray(initialTask.activities) ? initialTask.activities : [];
+            finalUpdates.activities = [...currentActivities, newActivity];
+            finalUpdates.lastActivity = newActivity;
+        }
+
+        // 1. Update the original task document
+        transaction.update(taskRef, finalUpdates);
+
+        // 2. Update the snapshot within the sharedLink document
+        const snapshotTasks = sharedLink.snapshot.tasks || [];
+        const updatedSnapshotTasks = snapshotTasks.map(task => 
+            task.id === taskId ? { ...task, ...updates, updatedAt: serverTimestamp.toDate().toISOString() } : task
+        );
+        transaction.update(linkRef, { 'snapshot.tasks': updatedSnapshotTasks });
+
+        // --- Handle Notifications ---
+        if (actionDescription) {
+            const notificationTitle = `Status Changed: ${initialTask.title}`;
+            const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
+            
+            const notifiedUserIds = new Set<string>(initialTask.assigneeIds);
+             
+            notifiedUserIds.forEach(userId => {
+                const notifRef = db.collection(`users/${userId}/notifications`).doc();
+                const newNotification: Omit<Notification, 'id'> = {
+                    userId, title: notificationTitle, message: notificationMessage, taskId: taskId, isRead: false,
+                    createdAt: serverTimestamp,
+                    createdBy: {
+                        id: sharedActor.id,
+                        name: sharedActor.name,
+                        avatarUrl: sharedActor.avatarUrl || '',
+                    },
+                };
+                transaction.set(notifRef, newNotification);
+            });
+        }
+    });
 
     return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200 });
 
   } catch (error: any) {
     console.error('Error updating shared task:', error);
-    return NextResponse.json({ message: 'An internal server error occurred.', error: error.message }, { status: 500 });
+    return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: 500 });
   }
 }

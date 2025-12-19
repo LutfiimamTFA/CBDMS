@@ -1,4 +1,5 @@
 
+
 'use client';
 import {
   Sheet,
@@ -102,6 +103,7 @@ interface TaskDetailsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accessLevel?: SharedLink['accessLevel'] | null;
+  creatorRole?: SharedLink['creatorRole'] | null;
 }
 
 const createActivity = (user: User, action: string): Activity => {
@@ -126,6 +128,7 @@ export function TaskDetailsSheet({
   open,
   onOpenChange,
   accessLevel = null,
+  creatorRole = null
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
@@ -249,30 +252,45 @@ export function TaskDetailsSheet({
     : (currentUser && (
         currentUser.role === 'Super Admin' || 
         isManagerOfBrand ||
-        isCreator 
+        (isCreator && (currentUser.role === 'Employee' || currentUser.role === 'PIC'))
       ));
       
   const canChangePriority = useMemo(() => {
-      if (isSharedView) return accessLevel === 'limited-edit';
-      if (!currentUser) return false;
-      if (currentUser.role === 'Super Admin') return true;
-      if (currentUser.role === 'Manager') {
-        return true;
+      if (isSharedView) {
+        if (accessLevel !== 'limited-edit') return false;
+        // Check if creator has rights
+        const creatorIsManagerOrAdmin = creatorRole === 'Manager' || creatorRole === 'Super Admin';
+        const creatorIsTaskOwner = initialTask.createdBy.id === params.linkId; // Simplified check
+        return creatorIsManagerOrAdmin || creatorIsTaskOwner;
       }
-      return false;
-  }, [currentUser, isSharedView, accessLevel]);
+      if (!currentUser) return false;
+      return currentUser.role === 'Super Admin' || currentUser.role === 'Manager';
+  }, [currentUser, isSharedView, accessLevel, creatorRole, initialTask.createdBy.id, params.linkId]);
   
   const canEditDueDate = useMemo(() => {
-    if (isSharedView) return accessLevel === 'limited-edit';
+    if (isSharedView) {
+        if (accessLevel !== 'limited-edit') return false;
+        const creatorIsManagerOrAdmin = creatorRole === 'Manager' || creatorRole === 'Super Admin';
+        const creatorIsTaskOwner = initialTask.createdBy.id === params.linkId; // Simplified check
+        return creatorIsManagerOrAdmin || creatorIsTaskOwner;
+    }
     return canEditContent;
-  }, [isSharedView, accessLevel, canEditContent]);
+  }, [isSharedView, accessLevel, canEditContent, creatorRole, initialTask.createdBy.id, params.linkId]);
 
   const canComment = !isSharedView && !!currentUser;
   
-  const canChangeStatus = isSharedView 
-    ? (accessLevel === 'status' || accessLevel === 'limited-edit')
-    : (currentUser && (isManagerOrAdmin || isAssignee));
-  
+  const canChangeStatus = useMemo(() => {
+    if (isSharedView) {
+      if (accessLevel === 'view') return false;
+      if (accessLevel === 'status' && (creatorRole === 'Employee' || creatorRole === 'PIC')) {
+        return !['Done', 'Revisi'].includes(form.getValues('status'));
+      }
+      return true;
+    }
+    if (!currentUser) return false;
+    return isManagerOrAdmin || isAssignee;
+  }, [isSharedView, accessLevel, creatorRole, form.watch('status'), currentUser, isManagerOrAdmin, isAssignee]);
+
   const canAssignUsers = isSharedView ? false : canEditContent;
   
   const form = useForm<TaskDetailsFormValues>({
@@ -1832,5 +1850,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    

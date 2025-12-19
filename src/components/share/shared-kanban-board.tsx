@@ -14,6 +14,7 @@ interface SharedKanbanBoardProps {
   statuses: WorkflowStatus[];
   accessLevel: SharedLink['accessLevel'];
   linkId: string;
+  creatorRole: SharedLink['creatorRole'];
 }
 
 export function SharedKanbanBoard({
@@ -21,13 +22,13 @@ export function SharedKanbanBoard({
   statuses,
   accessLevel,
   linkId,
+  creatorRole,
 }: SharedKanbanBoardProps) {
-  // This component is now fully controlled. It receives tasks from its parent
-  // which gets data from the real-time SharedSessionProvider.
-  // No more local `useState` for tasks.
   const { toast } = useToast();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const router = useRouter();
+
+  const isEmployeeLink = creatorRole === 'Employee' || creatorRole === 'PIC';
 
   const canDrag = accessLevel === 'status' || accessLevel === 'limited-edit';
 
@@ -43,6 +44,17 @@ export function SharedKanbanBoard({
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag) return;
+
+    // Prevent Employee-created links from moving to restricted statuses
+    if (isEmployeeLink && (newStatus === 'Revisi' || newStatus === 'Done')) {
+        toast({
+            variant: "destructive",
+            title: "Action Not Allowed",
+            description: "Tasks cannot be moved to 'Done' or 'Revisi' via this link.",
+        });
+        return;
+    }
+
     const taskId = e.dataTransfer.getData('taskId');
     const task = initialTasks.find((t) => t.id === taskId);
 
@@ -63,8 +75,6 @@ export function SharedKanbanBoard({
           throw new Error(errorData.message || 'Failed to update task.');
         }
 
-        // No more optimistic update or fire-and-forget here.
-        // The snapshot listener in SharedSessionProvider will handle the UI update.
         toast({
           title: 'Status Updated',
           description: `Task moved to "${newStatus}".`,
@@ -84,7 +94,6 @@ export function SharedKanbanBoard({
     router.push(path);
   };
   
-  // Strict validation as required.
   if (!statuses || statuses.length < 2) {
     return (
       <div className="flex h-full items-center justify-center p-8 w-full">
@@ -101,19 +110,24 @@ export function SharedKanbanBoard({
   return (
     <ScrollArea className="h-full w-full">
       <div className="flex h-full gap-4 pb-4">
-        {statuses.map((status) => (
-          <KanbanColumn
-            key={status.id}
-            status={status}
-            tasks={initialTasks.filter((task) => task.status === status.name)}
-            onDrop={handleDrop}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onCardClick={handleCardClick}
-            canDrag={canDrag}
-            draggingTaskId={draggingTaskId}
-          />
-        ))}
+        {statuses.map((status) => {
+          const isRestrictedColumn = isEmployeeLink && (status.name === 'Done' || status.name === 'Revisi');
+          const isDraggableColumn = canDrag && !isRestrictedColumn;
+
+          return (
+            <KanbanColumn
+              key={status.id}
+              status={status}
+              tasks={initialTasks.filter((task) => task.status === status.name)}
+              onDrop={handleDrop}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onCardClick={handleCardClick}
+              canDrag={isDraggableColumn} // Pass the calculated draggable status
+              draggingTaskId={draggingTaskId}
+            />
+          );
+        })}
       </div>
       <ScrollBar orientation="horizontal" />
     </ScrollArea>
