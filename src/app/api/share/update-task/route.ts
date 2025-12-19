@@ -63,7 +63,7 @@ export async function POST(request: Request) {
         }
 
         const sharedLink = linkSnap.data() as SharedLink;
-        const oldTask = taskSnap.data() as Task;
+        const initialTask = taskSnap.data() as Task;
         const sharedActor = createSharedActor(sharedLink);
 
         // --- Permission Validation ---
@@ -98,11 +98,12 @@ export async function POST(request: Request) {
         };
 
         let actionDescription: string | null = null;
-        if (updates.status && updates.status !== oldTask.status) {
-            actionDescription = `changed status from "${oldTask.status}" to "${updates.status}" via share link`;
+        if (updates.status && updates.status !== initialTask.status) {
+            actionDescription = `changed status from "${initialTask.status}" to "${updates.status}" via share link`;
             const newActivity = createActivity(sharedActor, actionDescription);
+            const currentActivities = Array.isArray(initialTask.activities) ? initialTask.activities : [];
+            finalUpdates.activities = [...currentActivities, newActivity];
             finalUpdates.lastActivity = newActivity;
-            finalUpdates.activities = [...(oldTask.activities || []), newActivity];
         }
 
         // 1. Update the original task document
@@ -117,10 +118,10 @@ export async function POST(request: Request) {
 
         // --- Handle Notifications ---
         if (actionDescription) {
-            const notificationTitle = `Status Changed: ${oldTask.title}`;
+            const notificationTitle = `Status Changed: ${initialTask.title}`;
             const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
             
-            const notifiedUserIds = new Set<string>(oldTask.assigneeIds);
+            const notifiedUserIds = new Set<string>(initialTask.assigneeIds);
              
             notifiedUserIds.forEach(userId => {
                 const notifRef = db.collection(`users/${userId}/notifications`).doc();

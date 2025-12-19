@@ -5,8 +5,8 @@ import type { Task, User } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star } from 'lucide-react';
-import { format, parseISO, isAfter } from 'date-fns';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History } from 'lucide-react';
+import { format, parseISO, isAfter, formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '../ui/progress';
 import Link from 'next/link';
@@ -36,6 +36,13 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
   const assignees = task.assignees || [];
   const creatorId = task.createdBy.id;
+
+  const lastActivityText = useMemo(() => {
+      if (!task.lastActivity) return null;
+      const { user, action, timestamp } = task.lastActivity;
+      const timeAgo = timestamp ? formatDistanceToNow(timestamp.toDate ? timestamp.toDate() : new Date(timestamp), { addSuffix: true }) : '';
+      return `${user.name} ${action} ${timeAgo}`;
+  }, [task.lastActivity]);
 
   return (
       <Card
@@ -76,14 +83,20 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
             </div>
           </div>
         
-        {(task.timeTracked !== undefined && task.timeEstimate !== undefined) && (
-            <div className="space-y-1">
-                <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Time Tracking</span>
-                    <span>{formatHours(task.timeTracked)} / {task.timeEstimate}h</span>
-                </div>
-                <Progress value={timeTrackingProgress} className="h-1" />
-            </div>
+        {lastActivityText && (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger className="w-full">
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground text-left">
+                            <History className="h-3 w-3 shrink-0" />
+                            <p className="truncate">{lastActivityText}</p>
+                        </div>
+                    </TooltipTrigger>
+                    <TooltipContent align="start">
+                        <p>{lastActivityText}</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
         )}
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
