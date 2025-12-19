@@ -1,8 +1,9 @@
+
 'use client';
 
-import React, { createContext, useContext, useMemo, useEffect, useState } from 'react';
+import React, { createContext, useContext, useMemo, useEffect, useState, useCallback } from 'react';
 import { initializeFirebase } from '@/firebase';
-import type { SharedLink, NavigationItem, Company } from '@/lib/types';
+import type { SharedLink, Company } from '@/lib/types';
 import { doc, getFirestore, type Firestore, onSnapshot } from 'firebase/firestore';
 import { useParams } from 'next/navigation';
 
@@ -42,6 +43,23 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
   
   const firestore = useMemo(() => getPublicFirestore(), []);
 
+  const handleLegacyLink = useCallback(async (linkId: string) => {
+    try {
+        const response = await fetch('/api/share/migrate-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ linkId }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to migrate link.');
+        }
+    } catch (migrationError: any) {
+        console.error("Migration failed:", migrationError);
+        setError(migrationError);
+    }
+  }, []);
+
   useEffect(() => {
     if (!firestore || !linkId) {
       setIsLoading(false);
@@ -49,9 +67,7 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
     }
     
     const token = sessionStorage.getItem(`share_token_${linkId}`);
-    if (!token && session?.password) {
-        // If there's a password but no token, we should not proceed.
-        // The password page will handle authentication.
+    if (session?.password && !token) {
         setIsLoading(false);
         return;
     }
@@ -64,12 +80,19 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
         if (docSnap.exists()) {
           const sessionData = { ...docSnap.data(), id: docSnap.id } as SharedLink;
 
-          // Password check for direct access
           if (sessionData.password && !sessionStorage.getItem(`share_token_${linkId}`)) {
               setError(new Error("Authentication required."));
               setSession(null);
               setIsLoading(false);
               return;
+          }
+
+          // Legacy link detection and one-time migration
+          if (!sessionData.snapshot.statuses || sessionData.snapshot.statuses.length === 0) {
+              await handleLegacyLink(linkId);
+              // The onSnapshot listener will be re-triggered with the updated data,
+              // so we can wait for the next snapshot instead of setting state here.
+              return; 
           }
 
           setSession(sessionData);
@@ -97,7 +120,7 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
     );
 
     return () => unsubscribe();
-  }, [firestore, linkId, session?.password]);
+  }, [firestore, linkId, session?.password, handleLegacyLink]);
 
   const value = useMemo(
     () => ({
