@@ -1,4 +1,5 @@
 
+
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
@@ -35,13 +36,14 @@ export async function POST(request: Request) {
     const sharedLink = linkSnap.data() as SharedLink;
 
     // --- Permission Validation ---
-    const allowedUpdates: Record<number, string[]> = {
-      3: ['status'], // Level 3 can only update status
-      4: ['status', 'dueDate', 'priority'], // Level 4 can update status, due date, and priority
+    const allowedUpdates: Record<string, string[]> = {
+      'view': [],
+      'status': ['status'],
+      'limited-edit': ['status', 'dueDate', 'priority'],
     };
 
     const requestedUpdateKeys = Object.keys(updates);
-    const permittedFields = allowedUpdates[sharedLink.permissions.accessLevel] || [];
+    const permittedFields = allowedUpdates[sharedLink.accessLevel] || [];
 
     const isUpdateAllowed = requestedUpdateKeys.every(key => permittedFields.includes(key));
 

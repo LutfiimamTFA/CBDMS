@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -438,16 +439,9 @@
         "brandIds": { "type": "array", "items": { "type": "string" } },
         "password": { "type": "string" },
         "expiresAt": { "type": "string", "format": "date-time" },
-        "permissions": {
-          "type": "object",
-          "properties": {
-            "canViewDetails": { "type": "boolean" },
-            "canComment": { "type": "boolean" },
-            "canChangeStatus": { "type": "boolean" },
-            "canEditContent": { "type": "boolean" },
-            "canAssignUsers": { "type": "boolean" }
-          },
-          "required": ["canViewDetails", "canComment", "canChangeStatus", "canEditContent", "canAssignUsers"]
+        "accessLevel": {
+          "type": "string",
+          "enum": ["view", "status", "limited-edit"]
         },
         "snapshot": {
             "type": "object",
@@ -463,7 +457,7 @@
         "createdBy": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "name", "companyId", "creatorRole", "allowedNavItems", "navItems", "permissions", "snapshot", "createdBy", "createdAt"]
+      "required": ["id", "name", "companyId", "creatorRole", "allowedNavItems", "navItems", "accessLevel", "snapshot", "createdBy", "createdAt"]
     }
   },
   "auth": {

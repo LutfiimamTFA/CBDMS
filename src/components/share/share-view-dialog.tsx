@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
 import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon } from 'lucide-react';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
@@ -30,6 +30,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
 import { defaultNavItems } from '@/lib/navigation-items';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -83,13 +84,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState('');
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
-  const [permissions, setPermissions] = useState({
-    canViewDetails: true,
-    canComment: false,
-    canChangeStatus: false,
-    canEditContent: false,
-    canAssignUsers: false,
-  });
+  const [accessLevel, setAccessLevel] = useState<SharedLink['accessLevel']>('view');
 
   // Get all navigation items relevant to the current user's role
   const userNavItems = useMemo(() => {
@@ -149,7 +144,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           creatorRole: profile.role,
           allowedNavItems: selectedNavIds, 
           navItems: userNavItems.map(item => ({...item, label: t(item.label as any)})),
-          permissions,
+          accessLevel: accessLevel,
           snapshot,
           createdBy: profile.id,
           password: usePassword ? password : undefined,
@@ -188,7 +183,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
       setPassword('');
       setLinkName('');
       setExpiresAt(undefined);
-      setPermissions({ canViewDetails: true, canComment: false, canChangeStatus: false, canEditContent: false, canAssignUsers: false });
+      setAccessLevel('view');
     }
   }, [isOpen]);
 
@@ -235,14 +230,31 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                 </div>
               </div>
 
-              <div className="space-y-4 rounded-md border p-4">
+               <div className="space-y-4 rounded-md border p-4">
                   <h4 className="text-sm font-medium">Permissions for Viewer</h4>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                        <Label htmlFor="perm-view" className="flex flex-col gap-1"><span>View Full Task Details</span><span className="font-normal text-xs text-muted-foreground">Allow viewers to open and see all task details.</span></Label>
-                        <Switch id="perm-view" checked={permissions.canViewDetails} onCheckedChange={(c) => setPermissions(p => ({...p, canViewDetails: c}))} />
-                    </div>
-                  </div>
+                   <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)}>
+                      <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                        <RadioGroupItem value="view" id="perm-view" />
+                        <Label htmlFor="perm-view" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                            <span className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4' /> View Only</span>
+                            <span className="font-normal text-xs text-muted-foreground">Can view shared pages and task details. Cannot make any changes.</span>
+                        </Label>
+                      </div>
+                       <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                        <RadioGroupItem value="status" id="perm-status" />
+                        <Label htmlFor="perm-status" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                            <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
+                            <span className="font-normal text-xs text-muted-foreground">Can view pages and change task statuses (including drag & drop).</span>
+                        </Label>
+                      </div>
+                       <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                        <RadioGroupItem value="limited-edit" id="perm-edit" />
+                        <Label htmlFor="perm-edit" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                            <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
+                            <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority. Cannot edit content.</span>
+                        </Label>
+                      </div>
+                    </RadioGroup>
               </div>
 
              <div className="space-y-4 rounded-md border p-4">
