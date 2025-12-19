@@ -21,8 +21,8 @@ export function SharedDashboardView({ session, tasks, statuses, brands, users, i
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <SharedKanbanBoard 
-            tasks={tasks || []} 
+          <SharedKanbanBoard
+            initialTasks={tasks || []} 
             statuses={statuses || []}
             permissions={session.permissions} 
             linkId={session.id}

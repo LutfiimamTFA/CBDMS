@@ -16,7 +16,6 @@ interface SharedSessionContextType {
   brands: Brand[] | null;
   isLoading: boolean;
   error: Error | null;
-  setSharedTasks: React.Dispatch<React.SetStateAction<Task[] | null>>;
 }
 
 const SharedSessionContext = createContext<SharedSessionContextType | undefined>(undefined);
@@ -43,7 +42,6 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
 
   const [session, setSession] = useState<SharedLink | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
-  const [sharedTasks, setSharedTasks] = useState<Task[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
@@ -63,7 +61,6 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
         if (docSnap.exists()) {
           const sessionData = { ...docSnap.data(), id: docSnap.id } as SharedLink;
           setSession(sessionData);
-          setSharedTasks(sessionData.snapshot.tasks);
 
           if (sessionData.companyId) {
             const companyDocRef = doc(firestore, 'companies', sessionData.companyId);
@@ -77,7 +74,6 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
         } else {
           setError(new Error("Share link not found or has been disabled."));
           setSession(null);
-          setSharedTasks(null);
         }
         setIsLoading(false);
       }, 
@@ -96,15 +92,14 @@ export function SharedSessionProvider({ children }: { children: React.ReactNode 
       session,
       navItems: session?.navItems || [],
       company: company || null,
-      tasks: sharedTasks, // Use the state variable here
+      tasks: session?.snapshot?.tasks || [],
       users: session?.snapshot?.users || [],
       statuses: session?.snapshot?.statuses || [],
       brands: session?.snapshot?.brands || [],
       isLoading,
       error,
-      setSharedTasks,
     }),
-    [session, company, sharedTasks, isLoading, error]
+    [session, company, isLoading, error]
   );
 
   return (

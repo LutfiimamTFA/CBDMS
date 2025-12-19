@@ -39,7 +39,6 @@ import { useRouter, useParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
-import { useSharedSession } from '@/context/shared-session-provider';
 
 interface SharedTasksTableProps {
     tasks: Task[];
@@ -53,7 +52,6 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
   const router = useRouter();
   const params = useParams();
   const linkId = params.linkId as string;
-  const { setSharedTasks } = useSharedSession();
   
   const [data, setData] = React.useState<Task[]>(tasks);
   React.useEffect(() => {
@@ -73,11 +71,12 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
 
   const handleCellUpdate = async (taskId: string, updates: Partial<Task>) => {
     setUpdatingCells(prev => ({...prev, [taskId]: true}));
+    
+    const originalTasks = data;
 
     // Optimistic UI Update
     const updatedTasks = data.map(t => t.id === taskId ? { ...t, ...updates } : t);
     setData(updatedTasks);
-    if(setSharedTasks) setSharedTasks(updatedTasks);
 
     try {
         const response = await fetch('/api/share/update-task', {
@@ -92,8 +91,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
 
     } catch (error) {
         // Revert UI on failure
-        setData(tasks);
-        if(setSharedTasks) setSharedTasks(tasks);
+        setData(originalTasks);
         toast({
             variant: "destructive",
             title: "Update Failed",

@@ -1,28 +1,25 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { TaskCard } from '../tasks/task-card';
 import type { Task, WorkflowStatus, SharedLink, User } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from '../tasks/kanban-column';
-import { useSharedSession } from '@/context/shared-session-provider';
 
 interface SharedKanbanBoardProps {
-  tasks: Task[];
+  initialTasks: Task[];
   statuses: WorkflowStatus[];
   permissions: SharedLink['permissions'];
   linkId: string;
 }
 
 export function SharedKanbanBoard({
-  tasks: initialTasks,
+  initialTasks,
   statuses,
   permissions,
   linkId,
 }: SharedKanbanBoardProps) {
-  const { setSharedTasks } = useSharedSession();
   const [tasks, setTasks] = useState(initialTasks);
   const { toast } = useToast();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -49,12 +46,12 @@ export function SharedKanbanBoard({
     const task = tasks.find((t) => t.id === taskId);
 
     if (task && task.status !== newStatus) {
+      const originalTasks = tasks;
       // Optimistic UI update
       const updatedTasks = tasks.map((t) =>
         t.id === taskId ? { ...t, status: newStatus } : t
       );
       setTasks(updatedTasks);
-      setSharedTasks(updatedTasks);
 
       try {
         const response = await fetch('/api/share/update-task', {
@@ -78,8 +75,7 @@ export function SharedKanbanBoard({
         });
       } catch (error: any) {
         // Revert optimistic update
-        setTasks(tasks);
-        setSharedTasks(tasks);
+        setTasks(originalTasks);
         toast({
           variant: 'destructive',
           title: 'Update Failed',
