@@ -101,7 +101,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                           </DropdownMenuItem>
                         </ShareTaskDialog>
                      )}
-                    <DropdownMenuItem>View Details</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push(`/tasks/${task.id}`)}>View Details</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
             </div>

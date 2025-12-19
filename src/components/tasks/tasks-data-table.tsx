@@ -58,6 +58,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
+import { ShareTaskDialog } from './share-task-dialog';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -121,6 +122,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
   
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
+  const [shareTask, setShareTask] = React.useState<Task | null>(null);
 
   const canChangePriority = React.useMemo(() => {
       if (!profile) return false;
@@ -471,11 +473,13 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
             }
             return false;
         }, [profile, permissions, task]);
+        
+        const isCreatorEmployeeOrPIC = ['Employee', 'PIC', 'Client'].includes(task.createdBy.role);
 
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8 p-0 opacity-50 focus:opacity-100 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="icon" className="h-8 w-8 p-0 opacity-50 focus:opacity-100 group-hover:opacity-100 transition-opacity">
                     <span className="sr-only">Open menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -489,6 +493,13 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                   <History className="mr-2 h-4 w-4" />
                   View History
               </DropdownMenuItem>
+              {isCreatorEmployeeOrPIC && (
+                <ShareTaskDialog task={task} open={shareTask?.id === task.id} onOpenChange={(open) => setShareTask(open ? task : null)}>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Share2 className="mr-2 h-4 w-4"/> Share Task
+                    </DropdownMenuItem>
+                </ShareTaskDialog>
+              )}
               <DropdownMenuSeparator />
               {canDelete && (
                 <DropdownMenuItem
