@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -34,17 +35,17 @@ const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     </div>
 );
 
-const LinkNotFoundComponent = () => (
+const LinkNotFoundComponent = ({ isMisconfigured = false, message }: { isMisconfigured?: boolean, message?: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
       <Card className="w-full max-w-md text-center">
         <CardHeader>
           <CardTitle className="flex items-center justify-center gap-2 text-destructive">
             <FileWarning className="h-6 w-6"/>
-            Link Not Found or Expired
+             {isMisconfigured ? "Link is Misconfigured" : "Link Not Found or Expired"}
           </CardTitle>
         </CardHeader>
         <CardContent>
-            <p className="text-muted-foreground">The share link you are trying to access is invalid, has expired, or has been disabled.</p>
+            <p className="text-muted-foreground">{message}</p>
             <Button variant="link" asChild className='mt-4'>
                 <a href="/login">Return to Login</a>
             </Button>
@@ -67,11 +68,29 @@ export default function ShareScopePage() {
   }
 
   if (error || !session) {
-    return <LinkNotFoundComponent />;
+    return <LinkNotFoundComponent message={error?.message || "The share link you are trying to access is invalid or has been disabled."} />;
+  }
+
+  const snapshotData = session.snapshot;
+  
+  // Runtime validation to prevent rendering a broken UI if the snapshot is incomplete
+  const isWorkflowValid = snapshotData.statuses && snapshotData.statuses.length > 1;
+  
+  if (!isWorkflowValid) {
+      return (
+        <>
+            <ShareSidebar />
+            <SidebarInset>
+                <SharedHeader title={'Misconfigured Link'} />
+                 <LinkNotFoundComponent 
+                    isMisconfigured={true}
+                    message="This shared link is missing a valid workflow configuration. Please contact the person who sent you this link."
+                 />
+            </SidebarInset>
+        </>
+      )
   }
   
-  const snapshotData = session.snapshot;
-
   const navItemForScope = (session.navItems || []).find(item => {
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
     return itemPath === scope.split('/')[0]; // Compare with base path

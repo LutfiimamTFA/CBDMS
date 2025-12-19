@@ -59,6 +59,15 @@ export async function POST(request: Request) {
     if (!isUpdateAllowed) {
       return NextResponse.json({ message: 'You do not have permission to perform this update.' }, { status: 403 });
     }
+    
+    // --- Workflow Status Identity Locking ---
+    if (updates.status) {
+        const snapshotStatuses = sharedLink.snapshot.statuses?.map(s => s.name) || [];
+        if (!snapshotStatuses.includes(updates.status)) {
+            return NextResponse.json({ message: 'Invalid status for this shared link.' }, { status: 403 });
+        }
+    }
+
 
     // --- Update Logic ---
     const taskRef = db.collection('tasks').doc(taskId);
