@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { serviceAccount } from '@/firebase/service-account';
-import type { SharedLink, Task } from '@/lib/types';
+import type { SharedLink, Task, User, Activity, Notification } from '@/lib/types';
 
 function initializeAdminApp(): App {
   if (getApps().length > 0) {
@@ -14,6 +14,15 @@ function initializeAdminApp(): App {
     credential: cert(serviceAccount),
   });
 }
+
+const createActivity = (user: User, action: string): Activity => {
+    return {
+      id: `act-${crypto.randomUUID()}`,
+      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+      action: action,
+      timestamp: Timestamp.now() as any,
+    };
+};
 
 export async function POST(request: Request) {
   try {
@@ -39,7 +48,7 @@ export async function POST(request: Request) {
     const allowedUpdates: Record<string, string[]> = {
       'view': [],
       'status': ['status'],
-      'limited-edit': ['status', 'dueDate', 'priority'],
+      'limited-edit': ['status', 'dueDate', 'priority', 'revisionItems'],
     };
 
     const requestedUpdateKeys = Object.keys(updates);
@@ -53,12 +62,57 @@ export async function POST(request: Request) {
 
     // --- Update Logic ---
     const taskRef = db.collection('tasks').doc(taskId);
-    const finalUpdates = {
+    const taskSnap = await taskRef.get();
+    if (!taskSnap.exists) {
+        return NextResponse.json({ message: 'Task not found.' }, { status: 404 });
+    }
+    const oldTask = taskSnap.data() as Task;
+    
+    const creatorRef = db.collection('users').doc(sharedLink.createdBy);
+    const creatorSnap = await creatorRef.get();
+    if (!creatorSnap.exists()) {
+        return NextResponse.json({ message: 'Link creator not found.' }, { status: 404 });
+    }
+    const creator = creatorSnap.data() as User;
+
+    const finalUpdates: any = {
       ...updates,
       updatedAt: Timestamp.now(),
     };
+    
+    const batch = db.batch();
+    
+    let actionDescription: string | null = null;
+    if (updates.status && updates.status !== oldTask.status) {
+        actionDescription = `changed status from "${oldTask.status}" to "${updates.status}" via share link`;
+    }
+    
+    if (actionDescription) {
+        const newActivity = createActivity(creator, actionDescription);
+        finalUpdates.lastActivity = newActivity;
+        finalUpdates.activities = [...(oldTask.activities || []), newActivity];
 
-    await taskRef.update(finalUpdates);
+        const notificationTitle = `Status Changed: ${oldTask.title}`;
+        const notificationMessage = `${creator.name} (via share link) changed status to ${updates.status}.`;
+        
+        const notifiedUserIds = new Set<string>();
+        oldTask.assigneeIds.forEach(assigneeId => {
+            if (assigneeId !== creator.id) notifiedUserIds.add(assigneeId);
+        });
+        if (oldTask.createdBy.id !== creator.id) notifiedUserIds.add(oldTask.createdBy.id);
+
+        notifiedUserIds.forEach(userId => {
+            const notifRef = db.collection(`users/${userId}/notifications`).doc();
+            const newNotification: Omit<Notification, 'id'> = {
+                userId, title: notificationTitle, message: notificationMessage, taskId: oldTask.id, isRead: false,
+                createdAt: Timestamp.now() as any, createdBy: newActivity.user,
+            };
+            batch.set(notifRef, newNotification);
+        });
+    }
+
+    batch.update(taskRef, finalUpdates);
+    await batch.commit();
 
     return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200 });
 

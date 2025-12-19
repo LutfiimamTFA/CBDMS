@@ -139,6 +139,7 @@ export type SharedLink = {
     statuses: WorkflowStatus[];
     users: User[];
     brands: Brand[];
+    socialMediaPosts?: SocialMediaPost[];
   };
   createdBy: string;
   createdAt: any;
@@ -220,6 +221,7 @@ export type SocialMediaPost = {
   objectPosition?: number;
   revisionItems?: RevisionItem[];
   revisionHistory?: RevisionCycle[];
+  updatedAt?: any;
 };
 
 
