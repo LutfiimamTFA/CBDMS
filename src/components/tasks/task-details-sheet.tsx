@@ -103,7 +103,6 @@ interface TaskDetailsSheetProps {
   accessLevel?: SharedLink['accessLevel'] | null;
 }
 
-// Centralized activity creation function to guarantee unique IDs.
 const createActivity = (user: User, action: string): Activity => {
     return {
       id: `act-${crypto.randomUUID()}`,
@@ -377,6 +376,15 @@ export function TaskDetailsSheet({
               }),
             });
             if (!response.ok) throw new Error('Failed to update status');
+
+            // Fire and forget activity logging
+            const actionText = `changed status from "${oldStatus}" to "${newStatus}"`;
+            fetch('/api/create-activity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ taskId: initialTask.id, actionText }),
+            });
+
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
         } catch (error) {
             form.setValue('status', oldStatus); // Revert
@@ -457,6 +465,15 @@ export function TaskDetailsSheet({
             body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { priority } }),
           });
           if (!response.ok) throw new Error('Failed to update priority');
+          
+          // Fire-and-forget activity logging for shared view
+          const actionText = `set priority from "${currentPriority}" to "${priority}"`;
+          fetch('/api/create-activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId: initialTask.id, actionText }),
+          });
+
           toast({ title: 'Priority Updated' });
         } catch (error) {
           form.setValue('priority', currentPriority);

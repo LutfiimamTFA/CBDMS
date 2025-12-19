@@ -1,10 +1,9 @@
 
-
 import { NextResponse } from 'next/server';
 import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { serviceAccount } from '@/firebase/service-account';
-import type { SharedLink, Task, User, Activity, Notification } from '@/lib/types';
+import type { SharedLink, Task } from '@/lib/types';
 
 function initializeAdminApp(): App {
   if (getApps().length > 0) {
@@ -15,15 +14,8 @@ function initializeAdminApp(): App {
   });
 }
 
-const createActivity = (user: {id: string, name: string, avatarUrl: string}, action: string): Activity => {
-    return {
-      id: `act-${crypto.randomUUID()}`,
-      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-      action: action,
-      timestamp: Timestamp.now() as any,
-    };
-};
-
+// This API is now responsible ONLY for updating the task fields.
+// Activity logging and notifications are handled by a separate, client-triggered API (/api/create-activity).
 export async function POST(request: Request) {
   try {
     const app = initializeAdminApp();
@@ -68,62 +60,15 @@ export async function POST(request: Request) {
         }
     }
 
-
-    // --- Update Logic ---
     const taskRef = db.collection('tasks').doc(taskId);
-    const taskSnap = await taskRef.get();
-    if (!taskSnap.exists) {
-        return NextResponse.json({ message: 'Task not found.' }, { status: 404 });
-    }
-    const oldTask = taskSnap.data() as Task;
     
-    // Create a generic actor for this shared action
-    const sharedActor = {
-        id: `share_${sharedLink.id.substring(0, 5)}`,
-        name: `Guest (${sharedLink.name})`,
-        avatarUrl: '', // No avatar for guest
-    };
-
     const finalUpdates: any = {
       ...updates,
       updatedAt: Timestamp.now(),
     };
-    
-    const batch = db.batch();
-    
-    let actionDescription: string | null = null;
-    if (updates.status && updates.status !== oldTask.status) {
-        actionDescription = `changed status from "${oldTask.status}" to "${updates.status}" via share link`;
-    }
-    
-    if (actionDescription) {
-        const newActivity = createActivity(sharedActor, actionDescription);
-        finalUpdates.lastActivity = newActivity;
-        
-        const currentActivities = Array.isArray(oldTask.activities) ? oldTask.activities : [];
-        finalUpdates.activities = [...currentActivities, newActivity];
 
-        const notificationTitle = `Status Changed: ${oldTask.title}`;
-        const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
-        
-        // Notify ONLY the direct assignees of the task.
-        oldTask.assigneeIds.forEach(assigneeId => {
-            const notifRef = db.collection(`users/${assigneeId}/notifications`).doc();
-            const newNotification: Omit<Notification, 'id'> = {
-                userId: assigneeId, 
-                title: notificationTitle, 
-                message: notificationMessage, 
-                taskId: oldTask.id, 
-                isRead: false,
-                createdAt: Timestamp.now() as any, 
-                createdBy: newActivity.user, // Use the consistent sharedActor object for the creator of the notification
-            };
-            batch.set(notifRef, newNotification);
-        });
-    }
-
-    batch.update(taskRef, finalUpdates);
-    await batch.commit();
+    // The update operation is simplified. No more activity or notification logic here.
+    await taskRef.update(finalUpdates);
 
     return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200 });
 

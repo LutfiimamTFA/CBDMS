@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -50,6 +51,8 @@ export function SharedKanbanBoard({
 
     if (task && task.status !== newStatus) {
       const originalTasks = tasks;
+      const oldStatus = task.status;
+      
       // Optimistic UI update
       const updatedTasks = tasks.map((t) =>
         t.id === taskId ? { ...t, status: newStatus } : t
@@ -72,6 +75,15 @@ export function SharedKanbanBoard({
           throw new Error(errorData.message || 'Failed to update task.');
         }
 
+        // Fire-and-forget activity logging call
+        const actionText = `changed status from "${oldStatus}" to "${newStatus}"`;
+        fetch('/api/create-activity', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ taskId, actionText, linkCreatorId: initialTasks[0].createdBy.id }), // Assuming createdBy is the link creator
+        }).catch(err => console.error("Failed to log activity:", err));
+
+
         toast({
           title: 'Status Updated',
           description: `Task moved to "${newStatus}".`,
@@ -89,10 +101,6 @@ export function SharedKanbanBoard({
   };
   
   const handleCardClick = (taskId: string) => {
-    if (accessLevel === 'view') {
-        toast({ variant: 'destructive', title: 'Permission Denied', description: 'Viewing task details is not allowed with this link.' });
-        return;
-    }
     const path = `/share/${linkId}/tasks/${taskId}`;
     router.push(path);
   };
