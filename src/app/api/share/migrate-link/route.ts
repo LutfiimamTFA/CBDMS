@@ -37,6 +37,8 @@ export async function POST(request: Request) {
     // Check if migration is needed (statuses are missing or empty)
     if (!sharedLink.snapshot.statuses || sharedLink.snapshot.statuses.length === 0) {
         
+        // Fetch all statuses for the company associated with the link.
+        // This is the correct source of truth for the complete workflow.
         const statusesQuery = db.collection('statuses').where('companyId', '==', sharedLink.companyId);
         const statusesSnap = await statusesQuery.get();
 
