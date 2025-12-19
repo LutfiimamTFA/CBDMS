@@ -1,9 +1,8 @@
-
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, WorkflowStatus, Activity, User, SharedLink, Notification, RevisionItem, Subtask, Attachment } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
@@ -30,9 +29,6 @@ const createActivity = (user: User, action: string): Activity => {
 
 interface KanbanBoardProps {
   tasks: Task[];
-  permissions?: SharedLink['accessLevel'] | null;
-  isSharedView?: boolean;
-  linkId?: string;
 }
 
 interface RevisionState {
@@ -47,7 +43,7 @@ interface FinalReviewState {
   task: Task | null;
 }
 
-export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedView = false, linkId }: KanbanBoardProps) {
+export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
   const firestore = useFirestore();
   const { profile } = useUserProfile();
@@ -57,7 +53,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
   const [isSaving, setIsSaving] = useState(false);
-
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -75,16 +70,12 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
     useCollection<WorkflowStatus>(statusesQuery);
     
   const canDrag = useMemo(() => {
-    if (isSharedView) {
-      return permissions === 'status' || permissions === 'limited-edit';
-    }
     if (!profile) return false;
     return true;
-  }, [profile, permissions, isSharedView]);
+  }, [profile]);
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
-    if (isSharedView) return tasks; // Don't filter in shared view
 
     const now = new Date();
     const thirtyDaysFromNow = addDays(now, 30);
@@ -103,7 +94,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
           return true;
       }
     });
-  }, [tasks, isSharedView]);
+  }, [tasks]);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
@@ -217,47 +208,6 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
     const task = tasks.find(t => t.id === taskId);
 
     if (task && task.status !== newStatus) {
-      if (isSharedView) {
-        if (!linkId) return;
-         // Optimistic UI update
-        const originalTasks = tasks;
-        const updatedTasks = tasks.map((t) =>
-            t.id === taskId ? { ...t, status: newStatus } : t
-        );
-        setTasks(updatedTasks);
-        
-        try {
-            const response = await fetch('/api/share/update-task', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                linkId,
-                taskId,
-                updates: { status: newStatus },
-              }),
-            });
-    
-            if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(errorData.message || 'Failed to update task.');
-            }
-    
-            toast({
-              title: 'Status Updated',
-              description: `Task moved to "${newStatus}".`,
-            });
-        } catch (error: any) {
-            // Revert optimistic update
-            setTasks(originalTasks);
-            toast({
-              variant: 'destructive',
-              title: 'Update Failed',
-              description: error.message,
-            });
-        }
-        return;
-      }
-      
       if (!firestore || !profile) return;
       
       const isEmployeeOrPIC = profile.role === 'Employee' || profile.role === 'PIC';
@@ -379,11 +329,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
   }
 
   const handleCardClick = (taskId: string) => {
-    const canViewDetails = !isSharedView || (permissions && permissions !== 'view');
-    if (!canViewDetails) return;
-    
-    const path = isSharedView ? `/share/${linkId}/tasks/${taskId}` : `/tasks/${taskId}`;
-    router.push(path);
+    router.push(`/tasks/${taskId}`);
   };
 
 
