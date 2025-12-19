@@ -83,6 +83,13 @@ interface TasksDataTableProps {
     isShareView?: boolean;
 }
 
+const formatDate = (date: any): string => {
+    if (!date) return 'N/A';
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    if (isNaN(dateObj.getTime())) return 'Invalid date';
+    return format(dateObj, 'PP, p');
+};
+
 export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null, isShareView = false }: TasksDataTableProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
@@ -495,12 +502,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
             desc: true
         }]
     },
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection
-    },
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
   });
 
   const isFiltered = table.getState().columnFilters.length > 0;
@@ -707,7 +709,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                           <span className="font-semibold">{activity.user.name}</span> {activity.action}.
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {activity.timestamp ? format(new Date(activity.timestamp), 'PP, HH:mm') : 'just now'}
+                          {formatDate(activity.timestamp)}
                         </p>
                       </div>
                     </div>
@@ -724,3 +726,5 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
     </>
   );
 }
+
+    

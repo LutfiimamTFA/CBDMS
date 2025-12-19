@@ -111,6 +111,14 @@ const createActivity = (user: User, action: string): Activity => {
       timestamp: new Date().toISOString() as any,
     };
 };
+
+const formatDate = (date: any): string => {
+    if (!date) return 'N/A';
+    // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    if (isNaN(dateObj.getTime())) return 'Invalid date';
+    return format(dateObj, 'PP, p');
+};
   
 
 export function TaskDetailsSheet({ 
@@ -1126,13 +1134,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     return {};
 }, [currentAssignees, allUsers, currentUser]);
 
-  const formatDate = (date: any): string => {
-    if (!date) return 'N/A';
-    // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
-    const dateObj = date.toDate ? date.toDate() : parseISO(date);
-    return format(dateObj, 'PP, p');
-  };
-
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1827,3 +1828,5 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
+
+    
