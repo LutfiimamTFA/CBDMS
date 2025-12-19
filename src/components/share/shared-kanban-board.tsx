@@ -6,6 +6,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from '../tasks/kanban-column';
 import { useRouter } from 'next/navigation';
+import { Card, CardContent } from '../ui/card';
 
 interface SharedKanbanBoardProps {
   initialTasks: Task[];
@@ -97,11 +98,14 @@ export function SharedKanbanBoard({
     router.push(path);
   };
   
-  // This is the key fix: Ensure we render columns from the props, not a separate fetch.
-  if (!statuses || statuses.length === 0) {
+  if (!statuses || statuses.length < 2) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">No workflow statuses found in this shared link.</p>
+      <div className="flex h-full items-center justify-center p-8 w-full">
+        <Card className="w-full max-w-md text-center">
+            <CardContent className="p-6">
+                <p className="text-muted-foreground">The workflow for this shared view is incomplete. The Kanban board cannot be displayed.</p>
+            </CardContent>
+        </Card>
       </div>
     );
   }

@@ -130,8 +130,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
             getDocs(query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId)))
         ]);
 
-        if (statusesSnap.empty) {
-            throw new Error("Cannot create share link: No workflow statuses found for this company. Please configure them in the admin settings.");
+        if (statusesSnap.empty || statusesSnap.docs.length < 2) {
+            throw new Error("Cannot create share link: A valid workflow (with at least 2 statuses) was not found for this company. Please configure it in the admin settings.");
         }
 
         const snapshot = {

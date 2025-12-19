@@ -86,16 +86,17 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
         });
 
         if (!response.ok) {
-          throw new Error('Failed to update task from server.');
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update task from server.');
         }
 
-    } catch (error) {
+    } catch (error: any) {
         // Revert UI on failure
         setData(originalTasks);
         toast({
             variant: "destructive",
             title: "Update Failed",
-            description: "Your changes could not be saved.",
+            description: error.message || "Your changes could not be saved.",
         });
     } finally {
       setUpdatingCells(prev => ({...prev, [taskId]: false}));
