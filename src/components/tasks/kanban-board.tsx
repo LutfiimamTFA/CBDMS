@@ -17,6 +17,7 @@ import { Input } from '../ui/input';
 import { isAfter, isBefore, startOfDay, addDays, subDays } from 'date-fns';
 import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
+import { useRouter } from 'next/navigation';
 
 const createActivity = (user: User, action: string): Activity => {
   return {
@@ -29,7 +30,7 @@ const createActivity = (user: User, action: string): Activity => {
 
 interface KanbanBoardProps {
   tasks: Task[];
-  permissions?: SharedLink['permissions'] | null;
+  permissions?: SharedLink['accessLevel'] | null;
   isSharedView?: boolean;
   linkId?: string;
 }
@@ -51,6 +52,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const { toast } = useToast();
+  const router = useRouter();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
@@ -73,15 +75,17 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
     useCollection<WorkflowStatus>(statusesQuery);
     
   const canDrag = useMemo(() => {
-    if (permissions) {
-      return permissions.canChangeStatus === true;
+    if (isSharedView) {
+      return permissions === 'status' || permissions === 'limited-edit';
     }
     if (!profile) return false;
     return true;
-  }, [profile, permissions]);
+  }, [profile, permissions, isSharedView]);
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
+    if (isSharedView) return tasks; // Don't filter in shared view
+
     const now = new Date();
     const thirtyDaysFromNow = addDays(now, 30);
     const sevenDaysAgo = subDays(startOfDay(now), 7);
@@ -99,7 +103,7 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
           return true;
       }
     });
-  }, [tasks]);
+  }, [tasks, isSharedView]);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
@@ -208,11 +212,53 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
 
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
-    if (!canDrag || !firestore || !profile) return;
+    if (!canDrag) return;
     const taskId = e.dataTransfer.getData('taskId');
     const task = tasks.find(t => t.id === taskId);
 
     if (task && task.status !== newStatus) {
+      if (isSharedView) {
+        if (!linkId) return;
+         // Optimistic UI update
+        const originalTasks = tasks;
+        const updatedTasks = tasks.map((t) =>
+            t.id === taskId ? { ...t, status: newStatus } : t
+        );
+        setTasks(updatedTasks);
+        
+        try {
+            const response = await fetch('/api/share/update-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                linkId,
+                taskId,
+                updates: { status: newStatus },
+              }),
+            });
+    
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.message || 'Failed to update task.');
+            }
+    
+            toast({
+              title: 'Status Updated',
+              description: `Task moved to "${newStatus}".`,
+            });
+        } catch (error: any) {
+            // Revert optimistic update
+            setTasks(originalTasks);
+            toast({
+              variant: 'destructive',
+              title: 'Update Failed',
+              description: error.message,
+            });
+        }
+        return;
+      }
+      
+      if (!firestore || !profile) return;
       
       const isEmployeeOrPIC = profile.role === 'Employee' || profile.role === 'PIC';
       const isManagerOrAdmin = profile.role === 'Manager' || profile.role === 'Super Admin';
@@ -332,6 +378,15 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
     setFinalReviewState({ isOpen: false, task: null });
   }
 
+  const handleCardClick = (taskId: string) => {
+    const canViewDetails = !isSharedView || (permissions && permissions !== 'view');
+    if (!canViewDetails) return;
+    
+    const path = isSharedView ? `/share/${linkId}/tasks/${taskId}` : `/tasks/${taskId}`;
+    router.push(path);
+  };
+
+
   if (areStatusesLoading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -352,11 +407,9 @@ export function KanbanBoard({ tasks: initialTasks, permissions = null, isSharedV
             onDrop={handleDrop}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onCardClick={handleCardClick}
             canDrag={canDrag}
             draggingTaskId={draggingTaskId}
-            permissions={permissions}
-            isSharedView={isSharedView}
-            linkId={linkId}
           />
         ))}
       </div>

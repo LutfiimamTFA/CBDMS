@@ -13,7 +13,6 @@ import {
   TooltipTrigger,
 } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
 import { Eye, RefreshCcw } from 'lucide-react';
 
 interface KanbanColumnProps {
@@ -22,10 +21,9 @@ interface KanbanColumnProps {
   onDrop: (e: React.DragEvent<HTMLDivElement>, status: string) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
   onDragEnd: () => void;
+  onCardClick: (taskId: string) => void;
   canDrag: boolean;
   draggingTaskId: string | null;
-  permissions?: SharedLink['accessLevel'] | null;
-  isSharedView?: boolean;
 }
 
 const getDragAfterElement = (container: HTMLElement, y: number): HTMLElement | null => {
@@ -52,13 +50,11 @@ export function KanbanColumn({
   onDrop,
   onDragStart,
   onDragEnd,
+  onCardClick,
   canDrag,
   draggingTaskId,
-  permissions = null,
-  isSharedView = false,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const router = useRouter();
   const columnRef = useRef<HTMLDivElement>(null);
   const [dropIndicatorIndex, setDropIndicatorIndex] = useState<number | null>(null);
   
@@ -101,17 +97,6 @@ export function KanbanColumn({
     setDropIndicatorIndex(null);
     onDrop(e, status.name);
   };
-  
-  const handleCardClick = (taskId: string) => {
-    const canViewDetails = !isSharedView || (permissions && accessLevel !== 'view');
-    if (!canViewDetails) return;
-    
-    const path = isSharedView ? `/share/${params.linkId}/tasks/${taskId}` : `/tasks/${taskId}`;
-    router.push(path);
-  };
-
-  const params = useParams();
-  const accessLevel = permissions;
 
   return (
     <div
@@ -191,7 +176,7 @@ export function KanbanColumn({
                       draggable={canDrag}
                       onDragStart={(e) => onDragStart(e, task.id)}
                       onDragEnd={onDragEnd}
-                      onClick={() => handleCardClick(task.id)}
+                      onClick={() => onCardClick(task.id)}
                       className={cn(
                         "transition-opacity", 
                         isDragging && "opacity-30",
