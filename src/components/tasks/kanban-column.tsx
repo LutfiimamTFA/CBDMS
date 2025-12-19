@@ -14,7 +14,7 @@ import {
 } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { Eye } from 'lucide-react';
+import { Eye, RefreshCcw } from 'lucide-react';
 
 interface KanbanColumnProps {
   status: WorkflowStatus;
@@ -24,7 +24,9 @@ interface KanbanColumnProps {
   onDragEnd: () => void;
   canDrag: boolean;
   draggingTaskId: string | null;
-  permissions?: SharedLink['permissions'] | null;
+  permissions?: SharedLink['accessLevel'] | null;
+  isSharedView?: boolean;
+  canViewDetailsInShare?: boolean;
 }
 
 const getDragAfterElement = (container: HTMLElement, y: number): HTMLElement | null => {
@@ -54,6 +56,8 @@ export function KanbanColumn({
   canDrag,
   draggingTaskId,
   permissions = null,
+  isSharedView = false,
+  canViewDetailsInShare = false,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
@@ -100,9 +104,11 @@ export function KanbanColumn({
     onDrop(e, status.name);
   };
   
-  const handleCardClick = (path: string) => {
-    const canViewDetails = permissions ? permissions.canViewDetails : true;
+  const handleCardClick = (taskId: string) => {
+    const canViewDetails = !isSharedView || canViewDetailsInShare;
     if (!canViewDetails) return;
+    
+    const path = isSharedView ? `/share/${permissions?.linkId}/tasks/${taskId}` : `/tasks/${taskId}`;
     router.push(path);
   };
 
@@ -120,6 +126,8 @@ export function KanbanColumn({
         <div className="flex items-center gap-2">
           {status.name === 'Preview' ? (
               <Eye className="h-4 w-4" style={{ color: status.color }}/>
+          ) : status.name === 'Revisi' ? (
+              <RefreshCcw className="h-4 w-4" style={{ color: status.color }}/>
           ) : (
              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></div>
           )}
@@ -173,8 +181,6 @@ export function KanbanColumn({
         <div ref={columnRef} className="flex flex-col gap-3 p-4">
           {tasks.map((task, index) => {
             const isDragging = draggingTaskId === task.id;
-            // The path is now constructed in the parent (KanbanBoard)
-            // and passed down to TaskCard. This component doesn't need to know the context.
             return (
                 <React.Fragment key={task.id}>
                     {dropIndicatorIndex === index && (
@@ -184,11 +190,11 @@ export function KanbanColumn({
                       draggable={canDrag}
                       onDragStart={(e) => onDragStart(e, task.id)}
                       onDragEnd={onDragEnd}
-                      onClick={() => handleCardClick(`/tasks/${task.id}`)}
+                      onClick={() => handleCardClick(task.id)}
                       className={cn(
                         "transition-opacity", 
                         isDragging && "opacity-30",
-                        (permissions && !permissions.canViewDetails) ? 'cursor-default' : 'cursor-pointer'
+                        canDrag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
                       )}
                       data-dragging={isDragging}
                     >
