@@ -45,10 +45,10 @@ interface SharedTasksTableProps {
     statuses: WorkflowStatus[];
     brands: Brand[];
     users: User[];
-    permissions: SharedLink['permissions'];
+    accessLevel: SharedLink['accessLevel'];
 }
 
-export function SharedTasksTable({ tasks, statuses, brands, users, permissions }: SharedTasksTableProps) {
+export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }: SharedTasksTableProps) {
   const router = useRouter();
   const params = useParams();
   const linkId = params.linkId as string;
@@ -66,8 +66,8 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
 
   const [updatingCells, setUpdatingCells] = React.useState<Record<string, boolean>>({});
 
-  const canUpdateStatus = permissions.canChangeStatus;
-  const canEditLimited = permissions.canEditContent;
+  const canChangeStatus = accessLevel === 'status' || accessLevel === 'limited-edit';
+  const canEditLimited = accessLevel === 'limited-edit';
 
   const handleCellUpdate = async (taskId: string, updates: Partial<Task>) => {
     setUpdatingCells(prev => ({...prev, [taskId]: true}));
@@ -235,11 +235,14 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
       accessorKey: 'assigneeIds',
       header: 'Assignees',
       cell: ({ row }) => {
-        const assignees = row.original.assignees || [];
-        if (!assignees || assignees.length === 0) {
+        const assigneeIds = row.original.assigneeIds || [];
+        if (assigneeIds.length === 0) {
             return <div className="text-muted-foreground">-</div>;
         }
+        
+        const assignees = assigneeIds.map(id => users?.find(u => u.id === id)).filter(Boolean) as User[];
         const firstAssignee = assignees[0];
+        if (!firstAssignee) return <div className="text-muted-foreground">-</div>;
 
         return (
           <div className="flex items-center gap-2">
@@ -323,7 +326,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
         const statusDetails = statuses?.find(s => s.name === statusName);
         const Icon = statusOptions.find(s => s.value === statusName)?.icon || Circle;
 
-        if (!canUpdateStatus) {
+        if (!canChangeStatus) {
            return (
               <Badge variant="outline" className="font-medium" style={{ backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent', borderColor: statusDetails?.color, color: statusDetails?.color }}>
                   <div className="flex items-center gap-2">
@@ -347,7 +350,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
                     </div>
                 </SelectTrigger>
                 <SelectContent>
-                    {statuses.map(s => (
+                    {(statuses || []).map(s => (
                         <SelectItem key={s.id} value={s.name}>
                             <div className="flex items-center gap-2">
                                 <div className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }}></div>
@@ -428,7 +431,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, permissions }
                   data-state={row.getIsSelected() && 'selected'}
                   className="group cursor-pointer"
                   onClick={() => {
-                      if (!permissions.canViewDetails) {
+                      if (accessLevel === 'view') {
                         toast({ variant: 'destructive', title: 'Permission Denied', description: 'Viewing task details is not allowed with this link.' });
                         return;
                       }

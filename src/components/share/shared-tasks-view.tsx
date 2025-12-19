@@ -5,7 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { SharedTasksTable } from './shared-tasks-table';
 import { TaskDetailsSheet } from '../tasks/task-details-sheet';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 
 interface SharedTasksViewProps {
   session: SharedLink;
@@ -18,6 +18,8 @@ interface SharedTasksViewProps {
 
 export function SharedTasksView({ session, tasks, statuses, brands, users, isLoading }: SharedTasksViewProps) {
     const params = useParams();
+    const router = useRouter();
+
     const taskId = Array.isArray(params.scope) && params.scope[0] === 'tasks' ? params.scope[1] : null;
     const [sheetOpen, setSheetOpen] = React.useState(!!taskId);
     const [activeTask, setActiveTask] = React.useState<Task | null>(null);
@@ -33,6 +35,15 @@ export function SharedTasksView({ session, tasks, statuses, brands, users, isLoa
             setSheetOpen(false);
         }
     }, [taskId, tasks]);
+
+    const handleSheetOpenChange = (open: boolean) => {
+      setSheetOpen(open);
+      if (!open) {
+        // Use window.history to avoid a full page reload which would lose local state
+        window.history.pushState({}, '', `/share/${session.id}/tasks`);
+        setActiveTask(null);
+      }
+    };
 
 
   return (
@@ -57,7 +68,7 @@ export function SharedTasksView({ session, tasks, statuses, brands, users, isLoa
             statuses={statuses || []}
             brands={brands || []}
             users={users || []}
-            permissions={session.permissions}
+            accessLevel={session.accessLevel}
           />
         )}
       </main>
@@ -65,14 +76,8 @@ export function SharedTasksView({ session, tasks, statuses, brands, users, isLoa
           <TaskDetailsSheet 
             task={activeTask}
             open={sheetOpen}
-            onOpenChange={(open) => {
-                if(!open) {
-                    window.history.pushState({}, '', `/share/${session.id}/tasks`);
-                    setSheetOpen(false);
-                    setActiveTask(null);
-                }
-            }}
-            permissions={session.permissions}
+            onOpenChange={handleSheetOpenChange}
+            accessLevel={session.accessLevel}
           />
       )}
     </div>

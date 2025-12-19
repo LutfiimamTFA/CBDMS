@@ -3,7 +3,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { Task, WorkflowStatus, SharedLink, User } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from '../tasks/kanban-column';
 
@@ -107,7 +106,7 @@ export function SharedKanbanBoard({
             canDrag={canDrag}
             draggingTaskId={draggingTaskId}
             isSharedView={true}
-            sharedLinkId={linkId}
+            permissions={permissions}
           />
         ))}
       </div>

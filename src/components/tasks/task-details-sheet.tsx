@@ -50,7 +50,7 @@ import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { useRouter } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -99,7 +99,7 @@ interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  permissions?: SharedLink['permissions'] | null;
+  accessLevel?: SharedLink['accessLevel'] | null;
 }
 
 // Centralized activity creation function to guarantee unique IDs.
@@ -117,11 +117,12 @@ export function TaskDetailsSheet({
   task: initialTask, 
   open,
   onOpenChange,
-  permissions = null,
+  accessLevel = null,
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
+  const params = useParams();
   const [isUploading, setIsUploading] = React.useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -228,7 +229,7 @@ export function TaskDetailsSheet({
 
   }, [allUsers, currentUser]);
 
-  const isSharedView = !!permissions;
+  const isSharedView = !!accessLevel;
   
   const isCreator = currentUser?.id === initialTask.createdBy.id;
   const isManagerOfBrand = currentUser?.role === 'Manager' && initialTask.brandId && currentUser.brandIds?.includes(initialTask.brandId);
@@ -236,7 +237,7 @@ export function TaskDetailsSheet({
   const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
 
   const canEditContent = isSharedView 
-    ? (permissions.canEditContent || false) 
+    ? (accessLevel === 'limited-edit') 
     : (currentUser && (
         currentUser.role === 'Super Admin' || 
         isManagerOfBrand ||
@@ -244,22 +245,22 @@ export function TaskDetailsSheet({
       ));
       
   const canChangePriority = useMemo(() => {
-      if (isSharedView) return false;
+      if (isSharedView) return accessLevel === 'limited-edit';
       if (!currentUser) return false;
       if (currentUser.role === 'Super Admin') return true;
       if (currentUser.role === 'Manager') {
         return true;
       }
       return false;
-  }, [currentUser, isSharedView]);
+  }, [currentUser, isSharedView, accessLevel]);
 
-  const canComment = isSharedView ? (permissions.canComment || false) : !!currentUser;
+  const canComment = !isSharedView && !!currentUser;
   
   const canChangeStatus = isSharedView 
-    ? (permissions.canChangeStatus || false)
+    ? (accessLevel === 'status' || accessLevel === 'limited-edit')
     : (currentUser && (isManagerOrAdmin || isAssignee));
   
-  const canAssignUsers = isSharedView ? (permissions.canAssignUsers || false) : canEditContent;
+  const canAssignUsers = isSharedView ? false : canEditContent;
   
   const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
@@ -268,13 +269,13 @@ export function TaskDetailsSheet({
   const currentFormStatus = form.watch('status');
 
   const canManageSubtasks = useMemo(() => {
-    if (isSharedView) return permissions.canEditContent || false;
+    if (isSharedView) return accessLevel === 'limited-edit';
     if (!currentUser) return false;
 
     const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(currentFormStatus);
     
     return (isAssignee || isManagerOrAdmin) && isAllowedStatus;
-  }, [isSharedView, permissions, currentUser, isAssignee, isManagerOrAdmin, currentFormStatus]);
+  }, [isSharedView, accessLevel, currentUser, isAssignee, isManagerOrAdmin, currentFormStatus]);
   
   const showTimeTracker = useMemo(() => {
       if (isSharedView) return false;
@@ -349,15 +350,42 @@ export function TaskDetailsSheet({
 
 
   const handleStatusChange = async (newStatus: string) => {
-    if (!firestore || !currentUser || !newStatus) return;
+    if ((!firestore || !currentUser) && !isSharedView) return;
+    
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
 
-    if (isRunning) {
+    // Pause timer if running and not in shared view
+    if (isRunning && !isSharedView) {
         await handlePauseSession();
     }
     
-    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    form.setValue('status', newStatus); // Optimistic UI update
+
+    if(isSharedView) {
+        // Shared view logic
+        const linkId = params.linkId;
+        try {
+            const response = await fetch('/api/share/update-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                linkId,
+                taskId: initialTask.id,
+                updates: { status: newStatus },
+              }),
+            });
+            if (!response.ok) throw new Error('Failed to update status');
+            toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
+        } catch (error) {
+            form.setValue('status', oldStatus); // Revert
+            toast({ variant: 'destructive', title: 'Update Failed' });
+        }
+        return;
+    }
+    
+    // Logged-in user logic
+    const newActivity = createActivity(currentUser!, `changed status from "${oldStatus}" to "${newStatus}"`);
     const updatedActivities = [...(initialTask.activities || []), newActivity];
 
     const taskRef = doc(firestore, 'tasks', initialTask.id);
@@ -372,50 +400,24 @@ export function TaskDetailsSheet({
             updatedAt: serverTimestamp() as Timestamp,
         };
         
-        if (oldStatus === 'Revisi' && newStatus === 'Doing') {
-            updates.isUnderRevision = true;
-        }
-        if (newStatus !== 'Doing' && initialTask.isUnderRevision) {
-            updates.isUnderRevision = deleteField() as any;
-        }
-        
-        if (oldStatus === 'To Do' && newStatus !== 'To Do' && !initialTask.actualStartDate) {
-            updates.actualStartDate = new Date().toISOString();
-        }
-        
-        if (newStatus === 'Done' && oldStatus !== 'Done') {
-            updates.actualCompletionDate = new Date().toISOString();
-        }
-
-        if (newStatus !== 'Done' && oldStatus === 'Done') {
-            updates.actualCompletionDate = deleteField() as any;
-        }
+        if (oldStatus === 'Revisi' && newStatus === 'Doing') updates.isUnderRevision = true;
+        if (newStatus !== 'Doing' && initialTask.isUnderRevision) updates.isUnderRevision = deleteField() as any;
+        if (oldStatus === 'To Do' && newStatus !== 'To Do' && !initialTask.actualStartDate) updates.actualStartDate = new Date().toISOString();
+        if (newStatus === 'Done' && oldStatus !== 'Done') updates.actualCompletionDate = new Date().toISOString();
+        if (newStatus !== 'Done' && oldStatus === 'Done') updates.actualCompletionDate = deleteField() as any;
 
         const notificationTitle = `Status Changed: ${initialTask.title}`;
-        const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
+        const notificationMessage = `${currentUser!.name} changed status to ${newStatus}.`;
         
         const notifiedUserIds = new Set<string>();
-
-        initialTask.assigneeIds.forEach(assigneeId => {
-            if (assigneeId !== currentUser.id) {
-                notifiedUserIds.add(assigneeId);
-            }
-        });
-
-        if (initialTask.createdBy.id !== currentUser.id) {
-            notifiedUserIds.add(initialTask.createdBy.id);
-        }
+        initialTask.assigneeIds.forEach(id => { if (id !== currentUser!.id) notifiedUserIds.add(id); });
+        if (initialTask.createdBy.id !== currentUser!.id) notifiedUserIds.add(initialTask.createdBy.id);
 
         notifiedUserIds.forEach(userId => {
             const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
             const newNotification: Omit<Notification, 'id'> = {
-                userId,
-                title: notificationTitle,
-                message: notificationMessage,
-                taskId: initialTask.id,
-                isRead: false,
-                createdAt: serverTimestamp() as any,
-                createdBy: newActivity.user,
+                userId, title: notificationTitle, message: notificationMessage, taskId: initialTask.id, isRead: false,
+                createdAt: serverTimestamp() as any, createdBy: newActivity.user,
             };
             batch.set(notifRef, newNotification);
         });
@@ -423,7 +425,6 @@ export function TaskDetailsSheet({
         batch.update(taskRef, updates);
         await batch.commit();
 
-        form.setValue('status', newStatus);
         toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
     } catch (error) {
         console.error('Failed to update status:', error);
@@ -442,12 +443,26 @@ export function TaskDetailsSheet({
         form.setValue('priority', currentPriority);
         return;
     }
+    
+    form.setValue('priority', newPriority); // Optimistic UI
 
-    const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
-
-    const applyPriorityChange = async (priority: Priority) => {
+    const applyChange = async (priority: Priority) => {
+      if (isSharedView) {
+        const linkId = params.linkId;
+        try {
+          const response = await fetch('/api/share/update-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { priority } }),
+          });
+          if (!response.ok) throw new Error('Failed to update priority');
+          toast({ title: 'Priority Updated' });
+        } catch (error) {
+          form.setValue('priority', currentPriority);
+          toast({ variant: 'destructive', title: 'Update Failed' });
+        }
+      } else {
         if (!firestore || !currentUser) return;
-        form.setValue('priority', priority);
         const taskRef = doc(firestore, 'tasks', initialTask.id);
         const newActivity = createActivity(currentUser, `set priority from "${currentPriority}" to "${priority}"`);
         try {
@@ -463,10 +478,17 @@ export function TaskDetailsSheet({
             form.setValue('priority', currentPriority); 
             toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task priority.' });
         }
+      }
     };
 
+    if (isSharedView) {
+      await applyChange(newPriority);
+      return;
+    }
+    
+    const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
     if (priorityValues[newPriority] <= priorityValues[currentPriority]) {
-        await applyPriorityChange(newPriority);
+        await applyChange(newPriority);
         return;
     }
 
@@ -480,23 +502,21 @@ export function TaskDetailsSheet({
         });
 
         if (result.isApproved) {
-            await applyPriorityChange(newPriority);
+            await applyChange(newPriority);
             toast({ title: 'AI Agrees!', description: result.reason });
         } else {
             setAiValidation({
-                isOpen: true,
-                isChecking: false,
-                reason: result.reason,
+                isOpen: true, isChecking: false, reason: result.reason,
                 onConfirm: async () => {
-                    await applyPriorityChange(newPriority); 
+                    await applyChange(newPriority); 
                     setAiValidation({ ...aiValidation, isOpen: false });
                 }
             });
         }
     } catch (e) {
         console.error(e);
-        toast({ variant: 'destructive', title: 'AI Validation Failed', description: 'Could not validate priority change. Applying directly.' });
-        await applyPriorityChange(newPriority);
+        toast({ variant: 'destructive', title: 'AI Validation Failed', description: 'Applying directly.' });
+        await applyChange(newPriority);
     } finally {
         if (aiValidation.isChecking) {
              setAiValidation(prev => ({ ...prev, isChecking: false }));
@@ -636,20 +656,35 @@ export function TaskDetailsSheet({
   };
   
   const handleToggleRevisionItem = async (itemId: string) => {
-    if (!firestore || !isAssignee) return;
+    if ((isSharedView && accessLevel !== 'limited-edit') || (!isSharedView && !isAssignee)) return;
+    if (isSharedView && !firestore) return;
 
     const newItems = revisionItems.map(item =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
     );
     setRevisionItems(newItems);
     
-    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-    try {
-        await updateDoc(taskDocRef, { revisionItems: newItems });
-    } catch (e) {
-        console.error("Failed to update revision item", e);
-        setRevisionItems(initialTask.revisionItems || []); // Revert on failure
-        toast({ variant: 'destructive', title: 'Update Failed' });
+    if(isSharedView) {
+        const linkId = params.linkId;
+        try {
+            await fetch('/api/share/update-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { revisionItems: newItems } }),
+            });
+        } catch(e) {
+            setRevisionItems(initialTask.revisionItems || []);
+            toast({ variant: 'destructive', title: 'Update Failed' });
+        }
+    } else {
+        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+        try {
+            await updateDoc(taskDocRef, { revisionItems: newItems });
+        } catch (e) {
+            console.error("Failed to update revision item", e);
+            setRevisionItems(initialTask.revisionItems || []); // Revert on failure
+            toast({ variant: 'destructive', title: 'Update Failed' });
+        }
     }
 };
 
@@ -763,73 +798,92 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
-    if (!firestore || !currentUser) return;
+    if ((!firestore || !currentUser) && !isSharedView) return;
     setIsSaving(true);
-    const batch = writeBatch(firestore);
-    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-
-    const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
-        const changes: string[] = [];
-        const oldDueDate = oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'MMM d, yyyy') : 'no due date';
-        const newDueDate = newData.dueDate ? format(parseISO(newData.dueDate), 'MMM d, yyyy') : 'no due date';
-
-        if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
-        if (oldTask.description !== (newData.description || '')) changes.push('updated the description');
-        if (oldDueDate !== newDueDate) changes.push(`changed the due date from ${oldDueDate} to ${newDueDate}`);
-        
-        return changes.length > 0 ? changes.join(', ') : null;
-    };
-
-    const actionDescription = getChangedFields(initialTask, data);
     
-    let activityData: Partial<Task> = {};
-    if (actionDescription) {
-        const newActivity: Activity = createActivity(currentUser, actionDescription);
-        activityData = {
-            activities: [...(initialTask.activities || []), newActivity],
-            lastActivity: newActivity,
-        };
-    }
-    
-    const updatedTaskData: Partial<Task> = {
+    const updates: Partial<Task> = {
         title: data.title,
         description: data.description,
         dueDate: data.dueDate,
         brandId: data.brandId,
-        assignees: currentAssignees,
-        assigneeIds: currentAssignees.map((a) => a.id),
+        assigneeIds: currentAssignees.map(a => a.id),
         tags: currentTags,
         subtasks: subtasks,
-        comments: initialTask.comments,
         attachments: attachments,
-        ...activityData,
-        updatedAt: serverTimestamp() as any,
     };
     
-    Object.keys(updatedTaskData).forEach(key => {
-      const typedKey = key as keyof typeof updatedTaskData;
-      if (updatedTaskData[typedKey] === undefined) {
-        delete (updatedTaskData as any)[typedKey];
-      }
-    });
+    if (isSharedView) {
+        // Shared view save
+        const linkId = params.linkId;
+        try {
+            const response = await fetch('/api/share/update-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ linkId, taskId: initialTask.id, updates }),
+            });
+            if (!response.ok) throw new Error('Failed to save changes');
+            toast({ title: 'Task Updated' });
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Save Failed' });
+        } finally {
+            setIsSaving(false);
+        }
 
-    batch.update(taskDocRef, updatedTaskData);
+    } else {
+        // Logged-in user save
+        const batch = writeBatch(firestore!);
+        const taskDocRef = doc(firestore!, 'tasks', initialTask.id);
+    
+        const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
+            const changes: string[] = [];
+            const oldDueDate = oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'MMM d, yyyy') : 'no due date';
+            const newDueDate = newData.dueDate ? format(parseISO(newData.dueDate), 'MMM d, yyyy') : 'no due date';
 
-    try {
-        await batch.commit();
-        toast({
-            title: 'Task Updated',
-            description: `"${data.title}" has been saved.`,
+            if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
+            if (oldTask.description !== (newData.description || '')) changes.push('updated the description');
+            if (oldDueDate !== newDueDate) changes.push(`changed the due date from ${oldDueDate} to ${newDueDate}`);
+            
+            return changes.length > 0 ? changes.join(', ') : null;
+        };
+
+        const actionDescription = getChangedFields(initialTask, data);
+        
+        let activityData: Partial<Task> = {};
+        if (actionDescription) {
+            const newActivity: Activity = createActivity(currentUser!, actionDescription);
+            activityData = {
+                activities: [...(initialTask.activities || []), newActivity],
+                lastActivity: newActivity,
+            };
+        }
+        
+        const updatedTaskData: Partial<Task> = { ...updates, ...activityData, updatedAt: serverTimestamp() as any, };
+        
+        Object.keys(updatedTaskData).forEach(key => {
+          const typedKey = key as keyof typeof updatedTaskData;
+          if (updatedTaskData[typedKey] === undefined) {
+            delete (updatedTaskData as any)[typedKey];
+          }
         });
-    } catch (error) {
-        console.error('Failed to update task:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Update Failed',
-            description: 'Could not save task changes.',
-        });
-    } finally {
-        setIsSaving(false);
+
+        batch.update(taskDocRef, updatedTaskData);
+
+        try {
+            await batch.commit();
+            toast({
+                title: 'Task Updated',
+                description: `"${data.title}" has been saved.`,
+            });
+        } catch (error) {
+            console.error('Failed to update task:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Update Failed',
+                description: 'Could not save task changes.',
+            });
+        } finally {
+            setIsSaving(false);
+        }
     }
   };
   
@@ -1077,7 +1131,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)}><History className="h-4 w-4 mr-2"/> View History</Button>
+                    {!isSharedView && <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)}><History className="h-4 w-4 mr-2"/> View History</Button>}
                     <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
                 </div>
              </div>
@@ -1130,7 +1184,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                                 id={`rev-${item.id}`}
                                                 checked={item.completed}
                                                 onCheckedChange={() => handleToggleRevisionItem(item.id)}
-                                                disabled={!isAssignee || isSharedView}
+                                                disabled={!isAssignee && !(isSharedView && accessLevel === 'limited-edit')}
                                             />
                                             <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
                                                 {item.text}
@@ -1382,7 +1436,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               {currentUser?.role !== 'Employee' && currentUser?.role !== 'PIC' && canChangeStatus ? (
+                               {canChangeStatus ? (
                                    <FormField control={form.control} name="status" render={({ field }) => (
                                      <Select onValueChange={(value) => handleStatusChange(value)} value={field.value}>
                                         <FormControl>

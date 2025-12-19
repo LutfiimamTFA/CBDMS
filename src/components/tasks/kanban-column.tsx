@@ -26,7 +26,6 @@ interface KanbanColumnProps {
   draggingTaskId: string | null;
   permissions?: SharedLink['accessLevel'] | null;
   isSharedView?: boolean;
-  canViewDetailsInShare?: boolean;
 }
 
 const getDragAfterElement = (container: HTMLElement, y: number): HTMLElement | null => {
@@ -57,7 +56,6 @@ export function KanbanColumn({
   draggingTaskId,
   permissions = null,
   isSharedView = false,
-  canViewDetailsInShare = false,
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const router = useRouter();
@@ -105,12 +103,15 @@ export function KanbanColumn({
   };
   
   const handleCardClick = (taskId: string) => {
-    const canViewDetails = !isSharedView || canViewDetailsInShare;
+    const canViewDetails = !isSharedView || (permissions && accessLevel !== 'view');
     if (!canViewDetails) return;
     
-    const path = isSharedView ? `/share/${permissions?.linkId}/tasks/${taskId}` : `/tasks/${taskId}`;
+    const path = isSharedView ? `/share/${params.linkId}/tasks/${taskId}` : `/tasks/${taskId}`;
     router.push(path);
   };
+
+  const params = useParams();
+  const accessLevel = permissions;
 
   return (
     <div
