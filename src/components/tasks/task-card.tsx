@@ -1,16 +1,18 @@
 
 'use client';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { Task, User } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History } from 'lucide-react';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History, MoreHorizontal, Share2 } from 'lucide-react';
 import { format, parseISO, isAfter, formatDistanceToNow } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Progress } from '../ui/progress';
-import Link from 'next/link';
-import { Badge } from '../ui/badge';
+import { useRouter } from 'next/navigation';
+import { useUserProfile } from '@/firebase';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../ui/dropdown-menu';
+import { ShareTaskDialog } from './share-task-dialog';
+
 
 interface TaskCardProps {
   task: Task;
@@ -18,14 +20,13 @@ interface TaskCardProps {
 }
 
 export function TaskCard({ task, draggable = false }: TaskCardProps) {
+  const router = useRouter();
+  const { profile: currentUser } = useUserProfile();
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   const PriorityIcon = priorityInfo[task.priority].icon;
   const priorityColor = priorityInfo[task.priority].color;
 
-  const timeTrackingProgress = task.timeEstimate && task.timeTracked
-    ? (task.timeTracked / task.timeEstimate) * 100
-    : 0;
-  
   const completionStatus = useMemo(() => {
     if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
     const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
@@ -44,17 +45,37 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       return `${user.name} ${action} ${timeAgo}`;
   }, [task.lastActivity]);
 
+  const isCreator = currentUser?.id === task.createdBy.id;
+
   return (
       <Card
         className={cn(
-          "transition-shadow duration-200 hover:shadow-lg w-full relative",
+          "transition-shadow duration-200 hover:shadow-lg w-full relative group/card",
           draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
         )}
+         onClick={() => router.push(`/tasks/${task.id}`)}
       >
         <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 rounded-l-lg", brandColor)}></div>
+        
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="absolute top-1 right-1 h-7 w-7 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                    <MoreHorizontal className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                 {isCreator && (
+                    <DropdownMenuItem onSelect={() => setIsShareOpen(true)}>
+                       <Share2 className="mr-2 h-4 w-4" />
+                       Share Task
+                    </DropdownMenuItem>
+                 )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+
         <CardContent className="p-4 pl-6 space-y-3">
           <div className="flex items-start justify-between">
-            <div className="font-medium cursor-pointer pr-2">
+            <div className="font-medium cursor-pointer pr-8">
               <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
             </div>
             <div className="flex items-center gap-2">
@@ -105,14 +126,14 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                 <Tooltip>
                   <TooltipTrigger className="flex items-center -space-x-2">
                     {assignees.slice(0, 2).map(assignee => {
-                      const isCreator = assignee.id === creatorId;
+                      const isCreatorAssignee = assignee.id === creatorId;
                       return (
                         <div key={assignee.id} className="relative">
                           <Avatar className="h-7 w-7 border-2 border-background">
                             <AvatarImage src={assignee.avatarUrl} alt={assignee.name} />
                             <AvatarFallback>{assignee.name.charAt(0)}</AvatarFallback>
                           </Avatar>
-                          {isCreator && (
+                          {isCreatorAssignee && (
                               <TooltipProvider>
                                   <Tooltip>
                                       <TooltipTrigger asChild>
@@ -167,20 +188,15 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                     </span>
                 )}
                 {task.dueDate && (
-                    <Badge variant="outline" className="flex items-center gap-1">
+                    <span className="flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         {format(parseISO(task.dueDate), 'MMM d')}
-                    </Badge>
+                    </span>
                 )}
             </div>
         </div>
         </CardContent>
+         <ShareTaskDialog open={isShareOpen} onOpenChange={setIsShareOpen} task={task} />
       </Card>
   );
 }
-
-function formatHours(hours: number = 0) {
-    const h = Math.floor(hours);
-    const m = Math.floor((hours - h) * 60);
-    return `${h}h ${m}m`;
-};
