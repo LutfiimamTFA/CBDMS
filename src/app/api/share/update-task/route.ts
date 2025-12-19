@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     
     // Create a generic actor for this shared action
     const sharedActor = {
-        id: `share_${sharedLink.id}`,
+        id: `share_${sharedLink.id.substring(0, 5)}`,
         name: `Guest (${sharedLink.name})`,
         avatarUrl: '', // No avatar for guest
     };
@@ -100,14 +100,13 @@ export async function POST(request: Request) {
         const newActivity = createActivity(sharedActor, actionDescription);
         finalUpdates.lastActivity = newActivity;
         
-        // Ensure activities is an array before trying to spread it
         const currentActivities = Array.isArray(oldTask.activities) ? oldTask.activities : [];
         finalUpdates.activities = [...currentActivities, newActivity];
 
         const notificationTitle = `Status Changed: ${oldTask.title}`;
         const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
         
-        // Notify only the assignees of the task.
+        // Notify ONLY the direct assignees of the task.
         oldTask.assigneeIds.forEach(assigneeId => {
             const notifRef = db.collection(`users/${assigneeId}/notifications`).doc();
             const newNotification: Omit<Notification, 'id'> = {
@@ -117,7 +116,7 @@ export async function POST(request: Request) {
                 taskId: oldTask.id, 
                 isRead: false,
                 createdAt: Timestamp.now() as any, 
-                createdBy: newActivity.user, // Use the consistent sharedActor object
+                createdBy: newActivity.user, // Use the consistent sharedActor object for the creator of the notification
             };
             batch.set(notifRef, newNotification);
         });
