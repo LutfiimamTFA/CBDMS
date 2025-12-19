@@ -99,7 +99,10 @@ export async function POST(request: Request) {
     if (actionDescription) {
         const newActivity = createActivity(sharedActor, actionDescription);
         finalUpdates.lastActivity = newActivity;
-        finalUpdates.activities = [...(oldTask.activities || []), newActivity];
+        
+        // Ensure activities is an array before trying to spread it
+        const currentActivities = Array.isArray(oldTask.activities) ? oldTask.activities : [];
+        finalUpdates.activities = [...currentActivities, newActivity];
 
         const notificationTitle = `Status Changed: ${oldTask.title}`;
         const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
@@ -117,8 +120,13 @@ export async function POST(request: Request) {
         notifiedUserIds.forEach(userId => {
             const notifRef = db.collection(`users/${userId}/notifications`).doc();
             const newNotification: Omit<Notification, 'id'> = {
-                userId, title: notificationTitle, message: notificationMessage, taskId: oldTask.id, isRead: false,
-                createdAt: Timestamp.now() as any, createdBy: newActivity.user,
+                userId, 
+                title: notificationTitle, 
+                message: notificationMessage, 
+                taskId: oldTask.id, 
+                isRead: false,
+                createdAt: Timestamp.now() as any, 
+                createdBy: newActivity.user,
             };
             batch.set(notifRef, newNotification);
         });
