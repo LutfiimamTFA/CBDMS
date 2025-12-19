@@ -10,7 +10,7 @@ import { KanbanColumn } from '../tasks/kanban-column';
 interface SharedKanbanBoardProps {
   initialTasks: Task[];
   statuses: WorkflowStatus[];
-  permissions: SharedLink['permissions'];
+  permissions: SharedLink['accessLevel'];
   linkId: string;
 }
 
@@ -28,7 +28,7 @@ export function SharedKanbanBoard({
     setTasks(initialTasks);
   }, [initialTasks]);
 
-  const canDrag = permissions.canChangeStatus;
+  const canDrag = permissions === 'status' || permissions === 'limited-edit';
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
     if (!canDrag) return;
@@ -106,9 +106,8 @@ export function SharedKanbanBoard({
             onDragEnd={handleDragEnd}
             canDrag={canDrag}
             draggingTaskId={draggingTaskId}
-            permissions={permissions}
             isSharedView={true}
-            linkId={linkId}
+            sharedLinkId={linkId}
           />
         ))}
       </div>
