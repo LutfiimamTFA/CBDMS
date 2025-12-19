@@ -125,7 +125,7 @@ export async function POST(request: Request) {
             notifiedUserIds.forEach(userId => {
                 const notifRef = db.collection(`users/${userId}/notifications`).doc();
                 const newNotification: Omit<Notification, 'id'> = {
-                    userId, title: notificationTitle, message: notificationMessage, taskId: oldTask.id, isRead: false,
+                    userId, title: notificationTitle, message: notificationMessage, taskId: taskId, isRead: false,
                     createdAt: serverTimestamp,
                     createdBy: {
                         id: sharedActor.id,
