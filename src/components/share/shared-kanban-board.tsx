@@ -1,8 +1,8 @@
 
 'use client';
 
-import React, { useState, useMemo, useRef, useEffect } from 'react';
-import type { Task, WorkflowStatus, SharedLink, User } from '@/lib/types';
+import React, { useState, useMemo } from 'react';
+import type { Task, WorkflowStatus, SharedLink } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from '../tasks/kanban-column';
@@ -22,15 +22,12 @@ export function SharedKanbanBoard({
   accessLevel,
   linkId,
 }: SharedKanbanBoardProps) {
-  const [tasks, setTasks] = useState(initialTasks);
+  // This component is now fully controlled. It receives tasks from its parent
+  // which gets data from the real-time SharedSessionProvider.
+  // No more local `useState` for tasks.
   const { toast } = useToast();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const router = useRouter();
-
-
-  useEffect(() => {
-    setTasks(initialTasks);
-  }, [initialTasks]);
 
   const canDrag = accessLevel === 'status' || accessLevel === 'limited-edit';
 
@@ -47,18 +44,9 @@ export function SharedKanbanBoard({
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag) return;
     const taskId = e.dataTransfer.getData('taskId');
-    const task = tasks.find((t) => t.id === taskId);
+    const task = initialTasks.find((t) => t.id === taskId);
 
     if (task && task.status !== newStatus) {
-      const originalTasks = tasks;
-      const oldStatus = task.status;
-      
-      // Optimistic UI update
-      const updatedTasks = tasks.map((t) =>
-        t.id === taskId ? { ...t, status: newStatus } : t
-      );
-      setTasks(updatedTasks);
-
       try {
         const response = await fetch('/api/share/update-task', {
           method: 'POST',
@@ -75,22 +63,13 @@ export function SharedKanbanBoard({
           throw new Error(errorData.message || 'Failed to update task.');
         }
 
-        // Fire-and-forget activity logging call
-        const actionText = `changed status from "${oldStatus}" to "${newStatus}"`;
-        fetch('/api/create-activity', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId, actionText, linkCreatorId: initialTasks[0].createdBy.id }), // Assuming createdBy is the link creator
-        }).catch(err => console.error("Failed to log activity:", err));
-
-
+        // No more optimistic update or fire-and-forget here.
+        // The snapshot listener in SharedSessionProvider will handle the UI update.
         toast({
           title: 'Status Updated',
           description: `Task moved to "${newStatus}".`,
         });
       } catch (error: any) {
-        // Revert optimistic update
-        setTasks(originalTasks);
         toast({
           variant: 'destructive',
           title: 'Update Failed',
@@ -105,6 +84,7 @@ export function SharedKanbanBoard({
     router.push(path);
   };
   
+  // Strict validation as required.
   if (!statuses || statuses.length < 2) {
     return (
       <div className="flex h-full items-center justify-center p-8 w-full">
@@ -125,7 +105,7 @@ export function SharedKanbanBoard({
           <KanbanColumn
             key={status.id}
             status={status}
-            tasks={tasks.filter((task) => task.status === status.name)}
+            tasks={initialTasks.filter((task) => task.status === status.name)}
             onDrop={handleDrop}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
