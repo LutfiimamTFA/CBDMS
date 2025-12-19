@@ -1,4 +1,3 @@
-
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -26,7 +25,9 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
   const { profile } = useUserProfile();
 
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
-  const canShowShareButton = !isSharedView && profile && shareableViews.includes(pathname);
+  const isPathShareable = shareableViews.some(p => pathname.startsWith(p));
+  
+  const canShowShareButton = !isSharedView && profile && isPathShareable;
 
 
   return (
