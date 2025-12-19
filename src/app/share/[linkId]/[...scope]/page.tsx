@@ -14,6 +14,7 @@ import { SharedScheduleView } from '@/components/share/shared-schedule-view';
 import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 import { SidebarInset } from '@/components/ui/sidebar';
 import { SharedHeader } from '@/components/share/shared-header';
+import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -53,7 +54,7 @@ const LinkNotFoundComponent = () => (
 );
 
 export default function ShareScopePage() {
-  const { session, isLoading, error, ...snapshotData } = useSharedSession();
+  const { session, isLoading, error } = useSharedSession();
   const params = useParams();
   const scope = Array.isArray(params.scope) ? params.scope.join('/') : params.scope;
   
@@ -68,10 +69,12 @@ export default function ShareScopePage() {
   if (error || !session) {
     return <LinkNotFoundComponent />;
   }
+  
+  const snapshotData = session.snapshot;
 
   const navItemForScope = (session.navItems || []).find(item => {
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
-    return itemPath === scope;
+    return itemPath === scope.split('/')[0]; // Compare with base path
   });
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
@@ -79,7 +82,11 @@ export default function ShareScopePage() {
   const viewProps = {
     session,
     isLoading,
-    ...snapshotData,
+    tasks: snapshotData.tasks || [],
+    statuses: snapshotData.statuses || [],
+    brands: snapshotData.brands || [],
+    users: snapshotData.users || [],
+    socialMediaPosts: (snapshotData as any).socialMediaPosts || [],
   };
 
   const renderContent = () => {
@@ -87,7 +94,8 @@ export default function ShareScopePage() {
         return <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />;
     }
 
-    switch (`/${scope}`) {
+    // Always render the base page content, the sheet will overlay it if taskId exists
+    switch (`/${scope.split('/')[0]}`) {
         case '/dashboard':
             return <SharedDashboardView {...viewProps} />;
         case '/tasks':
@@ -97,9 +105,7 @@ export default function ShareScopePage() {
         case '/schedule':
              return <SharedScheduleView {...viewProps} />;
         case '/social-media':
-            return <SharedSocialMediaView {...viewProps} isAnalyticsView={false} />;
-        case '/social-media/analytics':
-            return <SharedSocialMediaView {...viewProps} isAnalyticsView={true} />;
+            return <SharedSocialMediaView {...viewProps} isAnalyticsView={scope.includes('analytics')} />;
         default:
             return <AccessDeniedPlaceholder pageName={scope} />;
     }
