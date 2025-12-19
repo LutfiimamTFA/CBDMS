@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -74,7 +73,7 @@ export default function ShareScopePage() {
   const snapshotData = session.snapshot;
   
   // Runtime validation to prevent rendering a broken UI if the snapshot is incomplete
-  const isWorkflowValid = snapshotData.statuses && snapshotData.statuses.length > 1;
+  const isWorkflowValid = snapshotData.statuses && snapshotData.statuses.length >= 2;
   
   if (!isWorkflowValid) {
       return (
