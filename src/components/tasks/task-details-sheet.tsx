@@ -108,7 +108,7 @@ interface TaskDetailsSheetProps {
 
 const createActivity = (user: User, action: string): Activity => {
     return {
-      id: `act-${crypto.randomUUID()}`,
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
       action: action,
       timestamp: new Date().toISOString() as any,
@@ -590,7 +590,7 @@ export function TaskDetailsSheet({
         const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
 
         const comment: Comment = {
-          id: `c-${crypto.randomUUID()}`,
+          id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           user: currentUser,
           text: newComment,
           timestamp: new Date().toISOString(),
@@ -729,7 +729,7 @@ export function TaskDetailsSheet({
 
 
     const subtask: Subtask = {
-      id: `st-${crypto.randomUUID()}`,
+      id: `st-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       title: newSubtask,
       completed: false,
       ...(assignedUser && { assignee: { id: assignedUser.id, name: assignedUser.name, avatarUrl: assignedUser.avatarUrl || '' } }),
@@ -1013,7 +1013,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
           const batch = writeBatch(firestore);
 
           const newComment: Comment = {
-              id: `c-${crypto.randomUUID()}`,
+              id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
               user: currentUser,
               text: `**Revision Request:** ${rejectionReason}`,
               timestamp: new Date().toISOString(),
@@ -1145,7 +1145,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    <DropdownMenu>
+                  <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button>
                       </DropdownMenuTrigger>
@@ -1847,5 +1847,3 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     </>
   );
 }
-
-    

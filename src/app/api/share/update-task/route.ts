@@ -29,7 +29,7 @@ const createSharedActor = (session: SharedLink): User => {
 
 const createActivity = (user: User, action: string): Activity => {
   return {
-    id: `act-${crypto.randomUUID()}`,
+    id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
     action: action,
     timestamp: Timestamp.now() as any,
