@@ -112,6 +112,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
 
+  const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
+  const [tableRows, setTableRows] = useState(2);
+  const [tableCols, setTableCols] = useState(3);
+
 
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
@@ -531,11 +535,26 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setAttachments(prev => prev.filter(att => att.id !== id));
   };
   
-  const insertTableTemplate = () => {
-    const tableTemplate = `| Column 1 | Column 2 | Column 3 |\n| :--- | :--- | :--- |\n| Row 1, Col 1 | Row 1, Col 2 | Row 1, Col 3 |\n| Row 2, Col 1 | Row 2, Col 2 | Row 2, Col 3 |`;
-    const currentDescription = form.getValues('description') || '';
-    form.setValue('description', `${currentDescription}\n\n${tableTemplate}\n`);
+  const generateTableMarkdown = (rows: number, cols: number) => {
+    let table = '';
+    // Header
+    table += `| ${Array.from({ length: cols }, (_, i) => `Col ${i + 1}`).join(' | ')} |\n`;
+    // Separator
+    table += `| ${Array.from({ length: cols }).map(() => '---').join(' | ')} |\n`;
+    // Rows
+    for (let i = 0; i < rows; i++) {
+      table += `| ${Array.from({ length: cols }).map(() => ' ').join(' | ')} |\n`;
+    }
+    return table;
   };
+  
+  const handleGenerateTable = () => {
+    const tableMarkdown = generateTableMarkdown(tableRows, tableCols);
+    const currentDescription = form.getValues('description') || '';
+    form.setValue('description', `${currentDescription}\n\n${tableMarkdown}\n`);
+    setIsTablePopoverOpen(false);
+  };
+
 
   const renderCustomFieldInput = (field: CustomField) => {
     switch (field.type) {
@@ -836,7 +855,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     />
 
                     <Tabs defaultValue="description">
-                        <TabsList>
+                        <TabsList className="w-full grid grid-cols-2">
                           <TabsTrigger value="description">Description</TabsTrigger>
                           <TabsTrigger value="table">Table</TabsTrigger>
                         </TabsList>
@@ -855,10 +874,34 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                              )}/>
                         </TabsContent>
                          <TabsContent value="table" className="mt-2 space-y-2">
-                            <Button type="button" variant="outline" size="sm" onClick={insertTableTemplate}>
-                                <Table className="mr-2 h-4 w-4" />
-                                Insert Table Template
-                            </Button>
+                            <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button type="button" variant="outline" className="w-full">
+                                        <Table className="mr-2 h-4 w-4" />
+                                        Insert Table
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-80">
+                                    <div className="grid gap-4">
+                                        <div className="space-y-2">
+                                            <h4 className="font-medium leading-none">Generate Table</h4>
+                                            <p className="text-sm text-muted-foreground">Set the number of rows and columns.</p>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <div className="grid grid-cols-3 items-center gap-4">
+                                                <Label htmlFor="table-cols">Columns</Label>
+                                                <Input id="table-cols" type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} className="col-span-2 h-8" />
+                                            </div>
+                                             <div className="grid grid-cols-3 items-center gap-4">
+                                                <Label htmlFor="table-rows">Rows</Label>
+                                                <Input id="table-rows" type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} className="col-span-2 h-8" />
+                                            </div>
+                                        </div>
+                                        <Button onClick={handleGenerateTable}>Generate</Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+
                              <FormField control={form.control} name="description" render={({ field }) => (
                                 <FormItem>
                                     <FormControl>
@@ -1150,4 +1193,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
-
