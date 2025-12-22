@@ -69,8 +69,8 @@ export async function POST(request: Request) {
         // --- Permission Validation based on creator's role at time of link creation ---
         const allowedUpdates: Record<string, string[]> = {
             'view': [],
-            'status': ['status'],
-            'limited-edit': ['status', 'dueDate', 'priority', 'revisionItems'],
+            'status': ['status', 'attachments'],
+            'limited-edit': ['status', 'dueDate', 'priority', 'revisionItems', 'attachments'],
         };
         const permittedFields = allowedUpdates[sharedLink.accessLevel] || [];
         const requestedUpdateKeys = Object.keys(updates);

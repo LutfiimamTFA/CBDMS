@@ -102,6 +102,7 @@ interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  accessLevel?: SharedLink['accessLevel']; // Make accessLevel optional
   isSharedView?: boolean;
   sharedTaskConfig?: SharedTask | null;
 }
@@ -127,6 +128,7 @@ export function TaskDetailsSheet({
   task: initialTask, 
   open,
   onOpenChange,
+  accessLevel = 'view', // Provide a default value for accessLevel
   isSharedView = false,
   sharedTaskConfig = null,
 }: TaskDetailsSheetProps) {
@@ -808,7 +810,26 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     };
     
     if (isSharedView) {
-        return; // Saving is not implemented for shared view from this form
+        const linkId = sharedTaskConfig?.id;
+        if (!linkId) return;
+        try {
+            const response = await fetch('/api/share/update-task', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                linkId,
+                taskId: initialTask.id,
+                updates: { attachments },
+              }),
+            });
+            if (!response.ok) throw new Error('Failed to save attachments.');
+            toast({ title: 'Attachments Saved' });
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Save Failed' });
+        } finally {
+            setIsSaving(false);
+        }
+        return;
     } else {
         // Logged-in user save
         const batch = writeBatch(firestore!);
@@ -940,7 +961,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
     setFinalReviewState({ isOpen: false, task: null });
-  };
+  }
   
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
@@ -1209,7 +1230,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               ))}
                             </div>
                           )}
-                          {canEditContent && (
+                          {(canEditContent || (isSharedView && canComment)) && (
                             <div className="grid grid-cols-2 gap-4">
                               <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
                               <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
