@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -17,15 +16,13 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useUserProfile } from '@/firebase';
 import type { Task, SharedTask } from '@/lib/types';
-import { Link as LinkIcon, Copy, Loader2, KeyRound, Clock, Calendar as CalendarIcon } from 'lucide-react';
+import { Link as LinkIcon, Copy, Loader2, KeyRound, Clock, Calendar as CalendarIcon, Eye, ListTodo, Edit } from 'lucide-react';
 import { Switch } from '../ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '../ui/scroll-area';
-import { Eye, ListTodo, Edit } from 'lucide-react';
-
 
 interface ShareTaskDialogProps {
   children: React.ReactNode;
@@ -37,7 +34,7 @@ export function ShareTaskDialog({ children, task }: ShareTaskDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
 
-  const { profile } = useUserProfile();
+  const { user: authUser } = useUserProfile(); // Get the authUser to generate token
   const { toast } = useToast();
 
   const [usePassword, setUsePassword] = useState(false);
@@ -45,15 +42,21 @@ export function ShareTaskDialog({ children, task }: ShareTaskDialogProps) {
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
 
   const handleCreateLink = async () => {
-    if (!profile) return;
+    if (!authUser) {
+        toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in to share tasks.' });
+        return;
+    }
     setIsLoading(true);
     setGeneratedLink(null);
 
     try {
+      const idToken = await authUser.getIdToken();
+
       const response = await fetch('/api/share/task/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           taskId: task.id,
