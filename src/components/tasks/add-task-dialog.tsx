@@ -539,15 +539,15 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const currentText = form.getValues('description') || '';
-    let newText = '';
+    let newText;
 
     if (style === 'table') {
-      const tableTemplate = `\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n`;
+      const tableTemplate = `\n| Header 1 | Header 2 |\n| :--- | :--- |\n| Cell 1 | Cell 2 |\n`;
       newText = `${currentText.substring(0, start)}${tableTemplate}${currentText.substring(end)}`;
     } else if (style === 'list') {
       const selectedText = currentText.substring(start, end);
       const listText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
-      newText = `${currentText.substring(0, start)}${listText}${currentText.substring(end)}`;
+      newText = `${currentText.substring(0, start)}\n${listText}\n${currentText.substring(end)}`;
     } else {
       const wrapper = style === 'bold' ? '**' : '*';
       const selectedText = currentText.substring(start, end);
@@ -555,8 +555,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
     
     form.setValue('description', newText, { shouldValidate: true });
+    
+    // After updating the value, set focus back to the textarea
     textarea.focus();
-};
+    // And move the cursor to the end of the newly inserted/modified text
+    if (style === 'bold' || style === 'italic') {
+      textarea.setSelectionRange(start + wrapper.length, end + wrapper.length);
+    }
+  };
 
 
   const renderCustomFieldInput = (field: CustomField) => {
@@ -1164,4 +1170,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
-
