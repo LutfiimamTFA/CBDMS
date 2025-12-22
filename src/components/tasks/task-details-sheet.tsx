@@ -58,6 +58,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
 import { ShareTaskDialog } from '../share/share-task-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -262,7 +264,7 @@ export function TaskDetailsSheet({
       return false;
   }, [currentUser, isSharedView, accessLevel]);
 
-  const canComment = isSharedView ? accessLevel === 'comment' : !!currentUser;
+  const canComment = isSharedView ? accessLevel === 'limited-edit' : !!currentUser;
   
   const canChangeStatus = isSharedView 
     ? (accessLevel === 'status' || accessLevel === 'limited-edit')
@@ -1143,7 +1145,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <DropdownMenu>
+                    <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button>
                       </DropdownMenuTrigger>
@@ -1413,7 +1415,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                          </div>
                     )}
                     
-                    {isManagerOrAdmin && initialTask.status === 'Preview' && (
+                    {isManagerOrAdmin && initialTask.status === 'Preview' && !isSharedView && (
                         <div className="space-y-2">
                            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}>
                               <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
