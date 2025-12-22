@@ -34,9 +34,9 @@ import {
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2 } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -109,6 +109,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
+  const descriptionTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+
 
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
@@ -527,6 +529,33 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const handleRemoveAttachment = (id: string) => {
     setAttachments(prev => prev.filter(att => att.id !== id));
   };
+  
+    const applyMarkdown = (style: 'bold' | 'italic' | 'list' | 'table') => {
+        const textarea = descriptionTextareaRef.current;
+        if (!textarea) return;
+
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const currentText = form.getValues('description') || '';
+        let newText = '';
+
+        if (style === 'table') {
+            const tableTemplate = `\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n`;
+            newText = currentText + tableTemplate;
+        } else {
+            const selectedText = currentText.substring(start, end);
+            const wrapper = style === 'bold' ? '**' : '*';
+            
+            if (style === 'list') {
+                 newText = `${currentText.substring(0, start)}- ${selectedText}${currentText.substring(end)}`;
+            } else {
+                 newText = `${currentText.substring(0, start)}${wrapper}${selectedText}${wrapper}${currentText.substring(end)}`;
+            }
+        }
+        
+        form.setValue('description', newText, { shouldValidate: true });
+    };
+
 
   const renderCustomFieldInput = (field: CustomField) => {
     switch (field.type) {
@@ -832,9 +861,23 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>{t('addtask.form.description')}</FormLabel>
-                          <FormControl>
-                            <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} rows={8}/>
-                          </FormControl>
+                          <div className="rounded-md border border-input">
+                            <div className="p-2 border-b border-input flex items-center gap-1">
+                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('bold')}><Bold className="h-4 w-4" /></Button>
+                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('italic')}><Italic className="h-4 w-4" /></Button>
+                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('list')}><ListIcon className="h-4 w-4" /></Button>
+                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('table')}><Table className="h-4 w-4" /></Button>
+                            </div>
+                            <FormControl>
+                              <Textarea
+                                ref={descriptionTextareaRef}
+                                placeholder={t('addtask.form.description.placeholder')}
+                                {...field}
+                                rows={8}
+                                className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                              />
+                            </FormControl>
+                          </div>
                           <FormDescription className="text-xs">
                             You can use Markdown for formatting.
                           </FormDescription>
@@ -842,6 +885,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </FormItem>
                       )}
                     />
+
                     
                     <div className="grid grid-cols-2 gap-4">
                        <FormField control={form.control} name="priority" render={({ field }) => (
@@ -912,26 +956,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </div>
                         <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>{t('addtask.form.quickselect.clear')}</Button></div></div>
                     </div>
-
-                    <div className="space-y-4 rounded-lg border p-4">
-                      <h3 className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4" />Time Management</h3>
-                      <FormField control={form.control} name="timeEstimate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.timeestimate')}</FormLabel><FormControl><Input type="number" placeholder={t('addtask.form.timeestimate.placeholder')} {...field} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)}/>
-                      <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Time Logged</span><span>{timeTracked.toFixed(2)}h / {timeEstimateValue}h</span></div><Progress value={timeTrackingProgress} /></div>
-                      <Accordion type="single" collapsible>
-                        <AccordionItem value="time-log" className="border-b-0">
-                          <AccordionTrigger className="text-xs -mt-2">Log Manual Time</AccordionTrigger>
-                          <AccordionContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-4">
-                                <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="log-date" className="text-xs">Date</Label><Input id="log-date" type="date" value={logDate} onChange={(e) => setLogDate(e.target.value)} /></div><div><Label htmlFor="log-note" className="text-xs">Note</Label><Input id="log-note" value={logNote} onChange={(e) => setLogNote(e.target.value)} placeholder="What did you work on?"/></div></div>
-                                <div className="grid grid-cols-2 gap-4"><div><Label htmlFor="start-time" className="text-xs">Start Time</Label><Input id="start-time" type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} /></div><div><Label htmlFor="end-time" className="text-xs">End Time</Label><Input id="end-time" type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} /></div></div>
-                            </div>
-                            <Button variant="outline" type="button" onClick={handleAddLogEntry} className="w-full">Add Time Entry</Button>
-                            {timeLogs.length > 0 && (<div className="space-y-3 pt-4"><h4 className='text-xs font-semibold text-muted-foreground'>History</h4><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{timeLogs.map(log => (<div key={log.id} className='text-xs flex justify-between items-center bg-secondary/50 p-2 rounded-md'><div><p className='font-medium'>{format(parseISO(log.startTime), 'MMM d, yyyy')}</p><p className='text-muted-foreground'>{log.description ? `${log.description} - ` : ''}{format(parseISO(log.startTime), 'p')} - {format(parseISO(log.endTime), 'p')}</p></div><div className='font-semibold'>{formatDistanceToNow(new Date().getTime() - log.duration * 1000, { includeSeconds: true, addSuffix: false, unit: 'hour' })}</div></div>))}</div></div>)}
-                          </AccordionContent>
-                        </AccordionItem>
-                      </Accordion>
-                    </div>
-
                   </div>
 
                   {/* Right Column */}
@@ -1138,3 +1162,4 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
+
