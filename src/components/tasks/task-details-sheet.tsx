@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -778,7 +779,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
       if (fileType === 'attachment') {
         setAttachments(prev => [...prev, newFile]);
       } else {
-        setDeliverables(prev => [...prev, ...newFile]);
+        setDeliverables(prev => [...prev, newFile]);
       }
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
