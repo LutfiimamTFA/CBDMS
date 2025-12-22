@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -151,10 +150,7 @@ export function TaskDetailsSheet({
   
   const [currentAssignees, setCurrentAssignees] = useState<User[]>([]);
   const [currentTags, setCurrentTags] = useState<Tag[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [deliverables, setDeliverables] = useState<Attachment[]>([]);
   
-  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<User | null>(null);
 
@@ -163,10 +159,11 @@ export function TaskDetailsSheet({
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   
-  const [revisionItems, setRevisionItems] = useState<RevisionItem[]>([]);
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+
 
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
 
@@ -230,7 +227,6 @@ export function TaskDetailsSheet({
     }
     
     if (currentUser.role === 'Employee') {
-      // Employee should only see their team
       const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
       return { managers: [], employees: myTeam, clients: [] };
     }
@@ -306,13 +302,8 @@ export function TaskDetailsSheet({
             dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
         });
         
-        setSubtasks(initialTask.subtasks || []);
         setCurrentAssignees(initialTask.assignees || []);
         setCurrentTags(initialTask.tags || []);
-        setAttachments(initialTask.attachments || []);
-        setDeliverables(initialTask.deliverables || []);
-        
-        setRevisionItems(initialTask.revisionItems || []);
         
         setNewComment('');
         setCommentAttachment(null);
@@ -366,17 +357,16 @@ export function TaskDetailsSheet({
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
 
-    // Pause timer if running and not in shared view
     if (isRunning && !isSharedView) {
         await handlePauseSession();
     }
     
-    form.setValue('status', newStatus); // Optimistic UI update
+    form.setValue('status', newStatus);
 
     if(isSharedView) {
         if (!sharedTaskConfig) return;
         if (!sharedTaskConfig.allowedStatuses.includes(newStatus)) {
-            form.setValue('status', oldStatus); // Revert
+            form.setValue('status', oldStatus);
             toast({ variant: 'destructive', title: 'Action Not Allowed', description: `Your permission level does not allow changing status to "${newStatus}".` });
             return;
         }
@@ -396,13 +386,12 @@ export function TaskDetailsSheet({
 
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
         } catch (error) {
-            form.setValue('status', oldStatus); // Revert
+            form.setValue('status', oldStatus);
             toast({ variant: 'destructive', title: 'Update Failed' });
         }
         return;
     }
     
-    // Logged-in user logic
     const newActivity = createActivity(currentUser!, `changed status from "${oldStatus}" to "${newStatus}"`);
     const updatedActivities = [...(initialTask.activities || []), newActivity];
 
@@ -466,7 +455,7 @@ export function TaskDetailsSheet({
 
     const applyChange = async (priority: Priority) => {
       if (isSharedView) {
-        return; // This action is disabled in shared view
+        return;
       } else {
         if (!firestore || !currentUser) return;
         const taskRef = doc(firestore, 'tasks', initialTask.id);
@@ -648,8 +637,7 @@ export function TaskDetailsSheet({
 
   const handleToggleSubtask = async (subtaskId: string) => {
     if (!firestore) return;
-    const newSubtasks = subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
-    setSubtasks(newSubtasks);
+    const newSubtasks = initialTask.subtasks?.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st) || [];
     
     const taskDocRef = doc(firestore, 'tasks', initialTask.id);
     try {
@@ -657,36 +645,28 @@ export function TaskDetailsSheet({
     } catch (error) {
         console.error("Failed to update subtask:", error);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not save subtask status.' });
-        setSubtasks(subtasks);
     }
   };
   
   const handleToggleRevisionItem = async (itemId: string) => {
-    if ((isSharedView) || (!isSharedView && !isAssignee)) return;
-    if (isSharedView && !firestore) return;
+    if (isSharedView || !isAssignee || !firestore) return;
 
-    const newItems = revisionItems.map(item =>
+    const newItems = initialTask.revisionItems?.map(item =>
         item.id === itemId ? { ...item, completed: !item.completed } : item
     );
-    setRevisionItems(newItems);
     
-    if(isSharedView) {
-        return; // Shared view logic not implemented for this action
-    } else {
-        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-        try {
-            await updateDoc(taskDocRef, { revisionItems: newItems });
-        } catch (e) {
-            console.error("Failed to update revision item", e);
-            setRevisionItems(initialTask.revisionItems || []); // Revert on failure
-            toast({ variant: 'destructive', title: 'Update Failed' });
-        }
+    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+    try {
+        await updateDoc(taskDocRef, { revisionItems: newItems });
+    } catch (e) {
+        console.error("Failed to update revision item", e);
+        toast({ variant: 'destructive', title: 'Update Failed' });
     }
 };
 
 
-  const handleAddSubtask = () => {
-    if (!newSubtask.trim()) return;
+  const handleAddSubtask = async () => {
+    if (!newSubtask.trim() || !firestore) return;
     
     let assignedUser: User | null = newSubtaskAssignee;
     if (!assignedUser && currentAssignees.length === 1) {
@@ -702,17 +682,25 @@ export function TaskDetailsSheet({
       completed: false,
       ...(assignedUser && { assignee: { id: assignedUser.id, name: assignedUser.name, avatarUrl: assignedUser.avatarUrl || '' } }),
     };
-    setSubtasks([...subtasks, subtask]);
+    
+    const newSubtasks = [...(initialTask.subtasks || []), subtask];
+    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+    await updateDoc(taskDocRef, { subtasks: newSubtasks });
+    
     setNewSubtask('');
     setNewSubtaskAssignee(null);
   };
   
-  const handleRemoveSubtask = (subtaskId: string) => {
-    setSubtasks(subtasks.filter(st => st.id !== subtaskId));
+  const handleRemoveSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
+    const newSubtasks = initialTask.subtasks?.filter(st => st.id !== subtaskId);
+    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+    await updateDoc(taskDocRef, { subtasks: newSubtasks });
   }
   
-  const handleAssignSubtask = (subtaskId: string, user: User | null) => {
-    const newSubtasks = subtasks.map(st => {
+  const handleAssignSubtask = async (subtaskId: string, user: User | null) => {
+    if (!firestore) return;
+    const newSubtasks = initialTask.subtasks?.map(st => {
       if (st.id === subtaskId) {
         return { 
           ...st, 
@@ -721,7 +709,8 @@ export function TaskDetailsSheet({
       }
       return st;
     });
-    setSubtasks(newSubtasks);
+    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+    await updateDoc(taskDocRef, { subtasks: newSubtasks });
   };
 
   const getFileIcon = (fileName: string) => {
@@ -731,8 +720,8 @@ export function TaskDetailsSheet({
     return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
-const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
-    if (!event.target.files || !storage || !initialTask?.id) return;
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
+    if (!event.target.files || !storage || !initialTask?.id || !firestore) return;
 
     setIsUploading(true);
     const files = Array.from(event.target.files);
@@ -752,11 +741,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
         });
 
         const newFiles = await Promise.all(uploadPromises);
+        const currentFiles = fileType === 'attachment' ? (initialTask.attachments || []) : (initialTask.deliverables || []);
+        
+        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
         if (fileType === 'attachment') {
-            setAttachments(prev => [...prev, ...newFiles]);
+            await updateDoc(taskDocRef, { attachments: [...currentFiles, ...newFiles] });
         } else {
-            setDeliverables(prev => [...prev, ...newFiles]);
+            await updateDoc(taskDocRef, { deliverables: [...currentFiles, ...newFiles] });
         }
+
         toast({ title: 'Upload Successful', description: `${files.length} file(s) have been added.` });
 
     } catch (error) {
@@ -766,21 +759,23 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
     }
-};
+  };
 
-  const handleConfirmGdriveLink = (fileType: 'attachment' | 'deliverable') => {
-    if (gdriveLink && gdriveName) {
+  const handleConfirmGdriveLink = async (fileType: 'attachment' | 'deliverable') => {
+    if (gdriveLink && gdriveName && firestore) {
       const newFile: Attachment = {
         id: `gdrive-${Date.now()}`,
         name: gdriveName,
         type: 'gdrive',
         url: gdriveLink,
       };
-      if (fileType === 'attachment') {
-        setAttachments(prev => [...prev, newFile]);
-      } else {
-        setDeliverables(prev => [...prev, newFile]);
-      }
+
+      const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+      const currentFiles = fileType === 'attachment' ? (initialTask.attachments || []) : (initialTask.deliverables || []);
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+      
+      await updateDoc(taskDocRef, { [fieldToUpdate]: [...currentFiles, newFile] });
+
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
       setGdriveName('');
@@ -789,21 +784,22 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
     }
   };
 
-  const handleRemoveFile = (id: string, fileType: 'attachment' | 'deliverable') => {
-    if (fileType === 'attachment') {
-        setAttachments(prev => prev.filter(att => att.id !== id));
-    } else {
-        setDeliverables(prev => prev.filter(att => att.id !== id));
-    }
+  const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
+      if (!firestore) return;
+      const taskDocRef = doc(firestore, 'tasks', initialTask.id);
+      const currentFiles = fileType === 'attachment' ? (initialTask.attachments || []) : (initialTask.deliverables || []);
+      const newFiles = currentFiles.filter(att => att.id !== id);
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+
+      await updateDoc(taskDocRef, { [fieldToUpdate]: newFiles });
   };
 
 
   const subtaskProgress = useMemo(() => {
-    if (subtasks.length === 0) return 0;
-    const completedCount = subtasks.filter(st => st.completed).length;
-    return (completedCount / subtasks.length) * 100;
-  }, [subtasks]);
-
+    if (!initialTask.subtasks || initialTask.subtasks.length === 0) return 0;
+    const completedCount = initialTask.subtasks.filter(st => st.completed).length;
+    return (completedCount / initialTask.subtasks.length) * 100;
+  }, [initialTask.subtasks]);
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if ((!firestore || !currentUser) && !isSharedView) return;
@@ -816,87 +812,61 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
         brandId: data.brandId,
         assigneeIds: currentAssignees.map(a => a.id),
         tags: currentTags,
-        subtasks: subtasks,
-        attachments: attachments,
-        deliverables: deliverables,
     };
     
-    if (isSharedView) {
-        const linkId = sharedTaskConfig?.id;
-        if (!linkId) return;
-        try {
-            const response = await fetch('/api/share/task/update', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                linkId,
-                taskId: initialTask.id,
-                updates: { attachments, deliverables },
-              }),
-            });
-            if (!response.ok) throw new Error('Failed to save attachments.');
-            toast({ title: 'Files Saved' });
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Save Failed' });
-        } finally {
-            setIsSaving(false);
-        }
-        return;
-    } else {
-        // Logged-in user save
-        const batch = writeBatch(firestore!);
-        const taskDocRef = doc(firestore!, 'tasks', initialTask.id);
+    // Logged-in user save
+    const batch = writeBatch(firestore!);
+    const taskDocRef = doc(firestore!, 'tasks', initialTask.id);
+
+    const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
+        const changes: string[] = [];
+        const oldDueDate = oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'MMM d, yyyy') : 'no due date';
+        const newDueDate = newData.dueDate ? format(parseISO(newData.dueDate), 'MMM d, yyyy') : 'no due date';
+
+        if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
+        if (oldTask.description !== (newData.description || '')) changes.push('updated the description');
+        if (oldDueDate !== newDueDate) changes.push(`changed the due date from ${oldDueDate} to ${newDueDate}`);
+        
+        return changes.length > 0 ? changes.join(', ') : null;
+    };
+
+    const actionDescription = getChangedFields(initialTask, data);
     
-        const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
-            const changes: string[] = [];
-            const oldDueDate = oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'MMM d, yyyy') : 'no due date';
-            const newDueDate = newData.dueDate ? format(parseISO(newData.dueDate), 'MMM d, yyyy') : 'no due date';
-
-            if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
-            if (oldTask.description !== (newData.description || '')) changes.push('updated the description');
-            if (oldDueDate !== newDueDate) changes.push(`changed the due date from ${oldDueDate} to ${newDueDate}`);
-            
-            return changes.length > 0 ? changes.join(', ') : null;
+    let activityData: Partial<Task> = {};
+    if (actionDescription) {
+        const newActivity: Activity = createActivity(currentUser!, actionDescription);
+        activityData = {
+            activities: [...(initialTask.activities || []), newActivity],
+            lastActivity: newActivity,
         };
+    }
+    
+    const updatedTaskData: Partial<Task> = { ...updates, ...activityData, updatedAt: serverTimestamp() as any, };
+    
+    Object.keys(updatedTaskData).forEach(key => {
+      const typedKey = key as keyof typeof updatedTaskData;
+      if (updatedTaskData[typedKey] === undefined) {
+        delete (updatedTaskData as any)[typedKey];
+      }
+    });
 
-        const actionDescription = getChangedFields(initialTask, data);
-        
-        let activityData: Partial<Task> = {};
-        if (actionDescription) {
-            const newActivity: Activity = createActivity(currentUser!, actionDescription);
-            activityData = {
-                activities: [...(initialTask.activities || []), newActivity],
-                lastActivity: newActivity,
-            };
-        }
-        
-        const updatedTaskData: Partial<Task> = { ...updates, ...activityData, updatedAt: serverTimestamp() as any, };
-        
-        Object.keys(updatedTaskData).forEach(key => {
-          const typedKey = key as keyof typeof updatedTaskData;
-          if (updatedTaskData[typedKey] === undefined) {
-            delete (updatedTaskData as any)[typedKey];
-          }
+    batch.update(taskDocRef, updatedTaskData);
+
+    try {
+        await batch.commit();
+        toast({
+            title: 'Task Updated',
+            description: `"${data.title}" has been saved.`,
         });
-
-        batch.update(taskDocRef, updatedTaskData);
-
-        try {
-            await batch.commit();
-            toast({
-                title: 'Task Updated',
-                description: `"${data.title}" has been saved.`,
-            });
-        } catch (error) {
-            console.error('Failed to update task:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Update Failed',
-                description: 'Could not save task changes.',
-            });
-        } finally {
-            setIsSaving(false);
-        }
+    } catch (error) {
+        console.error('Failed to update task:', error);
+        toast({
+            variant: 'destructive',
+            title: 'Update Failed',
+            description: 'Could not save task changes.',
+        });
+    } finally {
+        setIsSaving(false);
     }
   };
   
@@ -966,8 +936,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
     }
   }
   
-  const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
-  const allRevisionsCompleted = useMemo(() => revisionItems.length === 0 || revisionItems.every(item => item.completed), [revisionItems]);
+  const allSubtasksCompleted = useMemo(() => (initialTask.subtasks || []).every(st => st.completed), [initialTask.subtasks]);
+  const allRevisionsCompleted = useMemo(() => (initialTask.revisionItems || []).every(item => item.completed), [initialTask.revisionItems]);
   const canSubmit = allSubtasksCompleted && allRevisionsCompleted;
   
   const handleFinalReviewAndComplete = async () => {
@@ -1114,7 +1084,10 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
 
   const canShareTask = currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC' || currentUser.role === 'Client');
   
-  const canUploadDeliverables = isAssignee && (initialTask.status === 'Doing' || initialTask.status === 'Revisi' || initialTask.status === 'Preview');
+  const canUploadDeliverables = useMemo(() => {
+    if (isSharedView) return sharedTaskConfig?.allowedActions.includes('upload') ?? false;
+    return isAssignee || isManagerOrAdmin;
+  }, [isSharedView, sharedTaskConfig, isAssignee, isManagerOrAdmin]);
 
 
   return (
@@ -1200,17 +1173,17 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
                         
                         <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
-                        {revisionItems && revisionItems.length > 0 && (
+                        {initialTask.revisionItems && initialTask.revisionItems.length > 0 && (
                             <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
                                 <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
                                 <div className="space-y-2">
-                                    {revisionItems.map(item => (
+                                    {initialTask.revisionItems.map(item => (
                                         <div key={item.id} className="flex items-center gap-3">
                                             <Checkbox
                                                 id={`rev-${item.id}`}
                                                 checked={item.completed}
                                                 onCheckedChange={() => handleToggleRevisionItem(item.id)}
-                                                disabled={!isAssignee && !(isSharedView)}
+                                                disabled={!isAssignee && !isSharedView}
                                             />
                                             <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
                                                 {item.text}
@@ -1248,9 +1221,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
                             <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                           </TabsList>
                           <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                                <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
+                                <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(initialTask.subtasks || []).filter(st => st.completed).length}/{(initialTask.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                    {subtasks.map((subtask) => (
+                                    {(initialTask.subtasks || []).map((subtask) => (
                                         <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
                                             <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canManageSubtasks} />
                                             <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
@@ -1327,9 +1300,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
                                   </div>
                                 )}
                           </TabsContent>
-                          <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                           <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
                             <div className="space-y-2">
-                              {deliverables.map((att) => (
+                              {(initialTask.deliverables || []).map((att) => (
                                 <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
                                   <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
                                     {getFileIcon(att.name)}
@@ -1342,13 +1315,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
                                   )}
                                 </div>
                               ))}
-                              {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
+                              {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
                             </div>
                             {canUploadDeliverables && (
                               <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                                 <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
                                 <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                                <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
+                                <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
                               </div>
                             )}
                           </TabsContent>
@@ -1625,11 +1598,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
                     </div>
                     
                     <div className="space-y-4 p-4 rounded-lg border">
-                        <h3 className="font-semibold text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" /> Supporting Materials ({attachments.length})</h3>
+                        <h3 className="font-semibold text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" /> Supporting Materials ({(initialTask.attachments || []).length})</h3>
                         <Separator/>
-                        {attachments.length > 0 && (
+                        {(initialTask.attachments || []).length > 0 && (
                           <div className="space-y-2">
-                            {attachments.map((att) => (
+                            {(initialTask.attachments || []).map((att) => (
                               <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
                                 <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
                                   {getFileIcon(att.name)}
@@ -1648,7 +1621,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
                           <div className="grid grid-cols-2 gap-4">
                             <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
                             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                            <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
+                            <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
                           </div>
                         )}
                     </div>
@@ -1775,8 +1748,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, file
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={() => handleConfirmGdriveLink('attachment')}>Add Link to Materials</Button>
-                    <Button onClick={() => handleConfirmGdriveLink('deliverable')}>Add Link to Deliverables</Button>
+                    <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
