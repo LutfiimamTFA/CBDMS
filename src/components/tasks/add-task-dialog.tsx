@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -551,44 +550,50 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   
   const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
     if (!descriptionRef.current) return;
+
     const textarea = descriptionRef.current;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = textarea.value.substring(start, end);
     const currentDescription = form.getValues('description') || '';
     let newDescription = '';
+    let cursorPosition = start;
 
     if (type === 'table') {
         setIsTablePopoverOpen(true);
         return;
     }
 
-    const modifier = type === 'bold' ? '**' : '*';
-    if (selectedText) {
+    if (type === 'list') {
+        const lineStart = currentDescription.lastIndexOf('\n', start - 1) + 1;
         newDescription = 
-            currentDescription.substring(0, start) +
-            `${modifier}${selectedText}${modifier}` +
-            currentDescription.substring(end);
+            currentDescription.substring(0, lineStart) + 
+            '- ' + 
+            currentDescription.substring(lineStart);
+        cursorPosition = start + 2;
     } else {
-        if (type === 'list') {
-            newDescription = currentDescription.substring(0, start) + '\n- ' + currentDescription.substring(start);
+        const modifier = type === 'bold' ? '**' : '*';
+        const selectedText = textarea.value.substring(start, end);
+        
+        if (selectedText) {
+            newDescription = 
+                currentDescription.substring(0, start) +
+                `${modifier}${selectedText}${modifier}` +
+                currentDescription.substring(end);
+            cursorPosition = end + 2 * modifier.length;
         } else {
-            newDescription = currentDescription.substring(0, start) + `${modifier}text${modifier}` + currentDescription.substring(start);
+            newDescription = 
+                currentDescription.substring(0, start) +
+                `${modifier}text${modifier}` +
+                currentDescription.substring(start);
+            cursorPosition = start + modifier.length;
         }
     }
-
+    
     form.setValue('description', newDescription, { shouldValidate: true });
     
-    // This timeout is needed to allow React to re-render before we set focus.
     setTimeout(() => {
         textarea.focus();
-        if (selectedText) {
-            textarea.setSelectionRange(start + modifier.length, end + modifier.length);
-        } else if (type === 'list') {
-            textarea.setSelectionRange(start + 3, start + 3);
-        } else {
-            textarea.setSelectionRange(start + modifier.length, start + modifier.length + 4);
-        }
+        textarea.setSelectionRange(cursorPosition, cursorPosition);
     }, 0);
   };
   
@@ -1053,7 +1058,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                       </PopoverContent>
                                     </Popover>
 
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
                                 </div>
                             ))}
                         </div>
@@ -1083,7 +1088,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                 </ScrollArea>
                               </PopoverContent>
                             </Popover>
-                            <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2"/> Add</Button>
+                            <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
                         </div>
                       </TabsContent>
                        <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
