@@ -111,6 +111,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
   const [tableRows, setTableRows] = useState(2);
@@ -548,6 +549,49 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     return table;
   };
   
+  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
+    if (!descriptionRef.current) return;
+    const textarea = descriptionRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const currentDescription = form.getValues('description') || '';
+    let newDescription = '';
+
+    if (type === 'table') {
+        setIsTablePopoverOpen(true);
+        return;
+    }
+
+    const modifier = type === 'bold' ? '**' : '*';
+    if (selectedText) {
+        newDescription = 
+            currentDescription.substring(0, start) +
+            `${modifier}${selectedText}${modifier}` +
+            currentDescription.substring(end);
+    } else {
+        if (type === 'list') {
+            newDescription = currentDescription.substring(0, start) + '\n- ' + currentDescription.substring(start);
+        } else {
+            newDescription = currentDescription.substring(0, start) + `${modifier}text${modifier}` + currentDescription.substring(start);
+        }
+    }
+
+    form.setValue('description', newDescription, { shouldValidate: true });
+    
+    // This timeout is needed to allow React to re-render before we set focus.
+    setTimeout(() => {
+        textarea.focus();
+        if (selectedText) {
+            textarea.setSelectionRange(start + modifier.length, end + modifier.length);
+        } else if (type === 'list') {
+            textarea.setSelectionRange(start + 3, start + 3);
+        } else {
+            textarea.setSelectionRange(start + modifier.length, start + modifier.length + 4);
+        }
+    }, 0);
+  };
+  
   const handleGenerateTable = () => {
     const tableMarkdown = generateTableMarkdown(tableRows, tableCols);
     const currentDescription = form.getValues('description') || '';
@@ -853,92 +897,50 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </FormItem>
                       )}
                     />
-
-                    <Tabs defaultValue="description">
-                        <TabsList className="w-full grid grid-cols-2">
-                          <TabsTrigger value="description">Description</TabsTrigger>
-                          <TabsTrigger value="table">Table</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="description" className="mt-2">
+                    
+                     <div className="space-y-2">
+                        <Label>Description</Label>
+                        <div className="rounded-md border">
+                            <div className="p-2 border-b flex items-center gap-1">
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('bold')}><Bold className="h-4 w-4"/></Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('italic')}><Italic className="h-4 w-4"/></Button>
+                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('list')}><ListIcon className="h-4 w-4"/></Button>
+                                <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8"><Table className="h-4 w-4"/></Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80">
+                                        <div className="grid gap-4">
+                                            <div className="space-y-2"><h4 className="font-medium leading-none">Generate Table</h4><p className="text-sm text-muted-foreground">Set rows and columns.</p></div>
+                                            <div className="grid gap-2">
+                                                <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="table-cols">Columns</Label><Input id="table-cols" type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} className="col-span-2 h-8" /></div>
+                                                <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="table-rows">Rows</Label><Input id="table-rows" type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} className="col-span-2 h-8" /></div>
+                                            </div>
+                                            <Button onClick={handleGenerateTable}>Generate</Button>
+                                        </div>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
                             <FormField control={form.control} name="description" render={({ field }) => (
                                 <FormItem>
                                     <FormControl>
                                     <Textarea
+                                        ref={descriptionRef}
                                         placeholder={t('addtask.form.description.placeholder')}
                                         {...field}
                                         rows={8}
+                                        className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                                     />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
                              )}/>
-                        </TabsContent>
-                         <TabsContent value="table" className="mt-2 space-y-2">
-                            <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button type="button" variant="outline" className="w-full">
-                                        <Table className="mr-2 h-4 w-4" />
-                                        Insert Table
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-80">
-                                    <div className="grid gap-4">
-                                        <div className="space-y-2">
-                                            <h4 className="font-medium leading-none">Generate Table</h4>
-                                            <p className="text-sm text-muted-foreground">Set the number of rows and columns.</p>
-                                        </div>
-                                        <div className="grid gap-2">
-                                            <div className="grid grid-cols-3 items-center gap-4">
-                                                <Label htmlFor="table-cols">Columns</Label>
-                                                <Input id="table-cols" type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} className="col-span-2 h-8" />
-                                            </div>
-                                             <div className="grid grid-cols-3 items-center gap-4">
-                                                <Label htmlFor="table-rows">Rows</Label>
-                                                <Input id="table-rows" type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} className="col-span-2 h-8" />
-                                            </div>
-                                        </div>
-                                        <Button onClick={handleGenerateTable}>Generate</Button>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-
-                             <FormField control={form.control} name="description" render={({ field }) => (
-                                <FormItem>
-                                    <FormControl>
-                                    <Textarea
-                                        placeholder="| Column 1 | Column 2 |&#10;|---|---|"
-                                        {...field}
-                                        rows={8}
-                                        className="font-mono text-xs"
-                                    />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                             )}/>
-                        </TabsContent>
-                    </Tabs>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                       <FormField control={form.control} name="priority" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>{t('addtask.form.priority')}</FormLabel>
-                            <div className="flex items-center gap-2">
-                                <Select onValueChange={(value) => { field.onChange(value); setSuggestionReason(null); }} value={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder={t('addtask.form.priority.placeholder')} /></SelectTrigger></FormControl>
-                                    <SelectContent>{Object.values(priorityInfo).map((p) => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
-                                </Select>
-                                <Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting} className="shrink-0">{isSuggesting ? (<Loader2 className="h-4 w-4 animate-spin" />) : (<Wand2 className="h-4 w-4" />)}<span className="sr-only">Suggest Priority</span></Button>
+                            <div className="p-4 bg-muted/50 border-t min-h-24">
+                                <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none" remarkPlugins={[remarkGfm]}>{form.watch('description') || "Description preview..."}</ReactMarkdown>
                             </div>
-                            {suggestionReason && (
-                                <div className="mt-2 text-xs text-muted-foreground p-2 bg-secondary/50 rounded-md animate-in fade-in-0 slide-in-from-top-2">
-                                    <span className='font-semibold text-primary'>{t('addtask.form.priority.aisays')}</span> {suggestionReason}
-                                </div>
-                            )}
-                            <FormMessage />
-                        </FormItem>
-                      )}/>
+                        </div>
                     </div>
-
+                    
                     <div className="space-y-4 rounded-lg border p-4">
                         <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
