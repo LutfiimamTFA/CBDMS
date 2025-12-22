@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -8,7 +7,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, SharedTask } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -103,7 +102,8 @@ interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  accessLevel?: SharedLink['accessLevel'] | null;
+  isSharedView?: boolean;
+  sharedTaskConfig?: SharedTask | null;
 }
 
 const createActivity = (user: User, action: string): Activity => {
@@ -127,7 +127,8 @@ export function TaskDetailsSheet({
   task: initialTask, 
   open,
   onOpenChange,
-  accessLevel = null,
+  isSharedView = false,
+  sharedTaskConfig = null,
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
@@ -223,7 +224,6 @@ export function TaskDetailsSheet({
     }
     
     if (currentUser.role === 'Employee') {
-      // Employee should only see their team
       const manager = allUsers.find(u => u.id === currentUser.managerId);
       const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
       
@@ -239,7 +239,6 @@ export function TaskDetailsSheet({
 
   }, [allUsers, currentUser]);
 
-  const isSharedView = !!accessLevel;
   
   const isCreator = currentUser?.id === initialTask.createdBy.id;
   const isManagerOfBrand = currentUser?.role === 'Manager' && initialTask.brandId && currentUser.brandIds?.includes(initialTask.brandId);
@@ -255,20 +254,21 @@ export function TaskDetailsSheet({
       ));
       
   const canChangePriority = useMemo(() => {
-      if (isSharedView) return accessLevel === 'limited-edit';
+      if (isSharedView) return false;
       if (!currentUser) return false;
       if (currentUser.role === 'Super Admin') return true;
       if (currentUser.role === 'Manager') {
         return true;
       }
       return false;
-  }, [currentUser, isSharedView, accessLevel]);
+  }, [currentUser, isSharedView]);
 
-  const canComment = isSharedView ? accessLevel === 'limited-edit' : !!currentUser;
+  const canComment = isSharedView ? (sharedTaskConfig?.allowedActions.includes('comment') ?? false) : !!currentUser;
   
-  const canChangeStatus = isSharedView 
-    ? (accessLevel === 'status' || accessLevel === 'limited-edit')
-    : (currentUser && (isManagerOrAdmin || isAssignee));
+  const canChangeStatus = useMemo(() => {
+    if (isSharedView) return sharedTaskConfig?.allowedActions.includes('changeStatus') ?? false;
+    return (currentUser && (isManagerOrAdmin || isAssignee));
+  }, [isSharedView, sharedTaskConfig, currentUser, isManagerOrAdmin, isAssignee]);
   
   const canAssignUsers = isSharedView ? false : canEditContent;
   
@@ -279,19 +279,19 @@ export function TaskDetailsSheet({
   const currentFormStatus = form.watch('status');
 
   const canManageSubtasks = useMemo(() => {
-    if (isSharedView) return accessLevel === 'limited-edit';
+    if (isSharedView) return false;
     if (!currentUser) return false;
 
     const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(currentFormStatus);
     
     return (isAssignee || isManagerOrAdmin) && isAllowedStatus;
-  }, [isSharedView, accessLevel, currentUser, isAssignee, isManagerOrAdmin, currentFormStatus]);
+  }, [isSharedView, currentUser, isAssignee, isManagerOrAdmin, currentFormStatus]);
   
   const showTimeTracker = useMemo(() => {
       if (isSharedView) return false;
       if (!isAssignee) return false;
       return ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
-  }, [isAssignee, isSharedView, form.watch('status')]);
+  }, [isAssignee, isSharedView, form, form.watch('status')]);
 
   useEffect(() => {
     if (initialTask && open) {
@@ -373,10 +373,16 @@ export function TaskDetailsSheet({
     form.setValue('status', newStatus); // Optimistic UI update
 
     if(isSharedView) {
-        // Shared view logic
-        const linkId = params.linkId;
+        if (!sharedTaskConfig) return;
+        if (!sharedTaskConfig.allowedStatuses.includes(newStatus)) {
+            form.setValue('status', oldStatus); // Revert
+            toast({ variant: 'destructive', title: 'Action Not Allowed', description: `Your permission level does not allow changing status to "${newStatus}".` });
+            return;
+        }
+
+        const linkId = sharedTaskConfig.id;
         try {
-            const response = await fetch('/api/share/update-task', {
+            const response = await fetch('/api/share/task/update', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -386,14 +392,6 @@ export function TaskDetailsSheet({
               }),
             });
             if (!response.ok) throw new Error('Failed to update status');
-
-            // Fire and forget activity logging
-            const actionText = `changed status from "${oldStatus}" to "${newStatus}"`;
-            fetch('/api/create-activity', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ taskId: initialTask.id, actionText, linkCreatorId: initialTask.createdBy.id }),
-            });
 
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
         } catch (error) {
@@ -467,28 +465,7 @@ export function TaskDetailsSheet({
 
     const applyChange = async (priority: Priority) => {
       if (isSharedView) {
-        const linkId = params.linkId;
-        try {
-          const response = await fetch('/api/share/update-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { priority } }),
-          });
-          if (!response.ok) throw new Error('Failed to update priority');
-          
-          // Fire-and-forget activity logging for shared view
-          const actionText = `set priority from "${currentPriority}" to "${priority}"`;
-          fetch('/api/create-activity', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskId: initialTask.id, actionText, linkCreatorId: initialTask.createdBy.id }),
-          });
-
-          toast({ title: 'Priority Updated' });
-        } catch (error) {
-          form.setValue('priority', currentPriority);
-          toast({ variant: 'destructive', title: 'Update Failed' });
-        }
+        return; // This action is disabled in shared view
       } else {
         if (!firestore || !currentUser) return;
         const taskRef = doc(firestore, 'tasks', initialTask.id);
@@ -684,7 +661,7 @@ export function TaskDetailsSheet({
   };
   
   const handleToggleRevisionItem = async (itemId: string) => {
-    if ((isSharedView && accessLevel !== 'limited-edit') || (!isSharedView && !isAssignee)) return;
+    if ((isSharedView) || (!isSharedView && !isAssignee)) return;
     if (isSharedView && !firestore) return;
 
     const newItems = revisionItems.map(item =>
@@ -693,17 +670,7 @@ export function TaskDetailsSheet({
     setRevisionItems(newItems);
     
     if(isSharedView) {
-        const linkId = params.linkId;
-        try {
-            await fetch('/api/share/update-task', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { revisionItems: newItems } }),
-            });
-        } catch(e) {
-            setRevisionItems(initialTask.revisionItems || []);
-            toast({ variant: 'destructive', title: 'Update Failed' });
-        }
+        return; // Shared view logic not implemented for this action
     } else {
         const taskDocRef = doc(firestore, 'tasks', initialTask.id);
         try {
@@ -841,22 +808,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     };
     
     if (isSharedView) {
-        // Shared view save
-        const linkId = params.linkId;
-        try {
-            const response = await fetch('/api/share/update-task', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ linkId, taskId: initialTask.id, updates }),
-            });
-            if (!response.ok) throw new Error('Failed to save changes');
-            toast({ title: 'Task Updated' });
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Save Failed' });
-        } finally {
-            setIsSaving(false);
-        }
-
+        return; // Saving is not implemented for shared view from this form
     } else {
         // Logged-in user save
         const batch = writeBatch(firestore!);
@@ -1222,7 +1174,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                                 id={`rev-${item.id}`}
                                                 checked={item.completed}
                                                 onCheckedChange={() => handleToggleRevisionItem(item.id)}
-                                                disabled={!isAssignee && !(isSharedView && accessLevel === 'limited-edit')}
+                                                disabled={!isAssignee && !(isSharedView)}
                                             />
                                             <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
                                                 {item.text}
