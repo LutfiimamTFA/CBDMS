@@ -111,7 +111,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
-  const descriptionTextareaRef = React.useRef<HTMLTextAreaElement>(null);
 
 
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
@@ -532,38 +531,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setAttachments(prev => prev.filter(att => att.id !== id));
   };
   
-  const applyMarkdown = (style: 'bold' | 'italic' | 'list' | 'table') => {
-    const textarea = descriptionTextareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentText = form.getValues('description') || '';
-    let newText;
-
-    if (style === 'table') {
-      const tableTemplate = `\n| Header 1 | Header 2 |\n| :--- | :--- |\n| Cell 1 | Cell 2 |\n`;
-      newText = `${currentText.substring(0, start)}${tableTemplate}${currentText.substring(end)}`;
-    } else if (style === 'list') {
-      const selectedText = currentText.substring(start, end);
-      const listText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
-      newText = `${currentText.substring(0, start)}\n${listText}\n${currentText.substring(end)}`;
-    } else {
-      const wrapper = style === 'bold' ? '**' : '*';
-      const selectedText = currentText.substring(start, end);
-      newText = `${currentText.substring(0, start)}${wrapper}${selectedText}${wrapper}${currentText.substring(end)}`;
-    }
-    
-    form.setValue('description', newText, { shouldValidate: true });
-    
-    // After updating the value, set focus back to the textarea
-    textarea.focus();
-    // And move the cursor to the end of the newly inserted/modified text
-    if (style === 'bold' || style === 'italic') {
-      textarea.setSelectionRange(start + wrapper.length, end + wrapper.length);
-    }
+  const insertTableTemplate = () => {
+    const tableTemplate = `| Column 1 | Column 2 | Column 3 |\n| :--- | :--- | :--- |\n| Row 1, Col 1 | Row 1, Col 2 | Row 1, Col 3 |\n| Row 2, Col 1 | Row 2, Col 2 | Row 2, Col 3 |`;
+    const currentDescription = form.getValues('description') || '';
+    form.setValue('description', `${currentDescription}\n\n${tableTemplate}\n`);
   };
-
 
   const renderCustomFieldInput = (field: CustomField) => {
     switch (field.type) {
@@ -863,37 +835,45 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       )}
                     />
 
-                    <FormField
-                      control={form.control}
-                      name="description"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('addtask.form.description')}</FormLabel>
-                          <div className="rounded-md border border-input">
-                            <div className="p-2 border-b border-input flex items-center gap-1">
-                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('bold')}><Bold className="h-4 w-4" /></Button>
-                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('italic')}><Italic className="h-4 w-4" /></Button>
-                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('list')}><ListIcon className="h-4 w-4" /></Button>
-                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('table')}><Table className="h-4 w-4" /></Button>
-                            </div>
-                            <FormControl>
-                              <Textarea
-                                ref={descriptionTextareaRef}
-                                placeholder={t('addtask.form.description.placeholder')}
-                                {...field}
-                                rows={8}
-                                className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                              />
-                            </FormControl>
-                          </div>
-                          <FormDescription className="text-xs">
-                            You can use Markdown for formatting.
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
+                    <Tabs defaultValue="description">
+                        <TabsList>
+                          <TabsTrigger value="description">Description</TabsTrigger>
+                          <TabsTrigger value="table">Table</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="description" className="mt-2">
+                            <FormField control={form.control} name="description" render={({ field }) => (
+                                <FormItem>
+                                    <FormControl>
+                                    <Textarea
+                                        placeholder={t('addtask.form.description.placeholder')}
+                                        {...field}
+                                        rows={8}
+                                    />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                             )}/>
+                        </TabsContent>
+                         <TabsContent value="table" className="mt-2 space-y-2">
+                            <Button type="button" variant="outline" size="sm" onClick={insertTableTemplate}>
+                                <Table className="mr-2 h-4 w-4" />
+                                Insert Table Template
+                            </Button>
+                             <FormField control={form.control} name="description" render={({ field }) => (
+                                <FormItem>
+                                    <FormControl>
+                                    <Textarea
+                                        placeholder="| Column 1 | Column 2 |&#10;|---|---|"
+                                        {...field}
+                                        rows={8}
+                                        className="font-mono text-xs"
+                                    />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                             )}/>
+                        </TabsContent>
+                    </Tabs>
                     
                     <div className="grid grid-cols-2 gap-4">
                        <FormField control={form.control} name="priority" render={({ field }) => (
@@ -1170,3 +1150,4 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
+
