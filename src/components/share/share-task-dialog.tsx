@@ -100,7 +100,7 @@ export function ShareTaskDialog({ children, task }: ShareTaskDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>{children}</DialogTrigger>
-      <DialogContent onOpenChange={(e) => e.preventDefault()}>
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Share Task: {task.title}</DialogTitle>
           <DialogDescription>
