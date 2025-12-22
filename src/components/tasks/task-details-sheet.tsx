@@ -57,6 +57,7 @@ import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
+import { ShareTaskDialog } from '../share/share-task-dialog';
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -261,7 +262,7 @@ export function TaskDetailsSheet({
       return false;
   }, [currentUser, isSharedView, accessLevel]);
 
-  const canComment = !isSharedView && !!currentUser;
+  const canComment = isSharedView ? accessLevel === 'comment' : !!currentUser;
   
   const canChangeStatus = isSharedView 
     ? (accessLevel === 'status' || accessLevel === 'limited-edit')
@@ -941,15 +942,6 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentTags(currentTags.filter(t => t.label !== tagLabel));
   }
 
-  const copyTaskLink = () => {
-    const link = `${window.location.origin}/tasks/${initialTask.id}`;
-    navigator.clipboard.writeText(link);
-    toast({
-        title: "Link Copied!",
-        description: "Task link has been copied to your clipboard.",
-    });
-  }
-
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
   const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
@@ -1133,6 +1125,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     return {};
 }, [currentAssignees, allUsers, currentUser]);
 
+  const canShareTask = currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC' || currentUser.role === 'Client');
+
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
@@ -1149,8 +1143,32 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    {!isSharedView && <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)}><History className="h-4 w-4 mr-2"/> View History</Button>}
-                    <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
+                  <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                          {!isSharedView && canShareTask && (
+                              <ShareTaskDialog task={initialTask}>
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                      <Share2 className="mr-2 h-4 w-4"/>
+                                      Share Task
+                                  </DropdownMenuItem>
+                              </ShareTaskDialog>
+                          )}
+                           {!isSharedView && (
+                              <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}>
+                                  <History className="mr-2 h-4 w-4"/>
+                                  View History
+                              </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4"/>
+                              Delete Task
+                          </DropdownMenuItem>
+                      </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
              </div>
           </SheetHeader>

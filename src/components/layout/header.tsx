@@ -26,7 +26,9 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
   const { profile } = useUserProfile();
 
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
-  const canShare = profile?.role !== 'Super Admin' && shareableViews.includes(pathname);
+  const canCreateShareView = profile?.role === 'Manager' || profile?.role === 'Super Admin';
+  const showShareButton = canCreateShareView && shareableViews.includes(pathname);
+
 
   return (
     <header className="sticky top-0 z-10 flex h-16 items-center justify-between gap-4 border-b bg-background/80 px-4 backdrop-blur-sm sm:px-6">
@@ -41,7 +43,7 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
         <div className="flex items-center gap-2">
             {!isSharedView ? (
               <>
-                {canShare && (
+                {showShareButton && (
                   <ShareViewDialog>
                     <Button variant="outline" size="sm">
                       <Share2 className="mr-2" /> Share View

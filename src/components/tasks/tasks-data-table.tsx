@@ -56,6 +56,7 @@ import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ShareTaskDialog } from '../share/share-task-dialog';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -178,15 +179,6 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       const taskRef = doc(firestore, 'tasks', taskId);
       deleteDocumentNonBlocking(taskRef);
   };
-
-  const copyTaskLink = (taskId: string) => {
-    const link = `${window.location.origin}/tasks/${taskId}`;
-    navigator.clipboard.writeText(link);
-    toast({
-        title: "Link Copied!",
-        description: "Task link has been copied to your clipboard.",
-    });
-  }
   
   const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
     if (!firestore || !profile) return;
@@ -468,10 +460,6 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setHistoryTask(task)}}>
                   <History className="mr-2 h-4 w-4" />
                   View History
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); copyTaskLink(task.id)}}>
-                <LinkIcon className="mr-2 h-4 w-4" />
-                Copy Link
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               {canDelete && (

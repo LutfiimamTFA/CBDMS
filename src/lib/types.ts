@@ -145,6 +145,23 @@ export type SharedLink = {
   createdAt: any;
 };
 
+export type SharedTask = {
+    id: string;
+    taskId: string;
+    companyId: string;
+    allowedActions: ('view' | 'comment' | 'upload' | 'changeStatus')[];
+    allowedStatuses: string[];
+    creatorUserId: string;
+    creatorName: string;
+    creatorRole: User['role'];
+    createdAt: any;
+    snapshot: {
+        task: Task;
+        brand: Brand | null;
+        statuses: WorkflowStatus[];
+    };
+};
+
 
 export type RevisionItem = {
     id: string;
