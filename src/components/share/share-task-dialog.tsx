@@ -17,15 +17,13 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useUserProfile } from '@/firebase';
 import type { Task, SharedTask } from '@/lib/types';
-import { Link as LinkIcon, Copy, Loader2, KeyRound } from 'lucide-react';
+import { Link as LinkIcon, Copy, Loader2, KeyRound, Eye, ListTodo, Edit, Clock, Calendar as CalendarIcon } from 'lucide-react';
 import { Switch } from '../ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
-import { Calendar as CalendarIcon, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
-import { Eye, ListTodo, Edit } from 'lucide-react';
+import { ScrollArea } from '../ui/scroll-area';
 
 
 interface ShareTaskDialogProps {
@@ -109,16 +107,17 @@ export function ShareTaskDialog({ children, task }: ShareTaskDialogProps) {
         </DialogHeader>
 
         {!generatedLink ? (
+         <ScrollArea className="max-h-[60vh] -mx-6 px-6">
          <div className="space-y-6 py-4">
             <div className="space-y-4 rounded-md border p-4">
-                <h4 className="text-sm font-medium">Permissions for Viewer</h4>
+                <h4 className="text-sm font-medium">Viewer Permissions</h4>
                 <p className="text-xs text-muted-foreground">
                     Based on your role, viewers will automatically be granted these permissions. This cannot be changed.
                 </p>
-                <ul className="list-disc list-inside text-sm space-y-1">
-                    <li>View task details</li>
-                    <li>Add comments and attachments</li>
-                    <li>Change status between To Do, Doing, and Preview</li>
+                 <ul className="space-y-2 text-sm">
+                    <li className="flex items-center gap-2"><Eye className="h-4 w-4 text-muted-foreground" /> View task details</li>
+                    <li className="flex items-center gap-2"><ListTodo className="h-4 w-4 text-muted-foreground" /> Add comments and attachments</li>
+                    <li className="flex items-center gap-2"><Edit className="h-4 w-4 text-muted-foreground" /> Change status (To Do, Doing, Preview)</li>
                 </ul>
             </div>
             
@@ -164,6 +163,7 @@ export function ShareTaskDialog({ children, task }: ShareTaskDialogProps) {
                 </div>
             </div>
           </div>
+         </ScrollArea>
         ) : (
           <div className="space-y-2 py-4">
             <Label htmlFor="share-link-task">Your Shareable Link</Label>
