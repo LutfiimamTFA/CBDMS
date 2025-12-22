@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     try {
         decodedToken = await auth.verifyIdToken(idToken);
     } catch (e: any) {
-        return NextResponse.json({ message: 'Unauthorized: Invalid token.' }, { status: 401 });
+        return NextResponse.json({ message: 'Unauthorized: Invalid token.', error: e.message }, { status: 401 });
     }
     const creatorId = decodedToken.uid;
 
@@ -48,11 +48,11 @@ export async function POST(request: Request) {
       db.collection('users').doc(creatorId).get(),
     ]);
 
-    if (!taskSnap.exists) {
+    if (!taskSnap.exists()) {
       return NextResponse.json({ message: 'Task not found.' }, { status: 404 });
     }
     if (!creatorSnap.exists()) {
-      return NextResponse.json({ message: 'Creator (user) not found.' }, { status: 404 });
+      return NextResponse.json({ message: 'Creator (user) could not be found in database.' }, { status: 404 });
     }
     
     const task = { id: taskSnap.id, ...taskSnap.data() } as Task;
@@ -95,8 +95,8 @@ export async function POST(request: Request) {
       creatorRole: creator.role,
       createdAt: Timestamp.now(),
       snapshot,
-      ...(password && { password }), // Only add password if it exists
-      ...(expiresAt && { expiresAt: Timestamp.fromDate(new Date(expiresAt)) }), // Only add expiresAt if it exists
+      ...(password && { password }),
+      ...(expiresAt && { expiresAt: Timestamp.fromDate(new Date(expiresAt)) }),
     };
 
     const docRef = await db.collection('sharedTasks').add(shareData);
@@ -104,13 +104,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ shareId: docRef.id }, { status: 201 });
 
   } catch (error: any) {
-    console.error('Error creating share task link:', error); // Server-side logging
-    
-    let message = 'An internal server error occurred.';
-    if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
-        message = 'Authentication token has expired or is invalid. Please log in again.';
-    }
-    
-    return NextResponse.json({ message, error: error.message }, { status: 500 });
+    console.error('Error creating share task link:', error); 
+    return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: 500 });
   }
 }
