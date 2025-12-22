@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -832,7 +831,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <FormItem>
                           <FormLabel>{t('addtask.form.description')}</FormLabel>
                           <FormControl>
-                            <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} rows={5}/>
+                            <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} rows={8}/>
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -978,6 +977,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                         </Button>
                                       </PopoverTrigger>
                                       <PopoverContent className="w-60 p-1">
+                                        <ScrollArea className="max-h-60">
                                         <div className="space-y-1">
                                           <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
                                           {(allUsers || []).map(user => (
@@ -987,6 +987,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                             </Button>
                                           ))}
                                         </div>
+                                        </ScrollArea>
                                       </PopoverContent>
                                     </Popover>
 

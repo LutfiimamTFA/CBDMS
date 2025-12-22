@@ -58,6 +58,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '..
 import { Label } from '@/components/ui/label';
 import { ShareTaskDialog } from '../share/share-task-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 
 const taskDetailsSchema = z.object({
@@ -1208,7 +1210,21 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 
                         <div className="space-y-2">
                           <h3 className="font-semibold text-sm">Description</h3>
-                          <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} readOnly={!canEditContent} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
+                          <div className="prose dark:prose-invert prose-sm max-w-none rounded-md border border-dashed p-4 min-h-24">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {form.getValues('description') || 'No description provided.'}
+                              </ReactMarkdown>
+                          </div>
+                          {canEditContent && (
+                              <Accordion type="single" collapsible>
+                                <AccordionItem value="edit-desc" className="border-none">
+                                    <AccordionTrigger className="text-xs">Edit Description</AccordionTrigger>
+                                    <AccordionContent>
+                                        <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description using Markdown..." rows={10}/> )}/>
+                                    </AccordionContent>
+                                </AccordionItem>
+                              </Accordion>
+                          )}
                         </div>
 
                         <div className="space-y-4">
