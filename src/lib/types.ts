@@ -207,6 +207,7 @@ export type Task = {
   tags?: Tag[];
   comments?: Comment[];
   attachments?: Attachment[];
+  deliverables?: Attachment[]; // Added for submitted work
   activities?: Activity[];
   lastActivity?: Activity | null;
   createdAt: any;

@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -32,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -152,6 +151,7 @@ export function TaskDetailsSheet({
   const [currentAssignees, setCurrentAssignees] = useState<User[]>([]);
   const [currentTags, setCurrentTags] = useState<Tag[]>([]);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [deliverables, setDeliverables] = useState<Attachment[]>([]);
   
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
@@ -229,15 +229,9 @@ export function TaskDetailsSheet({
     }
     
     if (currentUser.role === 'Employee') {
-      const manager = allUsers.find(u => u.id === currentUser.managerId);
+      // Employee should only see their team
       const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
-      
-      const teamWithManager = [...myTeam];
-      if (manager && !teamWithManager.some(u => u.id === manager.id)) {
-          teamWithManager.push(manager);
-      }
-
-      return { managers: manager ? [manager] : [], employees: teamWithManager, clients: [] };
+      return { managers: [], employees: myTeam, clients: [] };
     }
 
     return { managers: [], employees: [], clients: [] };
@@ -315,6 +309,7 @@ export function TaskDetailsSheet({
         setCurrentAssignees(initialTask.assignees || []);
         setCurrentTags(initialTask.tags || []);
         setAttachments(initialTask.attachments || []);
+        setDeliverables(initialTask.deliverables || []);
         
         setRevisionItems(initialTask.revisionItems || []);
         
@@ -735,7 +730,7 @@ export function TaskDetailsSheet({
     return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
-const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
     if (!event.target.files || !storage || !initialTask?.id) return;
 
     setIsUploading(true);
@@ -755,9 +750,13 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             };
         });
 
-        const newAttachments = await Promise.all(uploadPromises);
-        setAttachments(prev => [...prev, ...newAttachments]);
-        toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
+        const newFiles = await Promise.all(uploadPromises);
+        if (fileType === 'attachment') {
+            setAttachments(prev => [...prev, ...newFiles]);
+        } else {
+            setDeliverables(prev => [...prev, ...newFiles]);
+        }
+        toast({ title: 'Upload Successful', description: `${files.length} file(s) have been added.` });
 
     } catch (error) {
         console.error("File upload failed:", error);
@@ -768,15 +767,19 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
 };
 
-  const handleConfirmGdriveLink = () => {
+  const handleConfirmGdriveLink = (fileType: 'attachment' | 'deliverable') => {
     if (gdriveLink && gdriveName) {
-      const newAttachment: Attachment = {
+      const newFile: Attachment = {
         id: `gdrive-${Date.now()}`,
         name: gdriveName,
         type: 'gdrive',
         url: gdriveLink,
       };
-      setAttachments(prev => [...prev, newAttachment]);
+      if (fileType === 'attachment') {
+        setAttachments(prev => [...prev, newFile]);
+      } else {
+        setDeliverables(prev => [...prev, ...newFile]);
+      }
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
       setGdriveName('');
@@ -785,8 +788,12 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     }
   };
 
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(att => att.id !== id));
+  const handleRemoveFile = (id: string, fileType: 'attachment' | 'deliverable') => {
+    if (fileType === 'attachment') {
+        setAttachments(prev => prev.filter(att => att.id !== id));
+    } else {
+        setDeliverables(prev => prev.filter(att => att.id !== id));
+    }
   };
 
 
@@ -810,6 +817,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         tags: currentTags,
         subtasks: subtasks,
         attachments: attachments,
+        deliverables: deliverables,
     };
     
     if (isSharedView) {
@@ -822,11 +830,11 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
               body: JSON.stringify({
                 linkId,
                 taskId: initialTask.id,
-                updates: { attachments },
+                updates: { attachments, deliverables },
               }),
             });
             if (!response.ok) throw new Error('Failed to save attachments.');
-            toast({ title: 'Attachments Saved' });
+            toast({ title: 'Files Saved' });
         } catch (error) {
             toast({ variant: 'destructive', title: 'Save Failed' });
         } finally {
@@ -1104,6 +1112,9 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
 }, [currentAssignees, allUsers, currentUser]);
 
   const canShareTask = currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC' || currentUser.role === 'Client');
+  
+  const canUploadDeliverables = isAssignee && (initialTask.status === 'Doing' || initialTask.status === 'Revisi' || initialTask.status === 'Preview');
+
 
   return (
     <>
@@ -1227,39 +1238,15 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                               </Accordion>
                           )}
                         </div>
-
-                        <div className="space-y-4">
-                          <h3 className="font-semibold flex items-center gap-2 text-sm"><Paperclip className='h-4 w-4'/> Attachments ({attachments.length})</h3>
-                           {attachments.length > 0 && (
-                            <div className="space-y-2">
-                              {attachments.map((att) => (
-                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                    {getFileIcon(att.name)}
-                                    <span className="truncate" title={att.name}>{att.name}</span>
-                                  </a>
-                                  {canEditContent && (
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {(canEditContent || (isSharedView && canComment)) && (
-                            <div className="grid grid-cols-2 gap-4">
-                              <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
-                              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                              <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
-                            </div>
-                          )}
-                        </div>
                         
-                        <Accordion type="single" collapsible defaultValue="subtasks">
-                          <AccordionItem value="subtasks">
-                            <AccordionTrigger className="font-semibold text-sm">Subtasks</AccordionTrigger>
-                            <AccordionContent className="mt-4 space-y-4">
+                        <Tabs defaultValue="subtasks" className="w-full">
+                          <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                            <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                            <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                            <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                          </TabsList>
+                          <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                 <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                     {subtasks.map((subtask) => (
@@ -1338,56 +1325,40 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                                     <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
                                   </div>
                                 )}
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                        
-                        <div className="space-y-4">
-                           <h3 className="font-semibold text-sm">Comments</h3>
-                            {(initialTask.comments || []).map(comment => (
-                                <div key={comment.id} className="flex gap-3">
-                                    <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
-                                        <div className="text-sm bg-secondary p-3 rounded-lg mt-1 space-y-2">
-                                          <p>{comment.text}</p>
-                                          {comment.attachment && (
-                                            <a href={comment.attachment.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                                              <Paperclip className="h-4 w-4" />
-                                              <span>{comment.attachment.name}</span>
-                                            </a>
-                                          )}
-                                        </div>
-                                    </div>
+                          </TabsContent>
+                          <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                            <div className="space-y-2">
+                              {deliverables.map((att) => (
+                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                    {getFileIcon(att.name)}
+                                    <span className="truncate" title={att.name}>{att.name}</span>
+                                  </a>
+                                  {canUploadDeliverables && (
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}>
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  )}
                                 </div>
-                            ))}
-                            {canComment && (
-                                <div className="flex gap-3 pt-4 border-t">
-                                    <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                                    <div className="flex-1 relative">
-                                        <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-24" />
-                                        {commentAttachment && (
-                                          <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
-                                            <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                            <span className="truncate">{commentAttachment.name}</span>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setCommentAttachment(null)}>
-                                              <X className="h-4 w-4" />
-                                            </Button>
-                                          </div>
-                                        )}
-                                        <div className="absolute top-2 right-2 flex items-center gap-1">
-                                            <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
-                                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
-                                                <Paperclip className="h-4 w-4"/>
-                                            </Button>
-                                            <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
-                                                {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
+                              ))}
+                              {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
+                            </div>
+                            {canUploadDeliverables && (
+                              <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                                <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                                <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
+                              </div>
                             )}
-                        </div>
+                          </TabsContent>
+                          <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
+                            {/* Dependencies content here */}
+                          </TabsContent>
+                          <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                            {/* Comments content here */}
+                          </TabsContent>
+                        </Tabs>
+                        
                     </div>
                 </ScrollArea>
 
@@ -1567,9 +1538,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                            ))}
                           {canAssignUsers && (
                               <Popover>
-                                  <PopoverTrigger asChild>
-                                      <Button type="button" variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
-                                  </PopoverTrigger>
+                                  <PopoverTrigger asChild><Button type="button" variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button></PopoverTrigger>
                                   <PopoverContent className="w-60 p-1">
                                       <ScrollArea className="max-h-60">
                                           <div className="space-y-1">
@@ -1652,6 +1621,35 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                           <Progress value={timeTrackingProgress} />
                        </div>
 
+                    </div>
+                    
+                    <div className="space-y-4 p-4 rounded-lg border">
+                        <h3 className="font-semibold text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" /> Supporting Materials ({attachments.length})</h3>
+                        <Separator/>
+                        {attachments.length > 0 && (
+                          <div className="space-y-2">
+                            {attachments.map((att) => (
+                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                  {getFileIcon(att.name)}
+                                  <span className="truncate" title={att.name}>{att.name}</span>
+                                </a>
+                                {canEditContent && (
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}>
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {canEditContent && (
+                          <div className="grid grid-cols-2 gap-4">
+                            <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                            <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
+                          </div>
+                        )}
                     </div>
 
                   </div>
@@ -1776,7 +1774,8 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleConfirmGdriveLink}>Add Link</Button>
+                    <Button onClick={() => handleConfirmGdriveLink('attachment')}>Add Link to Materials</Button>
+                    <Button onClick={() => handleConfirmGdriveLink('deliverable')}>Add Link to Deliverables</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
