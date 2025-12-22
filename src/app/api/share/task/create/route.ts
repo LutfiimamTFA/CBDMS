@@ -21,60 +21,60 @@ export async function POST(request: Request) {
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    // 1. Authenticate the request and get the creator's ID (uid)
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ message: 'Unauthorized: Missing or invalid token.' }, { status: 401 });
     }
     const idToken = authHeader.split('Bearer ')[1];
+    
     let decodedToken;
     try {
         decodedToken = await auth.verifyIdToken(idToken);
     } catch (e: any) {
         return NextResponse.json({ message: 'Unauthorized: Invalid token.', error: e.message }, { status: 401 });
     }
+    
     const creatorId = decodedToken.uid;
-
     const { taskId, password, expiresAt } = await request.json();
 
-    // 2. Validate Inputs
     if (!taskId) {
       return NextResponse.json({ message: 'Bad Request: Missing taskId.' }, { status: 400 });
     }
 
-    // Fetch both task and creator documents
     const [taskSnap, creatorSnap] = await Promise.all([
       db.collection('tasks').doc(taskId).get(),
       db.collection('users').doc(creatorId).get(),
     ]);
 
-    if (!taskSnap.exists()) {
+    if (!taskSnap.exists) {
       return NextResponse.json({ message: 'Task not found.' }, { status: 404 });
     }
-    if (!creatorSnap.exists()) {
+    if (!creatorSnap.exists) {
       return NextResponse.json({ message: 'Creator (user) could not be found in database.' }, { status: 404 });
     }
     
     const task = { id: taskSnap.id, ...taskSnap.data() } as Task;
     const creator = creatorSnap.data() as User;
     
-    if (!creator.role) {
+    const creatorRole = creator.role;
+    if (!creatorRole) {
          return NextResponse.json({ message: 'Forbidden: Creator role is not defined.' }, { status: 403 });
     }
 
-    // 3. Define Permissions based on Creator's Role
     let allowedStatuses: string[];
     let allowedActions: ('view' | 'comment' | 'upload' | 'changeStatus')[];
 
-    if (creator.role === 'Manager' || creator.role === 'Super Admin') {
-        allowedStatuses = ['To Do', 'Doing', 'Preview', 'Revisi', 'Done']; // All statuses
+    const isPrivilegedRole = creatorRole === 'Manager' || creatorRole === 'Super Admin';
+    
+    if (isPrivilegedRole) {
+        const statusesSnap = await db.collection('statuses').where('companyId', '==', task.companyId).get();
+        allowedStatuses = statusesSnap.docs.map(doc => doc.data().name);
         allowedActions = ['view', 'comment', 'upload', 'changeStatus'];
-    } else { // Employee, PIC, Client
-        allowedStatuses = ['To Do', 'Doing', 'Preview']; // Limited statuses
+    } else { 
+        allowedStatuses = ['To Do', 'Doing', 'Preview']; 
         allowedActions = ['view', 'comment', 'upload', 'changeStatus'];
     }
-
-    // 4. Fetch necessary data for snapshot
+    
     const brandSnap = task.brandId ? await db.collection('brands').doc(task.brandId).get() : null;
     const statusesSnap = await db.collection('statuses').where('companyId', '==', task.companyId).get();
 
@@ -84,7 +84,6 @@ export async function POST(request: Request) {
       statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...(doc.data() as WorkflowStatus) })),
     };
     
-    // 5. Build the final, validated payload
     const shareData: Omit<SharedTask, 'id'> = {
       taskId: task.id,
       companyId: task.companyId,
