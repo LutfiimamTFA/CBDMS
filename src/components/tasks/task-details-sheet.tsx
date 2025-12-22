@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -815,7 +816,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const linkId = sharedTaskConfig?.id;
         if (!linkId) return;
         try {
-            const response = await fetch('/api/share/update-task', {
+            const response = await fetch('/api/share/task/update', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

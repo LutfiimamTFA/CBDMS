@@ -58,6 +58,8 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent } from '../ui/card';
 import { MultiSelect } from '../ui/multi-select';
 import { addDays, format, formatDistanceToNow, parse, parseISO, startOfWeek, nextSaturday } from 'date-fns';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 
 const taskSchema = z.object({
@@ -530,31 +532,31 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setAttachments(prev => prev.filter(att => att.id !== id));
   };
   
-    const applyMarkdown = (style: 'bold' | 'italic' | 'list' | 'table') => {
-        const textarea = descriptionTextareaRef.current;
-        if (!textarea) return;
+  const applyMarkdown = (style: 'bold' | 'italic' | 'list' | 'table') => {
+    const textarea = descriptionTextareaRef.current;
+    if (!textarea) return;
 
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const currentText = form.getValues('description') || '';
-        let newText = '';
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentText = form.getValues('description') || '';
+    let newText = '';
 
-        if (style === 'table') {
-            const tableTemplate = `\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n`;
-            newText = currentText + tableTemplate;
-        } else {
-            const selectedText = currentText.substring(start, end);
-            const wrapper = style === 'bold' ? '**' : '*';
-            
-            if (style === 'list') {
-                 newText = `${currentText.substring(0, start)}- ${selectedText}${currentText.substring(end)}`;
-            } else {
-                 newText = `${currentText.substring(0, start)}${wrapper}${selectedText}${wrapper}${currentText.substring(end)}`;
-            }
-        }
-        
-        form.setValue('description', newText, { shouldValidate: true });
-    };
+    if (style === 'table') {
+      const tableTemplate = `\n| Header 1 | Header 2 |\n| --- | --- |\n| Cell 1 | Cell 2 |\n`;
+      newText = `${currentText.substring(0, start)}${tableTemplate}${currentText.substring(end)}`;
+    } else if (style === 'list') {
+      const selectedText = currentText.substring(start, end);
+      const listText = selectedText.split('\n').map(line => `- ${line}`).join('\n');
+      newText = `${currentText.substring(0, start)}${listText}${currentText.substring(end)}`;
+    } else {
+      const wrapper = style === 'bold' ? '**' : '*';
+      const selectedText = currentText.substring(start, end);
+      newText = `${currentText.substring(0, start)}${wrapper}${selectedText}${wrapper}${currentText.substring(end)}`;
+    }
+    
+    form.setValue('description', newText, { shouldValidate: true });
+    textarea.focus();
+};
 
 
   const renderCustomFieldInput = (field: CustomField) => {
