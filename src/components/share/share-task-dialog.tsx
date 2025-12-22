@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -17,13 +17,14 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useUserProfile } from '@/firebase';
 import type { Task, SharedTask } from '@/lib/types';
-import { Link as LinkIcon, Copy, Loader2, KeyRound, Eye, ListTodo, Edit, Clock, Calendar as CalendarIcon } from 'lucide-react';
+import { Link as LinkIcon, Copy, Loader2, KeyRound, Clock, Calendar as CalendarIcon } from 'lucide-react';
 import { Switch } from '../ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '../ui/scroll-area';
+import { Eye, ListTodo, Edit } from 'lucide-react';
 
 
 interface ShareTaskDialogProps {
