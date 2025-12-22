@@ -905,46 +905,122 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </FormItem>
                       )}
                     />
-                    
-                     <div className="space-y-2">
-                        <Label>Description</Label>
-                         <div className="rounded-md border">
-                            <div className="p-2 border-b flex items-center gap-1">
-                                <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8"><Table className="h-4 w-4"/></Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-80">
-                                        <div className="grid gap-4">
-                                            <div className="space-y-2"><h4 className="font-medium leading-none">Generate Table</h4><p className="text-sm text-muted-foreground">Set rows and columns.</p></div>
-                                            <div className="grid gap-2">
-                                                <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="table-cols">Columns</Label><Input id="table-cols" type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} className="col-span-2 h-8" /></div>
-                                                <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="table-rows">Rows</Label><Input id="table-rows" type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} className="col-span-2 h-8" /></div>
-                                            </div>
-                                            <Button onClick={handleGenerateTable}>Generate</Button>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <FormField control={form.control} name="description" render={({ field }) => (
-                                <FormItem>
-                                    <FormControl>
-                                    <Textarea
-                                        ref={descriptionRef}
-                                        placeholder={t('addtask.form.description.placeholder')}
-                                        {...field}
-                                        rows={8}
-                                        className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                                    />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                             )}/>
-                            <div className="p-4 bg-muted/50 border-t min-h-24">
-                                <ReactMarkdown className="prose prose-sm dark:prose-invert max-w-none" remarkPlugins={[remarkGfm]}>{form.watch('description') || "Description preview..."}</ReactMarkdown>
-                            </div>
-                        </div>
+
+                    <div className="space-y-2">
+                      <Label>Description</Label>
+                      <div className="rounded-md border">
+                          <Tabs defaultValue="edit" className="w-full">
+                            <TabsList className="w-full rounded-b-none rounded-t-md">
+                              <TabsTrigger value="edit" className="w-full">Description</TabsTrigger>
+                              <TabsTrigger value="table" className="w-full">Table</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="edit" className="p-2">
+                               <FormField control={form.control} name="description" render={({ field }) => (
+                                  <FormItem>
+                                      <FormControl>
+                                      <Textarea
+                                          ref={descriptionRef}
+                                          placeholder={t('addtask.form.description.placeholder')}
+                                          {...field}
+                                          rows={8}
+                                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                                      />
+                                      </FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}/>
+                            </TabsContent>
+                             <TabsContent value="table" className="p-2 space-y-2">
+                                <Button type="button" onClick={() => setIsTablePopoverOpen(true)}>
+                                  Insert Table Template
+                                </Button>
+                                <FormField control={form.control} name="description" render={({ field }) => (
+                                  <FormItem>
+                                      <FormControl>
+                                      <Textarea
+                                          placeholder="Tabel Markdown akan muncul di sini"
+                                          {...field}
+                                          rows={8}
+                                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 font-mono text-xs"
+                                      />
+                                      </FormControl>
+                                      <FormMessage />
+                                  </FormItem>
+                              )}/>
+                            </TabsContent>
+                          </Tabs>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Right Column */}
+                  <div className="space-y-6">
+                    <FormField
+                      control={form.control}
+                      name="priority"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('addtask.form.priority')}</FormLabel>
+                          <div className="flex items-center gap-2">
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select priority" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {Object.values(priorityInfo).map((p) => (
+                                  <SelectItem key={p.value} value={p.value}>
+                                    <div className="flex items-center gap-2">
+                                      <p.icon className={`h-4 w-4 ${p.color}`} />
+                                      {p.label}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={handleSuggestPriority}
+                              disabled={isSuggesting}
+                              title="Suggest Priority (AI)"
+                            >
+                              {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                          {suggestionReason && <FormDescription className="text-primary">{t('addtask.form.priority.aisays')} {suggestionReason}</FormDescription>}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="assigneeIds"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Assign To</FormLabel>
+                          {areUsersLoading ? (
+                            <Loader2 className="animate-spin h-5 w-5" />
+                          ) : (
+                            <MultiSelect
+                              options={userOptions}
+                              onValueChange={(value) => {
+                                form.setValue('assigneeIds', value);
+                                setSelectedUsers(
+                                  allUsers?.filter((u) => value.includes(u.id)) || []
+                                );
+                              }}
+                              defaultValue={field.value || []}
+                              placeholder="Select team members..."
+                            />
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                     
                     <div className="space-y-4 rounded-lg border p-4">
                         <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
@@ -994,172 +1070,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </div>
                         <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>{t('addtask.form.quickselect.clear')}</Button></div></div>
                     </div>
-                  </div>
-
-                  {/* Right Column */}
-                  <div className="space-y-6">
-                    <FormField
-                      control={form.control}
-                      name="assigneeIds"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Assign To</FormLabel>
-                          {areUsersLoading ? (
-                            <Loader2 className="animate-spin h-5 w-5" />
-                          ) : (
-                            <MultiSelect
-                              options={userOptions}
-                              onValueChange={(value) => {
-                                form.setValue('assigneeIds', value);
-                                setSelectedUsers(
-                                  allUsers?.filter((u) => value.includes(u.id)) || []
-                                );
-                              }}
-                              defaultValue={field.value || []}
-                              placeholder="Select team members..."
-                            />
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                     <Tabs defaultValue="subtasks" className="w-full">
-                      <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                        <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                        <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
-                      </TabsList>
-                      <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                        <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
-                        <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
-                            {subtasks.map((subtask) => (
-                                <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
-                                    <Checkbox id={`subtask-create-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
-                                    <label htmlFor={`subtask-create-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                    
-                                    <Popover>
-                                      <PopoverTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                                          {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
-                                        </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-60 p-1">
-                                        <ScrollArea className="max-h-60">
-                                        <div className="space-y-1">
-                                          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
-                                          {(allUsers || []).map(user => (
-                                            <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
-                                              <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                              <span className="truncate">{user.name}</span>
-                                            </Button>
-                                          ))}
-                                        </div>
-                                        </ScrollArea>
-                                      </PopoverContent>
-                                    </Popover>
-
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-muted-foreground">
-                                  {newSubtaskAssignee ? (
-                                    <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
-                                  ) : (
-                                    <UserPlus className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-60 p-1">
-                                <ScrollArea className="max-h-60">
-                                <div className="space-y-1">
-                                  <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                  {(allUsers || []).map(user => (
-                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                      <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                      <span className="truncate">{user.name}</span>
-                                    </Button>
-                                  ))}
-                                </div>
-                                </ScrollArea>
-                              </PopoverContent>
-                            </Popover>
-                            <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
-                        </div>
-                      </TabsContent>
-                       <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                          <div className="space-y-2">
-                              <h4 className="font-semibold text-sm flex items-center gap-2">Waiting On ({dependencies.length})</h4>
-                              <p className="text-xs text-muted-foreground">This task can't start until these tasks are done.</p>
-                               <Popover>
-                                <PopoverTrigger asChild><Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Dependency</Button></PopoverTrigger>
-                                <PopoverContent className="w-80"><div className="space-y-2">{(allTasks || []).map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setDependencies(d => [...d, task.id])}>{task.title}</Button>))}</div></PopoverContent>
-                              </Popover>
-                              <div className="space-y-2">{dependencies.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks?.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDependencies(d => d.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
-                          </div>
-                           <div className="space-y-2">
-                              <h4 className="font-semibold text-sm flex items-center gap-2">Blocking ({blocking.length})</h4>
-                              <p className="text-xs text-muted-foreground">These tasks can't start until this task is done.</p>
-                              <Popover>
-                                <PopoverTrigger asChild><Button variant="outline" className="w-full"><Plus className="h-4 w-4 mr-2"/> Add Blocking Task</Button></PopoverTrigger>
-                                <PopoverContent className="w-80"><div className="space-y-2">{(allTasks || []).map(task => (<Button key={task.id} variant="ghost" size="sm" className="w-full justify-start" onClick={() => setBlocking(b => [...b, task.id])}>{task.title}</Button>))}</div></PopoverContent>
-                              </Popover>
-                               <div className="space-y-2">{blocking.map(depId => (<div key={depId} className="flex items-center justify-between p-2 bg-secondary/50 rounded-md text-sm"><span>{allTasks?.find(t=>t.id === depId)?.title}</span><Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setBlocking(b => b.filter(id => id !== depId))}><X className="h-4 w-4"/></Button></div>))}</div>
-                          </div>
-                      </TabsContent>
-                      <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                        <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
-                          {comments.map(comment => (
-                              <div key={comment.id} className="flex gap-3">
-                                  <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                  <div className="flex-1">
-                                      <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
-                                      <p className="text-sm bg-secondary/50 p-3 rounded-lg mt-1">{comment.text}</p>
-                                  </div>
-                              </div>
-                          ))}
-                        </div>
-                        {isMentioning && (
-                          <Card className="absolute bottom-20 w-full max-w-sm shadow-lg">
-                            <CardContent className="p-2 max-h-48 overflow-y-auto">
-                              {mentionSuggestions.length > 0 ? (
-                                mentionSuggestions.map(u => (
-                                  <Button key={u.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(u)}>
-                                    <Avatar className="h-6 w-6"><AvatarImage src={u.avatarUrl} /><AvatarFallback>{u.name.charAt(0)}</AvatarFallback></Avatar>
-                                    {u.name}
-                                  </Button>
-                                ))
-                              ) : (
-                                <p className="p-2 text-sm text-muted-foreground">No users found.</p>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )}
-                        <div className="flex gap-3 pt-4 border-t">
-                             <Avatar className="h-8 w-8"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{currentUserProfile?.name?.charAt(0)}</AvatarFallback></Avatar>
-                             <div className="flex-1 relative">
-                                <Textarea value={newComment} onChange={handleCommentChange} placeholder="Write a comment... use @ to mention" className="pr-24" />
-                                <div className="absolute top-2 right-2 flex gap-1">
-                                    <input type="file" ref={commentFileInputRef} onChange={() => {}} className="hidden" />
-                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"><AtSign className="h-4 w-4"/></Button>
-                                    <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()}><Paperclip className="h-4 w-4"/></Button>
-                                    <Button type="button" size="icon" className="h-7 w-7" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
-                                </div>
-                             </div>
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-
-                    <div className="space-y-4 rounded-lg border p-4">
-                        <h3 className="text-sm font-medium flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h3>
-                        <div className="grid grid-cols-2 gap-2"><input type="file" ref={fileInputRef} onChange={handleFileChange} multiple accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button></div>
-                        {attachments.length > 0 && (<div className="space-y-2"><Label>Attached Files</Label><div className="max-h-24 overflow-y-auto space-y-2 pr-2">{attachments.map(att => (<a key={att.id} href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm hover:bg-secondary"><div className="flex items-center gap-2 truncate">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></div><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={(e) => { e.preventDefault(); handleRemoveAttachment(att.id);}}><X className="h-4 w-4" /></Button></a>))}</div></div>)}
-                    </div>
-                    
                   </div>
                 </div>
               </form>
