@@ -564,6 +564,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
 
     if (type === 'list') {
+        // This is a simplified implementation. A more robust one would handle existing list items.
         const lineStart = currentDescription.lastIndexOf('\n', start - 1) + 1;
         newDescription = 
             currentDescription.substring(0, lineStart) + 
@@ -581,6 +582,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                 currentDescription.substring(end);
             cursorPosition = end + 2 * modifier.length;
         } else {
+            // If no text is selected, insert the markdown and place cursor in the middle
             newDescription = 
                 currentDescription.substring(0, start) +
                 `${modifier}text${modifier}` +
@@ -591,6 +593,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     form.setValue('description', newDescription, { shouldValidate: true });
     
+    // Use timeout to allow React to re-render before setting focus and selection
     setTimeout(() => {
         textarea.focus();
         textarea.setSelectionRange(cursorPosition, cursorPosition);
@@ -905,11 +908,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     
                      <div className="space-y-2">
                         <Label>Description</Label>
-                        <div className="rounded-md border">
+                         <div className="rounded-md border">
                             <div className="p-2 border-b flex items-center gap-1">
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('bold')}><Bold className="h-4 w-4"/></Button>
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('italic')}><Italic className="h-4 w-4"/></Button>
-                                <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={() => applyMarkdown('list')}><ListIcon className="h-4 w-4"/></Button>
                                 <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
                                     <PopoverTrigger asChild>
                                         <Button type="button" variant="ghost" size="icon" className="h-8 w-8"><Table className="h-4 w-4"/></Button>
