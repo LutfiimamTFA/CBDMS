@@ -19,7 +19,7 @@ function initializeAdminApp(): App {
 const createSharedActor = (session: SharedLink): User => {
     return {
         id: 'guest',
-        name: `Guest (${session.name})`,
+        name: `Guest via ${session.name}`,
         avatarUrl: '', // No avatar for guests
         email: '',
         role: 'Client', // Treat guests as clients for simplicity
@@ -27,11 +27,11 @@ const createSharedActor = (session: SharedLink): User => {
     };
 };
 
-const createActivity = (user: User, action: string): Activity => {
+const createActivity = (actor: User, action: string, sharedBy: { id: string, role: string }): Activity => {
   return {
     id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-    user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
-    action: action,
+    user: { id: actor.id, name: actor.name, avatarUrl: actor.avatarUrl || '' },
+    action: `${action} (shared by ${sharedBy.id} - ${sharedBy.role})`,
     timestamp: Timestamp.now() as any,
   };
 };
@@ -66,26 +66,30 @@ export async function POST(request: Request) {
         const initialTask = taskSnap.data() as Task;
         const sharedActor = createSharedActor(sharedLink);
 
-        // --- Permission Validation ---
+        // --- Permission Validation based on creator's role at time of link creation ---
         const allowedUpdates: Record<string, string[]> = {
             'view': [],
             'status': ['status'],
             'limited-edit': ['status', 'dueDate', 'priority', 'revisionItems'],
         };
-
-        const requestedUpdateKeys = Object.keys(updates);
         const permittedFields = allowedUpdates[sharedLink.accessLevel] || [];
-
+        const requestedUpdateKeys = Object.keys(updates);
         const isUpdateAllowed = requestedUpdateKeys.every(key => permittedFields.includes(key));
+        
         if (!isUpdateAllowed) {
-            throw new Error('You do not have permission to perform this update.');
+            return Promise.reject(new Error(`Forbidden: Your access level is "${sharedLink.accessLevel}". You cannot update these fields.`));
         }
 
         // --- Workflow Status Identity Locking ---
         if (updates.status) {
-            const snapshotStatuses = sharedLink.snapshot.statuses?.map(s => s.name) || [];
-            if (!snapshotStatuses.includes(updates.status)) {
-                throw new Error(`Invalid status "${updates.status}" for this shared link.`);
+            // Determine allowed statuses based on the creator's role, not the task owner's.
+            const creatorIsPrivileged = sharedLink.creatorRole === 'Super Admin' || sharedLink.creatorRole === 'Manager';
+            const allowedStatuses = creatorIsPrivileged
+                ? sharedLink.snapshot.statuses?.map(s => s.name) || []
+                : ['To Do', 'Doing', 'Preview'];
+            
+            if (!allowedStatuses.includes(updates.status)) {
+                return Promise.reject(new Error(`Forbidden: Status "${updates.status}" is not allowed for this shared link.`));
             }
         }
 
@@ -99,8 +103,8 @@ export async function POST(request: Request) {
 
         let actionDescription: string | null = null;
         if (updates.status && updates.status !== initialTask.status) {
-            actionDescription = `changed status from "${initialTask.status}" to "${updates.status}" via share link`;
-            const newActivity = createActivity(sharedActor, actionDescription);
+            actionDescription = `changed status from "${initialTask.status}" to "${updates.status}"`;
+            const newActivity = createActivity(sharedActor, actionDescription, { id: sharedLink.createdBy, role: sharedLink.creatorRole });
             const currentActivities = Array.isArray(initialTask.activities) ? initialTask.activities : [];
             finalUpdates.activities = [...currentActivities, newActivity];
             finalUpdates.lastActivity = newActivity;
@@ -119,9 +123,10 @@ export async function POST(request: Request) {
         // --- Handle Notifications ---
         if (actionDescription) {
             const notificationTitle = `Status Changed: ${initialTask.title}`;
-            const notificationMessage = `${sharedActor.name} changed status to ${updates.status}.`;
+            const notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorRole}) changed status to ${updates.status}.`;
             
             const notifiedUserIds = new Set<string>(initialTask.assigneeIds);
+            notifiedUserIds.add(sharedLink.createdBy); // Also notify the person who created the link
              
             notifiedUserIds.forEach(userId => {
                 const notifRef = db.collection(`users/${userId}/notifications`).doc();

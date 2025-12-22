@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    // 1. Authenticate the request
+    // 1. Authenticate the request and get the creator's ID (uid)
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ message: 'Unauthorized: Missing or invalid token.' }, { status: 401 });
@@ -42,6 +42,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Bad Request: Missing taskId.' }, { status: 400 });
     }
 
+    // Fetch both task and creator documents
     const [taskSnap, creatorSnap] = await Promise.all([
       db.collection('tasks').doc(taskId).get(),
       db.collection('users').doc(creatorId).get(),
@@ -51,7 +52,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Task not found.' }, { status: 404 });
     }
     if (!creatorSnap.exists()) {
-      // This should theoretically never happen if the token is valid
       return NextResponse.json({ message: 'Creator (user) not found.' }, { status: 404 });
     }
     
@@ -64,11 +64,11 @@ export async function POST(request: Request) {
 
     // 3. Define Permissions based on Creator's Role
     let allowedStatuses: string[];
-    let allowedActions: SharedTask['allowedActions'];
+    let allowedActions: ('view' | 'comment' | 'upload' | 'changeStatus')[];
 
     if (creator.role === 'Manager' || creator.role === 'Super Admin') {
         allowedStatuses = ['To Do', 'Doing', 'Preview', 'Revisi', 'Done']; // All statuses
-        allowedActions = ['view', 'comment', 'upload', 'changeStatus', 'edit'];
+        allowedActions = ['view', 'comment', 'upload', 'changeStatus'];
     } else { // Employee, PIC, Client
         allowedStatuses = ['To Do', 'Doing', 'Preview']; // Limited statuses
         allowedActions = ['view', 'comment', 'upload', 'changeStatus'];
