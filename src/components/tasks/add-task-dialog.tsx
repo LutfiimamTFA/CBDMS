@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -29,6 +30,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
@@ -833,6 +835,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <FormControl>
                             <Textarea placeholder={t('addtask.form.description.placeholder')} {...field} rows={8}/>
                           </FormControl>
+                          <FormDescription className="text-xs">
+                            You can use Markdown for formatting.
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
