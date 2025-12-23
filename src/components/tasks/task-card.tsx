@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History } from 'lucide-react';
-import { format, parseISO, isAfter, formatDistanceToNow } from 'date-fns';
+import { format, parseISO, isAfter, formatDistanceToNow, endOfDay } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '../ui/progress';
 import Link from 'next/link';
@@ -28,7 +28,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   
   const completionStatus = useMemo(() => {
     if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
-    const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
+    const isLate = isAfter(parseISO(task.actualCompletionDate), endOfDay(parseISO(task.dueDate)));
     return isLate ? 'Late' : 'On Time';
   }, [task.status, task.actualCompletionDate, task.dueDate]);
 

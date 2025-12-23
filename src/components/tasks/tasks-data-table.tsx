@@ -30,7 +30,7 @@ import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activit
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { format, parseISO, isAfter } from 'date-fns';
+import { format, parseISO, isAfter, endOfDay } from 'date-fns';
 import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2 } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
@@ -250,7 +250,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         
         const completionStatus = React.useMemo(() => {
             if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
-            const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
+            const isLate = isAfter(parseISO(task.actualCompletionDate), endOfDay(parseISO(task.dueDate)));
             return isLate ? 'Late' : 'On Time';
         }, [task.status, task.actualCompletionDate, task.dueDate]);
 
