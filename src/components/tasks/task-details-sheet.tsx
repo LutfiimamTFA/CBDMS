@@ -31,8 +31,8 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -157,9 +157,9 @@ export function TaskDetailsSheet({
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
+  const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
   const [rejectionItems, setRejectionItems] = useState<Omit<RevisionItem, 'id'|'completed'>[]>([]);
   const [currentItemText, setCurrentItemText] = useState('');
-
   
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
@@ -168,12 +168,15 @@ export function TaskDetailsSheet({
   const [isMentioning, setIsMentioning] = React.useState(false);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
 
-
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
+  const [tableRows, setTableRows] = useState(2);
+  const [tableCols, setTableCols] = useState(3);
+  const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
 
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
 
@@ -538,6 +541,13 @@ export function TaskDetailsSheet({
     };
   }, [isRunning]);
   
+  const handleMentionSelect = (user: User) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
+  };
   
   const handlePostComment = async () => {
     if ((!newComment.trim() && !commentAttachment) || !currentUser || !firestore || !storage) return;
@@ -973,12 +983,12 @@ export function TaskDetailsSheet({
   const handleRequestRevisions = () => {
       setRejectionItems([]);
       setCurrentItemText('');
+      setRejectionDialogOpen(true);
   };
   
   const handleConfirmRejection = async () => {
       if (!rejectionItems || rejectionItems.length === 0 || !currentUser || !firestore) return;
       
-      setRejectionItems([]);
       setIsSaving(true);
 
       const oldStatus = form.getValues('status');
@@ -1038,6 +1048,7 @@ export function TaskDetailsSheet({
            await batch.commit();
 
            form.setValue('status', newStatus);
+           setRejectionDialogOpen(false);
            setRejectionItems([]);
            setCurrentItemText('');
            toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
@@ -1121,11 +1132,79 @@ export function TaskDetailsSheet({
     return isAssignee || isManagerOrAdmin;
   }, [isSharedView, sharedTaskConfig, isAssignee, isManagerOrAdmin]);
 
+  const generateTableMarkdown = (rows: number, cols: number) => {
+    let table = '';
+    table += `| ${Array.from({ length: cols }, (_, i) => `Col ${i + 1}`).join(' | ')} |\n`;
+    table += `| ${Array.from({ length: cols }).map(() => '---').join(' | ')} |\n`;
+    for (let i = 0; i < rows; i++) {
+      table += `| ${Array.from({ length: cols }).map(() => ' ').join(' | ')} |\n`;
+    }
+    return table;
+  };
+  
+  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
+    if (!descriptionRef.current) return;
+
+    const textarea = descriptionRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentDescription = form.getValues('description') || '';
+    let newDescription = '';
+    let cursorPosition = start;
+
+    if (type === 'table') {
+        setIsTablePopoverOpen(true);
+        return;
+    }
+
+    if (type === 'list') {
+        const lineStart = currentDescription.lastIndexOf('\n', start - 1) + 1;
+        newDescription = 
+            currentDescription.substring(0, lineStart) + 
+            '- ' + 
+            currentDescription.substring(lineStart);
+        cursorPosition = start + 2;
+    } else {
+        const modifier = type === 'bold' ? '**' : '*';
+        const selectedText = textarea.value.substring(start, end);
+        
+        if (selectedText) {
+            newDescription = 
+                currentDescription.substring(0, start) +
+                `${modifier}${selectedText}${modifier}` +
+                currentDescription.substring(end);
+            cursorPosition = end + 2 * modifier.length;
+        } else {
+            newDescription = 
+                currentDescription.substring(0, start) +
+                `${modifier}${modifier}` +
+                currentDescription.substring(start);
+            cursorPosition = start + modifier.length;
+        }
+    }
+    
+    form.setValue('description', newDescription, { shouldValidate: true });
+    
+    setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(cursorPosition, cursorPosition);
+    }, 0);
+  };
+
+  const handleGenerateTable = () => {
+    const tableMarkdown = generateTableMarkdown(tableRows, tableCols);
+    const currentDescription = form.getValues('description') || '';
+    form.setValue('description', `${currentDescription}\n\n${tableMarkdown}\n`);
+    setIsTablePopoverOpen(false);
+  };
+  
+  const descriptionValue = form.watch('description');
+
 
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="sm:max-w-6xl grid grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="w-full md:w-3/4 lg:w-2/3 grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
@@ -1233,11 +1312,45 @@ export function TaskDetailsSheet({
                                 Edit Description
                               </AccordionTrigger>
                               <AccordionContent className="pt-2">
-                                <div className="prose dark:prose-invert prose-sm max-w-none rounded-md border p-4 min-h-24">
+                                <div className="rounded-md border">
+                                   <div className="p-2 border-b flex items-center gap-1">
+                                      <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
+                                      <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
+                                      <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
+                                      <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
+                                          <PopoverTrigger asChild>
+                                              <Button type="button" variant="ghost" size="icon"><TableIcon /></Button>
+                                          </PopoverTrigger>
+                                          <PopoverContent className="w-60 p-4 space-y-4">
+                                              <h4 className="font-medium text-sm">Insert Table</h4>
+                                              <div className="grid grid-cols-2 gap-2">
+                                                  <Input type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" />
+                                                  <Input type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" />
+                                              </div>
+                                              <Button onClick={handleGenerateTable} className="w-full">Generate</Button>
+                                          </PopoverContent>
+                                      </Popover>
+                                   </div>
+                                    <FormField control={form.control} name="description" render={({ field }) => (
+                                      <FormItem>
+                                          <FormControl>
+                                            <Textarea
+                                                ref={descriptionRef}
+                                                placeholder="Add a more detailed description..."
+                                                {...field}
+                                                rows={8}
+                                                className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-t-none"
+                                                readOnly={!canEditContent}
+                                            />
+                                          </FormControl>
+                                      </FormItem>
+                                    )}/>
+                                    <div className="prose dark:prose-invert prose-sm max-w-none p-4 min-h-[10rem] bg-secondary/30 rounded-b-md">
                                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                        {initialTask.description || 'No description provided.'}
+                                        {descriptionValue || "Description preview will appear here..."}
                                       </ReactMarkdown>
-                                  </div>
+                                    </div>
+                                </div>
                               </AccordionContent>
                             </AccordionItem>
                           </Accordion>
@@ -1273,13 +1386,7 @@ export function TaskDetailsSheet({
                                              {isMentioning && (
                                                 <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto bg-background border rounded-lg shadow-lg">
                                                     {mentionSuggestions.map(user => (
-                                                    <div key={user.id} className="p-2 hover:bg-secondary cursor-pointer" onClick={() => {
-                                                        const currentComment = newComment;
-                                                        const atIndex = currentComment.lastIndexOf('@');
-                                                        const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
-                                                        setNewComment(newCommentText);
-                                                        setIsMentioning(false);
-                                                    }}>
+                                                    <div key={user.id} className="p-2 hover:bg-secondary cursor-pointer" onClick={() => handleMentionSelect(user)}>
                                                         {user.name}
                                                     </div>
                                                     ))}
@@ -1478,7 +1585,7 @@ export function TaskDetailsSheet({
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               {(isManagerOrAdmin || isSharedView) ? (
+                               {(isManagerOrAdmin || (isSharedView && canChangeStatus)) ? (
                                    <FormField control={form.control} name="status" render={({ field }) => (
                                      <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}>
                                         <FormControl>
@@ -1851,7 +1958,7 @@ export function TaskDetailsSheet({
             </DialogContent>
         </Dialog>
 
-        <Dialog open={rejectionItems.length > 0} onOpenChange={(isOpen) => { if (!isOpen) setRejectionItems([])}}>
+        <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Create Revision Checklist</DialogTitle>
@@ -1894,7 +2001,7 @@ export function TaskDetailsSheet({
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="ghost" onClick={() => setRejectionItems([])}>Cancel</Button>
+                    <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
                     <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || rejectionItems.length === 0}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Confirm Revisions
