@@ -68,7 +68,10 @@ export type Attachment = {
   id: string;
   name: string;
   type: 'local' | 'gdrive';
-  url: string; 
+  url: string;
+  submittedAt?: string;
+  submittedBy?: User;
+  forRevisionCycle?: number;
 };
 
 export type WorkflowStatus = {

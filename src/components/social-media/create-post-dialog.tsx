@@ -278,8 +278,16 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
             
-            // Logic for re-submitting: clear current revision items as they are "done"
+            // Logic for re-submitting: Keep revision history, but clear current items as they are "done"
             if (status === 'Needs Approval' && post.status === 'Draft' && post.revisionItems) {
+                const completedCycle: RevisionCycle = {
+                    cycleNumber: post.revisionHistory ? post.revisionHistory.length + 1 : 1,
+                    requestedAt: post.updatedAt || serverTimestamp(), // Placeholder, should be the rejection time
+                    requestedBy: { id: '', name: 'Manager', avatarUrl: ''}, // Placeholder, needs actual rejector info
+                    items: post.revisionItems,
+                };
+                
+                postData.revisionHistory = [...(post.revisionHistory || []), completedCycle];
                 postData.revisionItems = deleteField() as any;
             }
 
@@ -325,8 +333,14 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     if (newStatus === 'Scheduled') {
         notificationTitle = 'Post Approved';
         notificationMessage = `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`;
-        // Clear revision items on approval
         if (post.revisionItems) {
+            const completedCycle: RevisionCycle = {
+                cycleNumber: post.revisionHistory ? post.revisionHistory.length + 1 : 1,
+                requestedAt: post.updatedAt || serverTimestamp(), 
+                requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' }, 
+                items: post.revisionItems,
+            };
+            updateData.revisionHistory = [...(post.revisionHistory || []), completedCycle];
             updateData.revisionItems = deleteField() as any;
         }
     } else { // Rejected, status becomes 'Draft'
