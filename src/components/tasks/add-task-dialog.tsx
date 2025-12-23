@@ -248,6 +248,50 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     return { managers: [], employees: [], clients: [] };
   }, [allUsers, currentUserProfile]);
 
+  const subtaskAssigneeOptions = useMemo(() => {
+    if (!allUsers || !currentUserProfile) return {};
+
+    const createGroup = (title: string, users: UserType[]) => users.length > 0 ? { [title]: users } : {};
+
+    const mainAssignees = selectedUsers;
+
+    if (currentUserProfile.role === 'Super Admin') {
+        const otherUsers = allUsers.filter(u => u.role !== 'Client' && !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("Other Members", otherUsers),
+        };
+    }
+    
+    if (currentUserProfile.role === 'Manager') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUserProfile.id);
+        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherMembers),
+        };
+    }
+    
+    if (currentUserProfile.role === 'Employee') {
+        const manager = allUsers.find(u => u.id === currentUserProfile.managerId);
+        const myTeam = allUsers.filter(u => u.managerId === currentUserProfile.managerId);
+        
+        const teamWithManager = [...myTeam];
+        if (manager && !teamWithManager.some(u => u.id === manager.id)) {
+            teamWithManager.push(manager);
+        }
+
+        const otherTeamMembers = teamWithManager.filter(u => !mainAssignees.some(a => a.id === u.id));
+
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherTeamMembers),
+        };
+    }
+
+    return {};
+}, [selectedUsers, allUsers, currentUserProfile]);
+
 
   const quickDateOptions = [
       { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
@@ -1059,12 +1103,74 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
                                 <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
                                 <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                
+                                <Popover>
+                                  <PopoverTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                                      {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-60 p-1">
+                                      <ScrollArea className="max-h-60">
+                                          <div className="space-y-1">
+                                              <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
+                                              {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                                users.length > 0 && (
+                                                  <React.Fragment key={group}>
+                                                      <Separator />
+                                                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                      {users.map(user => (
+                                                        <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                          <span className="truncate">{user.name}</span>
+                                                        </Button>
+                                                      ))}
+                                                  </React.Fragment>
+                                                )
+                                              ))}
+                                          </div>
+                                      </ScrollArea>
+                                  </PopoverContent>
+                                </Popover>
+                                
                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
                             </div>
                         ))}
                     </div>
                     <div className="flex items-center gap-2">
                         <Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground">
+                              {newSubtaskAssignee ? (
+                                <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
+                              ) : (
+                                <UserPlus className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-60 p-1">
+                            <ScrollArea className="max-h-60">
+                                <div className="space-y-1">
+                                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                    {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                        users.length > 0 && (
+                                            <React.Fragment key={group}>
+                                                <Separator />
+                                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                {users.map(user => (
+                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                        <span className="truncate">{user.name}</span>
+                                                    </Button>
+                                                ))}
+                                            </React.Fragment>
+                                        )
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                          </PopoverContent>
+                        </Popover>
                         <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
                     </div>
                   </TabsContent>
