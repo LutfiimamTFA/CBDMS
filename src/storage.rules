@@ -34,9 +34,10 @@ service firebase.storage {
       allow write: if isSignedIn();
     }
 
-    // Deny all other reads and writes by default for security.
+    // Allow writes for authenticated users, but deny reads by default.
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read: if false;
+      allow write: if isSignedIn();
     }
   }
 }

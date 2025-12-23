@@ -57,7 +57,6 @@ export default function SettingsPage() {
   const { user, profile, isLoading: isProfileLoading } = useUserProfile();
   const auth = useAuth();
   const firestore = useFirestore();
-  const storage = useStorage();
   const { toast } = useToast();
   
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -93,34 +92,38 @@ export default function SettingsPage() {
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user || !storage || !firestore || !auth?.currentUser) return;
+    if (!file || !user || !auth?.currentUser) return;
 
     setIsUploadingPhoto(true);
     try {
-      const storageRef = ref(storage, `avatars/${user.uid}`);
-      await uploadBytes(storageRef, file);
-      const photoURL = await getDownloadURL(storageRef);
-
-      // CRITICAL STEP: Update the user's profile in Firebase Authentication
-      await updateProfile(auth.currentUser, { photoURL });
+      const idToken = await auth.currentUser.getIdToken();
+      const formData = new FormData();
+      formData.append('file', file);
       
-      // Then, update the profile URL in the Firestore document
-      const userDocRef = doc(firestore, 'users', user.uid);
-      await updateDoc(userDocRef, { avatarUrl: photoURL });
+      const response = await fetch('/api/upload?uploadType=profile', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${idToken}` },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Upload failed');
+      }
       
       toast({
         title: 'Photo Updated',
         description: 'Your new profile picture has been saved.',
       });
-    } catch (error) {
+
+    } catch (error: any) {
       console.error('Photo Upload Error:', error);
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: 'Could not upload your new photo. Please try again.',
+        description: error.message || 'Could not upload your new photo. Please try again.',
       });
     } finally {
-      // ALWAYS ensure the loading state is turned off
       setIsUploadingPhoto(false);
     }
   };
