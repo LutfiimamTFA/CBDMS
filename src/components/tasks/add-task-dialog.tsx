@@ -32,7 +32,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
-import { priorityInfo, getInitials } from '@/lib/utils';
+import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table as TableIcon, Upload } from 'lucide-react';
@@ -59,6 +59,8 @@ import { MultiSelect } from '../ui/multi-select';
 import { addDays, format, formatDistanceToNow, parse, parseISO, startOfWeek, nextSaturday } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getInitials } from '@/lib/utils';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 
 
 const taskSchema = z.object({
@@ -777,6 +779,16 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setIsMentioning(false);
   };
 
+  const handleAddDependency = (taskId: string) => {
+    if (!dependencies.includes(taskId)) {
+      setDependencies(prev => [...prev, taskId]);
+    }
+  };
+  
+  const handleRemoveDependency = (taskId: string) => {
+    setDependencies(prev => prev.filter(id => id !== taskId));
+  };
+
 
   const subtaskProgress = useMemo(() => {
     if (subtasks.length === 0) return 0;
@@ -1153,7 +1165,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <ScrollArea className="max-h-60">
                                 <div className="space-y-1">
                                     <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                    {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                     {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
                                         users.length > 0 && (
                                             <React.Fragment key={group}>
                                                 <Separator />
@@ -1217,7 +1229,35 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                      </div>
                   </TabsContent>
                   <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                    <p className="text-center text-muted-foreground text-sm py-8">Dependency tracking is coming soon!</p>
+                    <Command>
+                      <CommandInput placeholder="Search tasks to add as dependency..." />
+                      <CommandList>
+                        <CommandEmpty>No tasks found.</CommandEmpty>
+                        <CommandGroup>
+                          {(allTasks || []).filter(task => !dependencies.includes(task.id)).map(task => (
+                            <CommandItem key={task.id} onSelect={() => handleAddDependency(task.id)}>
+                              {task.title}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                    <div className="space-y-2">
+                      <Label>Depends on:</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {dependencies.map(depId => {
+                          const task = allTasks?.find(t => t.id === depId);
+                          return task ? (
+                            <Badge key={depId} variant="secondary">
+                              {task.title}
+                              <button onClick={() => handleRemoveDependency(depId)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
                   </TabsContent>
                   <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                       <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
