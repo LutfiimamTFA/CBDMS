@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -271,9 +270,9 @@ export function TaskDetailsSheet({
   const canChangeStatus = useMemo(() => {
     if (isSharedView) return sharedTaskConfig?.allowedActions.includes('changeStatus') ?? false;
     if (!currentUser) return false;
-    if (currentUser.role === 'Employee' || currentUser.role === 'PIC') return false;
-    return isManagerOrAdmin || isAssignee;
-  }, [isSharedView, sharedTaskConfig, currentUser, isManagerOrAdmin, isAssignee]);
+    if ((currentUser.role === 'Employee' || currentUser.role === 'PIC') && form.getValues('status') !== 'Done') return true;
+    return isManagerOrAdmin;
+  }, [isSharedView, sharedTaskConfig, currentUser, isManagerOrAdmin, form.watch('status')]);
   
   const canAssignUsers = isSharedView ? false : canEditContent;
   
@@ -1590,9 +1589,8 @@ export function TaskDetailsSheet({
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
                                <FormField control={form.control} name="status" render={({ field }) => {
-                                 const isChangeDisabled = !canChangeStatus || (isSharedView && !sharedTaskConfig?.allowedStatuses.includes(field.value));
                                   return (
-                                   <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={isChangeDisabled}>
+                                   <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}>
                                       <FormControl>
                                         <SelectTrigger>
                                           <SelectValue placeholder="Select status" />
@@ -1600,7 +1598,7 @@ export function TaskDetailsSheet({
                                       </FormControl>
                                       <SelectContent>
                                         {(allStatuses || []).map(status => (
-                                          <SelectItem key={status.id} value={status.name} disabled={isSharedView && !sharedTaskConfig?.allowedStatuses.includes(status.name)}>{status.name}</SelectItem>
+                                          <SelectItem key={status.id} value={status.name} disabled={!canChangeStatus || (isSharedView && !sharedTaskConfig?.allowedStatuses.includes(status.name))}>{status.name}</SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
@@ -2003,4 +2001,3 @@ export function TaskDetailsSheet({
     </>
   );
 }
-
