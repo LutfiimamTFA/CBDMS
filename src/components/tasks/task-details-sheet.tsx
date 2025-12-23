@@ -163,6 +163,8 @@ export function TaskDetailsSheet({
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
   const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+  const [isMentioning, setIsMentioning] = React.useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
 
 
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
@@ -633,6 +635,19 @@ export function TaskDetailsSheet({
     const file = event.target.files?.[0];
     if (file) {
       setCommentAttachment(file);
+    }
+  };
+  
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+
+    const mentionMatch = text.match(/@(\w*)$/);
+    if (mentionMatch) {
+      setIsMentioning(true);
+      setMentionSuggestions((allUsers || []).filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+    } else {
+      setIsMentioning(false);
     }
   };
 
