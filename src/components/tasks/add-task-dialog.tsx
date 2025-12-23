@@ -35,7 +35,7 @@ import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table, Upload } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -108,6 +108,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   
   const [customFields, setCustomFields] = React.useState<CustomField[]>([]);
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  const [deliverables, setDeliverables] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
@@ -120,6 +121,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+
 
   const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = React.useState('');
@@ -319,6 +322,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         blocking,
         comments,
         attachments,
+        deliverables,
         companyId: currentUserProfile.companyId,
         createdBy: {
           id: currentUserProfile.id,
@@ -389,6 +393,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         setLogNote('');
         setCustomFields([]);
         setAttachments([]);
+        setDeliverables([]);
         setSubtasks([]);
         setDependencies([]);
         setBlocking([]);
@@ -482,7 +487,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
     if (!event.target.files || !storage) return;
     
     setIsUploading(true);
@@ -501,8 +506,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             };
         });
         
-        const newAttachments = await Promise.all(uploadPromises);
-        setAttachments(prev => [...prev, ...newAttachments]);
+        const newFiles = await Promise.all(uploadPromises);
+        if (fileType === 'attachment') {
+            setAttachments(prev => [...prev, ...newFiles]);
+        } else {
+            setDeliverables(prev => [...prev, ...newFiles]);
+        }
+        
         toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
 
     } catch (error) {
@@ -516,13 +526,17 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const handleConfirmGdriveLink = () => {
     if (gdriveLink && gdriveName) {
-      const newAttachment: Attachment = {
+      const newFile: Attachment = {
         id: `gdrive-${Date.now()}`,
         name: gdriveName,
         type: 'gdrive',
         url: gdriveLink,
       };
-      setAttachments(prev => [...prev, newAttachment]);
+       if (gdriveFileType === 'attachment') {
+        setAttachments(prev => [...prev, newFile]);
+      } else {
+        setDeliverables(prev => [...prev, newFile]);
+      }
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
       setGdriveName('');
@@ -533,6 +547,10 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const handleRemoveAttachment = (id: string) => {
     setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+  
+  const handleRemoveDeliverable = (id: string) => {
+    setDeliverables(prev => prev.filter(att => att.id !== id));
   };
   
   const generateTableMarkdown = (rows: number, cols: number) => {
@@ -564,7 +582,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
 
     if (type === 'list') {
-        // This is a simplified implementation. A more robust one would handle existing list items.
         const lineStart = currentDescription.lastIndexOf('\n', start - 1) + 1;
         newDescription = 
             currentDescription.substring(0, lineStart) + 
@@ -582,10 +599,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                 currentDescription.substring(end);
             cursorPosition = end + 2 * modifier.length;
         } else {
-            // If no text is selected, insert the markdown and place cursor in the middle
             newDescription = 
                 currentDescription.substring(0, start) +
-                `${modifier}text${modifier}` +
+                `${modifier}${modifier}` +
                 currentDescription.substring(start);
             cursorPosition = start + modifier.length;
         }
@@ -593,7 +609,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     form.setValue('description', newDescription, { shouldValidate: true });
     
-    // Use timeout to allow React to re-render before setting focus and selection
     setTimeout(() => {
         textarea.focus();
         textarea.setSelectionRange(cursorPosition, cursorPosition);
@@ -681,7 +696,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const handlePostComment = () => {
     if (!newComment.trim() || !currentUserProfile || !user) return;
     const comment: Comment = {
-      id: `c-${Date.now()}`,
+      id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       user: {
         id: user.uid,
         name: currentUserProfile.name || 'Unknown User',
@@ -796,6 +811,8 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const modifiersClassNames = {
     due: 'has-due-date',
   };
+  
+  const descriptionValue = form.watch('description');
 
   return (
     <>
@@ -810,47 +827,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         </DialogHeader>
         <ScrollArea className="px-6">
           <div className="pt-4">
-            <Accordion type="single" collapsible className="w-full mb-6">
-              <AccordionItem value="item-1">
-                <AccordionTrigger>
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <HelpCircle className="h-4 w-4"/>
-                    Panduan Fitur
-                  </div>
-                </AccordionTrigger>
-                <AccordionContent className="space-y-4 text-sm text-muted-foreground pt-2">
-                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
-                    <Star className="h-5 w-5 mt-1 text-primary shrink-0"/>
-                    <div>
-                      <h4 className="font-semibold text-foreground">Manajemen Tugas</h4>
-                      <p>Isi detail dasar tugas. Gunakan tombol <Wand2 className="inline h-3 w-3"/> untuk mendapatkan saran prioritas otomatis dari AI berdasarkan judul.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
-                    <Timer className="h-5 w-5 mt-1 text-primary shrink-0"/>
-                    <div>
-                      <h4 className="font-semibold text-foreground">Manajemen Waktu</h4>
-                      <p><b>Time Estimate</b> adalah total perkiraan waktu (dalam jam). <b>Time Tracking</b> digunakan untuk mencatat sesi kerja manual dengan jam mulai/selesai, tanggal, dan catatan untuk setiap sesi.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
-                    <Users className="h-5 w-5 mt-1 text-primary shrink-0"/>
-                    <div>
-                      <h4 className="font-semibold text-foreground">Kolaborasi Tim</h4>
-                      <p>Bagikan tugas melalui tautan (publik/privat), undang anggota tim via email, atau tugaskan kepada anggota yang sudah ada. Atur juga izin akses untuk setiap anggota (misal: hanya bisa melihat atau mengedit). Tambahkan juga subtugas, dependensi, dan komentar.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3 p-2 rounded-lg bg-secondary/50">
-                    <Blocks className="h-5 w-5 mt-1 text-primary shrink-0"/>
-                    <div>
-                      <h4 className="font-semibold text-foreground">Kustomisasi & Lampiran</h4>
-                      <p>Gunakan <b>Tags</b> untuk kategori. Lampirkan file dari <b>Local</b> atau <b>Google Drive</b>. Tambahkan <b>Custom Fields</b> (Teks, Angka, Tanggal, Dropdown) untuk data tambahan yang spesifik.</p>
-                    </div>
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-
             <Form {...form}>
               <form
                 id="add-task-form"
@@ -909,46 +885,43 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     <div className="space-y-2">
                       <Label>Description</Label>
                       <div className="rounded-md border">
-                          <Tabs defaultValue="edit" className="w-full">
-                            <TabsList className="w-full rounded-b-none rounded-t-md">
-                              <TabsTrigger value="edit" className="w-full">Description</TabsTrigger>
-                              <TabsTrigger value="table" className="w-full">Table</TabsTrigger>
-                            </TabsList>
-                            <TabsContent value="edit" className="p-2">
-                               <FormField control={form.control} name="description" render={({ field }) => (
-                                  <FormItem>
-                                      <FormControl>
-                                      <Textarea
-                                          ref={descriptionRef}
-                                          placeholder={t('addtask.form.description.placeholder')}
-                                          {...field}
-                                          rows={8}
-                                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0"
-                                      />
-                                      </FormControl>
-                                      <FormMessage />
-                                  </FormItem>
-                              )}/>
-                            </TabsContent>
-                             <TabsContent value="table" className="p-2 space-y-2">
-                                <Button type="button" onClick={() => setIsTablePopoverOpen(true)}>
-                                  Insert Table Template
-                                </Button>
-                                <FormField control={form.control} name="description" render={({ field }) => (
-                                  <FormItem>
-                                      <FormControl>
-                                      <Textarea
-                                          placeholder="Tabel Markdown akan muncul di sini"
-                                          {...field}
-                                          rows={8}
-                                          className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 font-mono text-xs"
-                                      />
-                                      </FormControl>
-                                      <FormMessage />
-                                  </FormItem>
-                              )}/>
-                            </TabsContent>
-                          </Tabs>
+                        <div className="p-2 border-b flex items-center gap-1">
+                          <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
+                          <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
+                           <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
+                              <PopoverTrigger asChild>
+                                  <Button type="button" variant="ghost" size="icon"><Table /></Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-60 p-4 space-y-4">
+                                  <h4 className="font-medium text-sm">Insert Table</h4>
+                                  <div className="grid grid-cols-2 gap-2">
+                                      <Input type="number" value={cols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" />
+                                      <Input type="number" value={rows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" />
+                                  </div>
+                                  <Button onClick={handleGenerateTable} className="w-full">Generate</Button>
+                              </PopoverContent>
+                          </Popover>
+                        </div>
+                       <FormField control={form.control} name="description" render={({ field }) => (
+                          <FormItem>
+                              <FormControl>
+                              <Textarea
+                                  ref={descriptionRef}
+                                  placeholder={t('addtask.form.description.placeholder')}
+                                  {...field}
+                                  rows={8}
+                                  className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-t-none"
+                              />
+                              </FormControl>
+                              <FormMessage />
+                          </FormItem>
+                        )}/>
+                        <div className="prose dark:prose-invert prose-sm max-w-none p-4 min-h-[10rem] bg-secondary/30 rounded-b-md">
+                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                {descriptionValue || "Description preview will appear here..."}
+                           </ReactMarkdown>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1072,6 +1045,32 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </div>
                   </div>
                 </div>
+
+                <Tabs defaultValue="subtasks" className="w-full">
+                  <TabsList className="grid w-full grid-cols-5">
+                    <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                    <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
+                    <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                    <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                    <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                      {/* Subtasks content */}
+                  </TabsContent>
+                  <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
+                     {/* Attachments content */}
+                  </TabsContent>
+                  <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                     {/* Deliverables content */}
+                  </TabsContent>
+                  <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
+                      {/* Dependencies content */}
+                  </TabsContent>
+                  <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                      {/* Comments content */}
+                  </TabsContent>
+                </Tabs>
               </form>
             </Form>
           </div>
