@@ -1204,7 +1204,7 @@ export function TaskDetailsSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:w-4/5 lg:w-3/4 grid grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="sm:max-w-none w-full grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
