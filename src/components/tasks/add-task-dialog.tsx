@@ -32,7 +32,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
-import { priorityInfo } from '@/lib/utils';
+import { priorityInfo, getInitials } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table as TableIcon, Upload } from 'lucide-react';
