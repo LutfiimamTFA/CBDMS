@@ -6,19 +6,31 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowRight, Briefcase } from "lucide-react";
 import { format } from 'date-fns';
+import { useAuth, initiateSignOut } from "@/firebase";
+import { useRouter } from "next/navigation";
 
 export default function RootPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const auth = useAuth();
+  const router = useRouter();
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
 
+    // Automatically sign out the user if they land on this page
+    if (auth) {
+      initiateSignOut(auth).finally(() => {
+        // Optional: ensure redirection if needed, though staying here is fine.
+        // router.push('/login'); 
+      });
+    }
+
     return () => {
       clearInterval(timer);
     };
-  }, []);
+  }, [auth, router]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
