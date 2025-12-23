@@ -263,7 +263,9 @@ export function TaskDetailsSheet({
   
   const canChangeStatus = useMemo(() => {
     if (isSharedView) return sharedTaskConfig?.allowedActions.includes('changeStatus') ?? false;
-    return (currentUser && (isManagerOrAdmin || isAssignee));
+    if (!currentUser) return false;
+    if (currentUser.role === 'Employee' || currentUser.role === 'PIC') return false;
+    return isManagerOrAdmin || isAssignee;
   }, [isSharedView, sharedTaskConfig, currentUser, isManagerOrAdmin, isAssignee]);
   
   const canAssignUsers = isSharedView ? false : canEditContent;
@@ -814,7 +816,6 @@ export function TaskDetailsSheet({
         tags: currentTags,
     };
     
-    // Logged-in user save
     const batch = writeBatch(firestore!);
     const taskDocRef = doc(firestore!, 'tasks', initialTask.id);
 
@@ -1093,7 +1094,7 @@ export function TaskDetailsSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-4xl grid grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="w-full sm:max-w-6xl grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
@@ -1195,31 +1196,60 @@ export function TaskDetailsSheet({
                         )}
 
                         <div className="space-y-2">
-                          <h3 className="font-semibold text-sm">Description</h3>
-                          <div className="prose dark:prose-invert prose-sm max-w-none rounded-md border border-dashed p-4 min-h-24">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {form.getValues('description') || 'No description provided.'}
-                              </ReactMarkdown>
-                          </div>
-                          {canEditContent && (
-                              <Accordion type="single" collapsible>
-                                <AccordionItem value="edit-desc" className="border-none">
-                                    <AccordionTrigger className="text-xs">Edit Description</AccordionTrigger>
-                                    <AccordionContent>
-                                        <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description using Markdown..." rows={10}/> )}/>
-                                    </AccordionContent>
-                                </AccordionItem>
-                              </Accordion>
-                          )}
+                          <Accordion type="single" collapsible>
+                            <AccordionItem value="description" className="border-none">
+                              <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
+                                Description
+                              </AccordionTrigger>
+                              <AccordionContent className="pt-2">
+                                {canEditContent ? (
+                                    <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description using Markdown..." rows={10}/> )}/>
+                                ) : (
+                                  <div className="prose dark:prose-invert prose-sm max-w-none rounded-md border p-4 min-h-24">
+                                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                        {initialTask.description || 'No description provided.'}
+                                      </ReactMarkdown>
+                                  </div>
+                                )}
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
                         </div>
                         
-                        <Tabs defaultValue="subtasks" className="w-full">
+                        <Tabs defaultValue="comments" className="w-full">
                           <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                             <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                             <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
                             <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                            <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                           </TabsList>
+                           <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                <ScrollArea className="max-h-48 pr-2">
+                                    <div className="space-y-4">
+                                        {(initialTask.comments || []).map((comment) => (
+                                        <div key={comment.id} className="flex items-start gap-3">
+                                            <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar>
+                                            <div>
+                                                <p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p>
+                                                <p className="text-sm">{comment.text}</p>
+                                            </div>
+                                        </div>
+                                        ))}
+                                        {(initialTask.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                    </div>
+                                </ScrollArea>
+                                {canComment && (
+                                    <div className="flex items-start gap-2 pt-4 border-t">
+                                        <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
+                                        <div className="flex-1">
+                                            <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                                        </div>
+                                        <Button type="button" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
+                                            {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
+                                        </Button>
+                                    </div>
+                                )}
+                          </TabsContent>
                           <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                 <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(initialTask.subtasks || []).filter(st => st.completed).length}/{(initialTask.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
                                 <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
@@ -1327,9 +1357,6 @@ export function TaskDetailsSheet({
                           </TabsContent>
                           <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
                             {/* Dependencies content here */}
-                          </TabsContent>
-                          <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                            {/* Comments content here */}
                           </TabsContent>
                         </Tabs>
                         
