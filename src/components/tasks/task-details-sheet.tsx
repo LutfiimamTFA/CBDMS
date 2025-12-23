@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -7,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, SharedTask } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, SharedTask, RevisionCycle } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -156,8 +157,9 @@ export function TaskDetailsSheet({
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
-  const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionItems, setRejectionItems] = useState<Omit<RevisionItem, 'id'|'completed'>[]>([]);
+  const [currentItemText, setCurrentItemText] = useState('');
+
   
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
@@ -954,7 +956,9 @@ export function TaskDetailsSheet({
   
   const allSubtasksCompleted = useMemo(() => (initialTask.subtasks || []).every(st => st.completed), [initialTask.subtasks]);
   const allRevisionsCompleted = useMemo(() => (initialTask.revisionItems || []).every(item => item.completed), [initialTask.revisionItems]);
-  const canSubmit = allSubtasksCompleted && allRevisionsCompleted;
+  const hasDeliverables = useMemo(() => (initialTask.deliverables || []).length > 0, [initialTask.deliverables]);
+
+  const canSubmit = allSubtasksCompleted && allRevisionsCompleted && hasDeliverables;
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
@@ -967,13 +971,14 @@ export function TaskDetailsSheet({
   };
   
   const handleRequestRevisions = () => {
-      setRejectionDialogOpen(true);
+      setRejectionItems([]);
+      setCurrentItemText('');
   };
   
   const handleConfirmRejection = async () => {
-      if (!rejectionReason.trim() || !currentUser || !firestore) return;
+      if (!rejectionItems || rejectionItems.length === 0 || !currentUser || !firestore) return;
       
-      setRejectionDialogOpen(false);
+      setRejectionItems([]);
       setIsSaving(true);
 
       const oldStatus = form.getValues('status');
@@ -983,27 +988,37 @@ export function TaskDetailsSheet({
       try {
           const batch = writeBatch(firestore);
 
-          const newComment: Comment = {
-              id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-              user: currentUser,
-              text: `**Revision Request:** ${rejectionReason}`,
-              timestamp: new Date().toISOString(),
-              replies: [],
-          };
-          const newComments = [...(initialTask.comments || []), newComment];
-          
+          const newRevisionItems: RevisionItem[] = rejectionItems.map(item => ({
+              id: crypto.randomUUID(),
+              text: item.text,
+              completed: false,
+          }));
+
           const newActivity = createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`);
           const updatedActivities = [...(initialTask.activities || []), newActivity];
 
+          const newRevisionCycle: RevisionCycle = {
+              cycleNumber: (initialTask.revisionHistory || []).length + 1,
+              requestedAt: serverTimestamp(),
+              requestedBy: {
+                  id: currentUser.id,
+                  name: currentUser.name,
+                  avatarUrl: currentUser.avatarUrl || '',
+              },
+              items: newRevisionItems
+          };
+
           batch.update(taskRef, {
               status: newStatus,
-              comments: newComments,
+              revisionItems: newRevisionItems,
+              revisionHistory: [...(initialTask.revisionHistory || []), newRevisionCycle],
               activities: updatedActivities,
               lastActivity: newActivity,
               updatedAt: serverTimestamp(),
+              actualCompletionDate: deleteField(),
           });
 
-           const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}...". See comments for details.`;
+           const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}...". See task for revision checklist.`;
            initialTask.assigneeIds.forEach(assigneeId => {
                 if (assigneeId !== currentUser.id) {
                      const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
@@ -1023,7 +1038,8 @@ export function TaskDetailsSheet({
            await batch.commit();
 
            form.setValue('status', newStatus);
-           setRejectionReason('');
+           setRejectionItems([]);
+           setCurrentItemText('');
            toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
       } catch (error) {
           console.error("Failed to request revisions:", error);
@@ -1109,7 +1125,7 @@ export function TaskDetailsSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-6xl grid grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="sm:max-w-6xl grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
@@ -1211,21 +1227,17 @@ export function TaskDetailsSheet({
                         )}
 
                         <div className="space-y-2">
-                          <Accordion type="single" collapsible>
+                          <Accordion type="single" collapsible defaultValue="description">
                             <AccordionItem value="description" className="border-none">
                               <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
-                                Description
+                                Edit Description
                               </AccordionTrigger>
                               <AccordionContent className="pt-2">
-                                {canEditContent ? (
-                                    <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} placeholder="Add a more detailed description using Markdown..." rows={10}/> )}/>
-                                ) : (
-                                  <div className="prose dark:prose-invert prose-sm max-w-none rounded-md border p-4 min-h-24">
+                                <div className="prose dark:prose-invert prose-sm max-w-none rounded-md border p-4 min-h-24">
                                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                         {initialTask.description || 'No description provided.'}
                                       </ReactMarkdown>
                                   </div>
-                                )}
                               </AccordionContent>
                             </AccordionItem>
                           </Accordion>
@@ -1256,8 +1268,23 @@ export function TaskDetailsSheet({
                                 {canComment && (
                                     <div className="flex items-start gap-2 pt-4 border-t">
                                         <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                                        <div className="flex-1">
+                                        <div className="flex-1 relative">
                                             <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                                             {isMentioning && (
+                                                <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto bg-background border rounded-lg shadow-lg">
+                                                    {mentionSuggestions.map(user => (
+                                                    <div key={user.id} className="p-2 hover:bg-secondary cursor-pointer" onClick={() => {
+                                                        const currentComment = newComment;
+                                                        const atIndex = currentComment.lastIndexOf('@');
+                                                        const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+                                                        setNewComment(newCommentText);
+                                                        setIsMentioning(false);
+                                                    }}>
+                                                        {user.name}
+                                                    </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                         <Button type="button" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
                                             {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
@@ -1370,7 +1397,7 @@ export function TaskDetailsSheet({
                               </div>
                             )}
                           </TabsContent>
-                          <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
+                           <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
                             {/* Dependencies content here */}
                           </TabsContent>
                         </Tabs>
@@ -1387,7 +1414,7 @@ export function TaskDetailsSheet({
                                Submit for Review
                            </Button>
                            {!canSubmit && (
-                               <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan poin revisi untuk melanjutkan.</p>
+                               <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file untuk melanjutkan.</p>
                            )}
                          </div>
                     )}
@@ -1451,9 +1478,9 @@ export function TaskDetailsSheet({
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               {canChangeStatus ? (
+                               {(isManagerOrAdmin || isSharedView) ? (
                                    <FormField control={form.control} name="status" render={({ field }) => (
-                                     <Select onValueChange={(value) => handleStatusChange(value)} value={field.value}>
+                                     <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}>
                                         <FormControl>
                                           <SelectTrigger>
                                             <SelectValue placeholder="Select status" />
@@ -1745,31 +1772,6 @@ export function TaskDetailsSheet({
           </ScrollArea>
         </DialogContent>
       </Dialog>
-      <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reason for Revision</DialogTitle>
-            <DialogDescription>
-              Please provide feedback for the assignee on why this task needs revisions. This will be added as a comment.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Textarea
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="e.g., The final design is missing the client's new logo."
-              rows={4}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || !rejectionReason.trim()}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Request Revisions
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
         <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
             <DialogContent>
                 <DialogHeader>
@@ -1844,6 +1846,58 @@ export function TaskDetailsSheet({
                     <Button variant="default" onClick={handleFinalReviewAndComplete}>
                         <Check className="mr-2 h-4 w-4" />
                         Confirm & Complete
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog open={rejectionItems.length > 0} onOpenChange={(isOpen) => { if (!isOpen) setRejectionItems([])}}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Create Revision Checklist</DialogTitle>
+                    <DialogDescription>
+                    Revisions for task: <span className="font-bold text-foreground">{initialTask?.title}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                    <div className="space-y-2">
+                        {rejectionItems.map((item, index) => (
+                            <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                <span className="flex-1 text-sm">{item.text}</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRejectionItems(prev => prev.filter((_, i) => i !== index))}>X</Button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Input
+                            value={currentItemText}
+                            onChange={(e) => setCurrentItemText(e.target.value)}
+                            placeholder="e.g., Fix the logo placement"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    if(currentItemText.trim()){
+                                        setRejectionItems(prev => [...prev, {text: currentItemText}]);
+                                        setCurrentItemText('');
+                                    }
+                                }
+                            }}
+                        />
+                         <Button onClick={() => {
+                             if(currentItemText.trim()){
+                                setRejectionItems(prev => [...prev, {text: currentItemText}]);
+                                setCurrentItemText('');
+                            }
+                         }} disabled={!currentItemText.trim()}>
+                            <Plus className="mr-2 h-4 w-4"/> Add
+                        </Button>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setRejectionItems([])}>Cancel</Button>
+                    <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || rejectionItems.length === 0}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Confirm Revisions
                     </Button>
                 </DialogFooter>
             </DialogContent>
