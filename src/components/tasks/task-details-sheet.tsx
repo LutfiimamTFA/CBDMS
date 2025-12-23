@@ -987,78 +987,79 @@ export function TaskDetailsSheet({
   };
   
   const handleConfirmRejection = async () => {
-      if (!rejectionItems || rejectionItems.length === 0 || !currentUser || !firestore) return;
-      
-      setIsSaving(true);
+    if (!rejectionItems || rejectionItems.length === 0 || !currentUser || !firestore) return;
+    
+    setIsSaving(true);
 
-      const oldStatus = form.getValues('status');
-      const newStatus = 'Revisi';
-      const taskRef = doc(firestore, 'tasks', initialTask.id);
-      
-      try {
-          const batch = writeBatch(firestore);
+    const oldStatus = form.getValues('status');
+    const newStatus = 'Revisi';
+    const taskRef = doc(firestore, 'tasks', initialTask.id);
+    
+    try {
+        const batch = writeBatch(firestore);
 
-          const newRevisionItems: RevisionItem[] = rejectionItems.map(item => ({
-              id: crypto.randomUUID(),
-              text: item.text,
-              completed: false,
-          }));
+        const newRevisionItems: RevisionItem[] = rejectionItems.map(item => ({
+            id: crypto.randomUUID(),
+            text: item.text,
+            completed: false,
+        }));
 
-          const newActivity = createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`);
-          const updatedActivities = [...(initialTask.activities || []), newActivity];
+        const newActivity = createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`);
+        const updatedActivities = [...(initialTask.activities || []), newActivity];
 
-          const newRevisionCycle: RevisionCycle = {
-              cycleNumber: (initialTask.revisionHistory || []).length + 1,
-              requestedAt: serverTimestamp(),
-              requestedBy: {
-                  id: currentUser.id,
-                  name: currentUser.name,
-                  avatarUrl: currentUser.avatarUrl || '',
-              },
-              items: newRevisionItems
-          };
+        const newRevisionCycle: RevisionCycle = {
+            cycleNumber: (initialTask.revisionHistory || []).length + 1,
+            requestedAt: new Date(), // Use JS Date object
+            requestedBy: {
+                id: currentUser.id,
+                name: currentUser.name,
+                avatarUrl: currentUser.avatarUrl || '',
+            },
+            items: newRevisionItems
+        };
 
-          batch.update(taskRef, {
-              status: newStatus,
-              revisionItems: newRevisionItems,
-              revisionHistory: [...(initialTask.revisionHistory || []), newRevisionCycle],
-              activities: updatedActivities,
-              lastActivity: newActivity,
-              updatedAt: serverTimestamp(),
-              actualCompletionDate: deleteField(),
-          });
+        batch.update(taskRef, {
+            status: newStatus,
+            revisionItems: newRevisionItems,
+            revisionHistory: [...(initialTask.revisionHistory || []), newRevisionCycle],
+            activities: updatedActivities,
+            lastActivity: newActivity,
+            updatedAt: serverTimestamp(),
+            actualCompletionDate: deleteField(),
+        });
 
-           const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}..."`;
-           initialTask.assigneeIds.forEach(assigneeId => {
-                if (assigneeId !== currentUser.id) {
-                     const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
-                     const newNotification: Omit<Notification, 'id'> = {
-                        userId: assigneeId,
-                        title: 'Revisions Required',
-                        message: notificationMessage,
-                        taskId: initialTask.id,
-                        isRead: false,
-                        createdAt: serverTimestamp() as any,
-                        createdBy: newActivity.user,
-                    };
-                    batch.set(notifRef, newNotification);
-                }
-           });
-           
-           await batch.commit();
+         const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}..."`;
+         initialTask.assigneeIds.forEach(assigneeId => {
+              if (assigneeId !== currentUser.id) {
+                   const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+                   const newNotification: Omit<Notification, 'id'> = {
+                      userId: assigneeId,
+                      title: 'Revisions Required',
+                      message: notificationMessage,
+                      taskId: initialTask.id,
+                      isRead: false,
+                      createdAt: serverTimestamp() as any,
+                      createdBy: newActivity.user,
+                  };
+                  batch.set(notifRef, newNotification);
+              }
+         });
+         
+         await batch.commit();
 
-           form.setValue('status', newStatus);
-           setRejectionDialogOpen(false);
-           setRejectionItems([]);
-           setCurrentItemText('');
-           toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
-      } catch (error) {
-          console.error("Failed to request revisions:", error);
-          toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision.' });
-      } finally {
-          setIsSaving(false);
-      }
+         form.setValue('status', newStatus);
+         setRejectionDialogOpen(false);
+         setRejectionItems([]);
+         setCurrentItemText('');
+         toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
+    } catch (error) {
+        console.error("Failed to request revisions:", error);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision.' });
+    } finally {
+        setIsSaving(false);
+    }
   };
+
 
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
@@ -1381,8 +1382,20 @@ export function TaskDetailsSheet({
                                 {canComment && (
                                     <div className="flex items-start gap-2 pt-4 border-t">
                                         <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                                        <div className="flex-1">
+                                        <div className="flex-1 relative">
                                             <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                                            {isMentioning && (
+                                                <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
+                                                <CardContent className="p-1">
+                                                    {mentionSuggestions.map(user => (
+                                                    <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}>
+                                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                        {user.name}
+                                                    </Button>
+                                                    ))}
+                                                </CardContent>
+                                                </Card>
+                                            )}
                                         </div>
                                         <Button type="button" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
                                             {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
@@ -1990,3 +2003,4 @@ export function TaskDetailsSheet({
     </>
   );
 }
+
