@@ -37,7 +37,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { Progress } from '../ui/progress';
-import { format, formatDistanceToNow, parseISO, isAfter } from 'date-fns';
+import { format, formatDistanceToNow, parseISO, isAfter, endOfDay } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
@@ -1062,7 +1062,7 @@ export function TaskDetailsSheet({
 
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
-    const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
+    const isLate = isAfter(parseISO(initialTask.actualCompletionDate), endOfDay(parseISO(initialTask.dueDate)));
     return isLate ? 'Late' : 'On Time';
   }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
   
@@ -1204,7 +1204,7 @@ export function TaskDetailsSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-none sm:w-3/4 lg:w-2/3 grid grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="w-full sm:w-4/5 lg:w-3/4 grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
