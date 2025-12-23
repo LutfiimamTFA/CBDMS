@@ -1028,7 +1028,7 @@ export function TaskDetailsSheet({
               actualCompletionDate: deleteField(),
           });
 
-           const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}...". See task for revision checklist.`;
+           const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}..."`;
            initialTask.assigneeIds.forEach(assigneeId => {
                 if (assigneeId !== currentUser.id) {
                      const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
@@ -1204,7 +1204,7 @@ export function TaskDetailsSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full md:w-3/4 lg:w-2/3 grid grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="w-full sm:max-w-none sm:w-3/4 lg:w-2/3 grid grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
@@ -1381,17 +1381,8 @@ export function TaskDetailsSheet({
                                 {canComment && (
                                     <div className="flex items-start gap-2 pt-4 border-t">
                                         <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                                        <div className="flex-1 relative">
+                                        <div className="flex-1">
                                             <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
-                                             {isMentioning && (
-                                                <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto bg-background border rounded-lg shadow-lg">
-                                                    {mentionSuggestions.map(user => (
-                                                    <div key={user.id} className="p-2 hover:bg-secondary cursor-pointer" onClick={() => handleMentionSelect(user)}>
-                                                        {user.name}
-                                                    </div>
-                                                    ))}
-                                                </div>
-                                            )}
                                         </div>
                                         <Button type="button" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
                                             {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
@@ -1585,36 +1576,23 @@ export function TaskDetailsSheet({
                         <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Status</FormLabel>
                             <div className="col-span-2">
-                               {(isManagerOrAdmin || (isSharedView && canChangeStatus)) ? (
-                                   <FormField control={form.control} name="status" render={({ field }) => (
-                                     <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}>
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue placeholder="Select status" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          {(allStatuses || []).map(status => (
-                                            <SelectItem key={status.id} value={status.name}>{status.name}</SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                   )}/>
-                               ) : (
-                                   <FormField control={form.control} name="status" render={({ field }) => {
-                                     const statusDetails = allStatuses?.find(s => s.name === field.value);
-                                      return (
-                                         <Badge variant="outline" style={{
-                                              backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent',
-                                              borderColor: statusDetails?.color,
-                                              color: statusDetails?.color,
-                                              borderWidth: '1.5px'
-                                          }}>
-                                              {field.value}
-                                          </Badge>
-                                      );
-                                   }}/>
-                               )}
+                               <FormField control={form.control} name="status" render={({ field }) => {
+                                 const isChangeDisabled = !canChangeStatus || (isSharedView && !sharedTaskConfig?.allowedStatuses.includes(field.value));
+                                  return (
+                                   <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={isChangeDisabled}>
+                                      <FormControl>
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select status" />
+                                        </SelectTrigger>
+                                      </FormControl>
+                                      <SelectContent>
+                                        {(allStatuses || []).map(status => (
+                                          <SelectItem key={status.id} value={status.name} disabled={isSharedView && !sharedTaskConfig?.allowedStatuses.includes(status.name)}>{status.name}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                 )
+                               }}/>
                             </div>
                         </FormItem>
                        <FormField control={form.control} name="priority" render={({ field }) => {
