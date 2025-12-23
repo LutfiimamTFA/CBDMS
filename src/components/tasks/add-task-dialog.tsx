@@ -35,7 +35,7 @@ import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table, Upload } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table as TableIcon, Upload } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -891,13 +891,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
                            <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
                               <PopoverTrigger asChild>
-                                  <Button type="button" variant="ghost" size="icon"><Table /></Button>
+                                  <Button type="button" variant="ghost" size="icon"><TableIcon /></Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-60 p-4 space-y-4">
                                   <h4 className="font-medium text-sm">Insert Table</h4>
                                   <div className="grid grid-cols-2 gap-2">
-                                      <Input type="number" value={cols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" />
-                                      <Input type="number" value={rows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" />
+                                      <Input type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" />
+                                      <Input type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" />
                                   </div>
                                   <Button onClick={handleGenerateTable} className="w-full">Generate</Button>
                               </PopoverContent>
@@ -1056,19 +1056,19 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   </TabsList>
                   
                   <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                      {/* Subtasks content */}
+                      {/* Subtasks content here */}
                   </TabsContent>
                   <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
-                     {/* Attachments content */}
+                     {/* Attachments content here */}
                   </TabsContent>
                   <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
-                     {/* Deliverables content */}
+                     {/* Deliverables content here */}
                   </TabsContent>
                   <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                      {/* Dependencies content */}
+                      {/* Dependencies content here */}
                   </TabsContent>
                   <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                      {/* Comments content */}
+                      {/* Comments content here */}
                   </TabsContent>
                 </Tabs>
               </form>
