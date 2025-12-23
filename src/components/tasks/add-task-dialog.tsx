@@ -61,6 +61,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getInitials } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
+import { Badge } from '@/components/ui/badge';
 
 
 const taskSchema = z.object({
@@ -581,7 +582,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
        if (gdriveFileType === 'attachment') {
         setAttachments(prev => [...prev, newFile]);
       } else {
-        setDeliverables(prev => [...prev, newFile]);
+        setDeliverables(prev => [...prev, ...newFile]);
       }
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
