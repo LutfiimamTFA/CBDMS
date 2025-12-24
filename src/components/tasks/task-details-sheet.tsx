@@ -135,7 +135,7 @@ export function TaskDetailsSheet({
   isSharedView = false,
   sharedTaskConfig = null,
 }: TaskDetailsSheetProps) {
-    const form = useForm<TaskDetailsFormValues>({
+  const form = useForm<TaskDetailsFormValues>({
     resolver: zodResolver(taskDetailsSchema),
   });
   
@@ -1009,7 +1009,7 @@ export function TaskDetailsSheet({
 
         const newRevisionCycle: RevisionCycle = {
             cycleNumber: (initialTask.revisionHistory || []).length + 1,
-            requestedAt: new Date(), // Use JS Date object
+            requestedAt: new Date(),
             requestedBy: {
                 id: currentUser.id,
                 name: currentUser.name,
@@ -1771,23 +1771,22 @@ export function TaskDetailsSheet({
                     <div className="space-y-4 p-4 rounded-lg border">
                         <h3 className="font-semibold text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" /> Supporting Materials ({(initialTask.attachments || []).length})</h3>
                         <Separator/>
-                        {(initialTask.attachments || []).length > 0 && (
-                          <div className="space-y-2">
+                        <div className="space-y-2">
                             {(initialTask.attachments || []).map((att) => (
-                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
                                 <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                  {getFileIcon(att.name)}
-                                  <span className="truncate" title={att.name}>{att.name}</span>
+                                    {getFileIcon(att.name)}
+                                    <span className="truncate" title={att.name}>{att.name}</span>
                                 </a>
                                 {canEditContent && (
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}>
                                     <X className="h-4 w-4" />
-                                  </Button>
+                                    </Button>
                                 )}
-                              </div>
+                                </div>
                             ))}
-                          </div>
-                        )}
+                            {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
+                        </div>
                         {canEditContent && (
                            <div className="grid grid-cols-2 gap-4">
                             <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
