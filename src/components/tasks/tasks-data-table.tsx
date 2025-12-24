@@ -96,7 +96,6 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   
-  // Conditionally use internal permissions hook only when not in share view
   const { permissions, isLoading: arePermsLoading } = !isShareView ? usePermissions() : { permissions: null, isLoading: false };
   
   const router = useRouter();
@@ -115,6 +114,8 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
     lastActivity: false,
+    assigneeIds: false,
+    dueDate: false,
   });
   const [rowSelection, setRowSelection] = React.useState({})
   const { toast } = useToast();
@@ -509,15 +510,15 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   return (
     <>
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex flex-1 items-center space-x-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex flex-1 flex-wrap items-center gap-2">
             <Input
               placeholder="Filter tasks by title..."
               value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
               onChange={(event) =>
                 table.getColumn('title')?.setFilterValue(event.target.value)
               }
-              className="h-8 w-[150px] lg:w-[250px]"
+              className="h-8 w-full sm:w-[150px] lg:w-[250px]"
             />
              <DataTableFacetedFilter
               column={table.getColumn("brandId")}
@@ -559,14 +560,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header) => {
                     return (
-                      <TableHead key={header.id}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </TableHead>
+                      <TableHead key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</TableHead>
                     );
                   })}
                 </TableRow>
@@ -596,14 +590,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center"
-                  >
-                    No results found.
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={columns.length} className="h-24 text-center">No results found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
