@@ -134,6 +134,10 @@ export function TaskDetailsSheet({
   isSharedView = false,
   sharedTaskConfig = null,
 }: TaskDetailsSheetProps) {
+  const form = useForm<TaskDetailsFormValues>({
+    resolver: zodResolver(taskDetailsSchema),
+  });
+
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
@@ -275,10 +279,6 @@ export function TaskDetailsSheet({
   }, [isSharedView, sharedTaskConfig, currentUser, isManagerOrAdmin, form.watch('status')]);
   
   const canAssignUsers = isSharedView ? false : canEditContent;
-  
-  const form = useForm<TaskDetailsFormValues>({
-    resolver: zodResolver(taskDetailsSchema),
-  });
   
   const currentFormStatus = form.watch('status');
 
