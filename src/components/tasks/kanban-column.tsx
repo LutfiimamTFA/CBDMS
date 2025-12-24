@@ -104,7 +104,7 @@ export function KanbanColumn({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "flex h-full w-80 shrink-0 flex-col rounded-lg bg-secondary/50 transition-colors",
+        "flex h-full w-full md:w-80 shrink-0 flex-col rounded-lg bg-secondary/50 transition-colors",
         isDragOver && canDrag && "border-2 border-dashed border-primary bg-primary/10"
       )}
     >
@@ -122,7 +122,7 @@ export function KanbanColumn({
             {tasks.length}
           </span>
         </div>
-        <div className="flex -space-x-2">
+        <div className="hidden md:flex -space-x-2">
           <TooltipProvider>
             {uniqueAssignees.slice(0, 3).map((assignee) => (
               <Tooltip key={assignee.id}>

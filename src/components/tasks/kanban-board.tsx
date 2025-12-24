@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -17,6 +18,8 @@ import { isAfter, isBefore, startOfDay, addDays, subDays } from 'date-fns';
 import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
 import { useRouter } from 'next/navigation';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
 
 const createActivity = (user: User, action: string): Activity => {
   return {
@@ -343,24 +346,49 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
   return (
     <>
-    <ScrollArea className="h-full w-full">
-      <div className="flex h-full gap-4 pb-4">
-        {statuses?.map((status) => (
-          <KanbanColumn
-            key={status.id}
-            status={status}
-            tasks={filteredTasks.filter((task) => task.status === status.name)}
-            onDrop={handleDrop}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-            onCardClick={handleCardClick}
-            canDrag={canDrag}
-            draggingTaskId={draggingTaskId}
-          />
-        ))}
-      </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+    {/* Desktop View */}
+    <div className="hidden md:flex h-full w-full">
+        <ScrollArea className="h-full w-full">
+        <div className="flex h-full gap-4 pb-4">
+            {statuses?.map((status) => (
+            <KanbanColumn
+                key={status.id}
+                status={status}
+                tasks={filteredTasks.filter((task) => task.status === status.name)}
+                onDrop={handleDrop}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onCardClick={handleCardClick}
+                canDrag={canDrag}
+                draggingTaskId={draggingTaskId}
+            />
+            ))}
+        </div>
+        <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+    </div>
+
+    {/* Mobile View */}
+    <div className="md:hidden flex flex-col h-full">
+        <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
+            <TabsList className="grid w-full grid-cols-3">
+                 {statuses?.map((status) => (
+                    <TabsTrigger key={status.id} value={status.name}>{status.name}</TabsTrigger>
+                ))}
+            </TabsList>
+            {statuses?.map((status) => (
+                <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
+                    <ScrollArea className="h-full">
+                        <div className="flex flex-col gap-3 p-1">
+                            {filteredTasks.filter((task) => task.status === status.name).map(task => (
+                                <TaskCard key={task.id} task={task} />
+                            ))}
+                        </div>
+                    </ScrollArea>
+                </TabsContent>
+            ))}
+        </Tabs>
+    </div>
     
     <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
         <DialogContent>
