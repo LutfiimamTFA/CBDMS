@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         
         // Fetch all statuses for the company associated with the link.
         // This is the correct source of truth for the complete workflow.
-        const statusesQuery = db.collection('statuses').where('companyId', '==', sharedLink.companyId);
+        const statusesQuery = db.collection('statuses').orderBy('order');
         const statusesSnap = await statusesQuery.get();
 
         if (statusesSnap.empty) {

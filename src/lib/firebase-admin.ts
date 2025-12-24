@@ -1,9 +1,10 @@
+
 // src/lib/firebase-admin.ts
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getStorage, Storage } from 'firebase-admin/storage';
-import { serviceAccount } from './service-account';
+import { serviceAccount } from '@/firebase/service-account';
 
 const BUCKET_NAME = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
 
