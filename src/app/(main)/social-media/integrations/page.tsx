@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { formatDistanceToNow, isAfter } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
+import Link from 'next/link';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -106,7 +107,7 @@ export default function SocialMediaIntegrationsPage() {
                             <div className="flex items-center gap-4">
                                     <InstagramIcon />
                                     <div>
-                                        <CardTitle>Instagram</CardTitle>
+                                        <CardTitle>Instagram Business</CardTitle>
                                         <CardDescription>Connect your professional Instagram account to publish content and track insights.</CardDescription>
                                     </div>
                             </div>
@@ -179,7 +180,7 @@ export default function SocialMediaIntegrationsPage() {
                                         {isManagerOrAdmin ? (
                                             <>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Connect your Instagram Business account to get started. You'll be redirected to Facebook to grant permissions.
+                                                    Connect your Instagram Business account to get started. You'll be redirected to Facebook to grant permissions. If you need help, please consult the <Button variant="link" asChild className="p-0 h-auto text-sm"><Link href="/guide" target="_blank">official guide</Link></Button>.
                                                 </p>
                                                 <Button onClick={handleInstagramConnect}>
                                                     <Instagram className="mr-2 h-4 w-4"/>
