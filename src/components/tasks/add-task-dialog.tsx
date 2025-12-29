@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -19,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -35,7 +36,7 @@ import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, Table as TableIcon, Upload } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, ListOrdered, Table as TableIcon, Upload } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -317,14 +318,13 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const descriptionValue = form.watch("description");
+  const descriptionValue = useWatch({ control: form.control, name: "description" });
 
-  const applyMarkdown = (type: 'bold' | 'italic' | 'list') => {
+  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'numbered-list' | 'table') => {
     const currentDescription = form.getValues('description') || '';
-    let newValue = currentDescription;
     let modifier = '';
-
-    switch(type) {
+    
+    switch (type) {
       case 'bold':
         modifier = '****';
         break;
@@ -334,10 +334,15 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       case 'list':
         modifier = '\n- ';
         break;
+      case 'numbered-list':
+        modifier = '\n1. ';
+        break;
+      case 'table':
+        setIsTablePopoverOpen(true);
+        return;
     }
     
-    newValue = `${currentDescription}${modifier}`;
-    form.setValue('description', newValue, { shouldDirty: true });
+    form.setValue('description', currentDescription + modifier, { shouldDirty: true });
   };
   
 
@@ -912,6 +917,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
+                           <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('numbered-list')}><ListOrdered /></Button>
                            <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
                               <PopoverTrigger asChild>
                                   <Button type="button" variant="ghost" size="icon"><TableIcon /></Button>
