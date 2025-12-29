@@ -1,23 +1,19 @@
-
 'use client';
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Instagram, CheckCircle, AlertCircle, Loader2, PowerOff, Link as LinkIcon, RefreshCw, Edit } from 'lucide-react';
+import { Instagram, CheckCircle, AlertCircle, Loader2, PowerOff, Edit } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
-import { useUserProfile, useCollection, useFirestore, useAuth } from '@/firebase';
+import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { formatDistanceToNow, addSeconds } from 'date-fns';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { formatDistanceToNow, isAfter } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
-const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
-const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI;
-const INSTAGRAM_AUTH_URL = `https://api.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${REDIRECT_URI}&scope=user_profile,user_media&response_type=code`;
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -27,6 +23,85 @@ const InstagramIcon = () => (
   </svg>
 );
 
+function ManualUpdateDialog({ onTokenUpdate }: { onTokenUpdate: () => void }) {
+    const [open, setOpen] = useState(false);
+    const [token, setToken] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const { toast } = useToast();
+    const { user } = useUserProfile();
+
+    const handleUpdate = async () => {
+        if (!token.trim()) {
+            toast({ variant: 'destructive', title: 'Token is required.' });
+            return;
+        }
+        if (!user) {
+            toast({ variant: 'destructive', title: 'You must be logged in.' });
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const idToken = await user.getIdToken();
+            const response = await fetch('/api/instagram/update-token', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}` 
+                },
+                body: JSON.stringify({ token }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to update token.');
+            }
+            
+            toast({ title: 'Success!', description: 'Instagram token has been updated and validated.' });
+            onTokenUpdate();
+            setOpen(false);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline">
+                    <Edit className="mr-2 h-4 w-4" />
+                    Manual Update
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Update Instagram Token</DialogTitle>
+                    <DialogDescription>
+                        Paste your new long-lived access token from the Meta Developer Dashboard below.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label htmlFor="token-input">Long-Lived Access Token</Label>
+                    <Input 
+                        id="token-input"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        placeholder="Paste your token here"
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button onClick={handleUpdate} disabled={isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Validate & Save Token
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function SocialMediaIntegrationsPage() {
     const { profile, isLoading: profileLoading } = useUserProfile();
@@ -53,11 +128,9 @@ export default function SocialMediaIntegrationsPage() {
     const isLoading = profileLoading || connectionsLoading;
 
     const isTokenExpired = useMemo(() => {
-        if (!instagramConnection?.connectedAt || !instagramConnection?.expiresIn) {
-            return false;
-        }
-        const expiryDate = addSeconds(instagramConnection.connectedAt.toDate(), instagramConnection.expiresIn);
-        return new Date() > expiryDate;
+        if (!instagramConnection?.expiresAt) return false;
+        const expiryDate = instagramConnection.expiresAt.toDate();
+        return isAfter(new Date(), expiryDate);
     }, [instagramConnection]);
 
     const handleDisconnect = async () => {
@@ -83,7 +156,6 @@ export default function SocialMediaIntegrationsPage() {
     };
     
     const isManagerOrAdmin = profile?.role === 'Super Admin' || profile?.role === 'Manager';
-    const isConfigMissing = !META_APP_ID || !REDIRECT_URI;
 
     return (
         <div className="flex h-svh flex-col bg-background">
@@ -141,12 +213,7 @@ export default function SocialMediaIntegrationsPage() {
                                         
                                         <div className="flex flex-wrap items-center gap-4">
                                            {isManagerOrAdmin && (
-                                                <Button asChild>
-                                                    <a href={INSTAGRAM_AUTH_URL}>
-                                                        <RefreshCw className="mr-2 h-4 w-4" />
-                                                        Reconnect Account
-                                                    </a>
-                                                </Button>
+                                                <ManualUpdateDialog onTokenUpdate={() => setRefreshKey(k => k + 1)} />
                                             )}
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
@@ -169,40 +236,21 @@ export default function SocialMediaIntegrationsPage() {
                                                 </AlertDialogContent>
                                             </AlertDialog>
                                         </div>
-                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please reconnect the account.</p>}
+                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please use "Manual Update" to provide a new token.</p>}
                                     </div>
                             ) : (
                                     <div className="space-y-4">
                                         {isManagerOrAdmin ? (
-                                            isConfigMissing ? (
-                                                <Alert variant="destructive">
-                                                    <AlertCircle className="h-4 w-4" />
-                                                    <AlertTitle>Configuration Required</AlertTitle>
-                                                    <AlertDescription>
-                                                        The Instagram App ID and/or Redirect URI are missing from the environment variables. Please contact support to configure this integration.
-                                                    </AlertDescription>
-                                                </Alert>
-                                            ) : (
-                                                <>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        No account is connected. Connect your account to get started.
-                                                    </p>
-                                                    <Button asChild>
-                                                        <a href={INSTAGRAM_AUTH_URL}>
-                                                            <LinkIcon className="mr-2 h-4 w-4" />
-                                                            Connect Instagram Account
-                                                        </a>
-                                                    </Button>
-                                                </>
-                                            )
+                                            <>
+                                                <p className="text-sm text-muted-foreground">
+                                                    No account is connected. Get a long-lived access token from the Meta Developer dashboard and add it manually.
+                                                </p>
+                                                <ManualUpdateDialog onTokenUpdate={() => setRefreshKey(k => k + 1)} />
+                                            </>
                                         ) : (
-                                            <Alert variant="default">
-                                                <AlertCircle className="h-4 w-4" />
-                                                <AlertTitle>Not Connected</AlertTitle>
-                                                <AlertDescription>
-                                                    Please ask a Manager or Super Admin to connect the company's Instagram account.
-                                                </AlertDescription>
-                                            </Alert>
+                                            <div className="text-sm text-muted-foreground">
+                                                Please ask a Manager or Super Admin to connect the company's Instagram account.
+                                            </div>
                                         )}
                                 </div>
                             )}

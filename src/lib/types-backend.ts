@@ -71,12 +71,13 @@ export type SocialMediaPost = {
 export type SocialMediaConnection = {
     id: string;
     platform: 'instagram';
-    userId: string;
+    userId: string; // Firebase UID
     companyId: string;
     instagramUserId: string;
     instagramUsername: string;
     accessToken: string;
-    expiresIn: number;
+    expiresIn: number; // Seconds
+    expiresAt: FirebaseFirestore.Timestamp;
     connectedAt: FirebaseFirestore.Timestamp;
 };
 

@@ -170,14 +170,15 @@ export type SharedTask = {
 export type SocialMediaConnection = {
     id: string;
     platform: 'instagram';
-    userId: string;
+    userId: string; // Firebase UID
     companyId: string;
     instagramUserId: string;
     instagramUsername: string;
     accessToken: string;
-    expiresIn: number;
-    connectedAt: any;
-}
+    expiresIn: number; // Seconds
+    expiresAt: any; // Timestamp
+    connectedAt: any; // Timestamp
+};
 
 
 export type RevisionItem = {
