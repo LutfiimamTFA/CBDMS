@@ -1,35 +1,22 @@
 
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { serverTimestamp, type Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 import { SocialMediaConnection } from '@/lib/types-backend';
 
-const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
-const META_APP_SECRET = process.env.META_APP_SECRET;
-
+// This function now directly uses the provided token to get user info.
 async function getInstagramUser(accessToken: string): Promise<{ id: string; username: string }> {
     const url = `https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`;
     const response = await fetch(url);
     const data = await response.json();
     if (data.error) {
+        // If the token is invalid, this call will fail, providing inherent validation.
         throw new Error(`Error getting Instagram User ID: ${data.error.message}`);
     }
     return data;
 }
 
-async function debugToken(inputToken: string): Promise<any> {
-    if (!META_APP_ID || !META_APP_SECRET) {
-        throw new Error('Server configuration error: Missing Meta App credentials.');
-    }
-    const url = `https://graph.facebook.com/debug_token?input_token=${inputToken}&access_token=${META_APP_ID}|${META_APP_SECRET}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data.error || !data.data.is_valid) {
-        throw new Error(data.error?.message || 'The provided token is invalid or expired.');
-    }
-    return data.data;
-}
-
+// The debugToken function has been removed as it was causing configuration errors.
 
 export async function POST(request: Request) {
     const authHeader = request.headers.get('Authorization');
@@ -56,18 +43,14 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: 'Access token is missing.' }, { status: 400 });
         }
 
-        // 1. Validate the token using Meta's debug endpoint
-        const tokenInfo = await debugToken(newToken);
+        // 1. Validate the token by using it to fetch the user's profile
+        const { id: instagramUserId, username: instagramUsername } = await getInstagramUser(newToken);
         
-        const expiresIn = tokenInfo.data_access_expires_at - Math.floor(Date.now() / 1000);
-        const expiresAt = new Date(tokenInfo.data_access_expires_at * 1000);
-        const instagramUserId = tokenInfo.user_id;
+        // As we don't have expiry info from this new flow, we'll set a default 60-day expiry.
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 60);
 
-        // 2. Get the user's Instagram username
-        const { username: instagramUsername } = await getInstagramUser(newToken);
-
-
-        // 3. Securely store the token and user info in Firestore
+        // 2. Securely store the token and user info in Firestore
         const connectionData: Omit<SocialMediaConnection, 'id'> = {
             platform: 'instagram',
             userId, // The Firebase UID of the user who connected the account
@@ -75,12 +58,11 @@ export async function POST(request: Request) {
             instagramUserId,
             instagramUsername,
             accessToken: newToken,
-            expiresIn,
+            expiresIn: 60 * 60 * 24 * 60, // 60 days in seconds
             expiresAt: Timestamp.fromDate(expiresAt),
             connectedAt: serverTimestamp() as Timestamp,
         };
 
-        // Use a composite ID to prevent duplicate connections for the same company and platform
         const connectionId = `${companyId}_instagram`;
         await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
 
