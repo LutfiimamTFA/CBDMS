@@ -85,6 +85,15 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: 'nav_social_media',
   },
   {
+    id: 'nav_social_media_posts',
+    label: 'nav.published_posts',
+    path: '/social-media/instagram/posts',
+    icon: 'Instagram',
+    order: 6.4,
+    roles: ['Super Admin', 'Manager'],
+    parentId: 'nav_social_media',
+  },
+  {
     id: 'nav_performance_analysis',
     label: 'nav.reports',
     path: '/reports',
