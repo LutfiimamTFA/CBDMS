@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -9,11 +10,8 @@ import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatDistanceToNow, isAfter } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -23,85 +21,6 @@ const InstagramIcon = () => (
   </svg>
 );
 
-function ManualUpdateDialog({ onTokenUpdate }: { onTokenUpdate: () => void }) {
-    const [open, setOpen] = useState(false);
-    const [token, setToken] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const { toast } = useToast();
-    const { user } = useUserProfile();
-
-    const handleUpdate = async () => {
-        if (!token.trim()) {
-            toast({ variant: 'destructive', title: 'Token is required.' });
-            return;
-        }
-        if (!user) {
-            toast({ variant: 'destructive', title: 'You must be logged in.' });
-            return;
-        }
-        setIsSaving(true);
-        try {
-            const idToken = await user.getIdToken();
-            const response = await fetch('/api/instagram/update-token', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}` 
-                },
-                body: JSON.stringify({ token }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to update token.');
-            }
-            
-            toast({ title: 'Success!', description: 'Instagram token has been updated and validated.' });
-            onTokenUpdate();
-            setOpen(false);
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-                <Button variant="outline">
-                    <Edit className="mr-2 h-4 w-4" />
-                    Manual Update
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Update Instagram Token</DialogTitle>
-                    <DialogDescription>
-                        Paste your new long-lived access token from the Meta Developer Dashboard below.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-2">
-                    <Label htmlFor="token-input">Long-Lived Access Token</Label>
-                    <Input 
-                        id="token-input"
-                        value={token}
-                        onChange={(e) => setToken(e.target.value)}
-                        placeholder="Paste your token here"
-                    />
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={handleUpdate} disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Validate & Save Token
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
 
 export default function SocialMediaIntegrationsPage() {
     const { profile, isLoading: profileLoading } = useUserProfile();
@@ -132,6 +51,15 @@ export default function SocialMediaIntegrationsPage() {
         const expiryDate = instagramConnection.expiresAt.toDate();
         return isAfter(new Date(), expiryDate);
     }, [instagramConnection]);
+    
+    const handleInstagramConnect = () => {
+        const clientId = process.env.NEXT_PUBLIC_META_APP_ID;
+        const redirectUri = `${window.location.origin}/social-media/integrations/instagram/callback`;
+        const scope = 'pages_show_list,instagram_basic,instagram_content_publish,pages_read_engagement';
+        const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code&state=${profile?.id}`;
+        window.location.href = authUrl;
+    };
+
 
     const handleDisconnect = async () => {
         if (!firestore || !instagramConnection) return;
@@ -209,11 +137,19 @@ export default function SocialMediaIntegrationsPage() {
                                             <p className="text-xs text-muted-foreground">
                                                 Connected {instagramConnection.connectedAt ? formatDistanceToNow(instagramConnection.connectedAt.toDate(), { addSuffix: true }) : 'N/A'}
                                             </p>
+                                             {instagramConnection.expiresAt && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    Token expires {formatDistanceToNow(instagramConnection.expiresAt.toDate(), { addSuffix: true })}
+                                                </p>
+                                            )}
                                         </div>
                                         
                                         <div className="flex flex-wrap items-center gap-4">
                                            {isManagerOrAdmin && (
-                                                <ManualUpdateDialog onTokenUpdate={() => setRefreshKey(k => k + 1)} />
+                                               <Button onClick={handleInstagramConnect}>
+                                                    <Instagram className="mr-2 h-4 w-4"/>
+                                                    Reconnect Account
+                                               </Button>
                                             )}
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
@@ -236,16 +172,19 @@ export default function SocialMediaIntegrationsPage() {
                                                 </AlertDialogContent>
                                             </AlertDialog>
                                         </div>
-                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please use "Manual Update" to provide a new token.</p>}
+                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please use "Reconnect Account" to refresh it.</p>}
                                     </div>
                             ) : (
                                     <div className="space-y-4">
                                         {isManagerOrAdmin ? (
                                             <>
                                                 <p className="text-sm text-muted-foreground">
-                                                    No account is connected. Get a long-lived access token from the Meta Developer dashboard and add it manually.
+                                                    Connect your Instagram Business account to get started. You'll be redirected to Facebook to grant permissions.
                                                 </p>
-                                                <ManualUpdateDialog onTokenUpdate={() => setRefreshKey(k => k + 1)} />
+                                                <Button onClick={handleInstagramConnect}>
+                                                    <Instagram className="mr-2 h-4 w-4"/>
+                                                    Connect Instagram Account
+                                                </Button>
                                             </>
                                         ) : (
                                             <div className="text-sm text-muted-foreground">
