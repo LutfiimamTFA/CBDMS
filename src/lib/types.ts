@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -164,6 +165,18 @@ export type SharedTask = {
         statuses: WorkflowStatus[];
     };
 };
+
+export type SocialMediaConnection = {
+    id: string;
+    platform: 'instagram';
+    userId: string;
+    companyId: string;
+    instagramUserId: string;
+    instagramUsername: string;
+    accessToken: string;
+    expiresIn: number;
+    connectedAt: any;
+}
 
 
 export type RevisionItem = {

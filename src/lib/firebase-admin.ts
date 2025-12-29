@@ -6,7 +6,7 @@ import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getStorage, Storage } from 'firebase-admin/storage';
 import { serviceAccount } from '@/firebase/service-account';
 
-const BUCKET_NAME = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+const BUCKET_NAME = "studio-3200695440-bed4a.firebasestorage.app";
 
 let adminApp: App;
 let adminAuth: Auth;
@@ -17,6 +17,7 @@ let adminStorage: ReturnType<Storage['bucket']>;
 if (!getApps().length) {
   adminApp = initializeApp({
     credential: cert(serviceAccount),
+    storageBucket: BUCKET_NAME,
   });
 } else {
   adminApp = getApps()[0];
@@ -24,6 +25,6 @@ if (!getApps().length) {
 
 adminAuth = getAuth(adminApp);
 adminDb = getFirestore(adminApp);
-adminStorage = getStorage(adminApp).bucket(BUCKET_NAME);
+adminStorage = getStorage(adminApp).bucket();
 
 export { adminApp, adminAuth, adminDb, adminStorage };

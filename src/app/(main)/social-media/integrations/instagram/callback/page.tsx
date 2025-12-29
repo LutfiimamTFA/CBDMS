@@ -3,13 +3,15 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/firebase';
 
 function InstagramCallback() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const auth = useAuth();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -23,34 +25,44 @@ function InstagramCallback() {
       return;
     }
 
-    if (code) {
-      // Exchange the code for an access token
-      fetch('/api/instagram/auth/callback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code }),
-      })
-      .then(async (res) => {
-        if (res.ok) {
-          setStatus('success');
-          // Redirect back to integrations page after a short delay
-          setTimeout(() => router.push('/social-media/integrations'), 2000);
-        } else {
-          const data = await res.json();
-          throw new Error(data.message || 'Failed to get access token.');
-        }
-      })
-      .catch((err) => {
-        setErrorMessage(err.message);
+    if (code && auth?.currentUser) {
+        auth.currentUser.getIdToken().then(token => {
+            fetch('/api/instagram/auth/callback', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ code }),
+            })
+            .then(async (res) => {
+                if (res.ok) {
+                setStatus('success');
+                // Redirect back to integrations page after a short delay
+                setTimeout(() => router.push('/social-media/integrations'), 2000);
+                } else {
+                const data = await res.json();
+                throw new Error(data.message || 'Failed to get access token.');
+                }
+            })
+            .catch((err) => {
+                setErrorMessage(err.message);
+                setStatus('error');
+            });
+        }).catch(err => {
+            setErrorMessage('Could not authenticate user. Please log in again.');
+            setStatus('error');
+        })
+    } else if (!auth?.currentUser) {
+        setErrorMessage('You must be logged in to connect an account.');
         setStatus('error');
-      });
-    } else {
+    }
+    
+    else {
         setErrorMessage('No authorization code provided.');
         setStatus('error');
     }
-  }, [searchParams, router]);
+  }, [searchParams, router, auth]);
 
   const renderStatus = () => {
     switch (status) {
@@ -95,7 +107,7 @@ function InstagramCallback() {
 
 export default function InstagramCallbackPage() {
     return (
-        <Suspense fallback={<Loader2 className="h-12 w-12 animate-spin text-primary" />}>
+        <Suspense fallback={<div className="flex h-svh w-full items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>}>
             <InstagramCallback />
         </Suspense>
     )
