@@ -1,25 +1,14 @@
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import type { Task, Brand, WorkflowStatus, User, SharedTask } from '@/lib/types';
 import { getAuth } from 'firebase-admin/auth';
 
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
-
 export async function POST(request: Request) {
   try {
-    const app = initializeAdminApp();
-    const db = getFirestore(app);
-    const auth = getAuth(app);
+    const db = adminDb;
+    const auth = adminAuth;
 
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

@@ -1,18 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { serviceAccount } from '@/firebase/service-account';
-
-// Function to safely initialize Firebase Admin
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
+import { adminAuth } from '@/lib/firebase-admin';
 
 // Function to generate a random, memorable password
 function generateTemporaryPassword(): string {
@@ -26,14 +14,13 @@ function generateTemporaryPassword(): string {
 
 export async function POST(request: Request) {
   try {
-    const app = initializeAdminApp();
     const { uid } = await request.json();
 
     if (!uid) {
       return NextResponse.json({ message: 'User ID (uid) is required.' }, { status: 400 });
     }
     
-    const auth = getAuth(app);
+    const auth = adminAuth;
     
     const temporaryPassword = generateTemporaryPassword();
 
