@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Instagram, CheckCircle, AlertCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import Link from 'next/link';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -19,6 +20,12 @@ const InstagramIcon = () => (
 export default function SocialMediaIntegrationsPage() {
 
     const isInstagramConnected = false; // Placeholder state
+
+    // Replace with your actual App ID and Redirect URI
+    const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || 'your-app-id';
+    const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI || 'http://localhost:3000/social-media/integrations/instagram/callback';
+
+    const instagramAuthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${REDIRECT_URI}&scope=instagram_basic,pages_show_list,instagram_content_publish,instagram_manage_insights&response_type=code`;
 
     return (
         <div className="flex h-svh flex-col bg-background">
@@ -58,7 +65,9 @@ export default function SocialMediaIntegrationsPage() {
                                     <p className="text-sm text-muted-foreground">
                                        Click the button below to go through the Meta OAuth flow and securely connect your account.
                                     </p>
-                                    <Button>Connect Instagram Account</Button>
+                                    <Button asChild>
+                                        <Link href={instagramAuthUrl}>Connect Instagram Account</Link>
+                                    </Button>
                                </div>
                            )}
                         </CardContent>
