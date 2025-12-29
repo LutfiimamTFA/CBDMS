@@ -11,12 +11,13 @@ import { useUserProfile, useCollection, useFirestore, useAuth } from '@/firebase
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { formatDistanceToNow, addSeconds } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+
+const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
+const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI;
+const INSTAGRAM_AUTH_URL = `https://api.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${REDIRECT_URI}&scope=user_profile,user_media&response_type=code`;
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -25,75 +26,6 @@ const InstagramIcon = () => (
     <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"></line>
   </svg>
 );
-
-function ManualTokenUpdateDialog({ onTokenUpdated, connectionExists }: { onTokenUpdated: () => void, connectionExists: boolean }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const [newToken, setNewToken] = useState('');
-    const [isUpdating, setIsUpdating] = useState(false);
-    const { toast } = useToast();
-    const auth = useAuth();
-
-    const handleUpdate = async () => {
-        if (!newToken.trim() || !auth?.currentUser) {
-            toast({ variant: "destructive", title: "Error", description: "Token cannot be empty." });
-            return;
-        }
-        setIsUpdating(true);
-        try {
-            const idToken = await auth.currentUser.getIdToken();
-            const response = await fetch('/api/instagram/update-token', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                },
-                body: JSON.stringify({ token: newToken }),
-            });
-
-            const data = await response.json();
-            if (!response.ok) {
-                throw new Error(data.message || 'Failed to update token.');
-            }
-            toast({ title: 'Success', description: 'Instagram token has been updated successfully.' });
-            onTokenUpdated();
-            setIsOpen(false);
-            setNewToken('');
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
-        } finally {
-            setIsUpdating(false);
-        }
-    };
-
-    return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-                <Button variant={connectionExists ? "secondary" : "default"}>
-                    <Edit className="mr-2 h-4 w-4"/> {connectionExists ? 'Update Token Manually' : 'Set Token Manually'}
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Manual Token Update</DialogTitle>
-                    <DialogDescription>
-                        Paste the new long-lived access token from Meta for Developers here. The system will validate and save it.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                    <Label htmlFor="new-token">New Access Token</Label>
-                    <Input id="new-token" value={newToken} onChange={(e) => setNewToken(e.target.value)} placeholder="Paste token here" />
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-                    <Button onClick={handleUpdate} disabled={isUpdating}>
-                        {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Validate & Save
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
-}
 
 
 export default function SocialMediaIntegrationsPage() {
@@ -151,7 +83,7 @@ export default function SocialMediaIntegrationsPage() {
     };
     
     const isManagerOrAdmin = profile?.role === 'Super Admin' || profile?.role === 'Manager';
-
+    const isConfigMissing = !META_APP_ID || !REDIRECT_URI;
 
     return (
         <div className="flex h-svh flex-col bg-background">
@@ -208,8 +140,13 @@ export default function SocialMediaIntegrationsPage() {
                                         </div>
                                         
                                         <div className="flex flex-wrap items-center gap-4">
-                                            {isManagerOrAdmin && (
-                                                <ManualTokenUpdateDialog onTokenUpdated={() => setRefreshKey(k => k + 1)} connectionExists={!!instagramConnection} />
+                                           {isManagerOrAdmin && (
+                                                <Button asChild>
+                                                    <a href={INSTAGRAM_AUTH_URL}>
+                                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                                        Reconnect Account
+                                                    </a>
+                                                </Button>
                                             )}
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
@@ -222,7 +159,7 @@ export default function SocialMediaIntegrationsPage() {
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                                         <AlertDialogDescription>
-                                                            This will disconnect your Instagram account. You will need to set a new token to continue publishing posts.
+                                                            This will disconnect your Instagram account. You will need to reconnect to continue publishing posts.
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter>
@@ -232,17 +169,32 @@ export default function SocialMediaIntegrationsPage() {
                                                 </AlertDialogContent>
                                             </AlertDialog>
                                         </div>
-                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please set a new one manually.</p>}
+                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please reconnect the account.</p>}
                                     </div>
                             ) : (
                                     <div className="space-y-4">
                                         {isManagerOrAdmin ? (
-                                             <>
-                                                <p className="text-sm text-muted-foreground">
-                                                No account is connected. Set a long-lived access token manually to begin.
-                                                </p>
-                                                <ManualTokenUpdateDialog onTokenUpdated={() => setRefreshKey(k => k + 1)} connectionExists={!!instagramConnection} />
-                                             </>
+                                            isConfigMissing ? (
+                                                <Alert variant="destructive">
+                                                    <AlertCircle className="h-4 w-4" />
+                                                    <AlertTitle>Configuration Required</AlertTitle>
+                                                    <AlertDescription>
+                                                        The Instagram App ID and/or Redirect URI are missing from the environment variables. Please contact support to configure this integration.
+                                                    </AlertDescription>
+                                                </Alert>
+                                            ) : (
+                                                <>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        No account is connected. Connect your account to get started.
+                                                    </p>
+                                                    <Button asChild>
+                                                        <a href={INSTAGRAM_AUTH_URL}>
+                                                            <LinkIcon className="mr-2 h-4 w-4" />
+                                                            Connect Instagram Account
+                                                        </a>
+                                                    </Button>
+                                                </>
+                                            )
                                         ) : (
                                             <Alert variant="default">
                                                 <AlertCircle className="h-4 w-4" />
