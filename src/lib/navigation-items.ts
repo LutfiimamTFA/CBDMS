@@ -1,4 +1,3 @@
-
 import type { NavigationItem } from './types';
 
 // This file now serves as a fallback or for initial seeding.
