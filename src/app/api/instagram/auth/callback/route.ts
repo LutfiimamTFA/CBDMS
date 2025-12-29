@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { serverTimestamp } from 'firebase-admin/firestore';
+import { serverTimestamp, type Timestamp } from 'firebase-admin/firestore';
 
 const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
 const META_APP_SECRET = process.env.META_APP_SECRET;
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
             instagramUsername,
             accessToken: longLivedToken,
             expiresIn,
-            connectedAt: serverTimestamp(),
+            connectedAt: serverTimestamp() as Timestamp,
         };
 
         // Use a composite ID to prevent duplicate connections for the same company and platform

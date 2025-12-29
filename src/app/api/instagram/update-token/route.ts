@@ -1,16 +1,17 @@
 
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { serverTimestamp } from 'firebase-admin/firestore';
+import { serverTimestamp, type Timestamp } from 'firebase-admin/firestore';
 import type { SocialMediaConnection } from '@/lib/types-backend';
 
 async function getInstagramUser(accessToken: string): Promise<{ id: string; username: string }> {
     const url = `https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`;
     const response = await fetch(url);
-    const data = await response.json();
-    if (data.error) {
-        throw new Error(`Error validating token with Instagram: ${data.error.message}`);
+    if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Error validating token with Instagram: ${errorData.error?.message || 'Unknown error'}`);
     }
+    const data = await response.json();
     if (!data.id || !data.username) {
         throw new Error('Invalid token: Did not receive ID and username from Instagram.');
     }
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
             accessToken: newToken,
             instagramUserId,
             instagramUsername,
-            connectedAt: serverTimestamp(),
+            connectedAt: serverTimestamp() as Timestamp,
             expiresIn: 5184000, // 60 days in seconds
             userId, // Log which admin performed the update
             companyId,
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
         };
 
         const connectionId = `${companyId}_instagram`;
-        await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData);
+        await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
 
         return NextResponse.json({ message: 'Token updated and validated successfully.' }, { status: 200 });
 
