@@ -1,9 +1,9 @@
 
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import type { SocialMediaConnection } from '@/lib/types';
+import type { SocialMediaConnection } from '@/lib/types-backend';
 
-const INSTAGRAM_GRAPH_API_URL = "https://graph.instagram.com";
+const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
 
 export async function GET(request: Request) {
     const authHeader = request.headers.get('Authorization');
@@ -32,9 +32,9 @@ export async function GET(request: Request) {
         const connectionData = connectionDoc.data() as SocialMediaConnection;
         const { accessToken, instagramUserId } = connectionData;
 
-        // Fetch user's media from Instagram Graph API
+        // Fetch user's media from Instagram Graph API (via Facebook Graph)
         const fields = 'id,media_type,media_url,thumbnail_url,permalink,caption,timestamp,username,comments_count,like_count';
-        const mediaUrl = `${INSTAGRAM_GRAPH_API_URL}/${instagramUserId}/media?fields=${fields}&access_token=${accessToken}`;
+        const mediaUrl = `${FACEBOOK_GRAPH_API_URL}/${instagramUserId}/media?fields=${fields}&access_token=${accessToken}`;
         
         const mediaResponse = await fetch(mediaUrl);
         const mediaData = await mediaResponse.json();

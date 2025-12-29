@@ -4,16 +4,28 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { Timestamp, serverTimestamp } from 'firebase-admin/firestore';
 import { SocialMediaConnection } from '@/lib/types-backend';
 
-// This function now directly uses the provided token to get user info.
-async function getInstagramUser(accessToken: string): Promise<{ id: string; username: string }> {
-    const url = `https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`;
-    const response = await fetch(url);
-    const data = await response.json();
-    if (data.error) {
-        // If the token is invalid, this call will fail, providing inherent validation.
-        throw new Error(`Error getting Instagram User ID: ${data.error.message}`);
+const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
+
+// This function validates the token by fetching connected Instagram Business Accounts
+async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: string; username: string }> {
+    const pagesUrl = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=instagram_business_account{username}&access_token=${accessToken}`;
+    const pagesResponse = await fetch(pagesUrl);
+    const pagesData = await pagesResponse.json();
+
+    if (pagesData.error) {
+        throw new Error(`Error fetching pages: ${pagesData.error.message}`);
     }
-    return data;
+
+    const businessAccount = pagesData.data?.find((page: any) => page.instagram_business_account)?.instagram_business_account;
+
+    if (!businessAccount) {
+        throw new Error('No Instagram Business Account found linked to any Facebook Page. Please ensure your account is set up correctly as a Professional/Business account and linked to a Facebook Page.');
+    }
+
+    return {
+        id: businessAccount.id,
+        username: businessAccount.username,
+    };
 }
 
 
@@ -42,17 +54,17 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: 'Access token is missing.' }, { status: 400 });
         }
 
-        // 1. Validate the token by using it to fetch the user's profile
-        const { id: instagramUserId, username: instagramUsername } = await getInstagramUser(newToken);
+        // 1. Validate the token by fetching the user's business account info
+        const { id: instagramUserId, username: instagramUsername } = await getInstagramBusinessAccount(newToken);
         
-        // As we don't have expiry info from this new flow, we'll set a default 60-day expiry.
+        // Assume 60-day expiry for manually entered long-lived tokens
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 60);
 
         // 2. Securely store the token and user info in Firestore
         const connectionData: Omit<SocialMediaConnection, 'id'> = {
             platform: 'instagram',
-            userId, // The Firebase UID of the user who connected the account
+            userId, 
             companyId,
             instagramUserId,
             instagramUsername,

@@ -1,3 +1,4 @@
+
 // This file is intended for server-side type definitions only.
 // Do not import this file in any client-side components.
 // It exists to prevent circular dependencies between server and client modules.
