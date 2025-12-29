@@ -5,6 +5,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { serviceAccount } from '@/firebase/service-account';
 import type { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types';
+import { adminDb } from '@/lib/firebase-admin';
 
 // Initialize Firebase Admin
 function initializeAdminApp(): App {
@@ -56,19 +57,48 @@ async function runSocialMediaPoster(firestore: FirebaseFirestore.Firestore) {
       return 0; // No posts published
     }
 
-    const batch = firestore.batch();
     let postsPublishedCount = 0;
 
-    postsToPublishSnapshot.forEach(doc => {
+    for (const doc of postsToPublishSnapshot.docs) {
+      const post = doc.data() as SocialMediaPost;
       const postRef = doc.ref;
-      batch.update(postRef, {
-        status: 'Posted',
-        postedAt: Timestamp.now(),
-      });
-      postsPublishedCount++;
-    });
 
-    await batch.commit();
+      try {
+        const publishResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/publish`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                // This would ideally use a service account or an app-level auth token,
+                // but for simplicity, we are calling it without auth from the scheduler.
+            },
+            body: JSON.stringify({ postId: doc.id }),
+        });
+        
+        const result = await publishResponse.json();
+
+        if (publishResponse.ok) {
+            await postRef.update({
+                status: 'Posted',
+                postedAt: Timestamp.now(),
+            });
+            postsPublishedCount++;
+        } else {
+            console.error(`Failed to publish post ${doc.id}:`, result.message);
+            await postRef.update({
+                status: 'Error',
+                errorDetails: result.message || 'Unknown publishing error',
+            });
+        }
+
+      } catch (error: any) {
+        console.error(`Exception while publishing post ${doc.id}:`, error);
+        await postRef.update({
+            status: 'Error',
+            errorDetails: error.message || 'An exception occurred.',
+        });
+      }
+    }
+
     return postsPublishedCount;
 }
 
@@ -145,11 +175,6 @@ async function runRecurringTaskGenerator(firestore: FirebaseFirestore.Firestore,
 
 export async function GET(request: Request) {
   // This single endpoint now runs all scheduled jobs.
-  // Optional: Add a secret key check for security
-  // const { searchParams } = new URL(request.url);
-  // if (searchParams.get('secret') !== process.env.SCHEDULER_SECRET) {
-  //   return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-  // }
   
   try {
     const app = initializeAdminApp();
