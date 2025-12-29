@@ -9,11 +9,7 @@ import { serviceAccount } from '@/firebase/service-account';
 const BUCKET_NAME = "studio-3200695440-bed4a.firebasestorage.app";
 
 let adminApp: App;
-let adminAuth: Auth;
-let adminDb: Firestore;
-let adminStorage: ReturnType<Storage['bucket']>;
 
-// Singleton pattern to initialize Firebase Admin SDK
 if (!getApps().length) {
   adminApp = initializeApp({
     credential: cert(serviceAccount),
@@ -23,8 +19,8 @@ if (!getApps().length) {
   adminApp = getApps()[0];
 }
 
-adminAuth = getAuth(adminApp);
-adminDb = getFirestore(adminApp);
-adminStorage = getStorage(adminApp).bucket();
+const adminAuth: Auth = getAuth(adminApp);
+const adminDb: Firestore = getFirestore(adminApp);
+const adminStorage: ReturnType<Storage['bucket']> = getStorage(adminApp).bucket();
 
 export { adminApp, adminAuth, adminDb, adminStorage };
