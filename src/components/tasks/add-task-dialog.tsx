@@ -145,7 +145,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     if (!firestore || !currentUserProfile) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
     
-    // For Employees, fetch only users with the same managerId.
     if (currentUserProfile.role === 'Employee' && currentUserProfile.managerId) {
       q = query(q, where('managerId', '==', currentUserProfile.managerId));
     }
@@ -193,13 +192,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     if (currentUserProfile.role === 'Manager') {
         if (!currentUserProfile.brandIds || currentUserProfile.brandIds.length === 0) {
-            return null; // Manager has no assigned brands, so they can't create tasks for any brand.
+            return null; 
         }
-        // For Managers, filter to only the brands they manage.
         return query(collection(firestore, 'brands'), where('__name__', 'in', currentUserProfile.brandIds), orderBy('name'));
     }
     
-    // For Super Admins and Employees, show all brands for now.
     return query(collection(firestore, 'brands'), orderBy('name'));
 
   }, [firestore, currentUserProfile]);
@@ -242,7 +239,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
     
     if (currentUserProfile.role === 'Employee') {
-      // Employee should only see their team
       const myTeam = (allUsers || []).filter(u => u.managerId === currentUserProfile.managerId);
       return { managers: [], employees: myTeam, clients: [] };
     }
@@ -321,31 +317,29 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     },
   });
 
-  const descriptionValue = form.watch('description');
+  const descriptionValue = form.watch("description");
 
-  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
-    const currentDescription = descriptionValue || '';
+  const applyMarkdown = (type: 'bold' | 'italic' | 'list') => {
+    const currentDescription = form.getValues('description') || '';
     let newValue = currentDescription;
-
-    if (type === 'table') {
-        setIsTablePopoverOpen(true);
-        return;
-    }
+    let modifier = '';
 
     switch(type) {
-        case 'bold':
-            newValue = `${currentDescription}****`;
-            break;
-        case 'italic':
-            newValue = `${currentDescription}**`;
-            break;
-        case 'list':
-            newValue = `${currentDescription}\n- `;
-            break;
+      case 'bold':
+        modifier = '****';
+        break;
+      case 'italic':
+        modifier = '**';
+        break;
+      case 'list':
+        modifier = '\n- ';
+        break;
     }
     
+    newValue = `${currentDescription}${modifier}`;
     form.setValue('description', newValue, { shouldDirty: true });
   };
+  
 
   useEffect(() => {
     if (open && currentUserProfile && user) {
