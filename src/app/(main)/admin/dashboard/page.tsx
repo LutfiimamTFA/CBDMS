@@ -32,7 +32,7 @@ export default function AdminDashboardPage() {
     let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
 
     if (profile.role === 'Manager') {
-      // For managers, fetch their direct reports
+      // For managers, fetch their direct reports and themselves
       q = query(q, where('managerId', '==', profile.id));
     }
     
@@ -58,7 +58,7 @@ export default function AdminDashboardPage() {
   
   const isLoading = isProfileLoading || isUsersLoading || isTasksLoading;
 
-  const totalUsers = users?.length || 0;
+  const totalUsers = profile?.role === 'Manager' ? (users?.length || 0) : useCollection<User>(query(collection(firestore!, 'users'), where('companyId', '==', companyId)))?.data?.length || 0;
   const totalTasks = tasks?.length || 0;
   const completedTasks =
     tasks?.filter((t) => t.status === 'Done').length || 0;
