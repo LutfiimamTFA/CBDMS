@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -46,9 +45,9 @@ export default function SocialMediaIntegrationsPage() {
     
     const isLoading = profileLoading || connectionsLoading;
 
-    // Replace with your actual App ID and Redirect URI from environment variables
-    const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || 'your-app-id';
-    const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI || 'http://localhost:3000/social-media/integrations/instagram/callback';
+    // These values should be set in your .env.local file
+    const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
+    const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI;
 
     const instagramAuthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${REDIRECT_URI}&scope=instagram_basic,pages_show_list,instagram_content_publish,instagram_manage_insights&response_type=code`;
 
@@ -171,12 +170,24 @@ export default function SocialMediaIntegrationsPage() {
                                     </div>
                             ) : (
                                     <div className="space-y-4">
-                                        <p className="text-sm text-muted-foreground">
-                                        Click the button below to go through the Meta OAuth flow and securely connect your account.
-                                        </p>
-                                        <Button asChild>
-                                            <Link href={instagramAuthUrl}><LinkIcon className="mr-2 h-4 w-4" />Connect Instagram Account</Link>
-                                        </Button>
+                                      {!META_APP_ID || !REDIRECT_URI ? (
+                                        <Alert variant="destructive">
+                                          <AlertCircle className="h-4 w-4" />
+                                          <AlertTitle>Configuration Required</AlertTitle>
+                                          <AlertDescription>
+                                            Please set NEXT_PUBLIC_META_APP_ID and NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI in your environment variables to enable Instagram connection.
+                                          </AlertDescription>
+                                        </Alert>
+                                      ) : (
+                                        <>
+                                            <p className="text-sm text-muted-foreground">
+                                            Click the button below to go through the Meta OAuth flow and securely connect your account.
+                                            </p>
+                                            <Button asChild>
+                                                <Link href={instagramAuthUrl}><LinkIcon className="mr-2 h-4 w-4" />Connect Instagram Account</Link>
+                                            </Button>
+                                        </>
+                                      )}
                                 </div>
                             )}
                             </CardContent>
