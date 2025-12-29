@@ -263,7 +263,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             message: `${profile.name} submitted a new social media post for approval.`,
                             taskId: postRef.id, // Using taskId field to link to the post
                             isRead: false,
-                            createdAt: serverTimestamp() as any,
+                            createdAt: serverTimestamp(),
                             createdBy: {
                                 id: user.uid,
                                 name: profile.name,
@@ -366,7 +366,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             message: notificationMessage,
             taskId: post.id,
             isRead: false,
-            createdAt: serverTimestamp() as any,
+            createdAt: serverTimestamp(),
             createdBy: {
                 id: user.uid,
                 name: profile.name,

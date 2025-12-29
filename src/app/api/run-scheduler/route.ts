@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp, serverTimestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types-backend';
 import { adminDb, adminAuth } from '@/lib/firebase-admin';
@@ -67,7 +67,7 @@ async function runSocialMediaPoster(firestore: FirebaseFirestore.Firestore) {
         if (publishResponse.ok) {
             await postRef.update({
                 status: 'Posted',
-                postedAt: Timestamp.now(),
+                postedAt: serverTimestamp(),
             });
             postsPublishedCount++;
         } else {
@@ -137,7 +137,7 @@ async function runRecurringTaskGenerator(firestore: FirebaseFirestore.Firestore,
 
     tasksToCreate.forEach(taskData => {
       const taskRef = firestore.collection('tasks').doc();
-      batch.set(taskRef, { ...taskData, createdAt: Timestamp.now() });
+      batch.set(taskRef, { ...taskData, createdAt: serverTimestamp() });
     });
 
     templatesToUpdate.forEach(update => {

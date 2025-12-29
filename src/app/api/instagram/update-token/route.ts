@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, serverTimestamp } from 'firebase-admin/firestore';
 import { SocialMediaConnection } from '@/lib/types-backend';
 
 // This function now directly uses the provided token to get user info.
@@ -16,7 +16,6 @@ async function getInstagramUser(accessToken: string): Promise<{ id: string; user
     return data;
 }
 
-// The debugToken function has been removed as it was causing configuration errors.
 
 export async function POST(request: Request) {
     const authHeader = request.headers.get('Authorization');
