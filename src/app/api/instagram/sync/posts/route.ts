@@ -25,16 +25,16 @@ export async function GET(request: Request) {
             return NextResponse.json({ message: 'User is not associated with a company.' }, { status: 400 });
         }
 
-        const connectionDoc = await adminDb.collection('socialMediaConnections').doc(`${companyId}_instagram`).get();
+        const connectionId = `${companyId}_instagram`;
+        const connectionDoc = await adminDb.collection('socialMediaConnections').doc(connectionId).get();
         if (!connectionDoc.exists) {
             return NextResponse.json({ message: 'Instagram connection not found for this company.' }, { status: 404 });
         }
         const connectionData = connectionDoc.data() as SocialMediaConnection;
         const { accessToken, instagramUserId } = connectionData;
 
-        // Fetch user's media from Instagram Graph API (via Facebook Graph)
+        // Fetch user's media from Instagram Graph API
         const fields = 'id,media_type,media_url,thumbnail_url,permalink,caption,timestamp,username,comments_count,like_count';
-        // Construct URL manually to avoid encoding issues with access token
         const mediaUrl = `${FACEBOOK_GRAPH_API_URL}/${instagramUserId}/media?fields=${fields}&access_token=${accessToken}`;
         
         const mediaResponse = await fetch(mediaUrl);

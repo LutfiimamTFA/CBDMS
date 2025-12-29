@@ -72,14 +72,15 @@ export type SocialMediaPost = {
 export type SocialMediaConnection = {
     id: string;
     platform: 'instagram';
-    userId: string; // Firebase UID
+    userId: string; // Firebase UID of user who set up/updated
     companyId: string;
     instagramUserId: string;
     instagramUsername: string;
     accessToken: string;
     expiresIn: number; // Seconds
-    expiresAt: FirebaseFirestore.Timestamp;
+    expiresAt: Date | FirebaseFirestore.Timestamp;
     connectedAt: FirebaseFirestore.Timestamp;
+    updatedAt: FirebaseFirestore.Timestamp;
 };
 
 export type RecurringTaskTemplate = {

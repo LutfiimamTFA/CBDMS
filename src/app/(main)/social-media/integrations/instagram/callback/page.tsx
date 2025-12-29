@@ -12,8 +12,8 @@ export default function InstagramCallbackPage() {
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center items-center">
                     <XCircle className="h-12 w-12 text-destructive" />
-                    <CardTitle className="mt-4">Endpoint Not Found</CardTitle>
-                    <CardDescription>This page is no longer in use. Please use the manual token update method.</CardDescription>
+                    <CardTitle className="mt-4">Endpoint Deprecated</CardTitle>
+                    <CardDescription>This page is part of a deprecated authentication flow. Please use the manual token update method instead.</CardDescription>
                     <Button asChild variant="link" className="mt-4">
                         <Link href="/social-media/integrations">Back to Integrations</Link>
                     </Button>

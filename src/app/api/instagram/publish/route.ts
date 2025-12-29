@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import type { SocialMediaPost, SocialMediaConnection } from '@/lib/types';
+import type { SocialMediaPost, SocialMediaConnection } from '@/lib/types-backend';
 
 // Helper function to poll for container status
 async function pollContainerStatus(containerId: string, accessToken: string, maxRetries = 20, delay = 5000) {
@@ -42,7 +42,8 @@ export async function POST(request: Request) {
         }
         const postData = postDoc.data() as SocialMediaPost;
 
-        const connectionDoc = await adminDb.collection('socialMediaConnections').doc(`${postData.companyId}_instagram`).get();
+        const connectionId = `${postData.companyId}_instagram`;
+        const connectionDoc = await adminDb.collection('socialMediaConnections').doc(connectionId).get();
         if (!connectionDoc.exists) {
             return NextResponse.json({ message: 'Instagram connection not found for this company.' }, { status: 404 });
         }
@@ -53,21 +54,24 @@ export async function POST(request: Request) {
         const creationUrl = `https://graph.facebook.com/v19.0/${instagramUserId}/media`;
         const mediaType = postData.postType === 'Reels' ? 'REELS' : 'IMAGE';
         
-        const creationParams = new URLSearchParams({
+        let creationParams: Record<string, string> = {
             access_token: accessToken,
             caption: postData.caption,
-        });
+        };
 
         if (mediaType === 'IMAGE') {
-            creationParams.append('image_url', postData.mediaUrl || '');
+            creationParams['image_url'] = postData.mediaUrl || '';
         } else { // REELS
-            creationParams.append('media_type', 'VIDEO');
-            creationParams.append('video_url', postData.mediaUrl || '');
+            creationParams['media_type'] = 'VIDEO';
+            creationParams['video_url'] = postData.mediaUrl || '';
         }
 
-        const creationResponse = await fetch(`${creationUrl}?${creationParams.toString()}`, {
+        const creationResponse = await fetch(creationUrl, {
             method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(creationParams)
         });
+
         const creationData = await creationResponse.json();
 
         if (creationData.error) {
@@ -82,13 +86,13 @@ export async function POST(request: Request) {
 
         // --- Step 2: Publish Media Container ---
         const publishUrl = `https://graph.facebook.com/v19.0/${instagramUserId}/media_publish`;
-        const publishParams = new URLSearchParams({
-            access_token: accessToken,
-            creation_id: containerId,
-        });
-        
-        const publishResponse = await fetch(`${publishUrl}?${publishParams.toString()}`, {
+        const publishResponse = await fetch(publishUrl, {
             method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                creation_id: containerId,
+                access_token: accessToken,
+            })
         });
         const publishData = await publishResponse.json();
 

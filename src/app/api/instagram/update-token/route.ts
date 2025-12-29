@@ -1,3 +1,4 @@
+
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { serverTimestamp } from 'firebase-admin/firestore';
@@ -5,17 +6,57 @@ import type { SocialMediaConnection } from '@/lib/types-backend';
 
 const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
 
-// Gets the Instagram Business Account ID and username linked to a Facebook Page
-async function getInstagramUser(accessToken: string): Promise<{ id: string; username: string }> {
-    // This URL asks for the IG business account connected to any of the user's FB pages
-    const pagesUrl = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=instagram_business_account{id,username}&access_token=${accessToken}`;
+/**
+ * Validates a user-provided token against Meta's debug_token endpoint.
+ * Requires a server-side App Access Token.
+ * @param userToken The token to validate.
+ * @returns The validation data from Meta.
+ */
+async function validateToken(userToken: string): Promise<any> {
+    const appId = process.env.META_APP_ID;
+    const appSecret = process.env.META_APP_SECRET;
+
+    if (!appId || !appSecret) {
+        throw new Error('Server configuration error: Missing Meta App credentials.');
+    }
+
+    const appAccessToken = `${appId}|${appSecret}`;
+    const url = `${FACEBOOK_GRAPH_API_URL}/debug_token?input_token=${userToken}&access_token=${appAccessToken}`;
     
-    const response = await fetch(pagesUrl);
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.error || !data.data.is_valid) {
+        throw new Error(data.error?.message || 'The provided token is invalid or expired.');
+    }
+    
+    // Check for required scopes
+    const requiredScopes = ['instagram_basic', 'pages_show_list', 'instagram_content_publish'];
+    const hasAllScopes = requiredScopes.every(scope => data.data.scopes.includes(scope));
+    
+    if (!hasAllScopes) {
+        throw new Error(`Token is missing required permissions. Please grant: ${requiredScopes.join(', ')}.`);
+    }
+
+    return data.data;
+}
+
+
+/**
+ * Gets the Instagram Business Account ID and username linked to a Facebook Page using a valid token.
+ * @param accessToken A valid, long-lived user access token.
+ * @returns The ID and username of the linked Instagram Business Account.
+ */
+async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: string; username: string }> {
+    const url = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=instagram_business_account{id,username}&access_token=${accessToken}`;
+    
+    const response = await fetch(url);
     const data = await response.json();
 
     if (data.error) {
         throw new Error(`Error fetching pages: ${data.error.message}`);
     }
+    
     const businessAccount = data.data?.find((page: any) => page.instagram_business_account)?.instagram_business_account;
     
     if (!businessAccount) {
@@ -32,13 +73,19 @@ async function getInstagramUser(accessToken: string): Promise<{ id: string; user
 export async function POST(request: Request) {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ message: 'Unauthorized: Missing or invalid token.' }, { status: 401 });
     }
     const idToken = authHeader.split('Bearer ')[1];
     
     try {
         const decodedToken = await adminAuth.verifyIdToken(idToken);
         const userId = decodedToken.uid;
+        const userRole = decodedToken.role;
+
+        // Security Check: Only Admins or Managers can perform this action.
+        if (userRole !== 'Super Admin' && userRole !== 'Manager') {
+             return NextResponse.json({ message: 'Forbidden: You do not have permission to perform this action.' }, { status: 403 });
+        }
 
         const userDoc = await adminDb.collection('users').doc(userId).get();
         if (!userDoc.exists) {
@@ -50,39 +97,44 @@ export async function POST(request: Request) {
         }
 
         const { accessToken } = await request.json();
-        if (!accessToken) {
-            return NextResponse.json({ message: 'Access token is missing.' }, { status: 400 });
+        if (!accessToken || typeof accessToken !== 'string') {
+            return NextResponse.json({ message: 'Bad Request: Access token is missing or invalid.' }, { status: 400 });
         }
 
-        // --- Use the provided token to get Instagram user details ---
-        const { id: instagramUserId, username: instagramUsername } = await getInstagramUser(accessToken);
+        const trimmedToken = accessToken.trim();
+
+        // 1. Validate the token using Meta's debug_token endpoint
+        const validationData = await validateToken(trimmedToken);
         
-        // --- Store the connection details in Firestore ---
-        // Note: For manually provided tokens, we don't know the exact expiry,
-        // so we'll set a placeholder or assume the standard 60 days.
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 60);
+        // 2. Get the Instagram Business Account details
+        const { id: instagramUserId, username: instagramUsername } = await getInstagramBusinessAccount(trimmedToken);
+        
+        // 3. Prepare data for Firestore
+        const expiresAt = new Date(validationData.expires_at * 1000);
 
         const connectionData: Omit<SocialMediaConnection, 'id'> = {
             platform: 'instagram',
-            userId: userId,
+            userId: userId, // The user who performed the action
             companyId: companyId,
             instagramUserId: instagramUserId,
             instagramUsername: instagramUsername,
-            accessToken: accessToken, // The token provided by the user
-            expiresIn: 5184000, // 60 days in seconds, a typical long-lived token duration
+            accessToken: trimmedToken,
+            expiresIn: validationData.data_access_expires_at - validationData.issued_at,
             expiresAt: expiresAt,
             connectedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
         };
         
         const connectionId = `${companyId}_instagram`;
         // Use set with merge:true to create or update the document
         await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
 
-        return NextResponse.json({ message: 'Successfully validated and updated Instagram token.' }, { status: 200 });
+        return NextResponse.json({ message: `Successfully connected to Instagram account @${instagramUsername}.` }, { status: 200 });
 
     } catch (error: any) {
         console.error("Instagram Manual Token Update Error:", error);
-        return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: 500 });
+        // Return a 400 Bad Request for validation errors, and 500 for others
+        const statusCode = error.message.includes('token') || error.message.includes('permission') ? 400 : 500;
+        return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: statusCode });
     }
 }
