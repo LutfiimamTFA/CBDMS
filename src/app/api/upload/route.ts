@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { adminAuth, adminDb, adminStorage } from '@/lib/firebase-admin';
-import type { Task, Attachment } from '@/lib/types';
+import type { Task, Attachment } from '@/lib/types-backend';
 
 const MAX_FILE_SIZE = 15 * 1024 * 1024; // 15MB
 

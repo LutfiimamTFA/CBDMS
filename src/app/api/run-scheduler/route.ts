@@ -1,21 +1,9 @@
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
-import type { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types';
-import { adminDb } from '@/lib/firebase-admin';
-
-// Initialize Firebase Admin
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
+import { getAuth } from 'firebase-admin/auth';
+import type { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types-backend';
+import { adminDb, adminAuth } from '@/lib/firebase-admin';
 
 // Helper to check if a recurring task should be generated today
 function shouldGenerateTask(template: RecurringTaskTemplate): boolean {
@@ -177,9 +165,8 @@ export async function GET(request: Request) {
   // This single endpoint now runs all scheduled jobs.
   
   try {
-    const app = initializeAdminApp();
-    const firestore = getFirestore(app);
-    const auth = getAuth(app);
+    const firestore = adminDb;
+    const auth = adminAuth;
 
     const [socialResult, taskResult] = await Promise.all([
       runSocialMediaPoster(firestore),

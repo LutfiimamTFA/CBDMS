@@ -1,18 +1,8 @@
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
-import type { SharedLink, Task, User, Activity, Notification } from '@/lib/types';
-
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
+import type { SharedLink, Task, User, Activity, Notification } from '@/lib/types-backend';
+import { adminDb } from '@/lib/firebase-admin';
 
 // This is a simplified "guest" user object for logging activities from a shared link.
 const createSharedActor = (session: SharedLink): User => {
@@ -37,8 +27,7 @@ const createActivity = (actor: User, action: string, sharedBy: { id: string, rol
 
 export async function POST(request: Request) {
   try {
-    const app = initializeAdminApp();
-    const db = getFirestore(app);
+    const db = adminDb;
 
     const { linkId, taskId, updates } = await request.json();
 

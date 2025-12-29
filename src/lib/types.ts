@@ -147,6 +147,7 @@ export type SharedLink = {
   };
   createdBy: string;
   createdAt: any;
+  permissions?: any;
 };
 
 export type SharedTask = {
@@ -233,6 +234,7 @@ export type Task = {
     avatarUrl: string;
   };
   companyId: string;
+  updatedAt?: any;
 };
 
 export type SocialMediaPost = {
@@ -256,6 +258,7 @@ export type SocialMediaPost = {
   revisionItems?: RevisionItem[];
   revisionHistory?: RevisionCycle[];
   updatedAt?: any;
+  errorDetails?: string;
 };
 
 
