@@ -612,46 +612,31 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   };
   
   const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
+    if (type === 'table') {
+      setIsTablePopoverOpen(true);
+      return;
+    }
+    
     if (!descriptionRef.current) return;
   
     const textarea = descriptionRef.current;
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const currentDescription = form.getValues('description') || '';
+    
     let newDescription = '';
-    let cursorPosition = start;
-  
-    if (type === 'table') {
-      setIsTablePopoverOpen(true);
-      return;
-    }
-  
+    let cursorPosition = 0;
+    
+    const modifier = type === 'bold' ? '**' : '*';
+
     if (type === 'list') {
-      const lineStart = currentDescription.lastIndexOf('\n', start - 1) + 1;
-      newDescription =
-        currentDescription.substring(0, lineStart) +
-        '- ' +
-        currentDescription.substring(lineStart);
+      newDescription = `${currentDescription.substring(0, start)}- ${currentDescription.substring(start)}`;
       cursorPosition = start + 2;
     } else {
-      const modifier = type === 'bold' ? '**' : '*';
-      const selectedText = textarea.value.substring(start, end);
-  
-      if (selectedText) {
-        newDescription =
-          currentDescription.substring(0, start) +
-          `${modifier}${selectedText}${modifier}` +
-          currentDescription.substring(end);
-        cursorPosition = end + 2 * modifier.length;
-      } else {
-        newDescription =
-          currentDescription.substring(0, start) +
-          `${modifier}${modifier}` +
-          currentDescription.substring(start);
+        newDescription = `${currentDescription.substring(0, start)}${modifier}${modifier}${currentDescription.substring(end)}`;
         cursorPosition = start + modifier.length;
-      }
     }
-  
+    
     form.setValue('description', newDescription, { shouldValidate: true });
   
     requestAnimationFrame(() => {
