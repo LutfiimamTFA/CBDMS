@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import type { SharedLink, Task, User, Activity, Notification } from '@/lib/types-backend';
+import { SharedLink, Task, User, Activity, Notification } from '@/lib/types-backend';
 import { adminDb } from '@/lib/firebase-admin';
 
 // This is a simplified "guest" user object for logging activities from a shared link.
@@ -21,7 +21,7 @@ const createActivity = (actor: User, action: string, sharedBy: { id: string, rol
     id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     user: { id: actor.id, name: actor.name, avatarUrl: actor.avatarUrl || '' },
     action: `${action} (shared by ${sharedBy.id} - ${sharedBy.role})`,
-    timestamp: Timestamp.now() as any,
+    timestamp: Timestamp.now(),
   };
 };
 

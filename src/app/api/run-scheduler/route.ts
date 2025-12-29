@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
-import type { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types-backend';
+import { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types-backend';
 import { adminDb, adminAuth } from '@/lib/firebase-admin';
 
 // Helper to check if a recurring task should be generated today

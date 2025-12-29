@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { serverTimestamp, type Timestamp } from 'firebase-admin/firestore';
-import type { SocialMediaConnection } from '@/lib/types-backend';
+import { SocialMediaConnection } from '@/lib/types-backend';
 
 async function getInstagramUser(accessToken: string): Promise<{ id: string; username: string }> {
     const url = `https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`;
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
             accessToken: newToken,
             instagramUserId,
             instagramUsername,
-            connectedAt: serverTimestamp() as Timestamp,
+            connectedAt: serverTimestamp(),
             expiresIn: 5184000, // 60 days in seconds
             userId, // Log which admin performed the update
             companyId,

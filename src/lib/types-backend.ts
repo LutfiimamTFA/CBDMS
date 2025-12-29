@@ -1,7 +1,7 @@
 // This file is intended for server-side type definitions only.
 // Do not import this file in any client-side components.
 // It exists to prevent circular dependencies between server and client modules.
-import type { FirebaseFirestore } from 'firebase-admin/firestore';
+import { FirebaseFirestore } from 'firebase-admin/firestore';
 
 export type User = {
   id: string;
