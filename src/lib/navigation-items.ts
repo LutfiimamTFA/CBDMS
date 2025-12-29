@@ -77,6 +77,15 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: 'nav_social_media',
   },
   {
+    id: 'nav_social_media_integrations',
+    label: 'nav.integrations',
+    path: '/social-media/integrations',
+    icon: 'Plug',
+    order: 6.3,
+    roles: ['Super Admin', 'Manager'],
+    parentId: 'nav_social_media',
+  },
+  {
     id: 'nav_performance_analysis',
     label: 'nav.reports',
     path: '/reports',

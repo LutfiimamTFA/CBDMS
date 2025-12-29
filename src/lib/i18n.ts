@@ -1,5 +1,4 @@
 
-
 export const languages = {
   en: { code: 'en', name: 'English', countryCode: 'gb' },
   id: { code: 'id', name: 'Indonesia', countryCode: 'id' },
@@ -24,6 +23,7 @@ export const ui = {
     'nav.social_media': 'Social Media',
     'nav.social_media_calendar': 'Social Media Calendar',
     'nav.analytics': 'Analytics',
+    'nav.integrations': 'Integrations',
     'nav.admin_dashboard': 'Admin Dashboard',
     'nav.users': 'Users',
     'nav.data': 'Data',
@@ -154,6 +154,7 @@ export const ui = {
     'nav.social_media': 'Media Sosial',
     'nav.social_media_calendar': 'Kalender Medsos',
     'nav.analytics': 'Analitik',
+    'nav.integrations': 'Integrasi',
     'nav.admin_dashboard': 'Dasbor Admin',
     'nav.users': 'Pengguna',
     'nav.data': 'Data',
@@ -269,10 +270,3 @@ export const ui = {
     'dashboard.role': 'Anda masuk sebagai {role}. Selamat bekerja dan semoga harimu produktif!',
   },
 } as const;
-
-
-
-
-
-
-
