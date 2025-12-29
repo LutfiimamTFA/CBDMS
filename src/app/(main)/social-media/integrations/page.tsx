@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -15,6 +16,8 @@ import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
 import Link from 'next/link';
+import { Textarea } from '@/components/ui/textarea';
+
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -266,3 +269,5 @@ export default function SocialMediaIntegrationsPage() {
         </div>
     );
 }
+
+    
