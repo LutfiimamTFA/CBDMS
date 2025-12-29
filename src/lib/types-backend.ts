@@ -1,6 +1,7 @@
 // This file is intended for server-side type definitions only.
 // Do not import this file in any client-side components.
 // It exists to prevent circular dependencies between server and client modules.
+import type { FirebaseFirestore } from 'firebase-admin/firestore';
 
 export type User = {
   id: string;
@@ -22,7 +23,7 @@ export type Activity = {
     avatarUrl: string;
   };
   action: string;
-  timestamp: any;
+  timestamp: FirebaseFirestore.Timestamp;
 };
 
 export type Notification = {
@@ -32,7 +33,7 @@ export type Notification = {
   message: string;
   taskId: string;
   isRead: boolean;
-  createdAt: any;
+  createdAt: FirebaseFirestore.Timestamp;
   createdBy: {
     id: string;
     name: string;
@@ -61,7 +62,7 @@ export type SocialMediaPost = {
   mediaUrl?: string;
   status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
   scheduledAt: string;
-  postedAt?: string;
+  postedAt?: FirebaseFirestore.Timestamp;
   createdBy: string;
   companyId: string;
   postType?: 'Post' | 'Reels';
@@ -76,7 +77,7 @@ export type SocialMediaConnection = {
     instagramUsername: string;
     accessToken: string;
     expiresIn: number;
-    connectedAt: any;
+    connectedAt: FirebaseFirestore.Timestamp;
 };
 
 export type RecurringTaskTemplate = {
@@ -91,8 +92,8 @@ export type RecurringTaskTemplate = {
   defaultPriority: 'Urgent' | 'High' | 'Medium' | 'Low';
   defaultBrandId: string;
   companyId: string;
-  lastGeneratedAt?: any; // Can be Firestore Timestamp
-  createdAt: any; // Can be Firestore Timestamp
+  lastGeneratedAt?: FirebaseFirestore.Timestamp; // Can be Firestore Timestamp
+  createdAt: FirebaseFirestore.Timestamp; // Can be Firestore Timestamp
 };
 
 export type SharedLink = {

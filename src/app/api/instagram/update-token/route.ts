@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { serverTimestamp } from 'firebase-admin/firestore';
+import type { SocialMediaConnection } from '@/lib/types-backend';
 
 async function getInstagramUser(accessToken: string): Promise<{ id: string; username: string }> {
     const url = `https://graph.instagram.com/me?fields=id,username&access_token=${accessToken}`;
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
         
         // Prepare data to update in Firestore
         // We assume a 60-day expiry for manually updated long-lived tokens
-        const connectionData = {
+        const connectionData: Omit<SocialMediaConnection, 'id'> = {
             accessToken: newToken,
             instagramUserId,
             instagramUsername,
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
         };
 
         const connectionId = `${companyId}_instagram`;
-        await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
+        await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData);
 
         return NextResponse.json({ message: 'Token updated and validated successfully.' }, { status: 200 });
 
