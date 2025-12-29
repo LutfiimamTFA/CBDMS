@@ -654,7 +654,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   
     form.setValue('description', newDescription, { shouldValidate: true });
   
-    // Use requestAnimationFrame to ensure the textarea updates before setting selection
     requestAnimationFrame(() => {
       textarea.focus();
       textarea.setSelectionRange(cursorPosition, cursorPosition);
