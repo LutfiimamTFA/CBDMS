@@ -1,16 +1,18 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Instagram, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Instagram, CheckCircle, AlertCircle, Loader2, PowerOff, Link as LinkIcon, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { formatDistanceToNow, addSeconds } from 'date-fns';
+import type { SocialMediaConnection } from '@/lib/types';
 
 
 const InstagramIcon = () => (
@@ -26,6 +28,7 @@ export default function SocialMediaIntegrationsPage() {
     const { profile, isLoading: profileLoading } = useUserProfile();
     const firestore = useFirestore();
     const { toast } = useToast();
+    const [isDisconnecting, setIsDisconnecting] = useState(false);
 
     const connectionsQuery = useMemo(() => {
         if (!firestore || !profile) return null;
@@ -35,7 +38,7 @@ export default function SocialMediaIntegrationsPage() {
         )
     }, [firestore, profile]);
     
-    const { data: connections, isLoading: connectionsLoading } = useCollection(connectionsQuery);
+    const { data: connections, isLoading: connectionsLoading } = useCollection<SocialMediaConnection>(connectionsQuery);
 
     const instagramConnection = useMemo(() => {
         return connections?.find(c => c.platform === 'instagram');
@@ -43,15 +46,23 @@ export default function SocialMediaIntegrationsPage() {
     
     const isLoading = profileLoading || connectionsLoading;
 
-    // Replace with your actual App ID and Redirect URI
+    // Replace with your actual App ID and Redirect URI from environment variables
     const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID || 'your-app-id';
     const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI || 'http://localhost:3000/social-media/integrations/instagram/callback';
 
     const instagramAuthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${REDIRECT_URI}&scope=instagram_basic,pages_show_list,instagram_content_publish,instagram_manage_insights&response_type=code`;
 
+    const isTokenExpired = useMemo(() => {
+        if (!instagramConnection?.connectedAt || !instagramConnection?.expiresIn) {
+            return false;
+        }
+        const expiryDate = addSeconds(instagramConnection.connectedAt.toDate(), instagramConnection.expiresIn);
+        return new Date() > expiryDate;
+    }, [instagramConnection]);
+    
     const handleDisconnect = async () => {
         if (!firestore || !instagramConnection) return;
-
+        setIsDisconnecting(true);
         const connectionRef = doc(firestore, 'socialMediaConnections', instagramConnection.id);
         try {
             await deleteDoc(connectionRef);
@@ -65,6 +76,8 @@ export default function SocialMediaIntegrationsPage() {
                 title: 'Error',
                 description: 'Could not disconnect the account. Please try again.',
             });
+        } finally {
+            setIsDisconnecting(false);
         }
     };
 
@@ -94,34 +107,67 @@ export default function SocialMediaIntegrationsPage() {
                                         <CardDescription>Connect your professional Instagram account to publish content and track insights.</CardDescription>
                                     </div>
                             </div>
-                                <Badge variant={instagramConnection ? "secondary" : "outline"} className={instagramConnection ? "text-green-600 border-green-600 bg-green-100 dark:bg-green-900/50" : ""}>
-                                    {instagramConnection ? <CheckCircle className="mr-2 h-4 w-4"/> : <AlertCircle className="mr-2 h-4 w-4"/>}
-                                    {instagramConnection ? 'Connected' : 'Not Connected'}
-                                </Badge>
+                                {instagramConnection ? (
+                                    isTokenExpired ? (
+                                        <Badge variant="destructive">
+                                            <AlertCircle className="mr-2 h-4 w-4"/>
+                                            Expired
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="secondary" className="text-green-600 border-green-600 bg-green-100 dark:bg-green-900/50">
+                                            <CheckCircle className="mr-2 h-4 w-4"/>
+                                            Connected
+                                        </Badge>
+                                    )
+                                ) : (
+                                     <Badge variant="outline">
+                                        <AlertCircle className="mr-2 h-4 w-4"/>
+                                        Not Connected
+                                    </Badge>
+                                )}
                             </CardHeader>
                             <CardContent>
                             {instagramConnection ? (
                                     <div className="space-y-4">
-                                        <p className="text-sm text-muted-foreground">
-                                            Connected as <span className="font-bold text-foreground">@{instagramConnection.instagramUsername}</span>. You can now schedule posts directly to Instagram.
-                                        </p>
-                                        <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <Button variant="destructive">Disconnect Account</Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        This will disconnect your Instagram account. You will need to reconnect it to continue publishing posts.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={handleDisconnect}>Confirm Disconnect</AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
+                                        <div className="p-4 bg-secondary/50 rounded-lg border">
+                                            <p className="text-sm font-semibold">Account: <span className="font-bold text-foreground">@{instagramConnection.instagramUsername}</span></p>
+                                            <p className="text-xs text-muted-foreground">
+                                                Connected {instagramConnection.connectedAt ? formatDistanceToNow(instagramConnection.connectedAt.toDate(), { addSuffix: true }) : 'N/A'}
+                                            </p>
+                                        </div>
+                                        
+                                        {isTokenExpired ? (
+                                            <div className="flex flex-wrap items-center gap-4">
+                                                <Button asChild>
+                                                    <Link href={instagramAuthUrl}>
+                                                        <RefreshCw className="mr-2 h-4 w-4"/>
+                                                        Reconnect Account
+                                                    </Link>
+                                                </Button>
+                                                <p className="text-sm text-destructive">Your connection has expired. Please reconnect.</p>
+                                            </div>
+                                        ) : (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" disabled={isDisconnecting}>
+                                                        {isDisconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PowerOff className="mr-2 h-4 w-4" />}
+                                                        Disconnect Account
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            This will disconnect your Instagram account. You will need to reconnect it to continue publishing posts.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={handleDisconnect}>Confirm Disconnect</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        )}
                                     </div>
                             ) : (
                                     <div className="space-y-4">
@@ -129,7 +175,7 @@ export default function SocialMediaIntegrationsPage() {
                                         Click the button below to go through the Meta OAuth flow and securely connect your account.
                                         </p>
                                         <Button asChild>
-                                            <Link href={instagramAuthUrl}>Connect Instagram Account</Link>
+                                            <Link href={instagramAuthUrl}><LinkIcon className="mr-2 h-4 w-4" />Connect Instagram Account</Link>
                                         </Button>
                                 </div>
                             )}
