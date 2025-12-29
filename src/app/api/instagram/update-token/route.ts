@@ -7,45 +7,11 @@ import type { SocialMediaConnection } from '@/lib/types-backend';
 const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
 
 /**
- * Validates a user-provided token against Meta's debug_token endpoint.
- * Requires a server-side App Access Token.
- * @param userToken The token to validate.
- * @returns The validation data from Meta.
- */
-async function validateToken(userToken: string): Promise<any> {
-    const appId = process.env.META_APP_ID;
-    const appSecret = process.env.META_APP_SECRET;
-
-    if (!appId || !appSecret) {
-        throw new Error('Server configuration error: Missing Meta App credentials.');
-    }
-
-    const appAccessToken = `${appId}|${appSecret}`;
-    const url = `${FACEBOOK_GRAPH_API_URL}/debug_token?input_token=${userToken}&access_token=${appAccessToken}`;
-    
-    const response = await fetch(url);
-    const data = await response.json();
-
-    if (data.error || !data.data.is_valid) {
-        throw new Error(data.error?.message || 'The provided token is invalid or expired.');
-    }
-    
-    // Check for required scopes
-    const requiredScopes = ['instagram_basic', 'pages_show_list', 'instagram_content_publish'];
-    const hasAllScopes = requiredScopes.every(scope => data.data.scopes.includes(scope));
-    
-    if (!hasAllScopes) {
-        throw new Error(`Token is missing required permissions. Please grant: ${requiredScopes.join(', ')}.`);
-    }
-
-    return data.data;
-}
-
-
-/**
  * Gets the Instagram Business Account ID and username linked to a Facebook Page using a valid token.
+ * This function now serves as the primary validation method.
  * @param accessToken A valid, long-lived user access token.
  * @returns The ID and username of the linked Instagram Business Account.
+ * @throws An error if no linked account is found or if the token is invalid.
  */
 async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: string; username: string }> {
     const url = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=instagram_business_account{id,username}&access_token=${accessToken}`;
@@ -54,13 +20,17 @@ async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: s
     const data = await response.json();
 
     if (data.error) {
-        throw new Error(`Error fetching pages: ${data.error.message}`);
+        // Provide a more specific error message if possible
+        if (data.error.code === 190) { // OAuthException
+            throw new Error('The provided token is invalid, expired, or has been revoked.');
+        }
+        throw new Error(`Error fetching pages from Meta: ${data.error.message}`);
     }
     
     const businessAccount = data.data?.find((page: any) => page.instagram_business_account)?.instagram_business_account;
     
     if (!businessAccount) {
-        throw new Error('No Instagram Business Account found linked to your Facebook Pages. Please ensure your account is a Business/Creator account and linked to a Facebook Page.');
+        throw new Error('No Instagram Business Account found linked to your Facebook Pages. Please ensure your account is a Business/Creator account and linked to a Facebook Page via Meta Business Suite.');
     }
 
     return {
@@ -82,7 +52,6 @@ export async function POST(request: Request) {
         const userId = decodedToken.uid;
         const userRole = decodedToken.role;
 
-        // Security Check: Only Admins or Managers can perform this action.
         if (userRole !== 'Super Admin' && userRole !== 'Manager') {
              return NextResponse.json({ message: 'Forbidden: You do not have permission to perform this action.' }, { status: 403 });
         }
@@ -103,30 +72,26 @@ export async function POST(request: Request) {
 
         const trimmedToken = accessToken.trim();
 
-        // 1. Validate the token using Meta's debug_token endpoint
-        const validationData = await validateToken(trimmedToken);
-        
-        // 2. Get the Instagram Business Account details
+        // 1. Validate the token and get Instagram Business Account details
         const { id: instagramUserId, username: instagramUsername } = await getInstagramBusinessAccount(trimmedToken);
         
-        // 3. Prepare data for Firestore
-        const expiresAt = new Date(validationData.expires_at * 1000);
+        // 2. Prepare data for Firestore
+        const expiresAtTimestamp = serverTimestamp(); // Placeholder, we no longer get expiry from debug_token
 
         const connectionData: Omit<SocialMediaConnection, 'id'> = {
             platform: 'instagram',
-            userId: userId, // The user who performed the action
+            userId: userId,
             companyId: companyId,
             instagramUserId: instagramUserId,
             instagramUsername: instagramUsername,
             accessToken: trimmedToken,
-            expiresIn: validationData.data_access_expires_at - validationData.issued_at,
-            expiresAt: expiresAt,
+            expiresIn: 0, // Not available without debug_token, set to 0
+            expiresAt: expiresAtTimestamp,
             connectedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
         
         const connectionId = `${companyId}_instagram`;
-        // Use set with merge:true to create or update the document
         await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
 
         return NextResponse.json({ message: `Successfully connected to Instagram account @${instagramUsername}.` }, { status: 200 });
@@ -134,7 +99,7 @@ export async function POST(request: Request) {
     } catch (error: any) {
         console.error("Instagram Manual Token Update Error:", error);
         // Return a 400 Bad Request for validation errors, and 500 for others
-        const statusCode = error.message.includes('token') || error.message.includes('permission') ? 400 : 500;
+        const statusCode = error.message.includes('token') || error.message.includes('permission') || error.message.includes('No Instagram Business Account') ? 400 : 500;
         return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: statusCode });
     }
 }
