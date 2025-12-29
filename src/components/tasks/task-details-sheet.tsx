@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -19,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -32,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -1143,55 +1142,37 @@ export function TaskDetailsSheet({
     return table;
   };
   
-  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
-    if (!descriptionRef.current) return;
-  
-    const textarea = descriptionRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'numbered-list') => {
     const currentDescription = form.getValues('description') || '';
-    let newDescription = '';
-    let cursorPosition = start;
-  
-    if (type === 'table') {
-      setIsTablePopoverOpen(true);
-      return;
+    let newDescription = currentDescription;
+
+    let modifier = '';
+    switch (type) {
+        case 'bold':
+            modifier = `\n** **`;
+            break;
+        case 'italic':
+            modifier = `\n* *`;
+            break;
+        case 'list':
+            modifier = `\n- `;
+            break;
+        case 'numbered-list':
+            modifier = `\n1. `;
+            break;
     }
-  
-    if (type === 'list') {
-      const lineStart = currentDescription.lastIndexOf('\n', start - 1) + 1;
-      newDescription =
-        currentDescription.substring(0, lineStart) +
-        '- ' +
-        currentDescription.substring(lineStart);
-      cursorPosition = start + 2;
-    } else {
-      const modifier = type === 'bold' ? '**' : '*';
-      const selectedText = textarea.value.substring(start, end);
-  
-      if (selectedText) {
-        newDescription =
-          currentDescription.substring(0, start) +
-          `${modifier}${selectedText}${modifier}` +
-          currentDescription.substring(end);
-        cursorPosition = end + 2 * modifier.length;
-      } else {
-        newDescription =
-          currentDescription.substring(0, start) +
-          `${modifier}${modifier}` +
-          currentDescription.substring(start);
-        cursorPosition = start + modifier.length;
-      }
-    }
-  
-    form.setValue('description', newDescription, { shouldValidate: true });
-  
-    // Use requestAnimationFrame to ensure the textarea updates before setting selection
+
+    newDescription += modifier;
+    form.setValue('description', newDescription, { shouldDirty: true });
+    
     requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursorPosition, cursorPosition);
+        if (descriptionRef.current) {
+            descriptionRef.current.focus();
+            const cursorPos = type === 'bold' || type === 'italic' ? newDescription.length - (modifier.length / 2) : newDescription.length;
+            descriptionRef.current.setSelectionRange(cursorPos, cursorPos);
+        }
     });
-  };
+};
 
   const handleGenerateTable = () => {
     const tableMarkdown = generateTableMarkdown(tableRows, tableCols);
@@ -1206,7 +1187,7 @@ export function TaskDetailsSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-none sm:w-4/5 lg:w-3/4 grid-rows-[auto_1fr_auto] p-0">
+        <SheetContent className="w-full grid-rows-[auto_1fr_auto] p-0">
           <SheetHeader className="p-4 border-b">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
@@ -1316,10 +1297,11 @@ export function TaskDetailsSheet({
                               <AccordionContent className="pt-2">
                                 <div className="rounded-md border">
                                    <div className="p-2 border-b flex items-center gap-1">
-                                      <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
-                                      <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
-                                      <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
-                                      <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
+                                       <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
+                                       <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
+                                       <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
+                                       <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('numbered-list')}><ListOrdered /></Button>
+                                       <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
                                           <PopoverTrigger asChild>
                                               <Button type="button" variant="ghost" size="icon"><TableIcon /></Button>
                                           </PopoverTrigger>
