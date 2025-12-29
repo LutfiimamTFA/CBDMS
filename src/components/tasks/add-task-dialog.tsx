@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -115,7 +114,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [deliverables, setDeliverables] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
   const [tableRows, setTableRows] = useState(2);
@@ -322,6 +320,32 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       tags: [],
     },
   });
+
+  const descriptionValue = form.watch('description');
+
+  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
+    const currentDescription = descriptionValue || '';
+    let newValue = currentDescription;
+
+    if (type === 'table') {
+        setIsTablePopoverOpen(true);
+        return;
+    }
+
+    switch(type) {
+        case 'bold':
+            newValue = `${currentDescription}****`;
+            break;
+        case 'italic':
+            newValue = `${currentDescription}**`;
+            break;
+        case 'list':
+            newValue = `${currentDescription}\n- `;
+            break;
+    }
+    
+    form.setValue('description', newValue, { shouldDirty: true });
+  };
 
   useEffect(() => {
     if (open && currentUserProfile && user) {
@@ -611,40 +635,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     return table;
   };
   
-  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'table') => {
-    if (type === 'table') {
-      setIsTablePopoverOpen(true);
-      return;
-    }
-    
-    if (!descriptionRef.current) return;
-  
-    const textarea = descriptionRef.current;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const currentDescription = form.getValues('description') || '';
-    
-    let newDescription = '';
-    let cursorPosition = 0;
-    
-    const modifier = type === 'bold' ? '**' : '*';
-
-    if (type === 'list') {
-      newDescription = `${currentDescription.substring(0, start)}- ${currentDescription.substring(start)}`;
-      cursorPosition = start + 2;
-    } else {
-        newDescription = `${currentDescription.substring(0, start)}${modifier}${modifier}${currentDescription.substring(end)}`;
-        cursorPosition = start + modifier.length;
-    }
-    
-    form.setValue('description', newDescription, { shouldValidate: true });
-  
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(cursorPosition, cursorPosition);
-    });
-  };
-  
   const handleGenerateTable = () => {
     const tableMarkdown = generateTableMarkdown(tableRows, tableCols);
     const currentDescription = form.getValues('description') || '';
@@ -852,7 +842,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     due: 'has-due-date',
   };
   
-  const descriptionValue = form.watch('description');
 
   return (
     <>
@@ -947,7 +936,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <FormItem>
                               <FormControl>
                               <Textarea
-                                  ref={descriptionRef}
                                   placeholder={t('addtask.form.description.placeholder')}
                                   {...field}
                                   rows={8}
