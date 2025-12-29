@@ -26,7 +26,7 @@ const InstagramIcon = () => (
   </svg>
 );
 
-function ManualTokenUpdateDialog({ onTokenUpdated }: { onTokenUpdated: () => void }) {
+function ManualTokenUpdateDialog({ onTokenUpdated, connectionExists }: { onTokenUpdated: () => void, connectionExists: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const [newToken, setNewToken] = useState('');
     const [isUpdating, setIsUpdating] = useState(false);
@@ -57,6 +57,7 @@ function ManualTokenUpdateDialog({ onTokenUpdated }: { onTokenUpdated: () => voi
             toast({ title: 'Success', description: 'Instagram token has been updated successfully.' });
             onTokenUpdated();
             setIsOpen(false);
+            setNewToken('');
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
         } finally {
@@ -67,8 +68,8 @@ function ManualTokenUpdateDialog({ onTokenUpdated }: { onTokenUpdated: () => voi
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
-                <Button variant="secondary" size="sm">
-                    <Edit className="mr-2 h-4 w-4"/> Manual Update
+                <Button variant={connectionExists ? "secondary" : "default"}>
+                    <Edit className="mr-2 h-4 w-4"/> {connectionExists ? 'Update Token Manually' : 'Set Token Manually'}
                 </Button>
             </DialogTrigger>
             <DialogContent>
@@ -100,7 +101,7 @@ export default function SocialMediaIntegrationsPage() {
     const firestore = useFirestore();
     const { toast } = useToast();
     const [isDisconnecting, setIsDisconnecting] = useState(false);
-    const [refreshKey, setRefreshKey] = useState(0); // State to force re-fetch
+    const [refreshKey, setRefreshKey] = useState(0); 
 
     const connectionsQuery = useMemo(() => {
         if (!firestore || !profile) return null;
@@ -118,11 +119,6 @@ export default function SocialMediaIntegrationsPage() {
     }, [connections]);
     
     const isLoading = profileLoading || connectionsLoading;
-
-    const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
-    const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI;
-
-    const instagramAuthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${REDIRECT_URI}&scope=instagram_basic,pages_show_list,instagram_content_publish,instagram_manage_insights&response_type=code`;
 
     const isTokenExpired = useMemo(() => {
         if (!instagramConnection?.connectedAt || !instagramConnection?.expiresIn) {
@@ -142,6 +138,7 @@ export default function SocialMediaIntegrationsPage() {
                 title: 'Disconnected',
                 description: 'Your Instagram account has been disconnected.',
             });
+            setRefreshKey(k => k + 1);
         } catch (error: any) {
             toast({
                 variant: 'destructive',
@@ -211,61 +208,50 @@ export default function SocialMediaIntegrationsPage() {
                                         </div>
                                         
                                         <div className="flex flex-wrap items-center gap-4">
-                                            {isTokenExpired ? (
-                                                <Button asChild>
-                                                    <Link href={instagramAuthUrl}>
-                                                        <RefreshCw className="mr-2 h-4 w-4"/>
-                                                        Reconnect Account
-                                                    </Link>
-                                                </Button>
-                                            ) : (
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" disabled={isDisconnecting}>
-                                                            {isDisconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PowerOff className="mr-2 h-4 w-4" />}
-                                                            Disconnect Account
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                This will disconnect your Instagram account. You will need to reconnect it to continue publishing posts.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={handleDisconnect}>Confirm Disconnect</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+                                            {isManagerOrAdmin && (
+                                                <ManualTokenUpdateDialog onTokenUpdated={() => setRefreshKey(k => k + 1)} connectionExists={!!instagramConnection} />
                                             )}
-                                             {isManagerOrAdmin && (
-                                                <ManualTokenUpdateDialog onTokenUpdated={() => setRefreshKey(k => k + 1)} />
-                                            )}
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" disabled={isDisconnecting}>
+                                                        {isDisconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PowerOff className="mr-2 h-4 w-4" />}
+                                                        Disconnect Account
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            This will disconnect your Instagram account. You will need to set a new token to continue publishing posts.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={handleDisconnect}>Confirm Disconnect</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
                                         </div>
-                                        {isTokenExpired && <p className="text-sm text-destructive">Your connection has expired. Please reconnect.</p>}
+                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please set a new one manually.</p>}
                                     </div>
                             ) : (
                                     <div className="space-y-4">
-                                      {!META_APP_ID || !REDIRECT_URI ? (
-                                        <Alert variant="destructive">
-                                          <AlertCircle className="h-4 w-4" />
-                                          <AlertTitle>Configuration Required</AlertTitle>
-                                          <AlertDescription>
-                                            The system administrator needs to configure the Meta App ID and Redirect URI in the environment variables to enable this feature.
-                                          </AlertDescription>
-                                        </Alert>
-                                      ) : (
-                                        <>
-                                            <p className="text-sm text-muted-foreground">
-                                            Click the button below to go through the Meta OAuth flow and securely connect your account.
-                                            </p>
-                                            <Button asChild>
-                                                <Link href={instagramAuthUrl}><LinkIcon className="mr-2 h-4 w-4" />Connect Instagram Account</Link>
-                                            </Button>
-                                        </>
-                                      )}
+                                        {isManagerOrAdmin ? (
+                                             <>
+                                                <p className="text-sm text-muted-foreground">
+                                                No account is connected. Set a long-lived access token manually to begin.
+                                                </p>
+                                                <ManualTokenUpdateDialog onTokenUpdated={() => setRefreshKey(k => k + 1)} connectionExists={!!instagramConnection} />
+                                             </>
+                                        ) : (
+                                            <Alert variant="default">
+                                                <AlertCircle className="h-4 w-4" />
+                                                <AlertTitle>Not Connected</AlertTitle>
+                                                <AlertDescription>
+                                                    Please ask a Manager or Super Admin to connect the company's Instagram account.
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
                                 </div>
                             )}
                             </CardContent>
