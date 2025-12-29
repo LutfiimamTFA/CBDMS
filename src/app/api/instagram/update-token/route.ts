@@ -14,16 +14,17 @@ const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
  * @throws An error if no linked account is found or if the token is invalid.
  */
 async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: string; username: string }> {
-    const url = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=instagram_business_account{id,username}&access_token=${accessToken}`;
+    const fields = 'instagram_business_account{id,username}';
+    const url = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=${fields}`;
     
-    const response = await fetch(url);
+    const response = await fetch(url, {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`
+        }
+    });
     const data = await response.json();
 
     if (data.error) {
-        // Provide a more specific error message if possible
-        if (data.error.code === 190) { // OAuthException
-            throw new Error('The provided token is invalid, expired, or has been revoked.');
-        }
         throw new Error(`Error fetching pages from Meta: ${data.error.message}`);
     }
     
@@ -76,8 +77,6 @@ export async function POST(request: Request) {
         const { id: instagramUserId, username: instagramUsername } = await getInstagramBusinessAccount(trimmedToken);
         
         // 2. Prepare data for Firestore
-        const expiresAtTimestamp = serverTimestamp(); // Placeholder, we no longer get expiry from debug_token
-
         const connectionData: Omit<SocialMediaConnection, 'id'> = {
             platform: 'instagram',
             userId: userId,
@@ -86,7 +85,7 @@ export async function POST(request: Request) {
             instagramUsername: instagramUsername,
             accessToken: trimmedToken,
             expiresIn: 0, // Not available without debug_token, set to 0
-            expiresAt: expiresAtTimestamp,
+            expiresAt: serverTimestamp(), // Placeholder for now
             connectedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
@@ -98,7 +97,6 @@ export async function POST(request: Request) {
 
     } catch (error: any) {
         console.error("Instagram Manual Token Update Error:", error);
-        // Return a 400 Bad Request for validation errors, and 500 for others
         const statusCode = error.message.includes('token') || error.message.includes('permission') || error.message.includes('No Instagram Business Account') ? 400 : 500;
         return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: statusCode });
     }

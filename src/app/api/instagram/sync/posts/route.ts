@@ -35,9 +35,13 @@ export async function GET(request: Request) {
 
         // Fetch user's media from Instagram Graph API
         const fields = 'id,media_type,media_url,thumbnail_url,permalink,caption,timestamp,username,comments_count,like_count';
-        const mediaUrl = `${FACEBOOK_GRAPH_API_URL}/${instagramUserId}/media?fields=${fields}&access_token=${accessToken}`;
+        const mediaUrl = `${FACEBOOK_GRAPH_API_URL}/${instagramUserId}/media?fields=${fields}`;
         
-        const mediaResponse = await fetch(mediaUrl);
+        const mediaResponse = await fetch(mediaUrl, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        });
         const mediaData = await mediaResponse.json();
 
         if (mediaData.error) {
