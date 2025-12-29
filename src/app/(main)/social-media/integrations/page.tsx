@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useState } from 'react';
@@ -10,6 +9,9 @@ import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
 import Link from 'next/link';
@@ -22,6 +24,82 @@ const InstagramIcon = () => (
   </svg>
 );
 
+function ManualUpdateDialog({ onTokenUpdated }: { onTokenUpdated: () => void }) {
+    const [open, setOpen] = useState(false);
+    const [token, setToken] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const { toast } = useToast();
+    const { user } = useUserProfile();
+
+    const handleUpdate = async () => {
+        if (!token.trim()) {
+            toast({ variant: 'destructive', title: 'Token is required' });
+            return;
+        }
+        if (!user) {
+            toast({ variant: 'destructive', title: 'Authentication Error' });
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const idToken = await user.getIdToken();
+            const response = await fetch('/api/instagram/update-token', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ accessToken: token }),
+            });
+
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'Failed to validate and save the token.');
+            }
+            toast({ title: 'Success!', description: data.message });
+            onTokenUpdated();
+            setOpen(false);
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button variant="outline"><Edit className="mr-2 h-4 w-4"/> Manual Update</Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Update Instagram Access Token</DialogTitle>
+                    <DialogDescription>
+                        Paste your new long-lived access token below. This will overwrite the existing token.
+                        For help, consult the <Link href="/guide" target='_blank' className='text-primary underline'>official guide</Link>.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 space-y-2">
+                    <Label htmlFor="token-input">Long-Lived Access Token</Label>
+                    <Textarea
+                        id="token-input"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        placeholder="Paste your token here..."
+                        rows={5}
+                    />
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                    <Button onClick={handleUpdate} disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Validate & Save Token
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function SocialMediaIntegrationsPage() {
     const { profile, isLoading: profileLoading } = useUserProfile();
@@ -53,15 +131,6 @@ export default function SocialMediaIntegrationsPage() {
         return isAfter(new Date(), expiryDate);
     }, [instagramConnection]);
     
-    const handleInstagramConnect = () => {
-        const clientId = process.env.NEXT_PUBLIC_META_APP_ID;
-        const redirectUri = `${window.location.origin}/social-media/integrations/instagram/callback`;
-        const scope = 'pages_show_list,instagram_basic,instagram_content_publish,pages_read_engagement';
-        const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code&state=${profile?.id}`;
-        window.location.href = authUrl;
-    };
-
-
     const handleDisconnect = async () => {
         if (!firestore || !instagramConnection) return;
         setIsDisconnecting(true);
@@ -147,10 +216,7 @@ export default function SocialMediaIntegrationsPage() {
                                         
                                         <div className="flex flex-wrap items-center gap-4">
                                            {isManagerOrAdmin && (
-                                               <Button onClick={handleInstagramConnect}>
-                                                    <Instagram className="mr-2 h-4 w-4"/>
-                                                    Reconnect Account
-                                               </Button>
+                                                <ManualUpdateDialog onTokenUpdated={() => setRefreshKey(k => k + 1)} />
                                             )}
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
@@ -173,19 +239,17 @@ export default function SocialMediaIntegrationsPage() {
                                                 </AlertDialogContent>
                                             </AlertDialog>
                                         </div>
-                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please use "Reconnect Account" to refresh it.</p>}
+                                        {isTokenExpired && <p className="text-sm text-destructive mt-2">Your connection token has expired. Please use "Manual Update" to refresh it.</p>}
                                     </div>
                             ) : (
                                     <div className="space-y-4">
                                         {isManagerOrAdmin ? (
                                             <>
                                                 <p className="text-sm text-muted-foreground">
-                                                    Connect your Instagram Business account to get started. You'll be redirected to Facebook to grant permissions. If you need help, please consult the <Button variant="link" asChild className="p-0 h-auto text-sm"><Link href="/guide" target="_blank">official guide</Link></Button>.
+                                                    No account connected. Use "Manual Update" to connect an account. 
+                                                    If you need help, please consult the <Button variant="link" asChild className="p-0 h-auto text-sm"><Link href="/guide" target="_blank">official guide</Link></Button>.
                                                 </p>
-                                                <Button onClick={handleInstagramConnect}>
-                                                    <Instagram className="mr-2 h-4 w-4"/>
-                                                    Connect Instagram Account
-                                                </Button>
+                                                <ManualUpdateDialog onTokenUpdated={() => setRefreshKey(k => k + 1)} />
                                             </>
                                         ) : (
                                             <div className="text-sm text-muted-foreground">
