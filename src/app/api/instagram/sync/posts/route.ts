@@ -34,6 +34,7 @@ export async function GET(request: Request) {
 
         // Fetch user's media from Instagram Graph API (via Facebook Graph)
         const fields = 'id,media_type,media_url,thumbnail_url,permalink,caption,timestamp,username,comments_count,like_count';
+        // Construct URL manually to avoid encoding issues with access token
         const mediaUrl = `${FACEBOOK_GRAPH_API_URL}/${instagramUserId}/media?fields=${fields}&access_token=${accessToken}`;
         
         const mediaResponse = await fetch(mediaUrl);

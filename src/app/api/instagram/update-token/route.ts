@@ -8,7 +8,9 @@ const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
 
 // This function validates the token by fetching connected Instagram Business Accounts
 async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: string; username: string }> {
-    const pagesUrl = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=instagram_business_account{username}&access_token=${accessToken}`;
+    const fields = 'instagram_business_account{username}';
+    // Construct URL manually to avoid double-encoding of the access token
+    const pagesUrl = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=${fields}&access_token=${accessToken}`;
     const pagesResponse = await fetch(pagesUrl);
     const pagesData = await pagesResponse.json();
 
@@ -71,7 +73,7 @@ export async function POST(request: Request) {
             accessToken: newToken,
             expiresIn: 60 * 60 * 24 * 60, // 60 days in seconds
             expiresAt: Timestamp.fromDate(expiresAt),
-            connectedAt: serverTimestamp() as Timestamp,
+            connectedAt: serverTimestamp() as FirebaseFirestore.Timestamp,
         };
 
         const connectionId = `${companyId}_instagram`;
