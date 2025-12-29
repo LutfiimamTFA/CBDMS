@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -327,6 +328,24 @@
         "createdBy": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "companyId", "creatorRole", "allowedNavItems", "navItems", "accessLevel", "snapshot", "createdBy", "createdAt"]
+    },
+    "SocialMediaConnection": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "SocialMediaConnection",
+        "type": "object",
+        "description": "Stores credentials for a social media platform connection.",
+        "properties": {
+            "id": { "type": "string" },
+            "platform": { "type": "string", "enum": ["instagram"] },
+            "userId": { "type": "string", "description": "The Firebase UID of the user who initiated the connection." },
+            "companyId": { "type": "string" },
+            "instagramUserId": { "type": "string", "description": "The User ID from the Instagram Graph API." },
+            "instagramUsername": { "type": "string" },
+            "accessToken": { "type": "string", "description": "The long-lived access token." },
+            "expiresIn": { "type": "number", "description": "Seconds until the token expires." },
+            "connectedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "platform", "userId", "companyId", "instagramUserId", "accessToken"]
     }
   },
   "auth": {
@@ -348,7 +367,10 @@
       { "path": "/statuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
       { "path": "/api/run-scheduler", "definition": { "description": "An API endpoint that, when called, runs all scheduled jobs like generating recurring tasks and posting social media content." } },
       { "path": "/socialMediaPosts/{postId}", "definition": { "entityName": "SocialMediaPost", "schema": { "$ref": "#/backend/entities/SocialMediaPost" } } },
-      { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } }
+      { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },
+      { "path": "/socialMediaConnections/{connectionId}", "definition": { "entityName": "SocialMediaConnection", "schema": { "$ref": "#/backend/entities/SocialMediaConnection" } } }
     ]
   }
 }
+
+    

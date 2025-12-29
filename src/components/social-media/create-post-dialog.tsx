@@ -97,8 +97,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
-  const [rejectionItems, setRejectionItems] = useState<string[]>([]);
-  const [currentRejectionItem, setCurrentRejectionItem] = useState('');
+  const [rejectionItems, setRejectionItems] = useState<Omit<RevisionItem, 'id' | 'completed'>[]>([]);
+  const [currentItemText, setCurrentItemText] = useState('');
   const [revisionItems, setRevisionItems] = useState<RevisionItem[]>([]);
 
   const firestore = useFirestore();
@@ -250,12 +250,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             });
 
             if (status === 'Needs Approval') {
-                const usersSnapshot = await getDocs(collection(firestore, 'users'));
+                const usersSnapshot = await getDocs(query(collection(firestore, 'users'), where('companyId', '==', profile.companyId)));
                 usersSnapshot.forEach(userDoc => {
-                    const userData = userDoc.data();
+                    const userData = userDoc.data() as UserType;
                     const isManagerForBrand = userData.role === 'Manager' && data.brandId && userData.brandIds?.includes(data.brandId);
 
-                    if ((userData.role === 'Super Admin' || isManagerForBrand) && userData.companyId === profile.companyId) {
+                    if (userData.role === 'Super Admin' || isManagerForBrand) {
                         const notifRef = doc(collection(firestore, `users/${userDoc.id}/notifications`));
                         const newNotification: Omit<Notification, 'id'> = {
                             userId: userDoc.id,
@@ -314,7 +314,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   };
   
-  const handleUpdateStatus = async (newStatus: SocialMediaPost['status'], reasonItems?: string[]) => {
+  const handleUpdateStatus = async (newStatus: SocialMediaPost['status'], reasonItems?: Omit<RevisionItem, 'id'|'completed'>[]) => {
     if (!firestore || !post || !profile || !user) return;
     setIsSaving(true);
     setRejectionDialogOpen(false);
@@ -334,8 +334,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         notificationTitle = 'Post Approved';
         notificationMessage = `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`;
         if (post.revisionItems) {
-            const completedCycle: RevisionCycle = {
-                cycleNumber: post.revisionHistory ? post.revisionHistory.length + 1 : 1,
+             const completedCycle: RevisionCycle = {
+                cycleNumber: (post.revisionHistory || []).length + 1,
                 requestedAt: post.updatedAt || serverTimestamp(), 
                 requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' }, 
                 items: post.revisionItems,
@@ -350,7 +350,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         if (reasonItems && reasonItems.length > 0) {
             updateData.revisionItems = reasonItems.map(item => ({
                 id: crypto.randomUUID(),
-                text: item,
+                text: item.text,
                 completed: false,
             }));
         }
@@ -392,7 +392,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     } finally {
       setIsSaving(false);
       setRejectionItems([]);
-      setCurrentRejectionItem('');
+      setCurrentItemText('');
     }
   };
   
@@ -454,9 +454,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
   
   const handleAddRejectionItem = () => {
-    if (currentRejectionItem.trim()) {
-        setRejectionItems(prev => [...prev, currentRejectionItem]);
-        setCurrentRejectionItem('');
+    if (currentItemText.trim()) {
+        setRejectionItems(prev => [...prev, {text: currentItemText}]);
+        setCurrentItemText('');
     }
   };
   
@@ -791,7 +791,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             <div className="space-y-2">
               {rejectionItems.map((item, index) => (
                 <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
-                  <span className="flex-1 text-sm">{item}</span>
+                  <span className="flex-1 text-sm">{item.text}</span>
                   <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRejectionItems(prev => prev.filter((_, i) => i !== index))}>
                     <XCircle className="h-4 w-4" />
                   </Button>
@@ -800,12 +800,17 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             </div>
             <div className="flex items-center gap-2">
               <Input
-                value={currentRejectionItem}
-                onChange={(e) => setCurrentRejectionItem(e.target.value)}
+                value={currentItemText}
+                onChange={(e) => setCurrentItemText(e.target.value)}
                 placeholder="e.g., Fix the logo placement"
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRejectionItem())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddRejectionItem();
+                  }
+                }}
               />
-              <Button onClick={handleAddRejectionItem} disabled={!currentRejectionItem.trim()}>
+              <Button onClick={handleAddRejectionItem} disabled={!currentItemText.trim()}>
                 <Plus className="mr-2 h-4 w-4" /> Add
               </Button>
             </div>
@@ -840,3 +845,5 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     </>
   );
 }
+
+    
