@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { serverTimestamp } from 'firebase-admin/firestore';
 
-const META_APP_ID = process.env.META_APP_ID;
+const META_APP_ID = process.env.NEXT_PUBLIC_META_APP_ID;
 const META_APP_SECRET = process.env.META_APP_SECRET;
 const REDIRECT_URI = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI;
 
