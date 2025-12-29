@@ -1,9 +1,8 @@
 
 import { NextResponse } from 'next/server';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
 import type { Task, User, Activity, Notification } from '@/lib/types-backend';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { adminDb } from '@/lib/firebase-admin';
 
 const createActivity = (user: User, action: string): Activity => {
   return {
@@ -20,7 +19,6 @@ const createActivity = (user: User, action: string): Activity => {
 export async function POST(request: Request) {
   try {
     const db = adminDb;
-    const auth = adminAuth;
 
     const { taskId, actionText, linkCreatorId } = await request.json();
 

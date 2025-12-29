@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import type { Task, Brand, WorkflowStatus, User, SharedTask } from '@/lib/types-backend';
-import { getAuth } from 'firebase-admin/auth';
 
 export async function POST(request: Request) {
   try {
