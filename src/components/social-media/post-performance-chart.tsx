@@ -1,4 +1,3 @@
-
 'use client';
 import type { SocialMediaPost } from '@/lib/types';
 import {
