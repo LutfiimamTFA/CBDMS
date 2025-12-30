@@ -1,4 +1,3 @@
-
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -242,7 +241,7 @@ export type SocialMediaPost = {
   platform: string;
   caption: string;
   mediaUrl?: string;
-  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
+  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Publishing' | 'Posted' | 'Error';
   scheduledAt: string;
   postedAt?: string;
   createdBy: string;

@@ -60,16 +60,16 @@ export type SocialMediaPost = {
   platform: string;
   caption: string;
   mediaUrl?: string;
-  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
+  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Publishing' | 'Posted' | 'Error';
   scheduledAt: string;
   postedAt?: FirebaseFirestore.Timestamp;
   createdBy: string;
   companyId: string;
   postType?: 'Post' | 'Reels';
+  errorDetails?: string;
 };
 
 export type SocialMediaConnection = {
-    id: string;
     platform: 'instagram';
     userId: string; // Firebase UID of user who set up/updated
     companyId: string;
@@ -78,7 +78,6 @@ export type SocialMediaConnection = {
     accessToken: string;
     expiresAt: FirebaseFirestore.Timestamp;
     connectedAt: FirebaseFirestore.Timestamp;
-    updatedAt: FirebaseFirestore.Timestamp;
 };
 
 export type RecurringTaskTemplate = {

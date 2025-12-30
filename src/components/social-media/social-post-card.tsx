@@ -3,7 +3,7 @@ import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { Instagram, FileText, Clapperboard } from 'lucide-react';
+import { Instagram, FileText, Clapperboard, RefreshCw, AlertTriangle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CreatePostDialog } from './create-post-dialog';
@@ -19,11 +19,24 @@ const platformIcons: Record<string, React.ElementType> = {
 
 const statusColors: Record<string, string> = {
     Draft: 'bg-gray-400 border-gray-400 text-white',
-    'Needs Approval': 'bg-yellow-400 border-yellow-400 text-yellow-900',
+    'Needs Approval': 'bg-yellow-500 border-yellow-500 text-yellow-900',
     Scheduled: 'bg-blue-500 border-blue-500 text-white',
+    Publishing: 'bg-blue-400 border-blue-400 text-white animate-pulse',
     Posted: 'bg-green-500 border-green-500 text-white',
     Error: 'bg-red-500 border-red-500 text-white',
 };
+
+const StatusIcon = ({ status }: { status: SocialMediaPost['status'] }) => {
+    switch (status) {
+        case 'Needs Approval':
+            return <RefreshCw className="h-2 w-2" />;
+        case 'Error':
+            return <AlertTriangle className="h-2 w-2" />;
+        default:
+            return <div className="h-2 w-2 rounded-full bg-current"></div>;
+    }
+};
+
 
 export function SocialPostCard({ post }: SocialPostCardProps) {
   const PlatformIcon = platformIcons[post.platform];
@@ -63,7 +76,7 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
           </CardContent>
           <CardFooter className="p-2 flex justify-between items-center bg-background/80">
             <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs', statusColors[post.status])}>
-                <div className="h-2 w-2 rounded-full bg-current"></div>
+                <StatusIcon status={post.status} />
                 <span className="font-medium">{post.status}</span>
             </Badge>
             <span className="text-xs font-semibold text-muted-foreground">

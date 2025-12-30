@@ -30,7 +30,6 @@ if (!getApps().length) {
     }
   
     // Dynamically get the storage bucket from the system-provided Firebase config.
-    // This is safer than hardcoding and avoids "bucket not found" errors.
     let storageBucketName: string | undefined;
     if (process.env.FIREBASE_CONFIG) {
         try {
@@ -42,7 +41,14 @@ if (!getApps().length) {
     }
 
     if (!storageBucketName) {
+      // Fallback for local development or if FIREBASE_CONFIG is not set
+      // This assumes a standard naming convention.
+      const projectId = serviceAccount.project_id;
+      if (projectId) {
+        storageBucketName = `${projectId}.appspot.com`;
+      } else {
         throw new Error("Could not determine Storage Bucket name. Make sure Firebase Storage is enabled for this project.");
+      }
     }
 
     adminApp = initializeApp({
