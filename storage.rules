@@ -29,7 +29,7 @@ service firebase.storage {
     }
     
     // Social media uploads can be written by authenticated users.
-    match /social-media/{companyId}/{allPaths=**} {
+    match /social-media/{companyId}/{mediaId} {
       allow read;
       allow write: if isSignedIn();
     }
