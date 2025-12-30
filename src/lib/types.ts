@@ -175,7 +175,6 @@ export type SocialMediaConnection = {
     instagramUserId: string;
     instagramUsername: string;
     accessToken: string;
-    expiresIn: number; // Seconds
     expiresAt: any; // Timestamp
     connectedAt: any; // Timestamp
 };

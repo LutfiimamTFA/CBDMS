@@ -4,24 +4,30 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { serverTimestamp } from 'firebase-admin/firestore';
 import type { SocialMediaConnection } from '@/lib/types-backend';
 
-const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
+const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v20.0";
 
-/**
- * Gets the Instagram Business Account ID and username linked to a Facebook Page using a valid token.
- * This function now serves as the primary validation method.
- * @param accessToken A valid, long-lived user access token.
- * @returns The ID and username of the linked Instagram Business Account.
- * @throws An error if no linked account is found or if the token is invalid.
- */
+async function getLongLivedAccessToken(shortLivedToken: string): Promise<{ access_token: string, expires_in: number }> {
+    const appId = process.env.INSTAGRAM_APP_ID;
+    const appSecret = process.env.INSTAGRAM_APP_SECRET;
+
+    if (!appId || !appSecret) {
+        throw new Error('Instagram App ID and Secret must be configured on the server.');
+    }
+    
+    const url = `${FACEBOOK_GRAPH_API_URL}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`;
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.error) {
+        throw new Error(`Error exchanging token: ${data.error.message}`);
+    }
+    return data;
+}
+
 async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: string; username: string }> {
     const fields = 'instagram_business_account{id,username}';
-    const url = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=${fields}`;
+    const url = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=${fields}&access_token=${accessToken}`;
     
-    const response = await fetch(url, {
-        headers: {
-            'Authorization': `Bearer ${accessToken}`
-        }
-    });
+    const response = await fetch(url);
     const data = await response.json();
 
     if (data.error) {
@@ -66,26 +72,42 @@ export async function POST(request: Request) {
             return NextResponse.json({ message: 'User is not associated with a company.' }, { status: 400 });
         }
 
-        const { accessToken } = await request.json();
-        if (!accessToken || typeof accessToken !== 'string') {
-            return NextResponse.json({ message: 'Bad Request: Access token is missing or invalid.' }, { status: 400 });
+        const { code, isTokenUpdate = false, accessToken: manualToken } = await request.json();
+
+        let longLivedToken: string;
+        let expiresIn: number;
+
+        if (isTokenUpdate && manualToken) {
+            longLivedToken = manualToken;
+            // When manually updating, we don't know the expiry, so we fetch it.
+            const debugUrl = `${FACEBOOK_GRAPH_API_URL}/debug_token?input_token=${longLivedToken}&access_token=${process.env.INSTAGRAM_APP_ID}|${process.env.INSTAGRAM_APP_SECRET}`;
+            const debugResponse = await fetch(debugUrl);
+            const debugData = await debugResponse.json();
+            if (debugData.error || !debugData.data.is_valid) {
+                throw new Error(debugData.error?.message || 'The provided token is invalid.');
+            }
+            expiresIn = debugData.data.expires_at ? debugData.data.expires_at - Math.floor(Date.now() / 1000) : 0;
+
+        } else if (code) {
+             const tokenData = await getLongLivedAccessToken(code);
+             longLivedToken = tokenData.access_token;
+             expiresIn = tokenData.expires_in;
+        } else {
+             return NextResponse.json({ message: 'Bad Request: Authorization code or access token is required.' }, { status: 400 });
         }
-
-        const trimmedToken = accessToken.trim();
-
-        // 1. Validate the token and get Instagram Business Account details
-        const { id: instagramUserId, username: instagramUsername } = await getInstagramBusinessAccount(trimmedToken);
         
-        // 2. Prepare data for Firestore
+        const { id: instagramUserId, username: instagramUsername } = await getInstagramBusinessAccount(longLivedToken);
+        
+        const expiresAt = new Date(Date.now() + expiresIn * 1000);
+
         const connectionData: Omit<SocialMediaConnection, 'id'> = {
             platform: 'instagram',
             userId: userId,
             companyId: companyId,
             instagramUserId: instagramUserId,
             instagramUsername: instagramUsername,
-            accessToken: trimmedToken,
-            expiresIn: 0, // Not available without debug_token, set to 0
-            expiresAt: serverTimestamp(), // Placeholder for now
+            accessToken: longLivedToken,
+            expiresAt: serverTimestamp.fromMillis(expiresAt.getTime()),
             connectedAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
         };
@@ -96,7 +118,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ message: `Successfully connected to Instagram account @${instagramUsername}.` }, { status: 200 });
 
     } catch (error: any) {
-        console.error("Instagram Manual Token Update Error:", error);
+        console.error("Instagram Token Update/Exchange Error:", error);
         const statusCode = error.message.includes('token') || error.message.includes('permission') || error.message.includes('No Instagram Business Account') ? 400 : 500;
         return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: statusCode });
     }

@@ -3,10 +3,12 @@ import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import type { SocialMediaPost, SocialMediaConnection } from '@/lib/types-backend';
 
+const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v20.0";
+
 // Helper function to poll for container status
 async function pollContainerStatus(containerId: string, accessToken: string, maxRetries = 20, delay = 5000) {
     for (let i = 0; i < maxRetries; i++) {
-        const statusUrl = `https://graph.facebook.com/v19.0/${containerId}?fields=status_code&access_token=${accessToken}`;
+        const statusUrl = `${FACEBOOK_GRAPH_API_URL}/${containerId}?fields=status_code&access_token=${accessToken}`;
         const statusResponse = await fetch(statusUrl);
         const statusData = await statusResponse.json();
 
@@ -29,6 +31,11 @@ async function pollContainerStatus(containerId: string, accessToken: string, max
 
 
 export async function POST(request: Request) {
+    const authHeader = request.headers.get('Authorization');
+    if (authHeader !== `Bearer ${process.env.SCHEDULER_SECRET}`) {
+        return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    }
+
     const { postId } = await request.json();
 
     if (!postId) {
@@ -45,33 +52,27 @@ export async function POST(request: Request) {
         const connectionId = `${postData.companyId}_instagram`;
         const connectionDoc = await adminDb.collection('socialMediaConnections').doc(connectionId).get();
         if (!connectionDoc.exists) {
-            return NextResponse.json({ message: 'Instagram connection not found for this company.' }, { status: 404 });
+            throw new Error('Instagram connection not found for this company.');
         }
         const connectionData = connectionDoc.data() as SocialMediaConnection;
         const { accessToken, instagramUserId } = connectionData;
 
-        // --- Step 1: Create Media Container ---
-        const creationUrl = `https://graph.facebook.com/v19.0/${instagramUserId}/media`;
         const mediaType = postData.postType === 'Reels' ? 'REELS' : 'IMAGE';
+
+        // --- Step 1: Create Media Container ---
+        let creationUrl = `${FACEBOOK_GRAPH_API_URL}/${instagramUserId}/media`;
+        const params = new URLSearchParams();
         
-        let creationParams: Record<string, string> = {
-            access_token: accessToken,
-            caption: postData.caption,
-        };
-
         if (mediaType === 'IMAGE') {
-            creationParams['image_url'] = postData.mediaUrl || '';
+            params.append('image_url', postData.mediaUrl || '');
         } else { // REELS
-            creationParams['media_type'] = 'VIDEO';
-            creationParams['video_url'] = postData.mediaUrl || '';
+            params.append('media_type', 'VIDEO');
+            params.append('video_url', postData.mediaUrl || '');
         }
+        params.append('caption', postData.caption);
+        params.append('access_token', accessToken);
 
-        const creationResponse = await fetch(creationUrl, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(creationParams)
-        });
-
+        const creationResponse = await fetch(`${creationUrl}?${params.toString()}`, { method: 'POST' });
         const creationData = await creationResponse.json();
 
         if (creationData.error) {
@@ -85,15 +86,13 @@ export async function POST(request: Request) {
         }
 
         // --- Step 2: Publish Media Container ---
-        const publishUrl = `https://graph.facebook.com/v19.0/${instagramUserId}/media_publish`;
-        const publishResponse = await fetch(publishUrl, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                creation_id: containerId,
-                access_token: accessToken,
-            })
+        const publishUrl = `${FACEBOOK_GRAPH_API_URL}/${instagramUserId}/media_publish`;
+        const publishParams = new URLSearchParams({
+            creation_id: containerId,
+            access_token: accessToken,
         });
+
+        const publishResponse = await fetch(`${publishUrl}?${publishParams.toString()}`, { method: 'POST' });
         const publishData = await publishResponse.json();
 
         if (publishData.error) {
@@ -104,6 +103,7 @@ export async function POST(request: Request) {
 
     } catch (error: any) {
         console.error("Instagram Publish Error:", error);
+        // Ensure the response is in the format Next.js expects for errors
         return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: 500 });
     }
 }

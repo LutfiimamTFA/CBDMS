@@ -1,4 +1,3 @@
-
 // This file is intended for server-side type definitions only.
 // Do not import this file in any client-side components.
 // It exists to prevent circular dependencies between server and client modules.
@@ -77,8 +76,7 @@ export type SocialMediaConnection = {
     instagramUserId: string;
     instagramUsername: string;
     accessToken: string;
-    expiresIn: number; // Seconds
-    expiresAt: Date | FirebaseFirestore.Timestamp;
+    expiresAt: FirebaseFirestore.Timestamp;
     connectedAt: FirebaseFirestore.Timestamp;
     updatedAt: FirebaseFirestore.Timestamp;
 };
@@ -106,3 +104,7 @@ export type SharedLink = {
   creatorRole: User['role'];
   [key: string]: any; // Allow other properties
 };
+
+export type Brand = any;
+export type WorkflowStatus = any;
+export type SharedTask = any;

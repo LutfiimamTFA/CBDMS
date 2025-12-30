@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import type { SocialMediaConnection } from '@/lib/types-backend';
 
-const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v19.0";
+const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v20.0";
 
 export async function GET(request: Request) {
     const authHeader = request.headers.get('Authorization');
