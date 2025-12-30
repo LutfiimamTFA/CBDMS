@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { adminAuth, adminDb, adminStorage } from '@/lib/firebase-admin';
@@ -86,6 +85,7 @@ export async function POST(request: Request) {
     if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
         return NextResponse.json({ message: 'Unauthorized. Please log in again.' }, { status: 401 });
     }
-    return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: 500 });
+    // Return a more generic server error to the client for security
+    return NextResponse.json({ message: 'An internal server error occurred during upload.' }, { status: 500 });
   }
 }
