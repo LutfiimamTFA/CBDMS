@@ -19,9 +19,15 @@ export async function GET(request: Request) {
 
     const clientId = process.env.INSTAGRAM_APP_ID;
     const redirectUri = `${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/oauth/callback`;
-    
+
     if (!clientId || !redirectUri) {
-        throw new Error("Instagram App ID or Redirect URI is not configured on the server.");
+        // Log the severe configuration error on the server
+        console.error("CRITICAL: Instagram OAuth environment variables are not set.");
+        // Redirect to an error page on the client side instead of throwing
+        const errorUrl = new URL('/social-media/integrations', request.url);
+        errorUrl.searchParams.set('error', 'server_misconfigured');
+        errorUrl.searchParams.set('error_description', 'The server is not configured for Instagram integration. Please contact support.');
+        return NextResponse.redirect(errorUrl);
     }
     
     // Pass the user's ID token in the state to re-authenticate on callback
@@ -42,13 +48,21 @@ export async function GET(request: Request) {
     authUrl.searchParams.append('scope', scope);
     authUrl.searchParams.append('response_type', 'code');
 
+    // Always redirect to the Meta OAuth dialog
     return NextResponse.redirect(authUrl.toString());
 
   } catch (error: any) {
     console.error("Instagram OAuth Start Error:", error);
+    // Handle cases like an invalid or expired token
+    const errorUrl = new URL('/social-media/integrations', request.url);
     if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
-        return NextResponse.json({ message: 'Unauthorized: Invalid token.' }, { status: 401 });
+        errorUrl.searchParams.set('error', 'auth_error');
+        errorUrl.searchParams.set('error_description', 'Your session has expired. Please log in again.');
+        return NextResponse.redirect(errorUrl);
     }
-    return NextResponse.json({ message: error.message || 'An internal server error occurred.' }, { status: 500 });
+    // For other unexpected errors, provide a generic message
+    errorUrl.searchParams.set('error', 'unknown_start_error');
+    errorUrl.searchParams.set('error_description', 'An unexpected error occurred while starting the connection process.');
+    return NextResponse.redirect(errorUrl);
   }
 }
