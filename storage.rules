@@ -9,13 +9,13 @@ service firebase.storage {
     }
 
     // Avatars can be read by anyone, but only the user themselves can write.
-    match /avatars/{userId} {
+    match /avatars/{userId}/{allPaths=**} {
       allow read;
       allow write: if isSignedIn() && request.auth.uid == userId;
     }
     
     // Logos can be read by anyone, but only authenticated users can write.
-    match /logos/{companyId} {
+    match /logos/{companyId}/{allPaths=**} {
         allow read;
         allow write: if isSignedIn();
     }
@@ -23,13 +23,13 @@ service firebase.storage {
     // Attachments can be read by anyone who has the URL.
     // Writes are allowed by any authenticated user.
     // Security is enforced by Firestore rules controlling access to the URL.
-    match /attachments/{taskId}/{attachmentId} {
+    match /attachments/{taskId}/{allPaths=**} {
       allow read;
       allow write: if isSignedIn();
     }
     
     // Social media uploads can be written by authenticated users.
-    match /social-media/{companyId}/{mediaId} {
+    match /social-media/{companyId}/{allPaths=**} {
       allow read;
       allow write: if isSignedIn();
     }
