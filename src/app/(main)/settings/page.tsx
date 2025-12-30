@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef } from 'react';
@@ -57,6 +58,7 @@ export default function SettingsPage() {
   const { user, profile, isLoading: isProfileLoading } = useUserProfile();
   const auth = useAuth();
   const firestore = useFirestore();
+  const storage = useStorage();
   const { toast } = useToast();
   
   const [isSavingProfile, setIsSavingProfile] = useState(false);
@@ -92,24 +94,23 @@ export default function SettingsPage() {
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user || !auth?.currentUser) return;
+    if (!file || !user || !auth?.currentUser || !storage || !firestore) return;
 
     setIsUploadingPhoto(true);
     try {
-      const idToken = await auth.currentUser.getIdToken();
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      const response = await fetch('/api/upload?uploadType=profile', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${idToken}` },
-        body: formData,
-      });
+      const filePath = `avatars/${user.uid}/${file.name}`;
+      const storageRef = ref(storage, filePath);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Upload failed');
-      }
+      // Upload file directly to Firebase Storage
+      await uploadBytes(storageRef, file);
+
+      // Get public URL
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Update Auth and Firestore
+      await updateProfile(auth.currentUser, { photoURL: downloadURL });
+      const userDocRef = doc(firestore, 'users', user.uid);
+      await updateDoc(userDocRef, { avatarUrl: downloadURL });
       
       toast({
         title: 'Photo Updated',
