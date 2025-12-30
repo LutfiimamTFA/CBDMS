@@ -1182,7 +1182,7 @@ export function TaskDetailsSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full flex flex-col p-0">
+        <SheetContent className="w-full flex flex-col p-0 max-w-4xl">
           <SheetHeader className="p-4 border-b flex-shrink-0">
              <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
              <div className="flex items-center justify-between">
