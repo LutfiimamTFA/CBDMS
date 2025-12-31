@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
   const cookieStore = cookies();
   const storedState = cookieStore.get('ig_oauth_state')?.value;
 
-  const errorUrl = new URL('/social-media/integrations', request.url);
+  const errorUrl = new URL('/social-media/integrations', request.nextUrl.origin);
 
   // Clean up state cookie immediately
   if (storedState) {
@@ -86,20 +86,20 @@ export async function GET(request: NextRequest) {
   // 1. CSRF Protection: Validate state
   if (!receivedState || !storedState || receivedState !== storedState) {
     errorUrl.searchParams.set('error', 'invalid_state');
-    errorUrl.searchParams.set('error_description', 'Authentication session has expired or is invalid. Please try again.');
+    errorUrl.searchParams.set('error_description', encodeURIComponent('Authentication session has expired or is invalid. Please try again.'));
     return NextResponse.redirect(errorUrl);
   }
 
   if (searchParams.has('error')) {
     const errorDescription = searchParams.get('error_description') || 'An error occurred during authentication.';
     errorUrl.searchParams.set('error', 'oauth_failed');
-    errorUrl.searchParams.set('error_description', errorDescription);
+    errorUrl.searchParams.set('error_description', encodeURIComponent(errorDescription));
     return NextResponse.redirect(errorUrl);
   }
 
   if (!code) {
     errorUrl.searchParams.set('error', 'invalid_callback');
-    errorUrl.searchParams.set('error_description', 'Missing authorization code from Meta callback.');
+    errorUrl.searchParams.set('error_description', encodeURIComponent('Missing authorization code from Meta callback.'));
     return NextResponse.redirect(errorUrl);
   }
 
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
     await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
 
     // On success, redirect the user back to the integrations page.
-    const successUrl = new URL('/social-media/integrations', request.url);
+    const successUrl = new URL('/social-media/integrations', request.nextUrl.origin);
     successUrl.searchParams.set('status', 'connected');
     return NextResponse.redirect(successUrl);
 
@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
         errorCode = 'not_logged_in';
     }
     errorUrl.searchParams.set('error', errorCode);
-    errorUrl.searchParams.set('error_description', error.message);
+    errorUrl.searchParams.set('error_description', encodeURIComponent(error.message));
     return NextResponse.redirect(errorUrl);
   }
 }
