@@ -13,15 +13,12 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarCollapsibleItem,
-  SidebarInset,
 } from '@/components/ui/sidebar';
 import {
   Loader2,
-  ChevronDown,
   User,
   Icon as LucideIcon,
   LogOut,
-  Share2,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
@@ -34,9 +31,8 @@ import { collection, query, orderBy } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
 import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
-import { Button } from '@/components/ui/button';
-import { ShareViewDialog } from '@/components/share/share-view-dialog';
 import { AppProviders } from '@/components/app-providers';
+import { SidebarInset } from '@/components/ui/sidebar';
 
 const Icon = ({
   name,
@@ -51,15 +47,37 @@ const Icon = ({
 
 function MainAppLayout({
   children,
-  finalNavItems,
 }: {
   children: React.ReactNode;
-  finalNavItems: NavigationItem[];
 }) {
-  const pathname = usePathname();
+  const { user, profile, isLoading: isUserLoading } = useUserProfile();
   const auth = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const { t } = useI18n();
+  const firestore = useFirestore();
 
+  useEffect(() => {
+    if (isUserLoading) return;
+    
+    if (!user && pathname !== '/login') {
+      router.replace('/login');
+      return;
+    }
+
+    if (auth?.currentUser) {
+      getIdTokenResult(auth.currentUser, true)
+        .then((idTokenResult) => {
+          if (idTokenResult.claims.mustChangePassword) {
+            router.replace('/force-password-change');
+          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
+            router.replace('/force-acknowledge-tasks');
+          }
+        })
+        .catch(() => router.replace('/login'));
+    }
+  }, [user, profile, isUserLoading, auth, router, pathname]);
+  
   const handleLogout = () => {
     if(auth) {
         initiateSignOut(auth);
@@ -68,7 +86,36 @@ function MainAppLayout({
   }
 
   useIdleTimer({ onIdle: handleLogout, idleTime: 60 });
+  
+  const navItemsCollectionRef = useMemo(
+    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
+    [firestore]
+  );
+  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
+  
+  const finalNavItems = useMemo(() => {
+    if (!profile || !navItemsFromDB) return [];
+    
+    const translatedItems = navItemsFromDB.map(item => ({...item, label: t(item.label as any) || item.label}));
+    const itemMap = new Map(translatedItems.map(item => [item.id, item]));
 
+    const childMap = new Map<string, NavigationItem[]>();
+    translatedItems.forEach(item => {
+      let parentId: string | null = null;
+      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
+      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
+       else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
+      if (parentId && item.id !== parentId) {
+        if (!childMap.has(parentId)) childMap.set(parentId, []);
+        childMap.get(parentId)!.push(item);
+      }
+    });
+     if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
+    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
+    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
+
+    return Array.from(itemMap.values()).filter(item => item.roles.includes(profile.role));
+  }, [profile, navItemsFromDB, t]);
 
   const { childMap } = useMemo(() => {
     const itemMap = new Map(finalNavItems.map(item => [item.id, item]));
@@ -158,6 +205,16 @@ function MainAppLayout({
     return activeItem?.label || 'Dashboard';
   }, [pathname, finalNavItems]);
 
+  const isLoading = isUserLoading || isNavItemsLoading;
+  
+  if (isLoading || !user || !profile) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">
@@ -192,78 +249,12 @@ function MainAppLayout({
 }
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, isLoading: isUserLoading } = useUserProfile();
-  const auth = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
-  const { t } = useI18n();
-  const firestore = useFirestore();
-
-  useEffect(() => {
-    if (isUserLoading) return;
-    
-    if (!user && pathname !== '/login') {
-      router.replace('/login');
-      return;
-    }
-
-    if (auth?.currentUser) {
-      getIdTokenResult(auth.currentUser, true)
-        .then((idTokenResult) => {
-          if (idTokenResult.claims.mustChangePassword) {
-            router.replace('/force-password-change');
-          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
-            router.replace('/force-acknowledge-tasks');
-          }
-        })
-        .catch(() => router.replace('/login'));
-    }
-  }, [user, profile, isUserLoading, auth, router, pathname]);
-
-  const navItemsCollectionRef = useMemo(
-    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
-  
-  const finalNavItems = useMemo(() => {
-    if (!profile || !navItemsFromDB) return [];
-    
-    const translatedItems = navItemsFromDB.map(item => ({...item, label: t(item.label as any) || item.label}));
-    const itemMap = new Map(translatedItems.map(item => [item.id, item]));
-
-    // Add pseudo-items for folders if they have children
-    const childMap = new Map<string, NavigationItem[]>();
-    translatedItems.forEach(item => {
-      let parentId: string | null = null;
-      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
-      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
-       else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
-      if (parentId && item.id !== parentId) {
-        if (!childMap.has(parentId)) childMap.set(parentId, []);
-        childMap.get(parentId)!.push(item);
-      }
-    });
-     if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
-
-    return Array.from(itemMap.values()).filter(item => item.roles.includes(profile.role));
-  }, [profile, navItemsFromDB, t]);
-
-  const isLoading = isUserLoading || isNavItemsLoading;
-  
-  if (isLoading || !user || !profile) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
+  // This component now solely acts as the provider wrapper for the main authenticated app section.
   return (
     <AppProviders>
-        <MainAppLayout finalNavItems={finalNavItems}>{children}</MainAppLayout>
+      <MainAppLayout>{children}</MainAppLayout>
     </AppProviders>
   );
 }
+
+    
