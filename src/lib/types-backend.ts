@@ -104,6 +104,13 @@ export type SharedLink = {
   [key: string]: any; // Allow other properties
 };
 
+export type SystemSettings = {
+    socialMedia?: {
+        instagramAppId: string;
+        instagramAppSecret: string;
+    }
+}
+
 export type Brand = any;
 export type WorkflowStatus = any;
 export type SharedTask = any;

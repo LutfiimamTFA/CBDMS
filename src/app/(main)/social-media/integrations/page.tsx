@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +15,7 @@ import type { SocialMediaConnection } from '@/lib/types';
 import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
 import { useSearchParams } from 'next/navigation';
+import { Input } from '@/components/ui/input';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -94,14 +94,100 @@ function ManualUpdateDialog({ onTokenUpdated }: { onTokenUpdated: () => void }) 
     );
 }
 
+function ConfigForm({ onConfigSaved }: { onConfigSaved: () => void }) {
+    const [appId, setAppId] = useState('');
+    const [appSecret, setAppSecret] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const { toast } = useToast();
+    const { user } = useUserProfile();
+
+    const handleSave = async () => {
+        if (!appId.trim() || !appSecret.trim()) {
+            toast({ variant: 'destructive', title: 'Both fields are required' });
+            return;
+        }
+        if (!user) {
+            toast({ variant: 'destructive', title: 'Authentication Error' });
+            return;
+        }
+        setIsLoading(true);
+        try {
+            const idToken = await user.getIdToken();
+            const response = await fetch('/api/admin/instagram-config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({ appId, appSecret }),
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.message || 'Failed to save configuration.');
+            toast({ title: 'Configuration Saved', description: 'You can now connect your Instagram account.' });
+            onConfigSaved();
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Save Failed', description: error.message });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="p-4 border-t space-y-4">
+            <h3 className="font-semibold text-lg">Instagram API Setup</h3>
+            <p className="text-sm text-muted-foreground">
+                Please provide your Instagram App ID and App Secret to enable the integration.
+                These credentials are required for the OAuth connection.
+            </p>
+            <div className="space-y-2">
+                <Label htmlFor="app-id">App ID</Label>
+                <Input id="app-id" value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="Enter your Instagram App ID" />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="app-secret">App Secret</Label>
+                <Input id="app-secret" type="password" value={appSecret} onChange={(e) => setAppSecret(e.target.value)} placeholder="Enter your Instagram App Secret" />
+            </div>
+            <Button onClick={handleSave} disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Configuration
+            </Button>
+        </div>
+    );
+}
+
 export default function SocialMediaIntegrationsPage() {
     const { profile, isLoading: profileLoading } = useUserProfile();
     const firestore = useFirestore();
+    const auth = useAuth();
     const { toast } = useToast();
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0); 
     const searchParams = useSearchParams();
+
+    const [isConfigAvailable, setIsConfigAvailable] = useState<boolean | null>(null);
+    const [isCheckingConfig, setIsCheckingConfig] = useState(true);
+
+    const checkConfig = useCallback(async () => {
+        if (!auth?.currentUser) return;
+        setIsCheckingConfig(true);
+        try {
+            const idToken = await auth.currentUser.getIdToken();
+            const response = await fetch('/api/admin/instagram-config', {
+                headers: { 'Authorization': `Bearer ${idToken}` }
+            });
+            const data = await response.json();
+            setIsConfigAvailable(data.isConfigured);
+        } catch (error) {
+            setIsConfigAvailable(false);
+        } finally {
+            setIsCheckingConfig(false);
+        }
+    }, [auth]);
+
+    useEffect(() => {
+        checkConfig();
+    }, [checkConfig]);
 
     useEffect(() => {
         const error = searchParams.get('error');
@@ -112,13 +198,6 @@ export default function SocialMediaIntegrationsPage() {
                 title: 'Connection Failed',
                 description: errorDescription || 'An unknown error occurred during the Instagram connection process.',
                 duration: 10000,
-            });
-        }
-        const status = searchParams.get('status');
-        if (status === 'connected') {
-            toast({
-                title: 'Connection Successful!',
-                description: 'Your Instagram account has been successfully connected.',
             });
         }
     }, [searchParams, toast]);
@@ -136,7 +215,7 @@ export default function SocialMediaIntegrationsPage() {
 
     const instagramConnection = useMemo(() => connections?.find(c => c.platform === 'instagram'), [connections]);
     
-    const isLoading = profileLoading || connectionsLoading;
+    const isLoading = profileLoading || connectionsLoading || isCheckingConfig;
 
     const { isTokenExpiring, isTokenExpired } = useMemo(() => {
         if (!instagramConnection?.expiresAt) return { isTokenExpiring: false, isTokenExpired: false };
@@ -150,9 +229,8 @@ export default function SocialMediaIntegrationsPage() {
     }, [instagramConnection]);
     
     const handleConnectOrRenew = useCallback(async () => {
-      setIsConnecting(true);
-      // Direct redirect to the OAuth start endpoint.
-      window.location.href = '/api/instagram/oauth/start';
+        setIsConnecting(true);
+        window.location.href = '/api/instagram/oauth/start';
     }, []);
     
     const handleDisconnect = async () => {
@@ -205,6 +283,16 @@ export default function SocialMediaIntegrationsPage() {
                                 )}
                             </CardHeader>
                             <CardContent>
+                                {isConfigAvailable === false && !isManagerOrAdmin && (
+                                     <Alert variant="destructive">
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>Configuration Required</AlertTitle>
+                                        <AlertDescription>
+                                            The Instagram integration has not been configured by an administrator. Please contact your manager to set it up.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
                                 {instagramConnection ? (
                                     <div className="space-y-4">
                                         <div className="p-4 bg-secondary/50 rounded-lg border">
@@ -250,23 +338,22 @@ export default function SocialMediaIntegrationsPage() {
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="space-y-4">
-                                        {isManagerOrAdmin ? (
-                                            <>
-                                                <p className="text-sm text-muted-foreground">
-                                                    No account connected. Connect an account to start auto-posting. For help, consult the <Button variant="link" asChild className="p-0 h-auto text-sm"><Link href="/guide" target="_blank">official guide</Link></Button>.
-                                                </p>
-                                                <Button onClick={handleConnectOrRenew} disabled={isConnecting}>
-                                                     {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
-                                                     Connect with Instagram
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <div className="text-sm text-muted-foreground">Please ask a Manager or Super Admin to connect the company's Instagram account.</div>
-                                        )}
-                                    </div>
+                                    isConfigAvailable && isManagerOrAdmin && (
+                                        <div className="space-y-4">
+                                             <p className="text-sm text-muted-foreground">
+                                                No account connected. Connect an account to start auto-posting. For help, consult the <Button variant="link" asChild className="p-0 h-auto text-sm"><Link href="/guide" target="_blank">official guide</Link></Button>.
+                                            </p>
+                                            <Button onClick={handleConnectOrRenew} disabled={isConnecting}>
+                                                 {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
+                                                 Connect with Instagram
+                                            </Button>
+                                        </div>
+                                    )
                                 )}
                             </CardContent>
+                             {isConfigAvailable === false && isManagerOrAdmin && (
+                                <ConfigForm onConfigSaved={() => checkConfig()} />
+                            )}
                         </Card>
                     )}
                 </div>
