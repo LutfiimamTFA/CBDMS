@@ -5,14 +5,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Instagram, CheckCircle, AlertCircle, Loader2, PowerOff, Edit, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useUserProfile, useCollection, useFirestore } from '@/firebase';
+import { useUserProfile, useCollection, useFirestore, useAuth } from '@/firebase';
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatDistanceToNow, isAfter, isBefore, subDays } from 'date-fns';
+import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
 import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
@@ -222,11 +222,11 @@ export default function SocialMediaIntegrationsPage() {
                                         <div className="p-4 bg-secondary/50 rounded-lg border">
                                             <p className="text-sm font-semibold">Account: <span className="font-bold text-foreground">@{instagramConnection.instagramUsername}</span></p>
                                             <p className="text-xs text-muted-foreground">
-                                                Connected {instagramConnection.connectedAt ? formatDistanceToNow(instagramConnection.connectedAt.toDate(), { addSuffix: true }) : 'N/A'}
+                                                Connected {instagramConnection.connectedAt ? formatDistanceToNow(parseISO(instagramConnection.connectedAt), { addSuffix: true }) : 'N/A'}
                                             </p>
                                             {instagramConnection.expiresAt && (
                                                 <p className={`text-xs ${isTokenExpired ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                                    Token expires {formatDistanceToNow(instagramConnection.expiresAt.toDate(), { addSuffix: true })}
+                                                    Token expires {formatDistanceToNow(parseISO(instagramConnection.expiresAt), { addSuffix: true })}
                                                 </p>
                                             )}
                                         </div>
@@ -286,5 +286,3 @@ export default function SocialMediaIntegrationsPage() {
         </div>
     );
 }
-
-    

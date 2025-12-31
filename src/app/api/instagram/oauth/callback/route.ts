@@ -1,3 +1,4 @@
+
 'use server';
 import { NextResponse, type NextRequest } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
@@ -91,6 +92,12 @@ export async function GET(request: NextRequest) {
   try {
     const decodedToken = await adminAuth.verifyIdToken(state);
     const userId = decodedToken.uid;
+    const userRole = decodedToken.role;
+
+    if (userRole !== 'Super Admin' && userRole !== 'Manager') {
+        throw new Error('Forbidden: You do not have permission to perform this action.');
+    }
+
     const userDoc = await adminDb.collection('users').doc(userId).get();
     const companyId = userDoc.data()?.companyId;
 
@@ -129,8 +136,13 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error("Instagram OAuth Callback Error:", error);
-    errorUrl.searchParams.set('error', 'connection_failed');
-    errorUrl.searchParams.set('error_description', error.message);
+    if(error.message.includes('Forbidden')) {
+        errorUrl.searchParams.set('error', 'forbidden_role');
+        errorUrl.searchParams.set('error_description', 'You do not have permission to connect an Instagram account.');
+    } else {
+        errorUrl.searchParams.set('error', 'connection_failed');
+        errorUrl.searchParams.set('error_description', error.message);
+    }
     return NextResponse.redirect(errorUrl);
   }
 }
