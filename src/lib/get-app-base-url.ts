@@ -1,4 +1,3 @@
-
 // src/lib/get-app-base-url.ts
 import { type NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
@@ -9,7 +8,7 @@ import { adminDb } from '@/lib/firebase-admin';
  *
  * Priority order:
  * 1. Environment variable `APP_BASE_URL` (for explicit overrides).
- * 2. Firestore document `systemSettings/socialMedia` field `appBaseUrl`.
+ * 2. Firestore document `systemSettings/socialMedia` field `appBaseUrl` (if it passes allowlist validation).
  * 3. `x-forwarded-host` header (for proxy/load balancer environments).
  * 4. `host` header from the request.
  * 5. `request.nextUrl.origin` (as a final fallback).
@@ -34,7 +33,7 @@ export async function getAppBaseUrl(request: NextRequest): Promise<string> {
       const configDoc = await adminDb.collection('systemSettings').doc('socialMedia').get();
       if (configDoc.exists()) {
         const data = configDoc.data();
-        // A simple allowlist for demonstration purposes.
+        // A simple allowlist for security. Only URLs from these domains can be used.
         const domainAllowlist = ['hosted.app', 'firebaseapp.com', 'web.app', 'cloudworkstations.dev'];
         if (data?.appBaseUrl && typeof data.appBaseUrl === 'string' && data.appBaseUrl.trim() !== '' && domainAllowlist.some(domain => data.appBaseUrl.includes(domain))) {
           baseUrl = data.appBaseUrl.trim();

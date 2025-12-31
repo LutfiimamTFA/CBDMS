@@ -19,14 +19,13 @@ export async function GET(req: NextRequest) {
   try {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
-    // If we can't even get a base URL, we can't safely redirect.
-    // This is a critical server misconfiguration.
     console.error("CRITICAL: Could not determine a valid base URL for OAuth start.", error);
+    // Cannot redirect if base URL itself fails. Return a plain error response.
     return NextResponse.json({ message: "Server is misconfigured. Could not determine application base URL.", error: error.message }, { status: 500 });
   }
 
   try {
-    // 1. Verify user is logged in and has the correct role
+    // 1. Verify user is logged in and has the correct role via Firebase session cookie
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get('__session')?.value;
     if (!sessionCookie) {
@@ -49,16 +48,12 @@ export async function GET(req: NextRequest) {
     // 3. Build the correct redirect URI using the robust helper
     const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
     
-    // 4. Protection Guard (already inside getAppBaseUrl, but an extra check is good)
-    if (process.env.NODE_ENV === "production" && (redirectUri.includes('localhost') || !redirectUri.startsWith('https'))) {
-      throw new Error(`FATAL: Insecure redirect_uri generated for production: ${redirectUri}.`);
-    }
-
-    // 5. Generate state for CSRF protection and session bridging
+    // 4. Generate state for CSRF protection and a separate session ID for bridging
     const state = crypto.randomBytes(24).toString("hex");
+    const oauthSessionId = crypto.randomBytes(24).toString("hex");
 
-    // Store state and UID in Firestore with a TTL for session bridging
-    const oauthSessionRef = adminDb.collection('oauthStates').doc(state);
+    // 5. Store session mapping in Firestore with a TTL
+    const oauthSessionRef = adminDb.collection('oauthStates').doc(oauthSessionId);
     const expiresAt = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000); // 10 minute TTL
     await oauthSessionRef.set({ 
         uid,
@@ -67,8 +62,15 @@ export async function GET(req: NextRequest) {
         expiresAt,
     });
     
-    // 6. Set CSRF state in a secure, httpOnly cookie
+    // 6. Set CSRF state and session ID in secure, httpOnly cookies
     cookieStore.set("ig_oauth_state", state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 600, // 10 minutes
+    });
+     cookieStore.set("ig_oauth_session", oauthSessionId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -96,6 +98,10 @@ export async function GET(req: NextRequest) {
 
   } catch (error: any) {
     console.error("[OAuth Start Error]", error);
-    return await redirectWithError(baseUrl, "start_failed", error.message || "Could not initiate the authentication flow.");
+    let errorMessage = "Could not initiate the authentication flow.";
+    if (error.code === 'auth/session-cookie-expired' || error.code === 'auth/session-cookie-revoked') {
+      errorMessage = "Your session has expired. Please log in again.";
+    }
+    return await redirectWithError(baseUrl, "start_failed", errorMessage);
   }
 }

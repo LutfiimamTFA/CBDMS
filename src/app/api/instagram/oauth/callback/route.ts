@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getInstagramConfig } from "@/lib/instagram-config";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { serverTimestamp, Timestamp } from "firebase-admin/firestore";
+import { Timestamp } from "firebase-admin/firestore";
 import type { SocialMediaConnection } from "@/lib/types-backend";
 import { getAppBaseUrl } from "@/lib/get-app-base-url";
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
     console.error("OAuth Callback Error: Failed to determine base URL.", error);
-    // Cannot redirect to a dynamic URL, so we construct a relative one.
+    // Cannot redirect to a dynamic URL, so construct a relative one.
     const url = new URL("/social-media/integrations", "https://placeholder.com");
     url.searchParams.set("error", "invalid_base_url");
     url.searchParams.set("error_description", error.message);
@@ -45,7 +45,11 @@ export async function GET(req: NextRequest) {
   }
   
   const savedState = cookieStore.get("ig_oauth_state")?.value;
-  cookieStore.delete("ig_oauth_state"); // Cleanup state cookie immediately
+  const oauthSessionId = cookieStore.get("ig_oauth_session")?.value;
+
+  // Cleanup cookies immediately regardless of outcome
+  cookieStore.delete("ig_oauth_state");
+  cookieStore.delete("ig_oauth_session");
 
   try {
     // 1. Handle explicit errors from Meta
@@ -57,25 +61,37 @@ export async function GET(req: NextRequest) {
     
     // 2. Validate CSRF state
     const stateFromParams = req.nextUrl.searchParams.get("state");
-    if (!savedState || !stateFromParams || savedState !== stateFromParams) {
+    if (!savedState) {
+        return await redirectWithError(baseUrl, "state_missing", "CSRF state cookie not found. Please try the connection process again.");
+    }
+    if (!stateFromParams || savedState !== stateFromParams) {
       return await redirectWithError(baseUrl, "invalid_state", "Invalid or expired authorization request. Please try again.");
     }
     
     // 3. Get UID from our session bridging mechanism (Firestore)
-    const stateDocRef = adminDb.collection('oauthStates').doc(stateFromParams);
+    if (!oauthSessionId) {
+        return await redirectWithError(baseUrl, "session_missing", "OAuth session identifier not found. Please try connecting again.");
+    }
+    const stateDocRef = adminDb.collection('oauthStates').doc(oauthSessionId);
     const stateDoc = await stateDocRef.get();
+
+    // Cleanup Firestore doc now that it's been used
+    if (stateDoc.exists) {
+        await stateDocRef.delete();
+    }
 
     if (!stateDoc.exists) {
         return await redirectWithError(baseUrl, "session_expired", "Your connection attempt has expired. Please try again.");
     }
     const stateData = stateDoc.data();
     if (stateData?.expiresAt.toDate() < new Date()) {
-        await stateDocRef.delete(); // Cleanup expired state
         return await redirectWithError(baseUrl, "session_expired", "Your connection attempt has expired. Please try again.");
     }
 
     const { uid: userId } = stateData as { uid: string };
-    await stateDocRef.delete(); // State is single-use, delete it now
+    if (!userId) {
+        return await redirectWithError(baseUrl, "session_invalid", "The connection session was invalid. Please try again.");
+    }
 
     // 4. Get App config and authorization code
     const config = await getInstagramConfig();
@@ -124,7 +140,7 @@ export async function GET(req: NextRequest) {
     const pageWithIg = (pagesData?.data || []).find((p: any) => p?.instagram_business_account?.id);
 
     if (!pageWithIg?.instagram_business_account?.id) {
-        throw new Error("No Instagram Business Account is linked to your Facebook Pages. Please check your Meta Business Suite settings.");
+        throw new Error("No Instagram Business Account is linked to your Facebook Pages. Please check your Meta Business Suite settings and ensure the account is professional.");
     }
 
     // 7. Get user's company and save connection
