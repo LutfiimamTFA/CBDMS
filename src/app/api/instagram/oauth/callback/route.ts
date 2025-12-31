@@ -1,3 +1,4 @@
+
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getInstagramConfig } from "@/lib/instagram-config";
@@ -51,11 +52,13 @@ export async function GET(req: NextRequest) {
     const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
     
     // Protection Guard
-    if (process.env.NODE_ENV !== 'development' && (redirectUri.includes('0.0.0.0') || redirectUri.includes('localhost'))) {
-        throw new Error(`Invalid redirect_uri detected in callback: ${redirectUri}.`);
+    if (process.env.NODE_ENV === 'production') {
+      if (redirectUri.includes('0.0.0.0') || redirectUri.includes('localhost') || !redirectUri.startsWith('https://')) {
+          throw new Error(`Invalid redirect_uri detected in callback: ${redirectUri}.`);
+      }
     }
     
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     const savedState = cookieStore.get("ig_oauth_state")?.value;
     cookieStore.delete("ig_oauth_state");
 

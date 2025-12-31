@@ -1,3 +1,4 @@
+
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "crypto";
 import { cookies } from "next/headers";
@@ -23,13 +24,19 @@ export async function GET(req: NextRequest) {
     const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
 
     // Protection Guard: Ensure redirect URI is not local or invalid in production-like environments
-    if (process.env.NODE_ENV !== 'development' && (redirectUri.includes('0.0.0.0') || redirectUri.includes('localhost'))) {
+    if (process.env.NODE_ENV === "production") {
+      if (redirectUri.includes('0.0.0.0') || redirectUri.includes('localhost') || !redirectUri.startsWith('https://')) {
+          throw new Error(`Invalid redirect_uri generated for production: ${redirectUri}. Aborting OAuth flow.`);
+      }
+    }
+    if (redirectUri.includes('0.0.0.0')) {
         throw new Error(`Invalid redirect_uri generated: ${redirectUri}. Aborting OAuth flow.`);
     }
 
+
     const state = crypto.randomBytes(16).toString("hex");
 
-    const cookieStore = cookies();
+    const cookieStore = await cookies();
     cookieStore.set("ig_oauth_state", state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
