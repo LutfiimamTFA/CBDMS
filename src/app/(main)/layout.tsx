@@ -26,7 +26,7 @@ import {
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useCollection, useFirestore, useUserProfile, useAuth } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile, useAuth, initiateSignOut } from '@/firebase';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import type { NavigationItem } from '@/lib/types';
@@ -36,6 +36,7 @@ import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
 import { Button } from '@/components/ui/button';
 import { ShareViewDialog } from '@/components/share/share-view-dialog';
+import { AppProviders } from '@/components/app-providers';
 
 const Icon = ({
   name,
@@ -61,7 +62,7 @@ function MainAppLayout({
 
   const handleLogout = () => {
     if(auth) {
-        auth.signOut();
+        initiateSignOut(auth);
         router.push('/login');
     }
   }
@@ -260,5 +261,9 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     );
   }
 
-  return <MainAppLayout finalNavItems={finalNavItems}>{children}</MainAppLayout>;
+  return (
+    <AppProviders>
+        <MainAppLayout finalNavItems={finalNavItems}>{children}</MainAppLayout>
+    </AppProviders>
+  );
 }

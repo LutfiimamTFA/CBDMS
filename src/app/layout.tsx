@@ -2,7 +2,6 @@
 
 import './globals.css';
 import { useEffect, useState } from 'react';
-import { AppProviders } from '@/components/app-providers';
 
 export default function RootLayout({
   children,
@@ -43,9 +42,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-body antialiased">
-          <AppProviders>
-            {children}
-          </AppProviders>
+        {children}
       </body>
     </html>
   );
