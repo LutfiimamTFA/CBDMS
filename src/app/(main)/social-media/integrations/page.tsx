@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
-import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useSearchParams } from 'next/navigation';
@@ -39,6 +38,10 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
         setFormErrorMessage(null);
         if (!appIdInput.trim()) {
             setFormErrorMessage("App ID cannot be empty.");
+            return;
+        }
+        if (!/^\d+$/.test(appIdInput)) {
+            setFormErrorMessage("App ID must only contain numbers.");
             return;
         }
         if (appSecretInput.trim().length < 10) {
@@ -170,7 +173,6 @@ export default function SocialMediaIntegrationsPage() {
                 description: errorDescription || 'An unknown error occurred during the Instagram connection process.',
                 duration: 10000,
             });
-            // Clear URL params after showing toast
             window.history.replaceState({}, '', '/social-media/integrations');
         }
     }, [searchParams, toast]);
@@ -258,12 +260,18 @@ export default function SocialMediaIntegrationsPage() {
                             {isRedirecting ? 'Redirecting...' : (instagramConnection ? 'Renew Connection' : 'Connect with Instagram')}
                         </Button>
                     ) : (
-                       <p className="text-sm text-muted-foreground">Set up the configuration to connect.</p>
+                       !statusLoading && (
+                        <ConfigDialog onConfigSaved={() => { setConfigJustSaved(true); checkConfig(); }}>
+                            <Button variant="default"><Edit className="mr-2 h-4 w-4" /> Set Up Configuration</Button>
+                        </ConfigDialog>
+                       )
                     )}
                     
-                    <ConfigDialog onConfigSaved={() => { setConfigJustSaved(true); checkConfig(); }}>
-                        <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
-                    </ConfigDialog>
+                    {configStatus?.configured && (
+                        <ConfigDialog onConfigSaved={() => { setConfigJustSaved(true); checkConfig(); }}>
+                            <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
+                        </ConfigDialog>
+                    )}
                 </div>
 
                 {instagramConnection && (
@@ -311,7 +319,6 @@ export default function SocialMediaIntegrationsPage() {
              )
         }
 
-        // Main view for Admin/Manager
         return (
             <CardContent className="space-y-4">
                  {statusLoading ? (
@@ -320,12 +327,16 @@ export default function SocialMediaIntegrationsPage() {
                         <span>Checking server configuration...</span>
                     </div>
                  ) : statusError ? (
-                     <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md flex items-center justify-between gap-3">
-                        <div>
-                            <p className="font-semibold">Could Not Read Status</p>
-                            <p>{statusError}</p>
-                        </div>
-                        <Button variant="ghost" onClick={checkConfig}><RefreshCw className="mr-2 h-4 w-4" /> Try Again</Button>
+                    <div className="p-4 border-t space-y-4">
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Cannot Read Status</AlertTitle>
+                            <AlertDescription>{statusError}</AlertDescription>
+                        </Alert>
+                        <Button onClick={checkConfig}>
+                            <RefreshCw className="mr-2 h-4 w-4"/>
+                            Try Again
+                        </Button>
                     </div>
                  ) : (
                      <>

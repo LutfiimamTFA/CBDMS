@@ -1,3 +1,4 @@
+
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "crypto";
 import { cookies } from "next/headers";
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
     integrationsUrl.searchParams.set("error", "server_misconfigured");
     integrationsUrl.searchParams.set(
       "error_description",
-      "Instagram App ID/Secret has not been configured. Please set it in the Integrations page."
+      "Instagram App ID/Secret has not been configured. Please ask an administrator to set it in the Integrations page."
     );
     return NextResponse.redirect(integrationsUrl);
   }
@@ -21,8 +22,9 @@ export async function GET(req: NextRequest) {
   const { appId } = config;
   const redirectUri = new URL("/api/instagram/oauth/callback", origin).toString();
   const state = crypto.randomBytes(16).toString("hex");
-
-  cookies().set("ig_oauth_state", state, {
+  
+  const cookieStore = cookies();
+  cookieStore.set("ig_oauth_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

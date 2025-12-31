@@ -1,3 +1,4 @@
+
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getInstagramConfig } from "@/lib/instagram-config";
@@ -21,6 +22,10 @@ function redirectWithError(request: NextRequest, error: string, description: str
 
 async function fbFetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { method: "GET" });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Facebook API request failed with status ${res.status}`);
+  }
   return (await res.json()) as T;
 }
 
@@ -38,7 +43,6 @@ export async function GET(req: NextRequest) {
   const { appId, appSecret } = config;
   const redirectUri = new URL("/api/instagram/oauth/callback", req.nextUrl.origin).toString();
   
-  // Clean up cookies regardless of outcome
   const cookieStore = cookies();
   const savedState = cookieStore.get("ig_oauth_state")?.value;
   cookieStore.delete("ig_oauth_state");
@@ -61,6 +65,22 @@ export async function GET(req: NextRequest) {
   }
   
   try {
+    const sessionCookie = cookieStore.get('__session')?.value;
+    if (!sessionCookie) {
+        throw new Error("User session not found. Please log in and try again.");
+    }
+    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+    const userId = decodedToken.uid;
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    if (!userDoc.exists) throw new Error("Authenticated user not found in the database.");
+
+    const userData = userDoc.data();
+    if (!userData || (userData.role !== 'Super Admin' && userData.role !== 'Manager')) {
+        throw new Error("User does not have permission to perform this action.");
+    }
+    const companyId = userData.companyId;
+    if (!companyId) throw new Error("User is not associated with a company.");
+
     // Exchange code for short-lived token
     const tokenUrl = new URL("https://graph.facebook.com/v20.0/oauth/access_token");
     tokenUrl.searchParams.set("client_id", appId);
@@ -85,32 +105,6 @@ export async function GET(req: NextRequest) {
         throw new Error(longToken.error?.message || "Failed to exchange for a long-lived access token.");
     }
 
-    // --- Validation after getting token ---
-    const debugUrl = new URL("https://graph.facebook.com/debug_token");
-    debugUrl.searchParams.set("input_token", longToken.access_token);
-    debugUrl.searchParams.set("access_token", `${appId}|${appSecret}`);
-
-    const debugData = await fbFetchJson<{ data: any }>(debugUrl.toString());
-    if (!debugData.data?.is_valid || debugData.data?.app_id !== appId) {
-        throw new Error("The access token is invalid or does not belong to this application.");
-    }
-    const userIdFromToken = debugData.data.user_id;
-
-    // Get user from our system based on who initiated the flow
-    const authHeader = req.headers.get('cookie');
-    // NOTE: In a real-world scenario, you would use a more robust session management system.
-    // For this example, we assume some form of session cookie is present that can be verified.
-    // This part is placeholder and needs to be replaced with your actual session verification logic.
-    const tempUserId = "placeholder_user_id_from_session"; // This MUST be replaced.
-
-    const userDoc = await adminDb.collection('users').doc(tempUserId).get();
-    if (!userDoc.exists) throw new Error("Authenticated user not found in the database.");
-    
-    const userData = userDoc.data();
-    if (userData?.role !== 'Super Admin' && userData?.role !== 'Manager') {
-        throw new Error("User does not have permission to perform this action.");
-    }
-
     const pagesUrl = new URL("https://graph.facebook.com/v20.0/me/accounts");
     pagesUrl.searchParams.set("access_token", longToken.access_token);
     pagesUrl.searchParams.set("fields", "id,name,instagram_business_account{username,id}");
@@ -125,7 +119,7 @@ export async function GET(req: NextRequest) {
     const connectionData: Omit<SocialMediaConnection, 'id'> = {
         platform: 'instagram',
         userId: userDoc.id,
-        companyId: userData.companyId,
+        companyId: companyId,
         instagramUserId: pageWithIg.instagram_business_account.id,
         instagramUsername: pageWithIg.instagram_business_account.username,
         accessToken: longToken.access_token,
@@ -133,7 +127,7 @@ export async function GET(req: NextRequest) {
         connectedAt: serverTimestamp(),
     };
     
-    const connectionId = `${userData.companyId}_instagram`;
+    const connectionId = `${companyId}_instagram`;
     await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
 
     const successUrl = new URL('/social-media/integrations', req.nextUrl.origin);
