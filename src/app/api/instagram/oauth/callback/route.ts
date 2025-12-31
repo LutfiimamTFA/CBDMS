@@ -7,13 +7,6 @@ import { serverTimestamp } from "firebase-admin/firestore";
 import type { SocialMediaConnection } from "@/lib/types-backend";
 import { getAppBaseUrl } from "@/lib/get-app-base-url";
 
-type FbTokenResponse = {
-  access_token?: string;
-  token_type?: string;
-  expires_in?: number;
-  error?: { message: string; type?: string; code?: number; fbtrace_id?: string };
-};
-
 async function redirectWithError(request: NextRequest, error: string, description: string) {
   try {
     const baseUrl = await getAppBaseUrl(request);
@@ -25,6 +18,13 @@ async function redirectWithError(request: NextRequest, error: string, descriptio
      return new Response(`OAuth Callback Failed: ${description}. Additionally, could not build error redirect URL: ${fallbackError.message}`, { status: 500 });
   }
 }
+
+type FbTokenResponse = {
+  access_token?: string;
+  token_type?: string;
+  expires_in?: number;
+  error?: { message: string; type?: string; code?: number; fbtrace_id?: string };
+};
 
 async function fbFetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { method: "GET" });
@@ -56,6 +56,9 @@ export async function GET(req: NextRequest) {
       if (redirectUri.includes('0.0.0.0') || redirectUri.includes('localhost') || !redirectUri.startsWith('https://')) {
           throw new Error(`Invalid redirect_uri detected in callback: ${redirectUri}.`);
       }
+    }
+     if (redirectUri.includes('0.0.0.0')) {
+        throw new Error(`Invalid redirect_uri generated: ${redirectUri}. Aborting OAuth flow.`);
     }
     
     const cookieStore = await cookies();

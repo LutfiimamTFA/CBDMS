@@ -1,4 +1,3 @@
-
 // src/lib/get-app-base-url.ts
 import { type NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
@@ -34,7 +33,10 @@ export async function getAppBaseUrl(request: NextRequest): Promise<string> {
       const configDoc = await adminDb.collection('systemSettings').doc('app').get();
       if (configDoc.exists()) {
         const data = configDoc.data();
-        if (data?.baseUrl && typeof data.baseUrl === 'string' && data.baseUrl.trim() !== '') {
+        // A simple allowlist for demonstration purposes.
+        // In a real scenario, this could be more complex.
+        const domainAllowlist = ['hosted.app', 'firebaseapp.com', 'web.app'];
+        if (data?.baseUrl && typeof data.baseUrl === 'string' && data.baseUrl.trim() !== '' && domainAllowlist.some(domain => data.baseUrl.includes(domain))) {
           baseUrl = data.baseUrl.trim();
         }
       }
@@ -74,7 +76,7 @@ export async function getAppBaseUrl(request: NextRequest): Promise<string> {
   if (baseUrl.includes('0.0.0.0')) {
     throw new Error(
       `FATAL: Invalid base URL detected: ${baseUrl}. Contains '0.0.0.0'. ` +
-      `Please set APP_BASE_URL environment variable.`
+      `Please set APP_BASE_URL environment variable if running in a complex environment.`
     );
   }
 
