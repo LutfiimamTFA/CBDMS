@@ -8,14 +8,33 @@ import { Badge } from '@/components/ui/badge';
 import { useUserProfile, useCollection, useFirestore, useAuth } from '@/firebase';
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useSearchParams } from 'next/navigation';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -40,8 +59,8 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
             setFormErrorMessage("App ID cannot be empty.");
             return;
         }
-        if (!/^\d+$/.test(appIdInput)) {
-            setFormErrorMessage("App ID must only contain numbers.");
+        if (!appSecretInput.trim()) {
+            setFormErrorMessage("App Secret cannot be empty.");
             return;
         }
         if (appSecretInput.trim().length < 10) {
