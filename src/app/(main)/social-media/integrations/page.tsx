@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
 import { useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 
 const InstagramIcon = () => (
@@ -34,13 +34,13 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
     const [errorMessage, setFormErrorMessage] = useState<string | null>(null);
     const [appIdInput, setAppIdInput] = useState('');
     const [appSecretInput, setAppSecretInput] = useState('');
-    const { auth } = useAuth();
+    const auth = useAuth();
     const { toast } = useToast();
     
     const handleSaveConfig = async () => {
         setFormErrorMessage(null);
-        if (!/^\d+$/.test(appIdInput)) {
-            setFormErrorMessage("App ID must only contain numbers.");
+        if (!appIdInput.trim() || !appSecretInput.trim()) {
+            setFormErrorMessage("App ID and App Secret cannot be empty.");
             return;
         }
         if (appSecretInput.trim().length < 10) {
@@ -55,7 +55,7 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
             const response = await fetch('/api/admin/instagram-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
-                body: JSON.stringify({ appId: appIdInput, appSecret: appSecretInput }),
+                body: JSON.stringify({ appId: appIdInput.trim(), appSecret: appSecretInput.trim() }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.message || 'Failed to save configuration.');
@@ -230,64 +230,13 @@ export default function SocialMediaIntegrationsPage() {
     }
     
     const renderActionButtons = () => {
-        if (statusLoading) {
-            return (
-                 <div className="flex items-center gap-2 p-4 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Checking configuration...</span>
-                    <Button variant="outline" size="sm" onClick={checkConfig}>Refresh</Button>
-                </div>
-            )
-        }
-        
-        if (statusError) {
-             return (
-                 <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Could Not Check Status</AlertTitle>
-                    <AlertDescription>
-                        {statusError}
-                        <Button variant="link" onClick={checkConfig} className="p-0 h-auto ml-2">Try again</Button>
-                    </AlertDescription>
-                </Alert>
-            )
-        }
-
-        if (!configStatus) {
-             return (
-                 <div className="p-4 border-t space-y-4">
-                    <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Cannot Read Status</AlertTitle>
-                        <AlertDescription>The connection status could not be determined. Please try refreshing.</AlertDescription>
-                    </Alert>
-                     {isManagerOrAdmin && (
-                        <ConfigDialog onConfigSaved={checkConfig}>
-                            <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Set Up Configuration</Button>
-                        </ConfigDialog>
-                     )}
-                </div>
-             )
-        }
-
-
         if (isManagerOrAdmin) {
             return (
                 <div className="flex flex-wrap gap-4 items-center">
-                   
-                    {!configStatus.configured ? (
-                         <div className="w-full">
-                            <Alert>
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertTitle>Configuration Required</AlertTitle>
-                                <AlertDescription>
-                                    Please provide your Instagram App credentials to enable this integration. This is a one-time setup.
-                                </AlertDescription>
-                            </Alert>
-                            <ConfigDialog onConfigSaved={checkConfig}>
-                                <Button className="mt-4"><Edit className="mr-2 h-4 w-4" /> Set Up Configuration</Button>
-                            </ConfigDialog>
-                        </div>
+                    {!configStatus?.configured ? (
+                        <ConfigDialog onConfigSaved={checkConfig}>
+                             <Button><Edit className="mr-2 h-4 w-4" /> Set Up Configuration</Button>
+                        </ConfigDialog>
                     ) : (
                          <Button onClick={handleConnectOrRenew} disabled={isConnecting}>
                             {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
@@ -316,7 +265,7 @@ export default function SocialMediaIntegrationsPage() {
                         </AlertDialog>
                     )}
 
-                     {configStatus.configured && (
+                     {configStatus?.configured && (
                         <ConfigDialog onConfigSaved={checkConfig}>
                             <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
                         </ConfigDialog>
@@ -326,7 +275,7 @@ export default function SocialMediaIntegrationsPage() {
         }
         
         return (
-            !configStatus.configured ? (
+            !configStatus?.configured ? (
                  <p className="text-sm text-muted-foreground p-4 border-t">The Instagram integration has not been configured by an administrator yet.</p>
             ) : (
                  <p className="text-sm text-muted-foreground p-4 border-t">Configuration and connection management can only be performed by a Manager or Administrator.</p>
