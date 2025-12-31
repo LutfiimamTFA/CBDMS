@@ -341,10 +341,10 @@
             "instagramUserId": { "type": "string", "description": "The User ID from the Instagram Graph API." },
             "instagramUsername": { "type": "string" },
             "accessToken": { "type": "string", "description": "The long-lived access token." },
-            "expiresIn": { "type": "number", "description": "Seconds until the token expires." },
+            "expiresAt": { "type": "string", "format": "date-time" },
             "connectedAt": { "type": "string", "format": "date-time" }
         },
-        "required": ["id", "platform", "userId", "companyId", "instagramUserId", "accessToken"]
+        "required": ["id", "platform", "userId", "companyId", "instagramUserId", "accessToken", "expiresAt"]
     }
   },
   "auth": {
@@ -364,11 +364,11 @@
       { "path": "/navigationItems/{navItemId}", "definition": { "entityName": "NavigationItem", "schema": { "$ref": "#/backend/entities/NavigationItem" } } },
       { "path": "/users/{userId}/notifications/{notificationId}", "definition": { "entityName": "Notification", "schema": { "$ref": "#/backend/entities/Notification" } } },
       { "path": "/statuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
-      { "path": "/api/run-scheduler", "definition": { "description": "An API endpoint that, when called, runs all scheduled jobs like generating recurring tasks and posting social media content." } },
       { "path": "/socialMediaPosts/{postId}", "definition": { "entityName": "SocialMediaPost", "schema": { "$ref": "#/backend/entities/SocialMediaPost" } } },
       { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },
       { "path": "/socialMediaConnections/{connectionId}", "definition": { "entityName": "SocialMediaConnection", "schema": { "$ref": "#/backend/entities/SocialMediaConnection" } } },
-      { "path": "/api/instagram/publish", "definition": { "description": "An API endpoint to publish a post to Instagram." } }
+      { "path": "/api/instagram/publish", "definition": { "description": "An API endpoint to publish a post to Instagram." } },
+      { "path": "/api/run-scheduler", "definition": { "description": "An API endpoint that runs scheduled jobs like posting social media content." } }
     ]
   }
 }

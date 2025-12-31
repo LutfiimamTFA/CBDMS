@@ -10,7 +10,6 @@ import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
@@ -151,20 +150,9 @@ export default function SocialMediaIntegrationsPage() {
     }, [instagramConnection]);
     
     const handleConnectOrRenew = async () => {
-        if (!user) {
-            toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
-            return;
-        }
-
         setIsConnecting(true);
-        try {
-            const idToken = await user.getIdToken();
-            const state = idToken; // Pass the ID token in the state parameter
-            window.location.href = `/api/instagram/oauth/start?state=${encodeURIComponent(state)}`;
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not generate authentication token. Please try again.' });
-            setIsConnecting(false);
-        }
+        // Direct redirect to the OAuth start endpoint.
+        window.location.href = '/api/instagram/oauth/start';
     };
     
     const handleDisconnect = async () => {
@@ -226,7 +214,7 @@ export default function SocialMediaIntegrationsPage() {
                                             </p>
                                             {instagramConnection.expiresAt && (
                                                 <p className={`text-xs ${isTokenExpired ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                                    Token expires {formatDistanceToNow(parseISO(instagramConnection.expiresAt), { addSuffix: true })}
+                                                    Token expires {formatDistanceToNow(instagramConnection.expiresAt.toDate(), { addSuffix: true })}
                                                 </p>
                                             )}
                                         </div>

@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { serverTimestamp } from 'firebase-admin/firestore';
 import type { SocialMediaConnection } from '@/lib/types-backend';
+import { cookies } from 'next/headers';
 
 const FACEBOOK_GRAPH_API_URL = "https://graph.facebook.com/v20.0";
 const APP_ID = process.env.INSTAGRAM_APP_ID;
@@ -54,7 +55,6 @@ async function debugToken(accessToken: string): Promise<any> {
     return data.data;
 }
 
-
 async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: string; username: string }> {
     const url = `${FACEBOOK_GRAPH_API_URL}/me/accounts?fields=instagram_business_account{id,username}&access_token=${accessToken}`;
     const response = await fetch(url);
@@ -72,9 +72,24 @@ async function getInstagramBusinessAccount(accessToken: string): Promise<{ id: s
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const state = searchParams.get('state'); // The ID token from the start of the flow
+  const receivedState = searchParams.get('state');
+  
+  const cookieStore = cookies();
+  const storedState = cookieStore.get('ig_oauth_state')?.value;
 
   const errorUrl = new URL('/social-media/integrations', request.url);
+
+  // Clean up state cookie immediately
+  if (storedState) {
+    cookieStore.delete('ig_oauth_state');
+  }
+
+  // 1. CSRF Protection: Validate state
+  if (!receivedState || !storedState || receivedState !== storedState) {
+    errorUrl.searchParams.set('error', 'invalid_state');
+    errorUrl.searchParams.set('error_description', 'Authentication session has expired or is invalid. Please try again.');
+    return NextResponse.redirect(errorUrl);
+  }
 
   if (searchParams.has('error')) {
     const errorDescription = searchParams.get('error_description') || 'An error occurred during authentication.';
@@ -83,28 +98,39 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(errorUrl);
   }
 
-  if (!code || !state) {
+  if (!code) {
     errorUrl.searchParams.set('error', 'invalid_callback');
-    errorUrl.searchParams.set('error_description', 'Missing authorization code or state from Meta callback.');
+    errorUrl.searchParams.set('error_description', 'Missing authorization code from Meta callback.');
     return NextResponse.redirect(errorUrl);
   }
 
   try {
-    const decodedToken = await adminAuth.verifyIdToken(state);
+    // 2. User & Role Validation: Get user from session cookie provided by Firebase Auth
+    const sessionCookie = cookieStore.get('__session')?.value || '';
+    if (!sessionCookie) {
+        throw new Error('User not logged in. Please sign in and try again.');
+    }
+    
+    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
     const userId = decodedToken.uid;
-    const userRole = decodedToken.role;
+    const userDoc = await adminDb.collection('users').doc(userId).get();
+    const userData = userDoc.data();
+    
+    if (!userData) {
+      throw new Error('User not found in database.');
+    }
 
+    const userRole = userData.role;
     if (userRole !== 'Super Admin' && userRole !== 'Manager') {
         throw new Error('Forbidden: You do not have permission to perform this action.');
     }
-
-    const userDoc = await adminDb.collection('users').doc(userId).get();
-    const companyId = userDoc.data()?.companyId;
-
+    
+    const companyId = userData.companyId;
     if (!companyId) {
         throw new Error('User is not associated with a company.');
     }
 
+    // 3. Exchange code for token and save connection (only after all validations pass)
     const redirectUri = `${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/oauth/callback`;
     const tokenInfo = await getLongLivedAccessToken(code, redirectUri);
     const longLivedToken = tokenInfo.access_token;
@@ -136,13 +162,14 @@ export async function GET(request: NextRequest) {
 
   } catch (error: any) {
     console.error("Instagram OAuth Callback Error:", error);
+    let errorCode = 'connection_failed';
     if(error.message.includes('Forbidden')) {
-        errorUrl.searchParams.set('error', 'forbidden_role');
-        errorUrl.searchParams.set('error_description', 'You do not have permission to connect an Instagram account.');
-    } else {
-        errorUrl.searchParams.set('error', 'connection_failed');
-        errorUrl.searchParams.set('error_description', error.message);
+        errorCode = 'forbidden_role';
+    } else if (error.message.includes('User not logged in')) {
+        errorCode = 'not_logged_in';
     }
+    errorUrl.searchParams.set('error', errorCode);
+    errorUrl.searchParams.set('error_description', error.message);
     return NextResponse.redirect(errorUrl);
   }
 }
