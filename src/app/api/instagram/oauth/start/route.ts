@@ -1,12 +1,11 @@
-
 'use server';
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
 import { adminAuth } from '@/lib/firebase-admin';
 
-export async function GET(request: Request) {
-    const errorUrl = new URL('/social-media/integrations', new URL(request.url).origin);
+export async function GET(request: NextRequest) {
+    const errorUrl = new URL('/social-media/integrations', request.url);
 
     const clientId = process.env.INSTAGRAM_APP_ID;
     const redirectUri = `${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/oauth/callback`;

@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Instagram, CheckCircle, AlertCircle, Loader2, PowerOff, Edit, RefreshCw } from 'lucide-react';
@@ -95,7 +95,7 @@ function ManualUpdateDialog({ onTokenUpdated }: { onTokenUpdated: () => void }) 
 }
 
 export default function SocialMediaIntegrationsPage() {
-    const { profile, isLoading: profileLoading, user } = useUserProfile();
+    const { profile, isLoading: profileLoading } = useUserProfile();
     const firestore = useFirestore();
     const { toast } = useToast();
     const [isDisconnecting, setIsDisconnecting] = useState(false);
@@ -149,11 +149,11 @@ export default function SocialMediaIntegrationsPage() {
         };
     }, [instagramConnection]);
     
-    const handleConnectOrRenew = async () => {
-        setIsConnecting(true);
-        // Direct redirect to the OAuth start endpoint.
-        window.location.href = '/api/instagram/oauth/start';
-    };
+    const handleConnectOrRenew = useCallback(async () => {
+      setIsConnecting(true);
+      // Direct redirect to the OAuth start endpoint.
+      window.location.href = '/api/instagram/oauth/start';
+    }, []);
     
     const handleDisconnect = async () => {
         if (!firestore || !instagramConnection) return;
