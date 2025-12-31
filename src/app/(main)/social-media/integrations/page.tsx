@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -150,23 +151,18 @@ export default function SocialMediaIntegrationsPage() {
     }, [instagramConnection]);
     
     const handleConnectOrRenew = async () => {
-        if (!user) return;
+        if (!user) {
+            toast({ variant: 'destructive', title: 'Authentication Error', description: 'You must be logged in.' });
+            return;
+        }
+
         setIsConnecting(true);
         try {
             const idToken = await user.getIdToken();
-            const response = await fetch('/api/instagram/oauth/start', {
-                headers: { 'Authorization': `Bearer ${idToken}` }
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Failed to start connection process.');
-            }
-
-            const { url } = await response.json();
-            window.location.href = url; // Redirect user to Meta OAuth
+            const state = idToken; // Pass the ID token in the state parameter
+            window.location.href = `/api/instagram/oauth/start?state=${encodeURIComponent(state)}`;
         } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Error', description: error.message });
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not generate authentication token. Please try again.' });
             setIsConnecting(false);
         }
     };
@@ -290,3 +286,5 @@ export default function SocialMediaIntegrationsPage() {
         </div>
     );
 }
+
+    
