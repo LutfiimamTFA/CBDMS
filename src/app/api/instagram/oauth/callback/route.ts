@@ -1,10 +1,10 @@
-
 import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getInstagramConfig } from "@/lib/instagram-config";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { serverTimestamp } from "firebase-admin/firestore";
 import type { SocialMediaConnection } from "@/lib/types-backend";
+import { getAppBaseUrl } from "@/lib/get-app-base-url";
 
 type FbTokenResponse = {
   access_token?: string;
@@ -13,11 +13,16 @@ type FbTokenResponse = {
   error?: { message: string; type?: string; code?: number; fbtrace_id?: string };
 };
 
-function redirectWithError(request: NextRequest, error: string, description: string) {
-  const url = new URL("/social-media/integrations", request.nextUrl.origin);
-  url.searchParams.set("error", error);
-  url.searchParams.set("error_description", description);
-  return NextResponse.redirect(url);
+async function redirectWithError(request: NextRequest, error: string, description: string) {
+  try {
+    const baseUrl = await getAppBaseUrl(request);
+    const url = new URL("/social-media/integrations", baseUrl);
+    url.searchParams.set("error", error);
+    url.searchParams.set("error_description", description);
+    return NextResponse.redirect(url);
+  } catch (fallbackError: any) {
+     return new Response(`OAuth Callback Failed: ${description}. Additionally, could not build error redirect URL: ${fallbackError.message}`, { status: 500 });
+  }
 }
 
 async function fbFetchJson<T>(url: string): Promise<T> {
@@ -30,41 +35,47 @@ async function fbFetchJson<T>(url: string): Promise<T> {
 }
 
 export async function GET(req: NextRequest) {
-  const config = await getInstagramConfig();
-
-  if (!config) {
-    return redirectWithError(
-      req,
-      "server_misconfigured",
-      "Instagram App ID/Secret is not configured on the server."
-    );
-  }
-
-  const { appId, appSecret } = config;
-  const redirectUri = new URL("/api/instagram/oauth/callback", req.nextUrl.origin).toString();
-  
-  const cookieStore = cookies();
-  const savedState = cookieStore.get("ig_oauth_state")?.value;
-  cookieStore.delete("ig_oauth_state");
-
-  const oauthError = req.nextUrl.searchParams.get("error");
-  const oauthErrorDesc = req.nextUrl.searchParams.get("error_description");
-  if (oauthError) {
-    return redirectWithError(req, "oauth_failed", oauthErrorDesc || `OAuth error: ${oauthError}`);
-  }
-
-  const code = req.nextUrl.searchParams.get("code");
-  const state = req.nextUrl.searchParams.get("state");
-
-  if (!savedState || !state || savedState !== state) {
-    return redirectWithError(req, "invalid_state", "Invalid or expired authorization request. Please try again.");
-  }
-  
-  if (!code) {
-    return redirectWithError(req, "oauth_failed", "Authorization code not found in callback. Please try again.");
-  }
-  
   try {
+    const baseUrl = await getAppBaseUrl(req);
+    const config = await getInstagramConfig();
+    
+    if (!config) {
+      return redirectWithError(
+        req,
+        "server_misconfigured",
+        "Instagram App ID/Secret is not configured on the server."
+      );
+    }
+
+    const { appId, appSecret } = config;
+    const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
+    
+    // Protection Guard
+    if (process.env.NODE_ENV !== 'development' && (redirectUri.includes('0.0.0.0') || redirectUri.includes('localhost'))) {
+        throw new Error(`Invalid redirect_uri detected in callback: ${redirectUri}.`);
+    }
+    
+    const cookieStore = cookies();
+    const savedState = cookieStore.get("ig_oauth_state")?.value;
+    cookieStore.delete("ig_oauth_state");
+
+    const oauthError = req.nextUrl.searchParams.get("error");
+    const oauthErrorDesc = req.nextUrl.searchParams.get("error_description");
+    if (oauthError) {
+      return redirectWithError(req, "oauth_failed", oauthErrorDesc || `OAuth error: ${oauthError}`);
+    }
+
+    const code = req.nextUrl.searchParams.get("code");
+    const state = req.nextUrl.searchParams.get("state");
+
+    if (!savedState || !state || savedState !== state) {
+      return redirectWithError(req, "invalid_state", "Invalid or expired authorization request. Please try again.");
+    }
+    
+    if (!code) {
+      return redirectWithError(req, "oauth_failed", "Authorization code not found in callback. Please try again.");
+    }
+    
     const sessionCookie = cookieStore.get('__session')?.value;
     if (!sessionCookie) {
         throw new Error("User session not found. Please log in and try again.");
@@ -130,7 +141,7 @@ export async function GET(req: NextRequest) {
     const connectionId = `${companyId}_instagram`;
     await adminDb.collection('socialMediaConnections').doc(connectionId).set(connectionData, { merge: true });
 
-    const successUrl = new URL('/social-media/integrations', req.nextUrl.origin);
+    const successUrl = new URL('/social-media/integrations', baseUrl);
     successUrl.searchParams.set('status', 'connected');
     return NextResponse.redirect(successUrl);
 
