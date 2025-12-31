@@ -56,25 +56,44 @@ function MainAppLayout({
   const pathname = usePathname();
   const { t } = useI18n();
   const firestore = useFirestore();
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    if (isUserLoading) return;
-    
-    if (!user && pathname !== '/login') {
-      router.replace('/login');
+    // If the authentication state is still loading, do nothing yet.
+    if (isUserLoading) {
       return;
     }
 
-    if (auth?.currentUser) {
-      getIdTokenResult(auth.currentUser, true)
+    // If loading is finished and there's no user, redirect to login immediately.
+    // Allow access only to the explicit login and related public pages.
+    const publicPaths = ['/login', '/check-email'];
+    if (!user && !publicPaths.includes(pathname)) {
+      router.replace(`/login?next=${pathname}`);
+      return;
+    }
+
+    // If there is a user, handle post-login logic.
+    if (user && profile) {
+      // Logic for forced actions (password change, task acknowledgment)
+      getIdTokenResult(user, true)
         .then((idTokenResult) => {
-          if (idTokenResult.claims.mustChangePassword) {
+          const claims = idTokenResult.claims;
+          if (claims.mustChangePassword && pathname !== '/force-password-change') {
             router.replace('/force-password-change');
-          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
+          } else if (claims.mustAcknowledgeTasks && pathname !== '/force-acknowledge-tasks') {
             router.replace('/force-acknowledge-tasks');
+          } else {
+             // If no forced actions are needed, we can consider the layout ready.
+            setIsReady(true);
           }
         })
-        .catch(() => router.replace('/login'));
+        .catch(() => {
+          // If token verification fails, the user is effectively logged out.
+          router.replace('/login');
+        });
+    } else if (!user) {
+        // If there's no user, and we are on a public page, the content is ready to be shown.
+        setIsReady(true);
     }
   }, [user, profile, isUserLoading, auth, router, pathname]);
   
@@ -207,7 +226,7 @@ function MainAppLayout({
 
   const isLoading = isUserLoading || isNavItemsLoading;
   
-  if (isLoading || !user || !profile) {
+  if (isLoading || !isReady) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -256,5 +275,3 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
     </AppProviders>
   );
 }
-
-    

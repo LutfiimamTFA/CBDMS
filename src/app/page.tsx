@@ -1,14 +1,29 @@
-
 'use client';
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowRight, Briefcase } from "lucide-react";
+import { ArrowRight, Briefcase, Loader2 } from "lucide-react";
 import { format } from 'date-fns';
+import { useUserProfile } from "@/firebase";
+import { useRouter } from "next/navigation";
 
 export default function RootPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const { user, profile, isLoading } = useUserProfile();
+  const router = useRouter();
+
+  useEffect(() => {
+    // If the user state has been determined
+    if (!isLoading) {
+      if (user && profile) {
+        // User is logged in, redirect them to the appropriate dashboard
+        const destination = (profile.role === 'Employee' || profile.role === 'PIC') ? '/my-work' : '/dashboard';
+        router.replace(destination);
+      }
+      // If not logged in, the user will see the landing page.
+    }
+  }, [user, profile, isLoading, router]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -20,6 +35,16 @@ export default function RootPage() {
     };
   }, []);
 
+  // While loading auth state, show a loader to prevent flicker
+  if (isLoading || (user && profile)) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Render the landing page only if the user is not logged in
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
       <div className="text-center space-y-8">

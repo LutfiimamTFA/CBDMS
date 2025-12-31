@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,15 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
@@ -55,16 +46,8 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
     
     const handleSaveConfig = async () => {
         setFormErrorMessage(null);
-        if (!appIdInput.trim()) {
-            setFormErrorMessage("App ID cannot be empty.");
-            return;
-        }
-        if (!appSecretInput.trim()) {
-            setFormErrorMessage("App Secret cannot be empty.");
-            return;
-        }
-        if (appSecretInput.trim().length < 10) {
-            setFormErrorMessage("App Secret seems too short. Please double-check.");
+        if (!appIdInput.trim() || !appSecretInput.trim()) {
+            setFormErrorMessage("App ID and App Secret cannot be empty.");
             return;
         }
 
@@ -169,7 +152,6 @@ export default function SocialMediaIntegrationsPage() {
                 throw new Error(data.message || 'Failed to check server configuration.');
             }
             setConfigStatus(data);
-            console.log("Config status fetched:", data);
         } catch (error: any) {
             console.error("Failed to fetch config status:", error);
             setStatusError(error.message);
@@ -216,8 +198,14 @@ export default function SocialMediaIntegrationsPage() {
             return;
         }
         setIsRedirecting(true);
-        const token = await auth.currentUser.getIdToken();
-        window.location.href = `/api/instagram/oauth/start?token=${token}`;
+        try {
+            const token = await auth.currentUser.getIdToken();
+            // The API route will handle the full redirect.
+            window.location.href = `/api/instagram/oauth/start?token=${token}`;
+        } catch (error) {
+            toast({ variant: 'destructive', title: 'Authentication Error', description: 'Could not get authentication token. Please log in again.'});
+            setIsRedirecting(false);
+        }
     };
     
     const handleDisconnect = async () => {

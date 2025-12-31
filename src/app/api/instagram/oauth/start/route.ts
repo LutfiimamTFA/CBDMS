@@ -1,4 +1,3 @@
-
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "crypto";
 import { cookies } from "next/headers";
@@ -20,16 +19,19 @@ export async function GET(req: NextRequest) {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
     console.error("CRITICAL: Could not determine a valid base URL for OAuth start.", error);
-    return NextResponse.json({ message: "Server is misconfigured. Could not determine application base URL.", error: error.message }, { status: 500 });
+    const errorUrl = new URL("/social-media/integrations", req.nextUrl.origin);
+    errorUrl.searchParams.set("error", "invalid_base_url");
+    errorUrl.searchParams.set("error_description", error.message);
+    return NextResponse.redirect(errorUrl.toString());
   }
+  
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return await redirectWithError(baseUrl, "not_authenticated", "Your session is invalid. Please log in again.");
+  }
+  const idToken = authHeader.split('Bearer ')[1];
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return await redirectWithError(baseUrl, "not_authenticated", "Please log in and try again.");
-    }
-    const idToken = authHeader.split('Bearer ')[1];
-    
     const decodedToken = await adminAuth.verifyIdToken(idToken);
     const uid = decodedToken.uid;
     const userRole = decodedToken.role;
@@ -48,7 +50,7 @@ export async function GET(req: NextRequest) {
     const state = crypto.randomBytes(24).toString("hex");
     const oauthSessionId = crypto.randomBytes(24).toString("hex");
 
-    const oauthSessionRef = adminDb.collection('oauthStates').doc(oauthSessionId);
+    const oauthSessionRef = adminDb.collection('oauthSessions').doc(oauthSessionId);
     const expiresAt = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000); // 10 minute TTL
     await oauthSessionRef.set({ 
         uid,
@@ -63,14 +65,14 @@ export async function GET(req: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 600, // 10 minutes
+      maxAge: 600,
     });
      cookieStore.set("ig_oauth_session", oauthSessionId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 600, // 10 minutes
+      maxAge: 600,
     });
 
     const scope = [
@@ -93,9 +95,11 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error("[OAuth Start Error]", error);
     let errorMessage = "Could not initiate the authentication flow.";
+    let errorCode = "start_failed";
     if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
       errorMessage = "Your session has expired. Please log in again.";
+      errorCode = "not_authenticated";
     }
-    return await redirectWithError(baseUrl, "start_failed", errorMessage);
+    return await redirectWithError(baseUrl, errorCode, errorMessage);
   }
 }
