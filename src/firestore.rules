@@ -152,12 +152,10 @@ service cloud.firestore {
     match /permissions/{docId} {
       allow read, write: if isSuperAdmin();
     }
-    
-    // System Settings can be read by any authenticated user (e.g. for base URL)
-    // but only written to by Super Admins.
+
+    // System Settings can only be read/written to by Super Admins and Managers.
     match /systemSettings/{settingId} {
-        allow read: if isSignedIn();
-        allow write: if isSuperAdmin();
+        allow read, write: if isSuperAdmin() || isRole('Manager');
     }
 
     match /companySettings/{companyId} {
@@ -177,10 +175,9 @@ service cloud.firestore {
     }
     
     // Temporary storage for OAuth states.
-    // Can be read/written publicly as the state itself is a secure random string.
-    // Documents should have a TTL to auto-delete.
+    // Can be read/written by the user who owns the state document (identified by UID).
     match /oauthStates/{stateId} {
-      allow read, write: if true;
+      allow read, write: if isSignedIn() && request.auth.uid == resource.data.uid;
     }
   }
 }

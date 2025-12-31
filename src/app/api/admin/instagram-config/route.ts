@@ -1,20 +1,34 @@
-
 // src/app/api/admin/instagram-config/route.ts
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { getInstagramConfig } from '@/lib/instagram-config';
+import { cookies } from 'next/headers';
+
+async function verifyAdminRole(request: Request): Promise<{ uid: string; role: string; error: NextResponse | null }> {
+    const sessionCookie = (await cookies()).get('__session')?.value;
+    if (!sessionCookie) {
+        return { uid: '', role: '', error: NextResponse.json({ message: 'Unauthorized: No session cookie found.' }, { status: 401 }) };
+    }
+    try {
+        const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+        const userRole = decodedToken.role;
+
+        if (userRole !== 'Super Admin' && userRole !== 'Manager') {
+            return { uid: '', role: '', error: NextResponse.json({ message: 'Forbidden: You do not have permission.' }, { status: 403 }) };
+        }
+        return { uid: decodedToken.uid, role: userRole, error: null };
+    } catch (error) {
+        return { uid: '', role: '', error: NextResponse.json({ message: 'Unauthorized: Invalid session.' }, { status: 401 }) };
+    }
+}
+
 
 // GET endpoint to check if the configuration exists
 export async function GET(request: Request) {
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-    }
+    const { error } = await verifyAdminRole(request);
+    if (error) return error;
     
     try {
-        const idToken = authHeader.split('Bearer ')[1];
-        await adminAuth.verifyIdToken(idToken);
-        
         const config = await getInstagramConfig();
         
         if (!config) {
@@ -33,33 +47,23 @@ export async function GET(request: Request) {
 
     } catch (error: any) {
         console.error("GET /api/admin/instagram-config error:", error);
-        return NextResponse.json({ message: 'Authentication failed or server error.' }, { status: 401 });
+        return NextResponse.json({ message: 'Server error while fetching configuration.' }, { status: 500 });
     }
 }
 
 // POST endpoint to save the configuration
 export async function POST(request: Request) {
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ ok: false, message: 'Unauthorized' }, { status: 401 });
-    }
+    const { error } = await verifyAdminRole(request);
+    if (error) return error;
 
     try {
-        const idToken = authHeader.split('Bearer ')[1];
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
-        const userRole = decodedToken.role;
-
-        if (userRole !== 'Super Admin' && userRole !== 'Manager') {
-             return NextResponse.json({ ok: false, message: 'Forbidden: You do not have permission to change this configuration.' }, { status: 403 });
-        }
-
         const { appId, appSecret } = await request.json();
         
         if (!appId || !appId.trim()) {
-            return NextResponse.json({ ok: false, message: 'App ID cannot be empty.' }, { status: 400 });
+            return NextResponse.json({ message: 'App ID cannot be empty.' }, { status: 400 });
         }
         if (!appSecret || appSecret.trim().length < 10) {
-            return NextResponse.json({ ok: false, message: 'App Secret is required and must be at least 10 characters.' }, { status: 400 });
+            return NextResponse.json({ message: 'App Secret is required and must be at least 10 characters.' }, { status: 400 });
         }
         
         const configRef = adminDb.collection('systemSettings').doc('socialMedia');
@@ -69,13 +73,10 @@ export async function POST(request: Request) {
             updatedAt: new Date().toISOString(),
         }, { merge: true });
 
-        return NextResponse.json({ ok: true, message: 'Instagram configuration saved successfully.' }, { status: 200 });
+        return NextResponse.json({ message: 'Instagram configuration saved successfully.' }, { status: 200 });
 
     } catch (error: any) {
-        if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
-            return NextResponse.json({ ok: false, message: 'Authentication failed' }, { status: 401 });
-        }
         console.error("Error saving Instagram config:", error);
-        return NextResponse.json({ ok: false, message: 'An internal server error occurred.' }, { status: 500 });
+        return NextResponse.json({ message: 'An internal server error occurred.' }, { status: 500 });
     }
 }

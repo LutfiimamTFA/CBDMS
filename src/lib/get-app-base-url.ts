@@ -1,4 +1,3 @@
-
 // src/lib/get-app-base-url.ts
 import { type NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
@@ -31,13 +30,13 @@ export async function getAppBaseUrl(request: NextRequest): Promise<string> {
   // 2. Firestore Configuration (Dynamic override, if not already set by env)
   if (!baseUrl) {
     try {
-      const configDoc = await adminDb.collection('systemSettings').doc('app').get();
+      const configDoc = await adminDb.collection('systemSettings').doc('socialMedia').get();
       if (configDoc.exists()) {
         const data = configDoc.data();
         // A simple allowlist for demonstration purposes.
-        const domainAllowlist = ['hosted.app', 'firebaseapp.com', 'web.app'];
-        if (data?.baseUrl && typeof data.baseUrl === 'string' && data.baseUrl.trim() !== '' && domainAllowlist.some(domain => data.baseUrl.includes(domain))) {
-          baseUrl = data.baseUrl.trim();
+        const domainAllowlist = ['hosted.app', 'firebaseapp.com', 'web.app', 'cloudworkstations.dev'];
+        if (data?.appBaseUrl && typeof data.appBaseUrl === 'string' && data.appBaseUrl.trim() !== '' && domainAllowlist.some(domain => data.appBaseUrl.includes(domain))) {
+          baseUrl = data.appBaseUrl.trim();
         }
       }
     } catch (error) {
