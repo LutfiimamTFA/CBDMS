@@ -179,8 +179,10 @@ export default function SocialMediaIntegrationsPage() {
     }, [auth]);
 
     useEffect(() => {
-        checkConfig();
-    }, [checkConfig]);
+        if (auth?.currentUser) {
+            checkConfig();
+        }
+    }, [checkConfig, auth]);
 
     useEffect(() => {
         const error = searchParams.get('error');
@@ -192,6 +194,7 @@ export default function SocialMediaIntegrationsPage() {
                 description: errorDescription || 'An unknown error occurred during the Instagram connection process.',
                 duration: 10000,
             });
+            // Clear URL parameters
             window.history.replaceState({}, '', '/social-media/integrations');
         }
     }, [searchParams, toast]);
@@ -207,9 +210,14 @@ export default function SocialMediaIntegrationsPage() {
         };
     }, [instagramConnection]);
     
-    const handleConnectOrRenew = () => {
+    const handleConnectOrRenew = async () => {
+        if (!auth?.currentUser) {
+            toast({ variant: 'destructive', title: 'Not Authenticated', description: 'Please log in to connect.'});
+            return;
+        }
         setIsRedirecting(true);
-        window.location.href = "/api/instagram/oauth/start";
+        const token = await auth.currentUser.getIdToken();
+        window.location.href = `/api/instagram/oauth/start?token=${token}`;
     };
     
     const handleDisconnect = async () => {

@@ -2,15 +2,16 @@
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { getInstagramConfig } from '@/lib/instagram-config';
-import { cookies } from 'next/headers';
 
 async function verifyAdminRole(request: Request): Promise<{ uid: string; role: string; error: NextResponse | null }> {
-    const sessionCookie = (await cookies()).get('__session')?.value;
-    if (!sessionCookie) {
-        return { uid: '', role: '', error: NextResponse.json({ message: 'Unauthorized: No session cookie found.' }, { status: 401 }) };
+    const authHeader = request.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return { uid: '', role: '', error: NextResponse.json({ message: 'Unauthorized: Missing or invalid token.' }, { status: 401 }) };
     }
+    const idToken = authHeader.split('Bearer ')[1];
+
     try {
-        const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+        const decodedToken = await adminAuth.verifyIdToken(idToken);
         const userRole = decodedToken.role;
 
         if (userRole !== 'Super Admin' && userRole !== 'Manager') {

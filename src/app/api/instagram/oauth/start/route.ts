@@ -20,18 +20,17 @@ export async function GET(req: NextRequest) {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
     console.error("CRITICAL: Could not determine a valid base URL for OAuth start.", error);
-    // Cannot redirect if base URL itself fails. Return a plain error response.
     return NextResponse.json({ message: "Server is misconfigured. Could not determine application base URL.", error: error.message }, { status: 500 });
   }
 
   try {
-    // 1. Verify user is logged in and has the correct role via Firebase session cookie
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get('__session')?.value;
-    if (!sessionCookie) {
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return await redirectWithError(baseUrl, "not_authenticated", "Please log in and try again.");
     }
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    const decodedToken = await adminAuth.verifyIdToken(idToken);
     const uid = decodedToken.uid;
     const userRole = decodedToken.role;
 
@@ -39,20 +38,16 @@ export async function GET(req: NextRequest) {
         return await redirectWithError(baseUrl, "forbidden_role", "You do not have permission to connect social media accounts.");
     }
     
-    // 2. Fetch Instagram App config
     const config = await getInstagramConfig();
     if (!config) {
       return await redirectWithError(baseUrl, "server_misconfigured", "Instagram App ID/Secret has not been configured. Please ask an administrator to set it up.");
     }
 
-    // 3. Build the correct redirect URI using the robust helper
     const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
     
-    // 4. Generate state for CSRF protection and a separate session ID for bridging
     const state = crypto.randomBytes(24).toString("hex");
     const oauthSessionId = crypto.randomBytes(24).toString("hex");
 
-    // 5. Store session mapping in Firestore with a TTL
     const oauthSessionRef = adminDb.collection('oauthStates').doc(oauthSessionId);
     const expiresAt = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000); // 10 minute TTL
     await oauthSessionRef.set({ 
@@ -62,7 +57,7 @@ export async function GET(req: NextRequest) {
         expiresAt,
     });
     
-    // 6. Set CSRF state and session ID in secure, httpOnly cookies
+    const cookieStore = cookies();
     cookieStore.set("ig_oauth_state", state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -86,7 +81,6 @@ export async function GET(req: NextRequest) {
       "business_management",
     ].join(",");
 
-    // 7. Redirect to Meta's OAuth dialog
     const authUrl = new URL("https://www.facebook.com/v20.0/dialog/oauth");
     authUrl.searchParams.set("client_id", config.appId);
     authUrl.searchParams.set("redirect_uri", redirectUri);
@@ -99,7 +93,7 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error("[OAuth Start Error]", error);
     let errorMessage = "Could not initiate the authentication flow.";
-    if (error.code === 'auth/session-cookie-expired' || error.code === 'auth/session-cookie-revoked') {
+    if (error.code === 'auth/id-token-expired' || error.code === 'auth/argument-error') {
       errorMessage = "Your session has expired. Please log in again.";
     }
     return await redirectWithError(baseUrl, "start_failed", errorMessage);
