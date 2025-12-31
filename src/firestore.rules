@@ -153,11 +153,6 @@ service cloud.firestore {
       allow read, write: if isSuperAdmin();
     }
 
-    // System Settings can only be read/written to by Super Admins and Managers.
-    match /systemSettings/{settingId} {
-        allow read, write: if isSuperAdmin() || isRole('Manager');
-    }
-
     match /companySettings/{companyId} {
       allow read: if isSignedIn() && isSameCompanyAsRequestingUser(companyId);
       allow write: if isSuperAdmin();
@@ -174,10 +169,19 @@ service cloud.firestore {
         allow write: if (isRole('Employee') || isRole('PIC')) && isOwnRecord(resource.data.userId);
     }
     
+    // Allow read/write to system settings for Super Admins and Managers for config
+    match /systemSettings/{settingId} {
+        allow read, write: if isSuperAdmin() || isRole('Manager');
+    }
+
     // Temporary storage for OAuth states.
-    // Can be read/written by the user who owns the state document (identified by UID).
+    // Can only be read/written by the server-side admin SDK, so we can lock it down.
+    // However, to allow creation from an authenticated user context in `/start`,
+    // we allow write if the UID in the document matches the requestor's UID.
     match /oauthStates/{stateId} {
-      allow read, write: if isSignedIn() && request.auth.uid == resource.data.uid;
+      allow read: if false; // Should only be read by server
+      allow write: if isSignedIn() && request.auth.uid == request.resource.data.uid;
+      allow delete: if false; // Should only be deleted by server
     }
   }
 }

@@ -1,3 +1,4 @@
+
 // src/lib/get-app-base-url.ts
 import { type NextRequest } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
@@ -8,7 +9,7 @@ import { adminDb } from '@/lib/firebase-admin';
  *
  * Priority order:
  * 1. Environment variable `APP_BASE_URL` (for explicit overrides).
- * 2. Firestore document `systemSettings/app` field `baseUrl`.
+ * 2. Firestore document `systemSettings/socialMedia` field `appBaseUrl`.
  * 3. `x-forwarded-host` header (for proxy/load balancer environments).
  * 4. `host` header from the request.
  * 5. `request.nextUrl.origin` (as a final fallback).
@@ -69,25 +70,26 @@ export async function getAppBaseUrl(request: NextRequest): Promise<string> {
   
   // --- FINAL VALIDATION & PROTECTION GUARD ---
   if (!baseUrl) {
-    throw new Error('FATAL: Base URL could not be determined from any source.');
+    throw new Error('Base URL could not be determined from any source.');
   }
+  
+  const url = new URL(baseUrl);
 
-  if (baseUrl.includes('0.0.0.0')) {
+  if (url.hostname === '0.0.0.0') {
     throw new Error(
-      `FATAL: Invalid base URL detected: ${baseUrl}. Contains '0.0.0.0'. ` +
-      `Please set APP_BASE_URL environment variable if running in a complex environment.`
+      `Invalid base URL detected: ${baseUrl}. Host '0.0.0.0' is not allowed.`
     );
   }
 
   if (isProduction) {
-    if (!baseUrl.startsWith('https://')) {
+    if (url.protocol !== 'https:') {
         throw new Error(
-            `FATAL: Insecure URL in production. Base URL must be HTTPS. Detected: ${baseUrl}`
+            `Insecure URL in production. Base URL must be HTTPS. Detected: ${baseUrl}`
         );
     }
-    if (baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1')) {
+    if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
        throw new Error(
-            `FATAL: Localhost URL detected in production environment. Detected: ${baseUrl}`
+            `Localhost URL detected in production environment. Detected: ${baseUrl}`
         );
     }
   }

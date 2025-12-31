@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { getInstagramConfig } from "@/lib/instagram-config";
 import { getAppBaseUrl } from "@/lib/get-app-base-url";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 
 async function redirectWithError(baseUrl: string, error: string, description: string) {
     const integrationsUrl = new URL("/social-media/integrations", baseUrl);
@@ -18,44 +19,53 @@ export async function GET(req: NextRequest) {
   try {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
-    console.error("OAuth Start Error: Failed to determine base URL.", error);
-    // Cannot redirect without a base URL, so return a plain response.
-    return new Response(`OAuth Start Failed: Could not determine a valid application base URL. ${error.message}`, { status: 500 });
+    // Cannot redirect without a base URL, but we can try a relative path if it's a non-fatal error.
+    const url = new URL("/social-media/integrations", "https://placeholder.com"); // Placeholder base
+    url.searchParams.set("error", "invalid_base_url");
+    url.searchParams.set("error_description", error.message);
+    return NextResponse.redirect(url.pathname + url.search);
   }
 
   try {
-    // 1. Verify user is logged in using the session cookie.
+    // 1. Verify user is logged in and has the correct role
     const sessionCookie = (await cookies()).get('__session')?.value;
     if (!sessionCookie) {
-        return redirectWithError(baseUrl, "not_authenticated", "You must be logged in to connect an account.");
+        return await redirectWithError(baseUrl, "not_authenticated", "Please log in and try again.");
     }
     const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
     const uid = decodedToken.uid;
+    const userRole = decodedToken.role;
+
+    if (userRole !== 'Super Admin' && userRole !== 'Manager') {
+        return await redirectWithError(baseUrl, "forbidden_role", "You do not have permission to connect social media accounts.");
+    }
     
     // 2. Fetch Instagram App config
     const config = await getInstagramConfig();
     if (!config) {
-      return redirectWithError(baseUrl, "server_misconfigured", "Instagram App ID/Secret has not been configured. Please ask an administrator to set it up.");
+      return await redirectWithError(baseUrl, "server_misconfigured", "Instagram App ID/Secret has not been configured. Please ask an administrator to set it up.");
     }
 
     // 3. Build the correct redirect URI
     const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
 
-    // 4. Protection Guard
+    // 4. Protection Guard (already inside getAppBaseUrl, but an extra check is good)
     if (process.env.NODE_ENV === "production" && (redirectUri.includes('localhost') || !redirectUri.startsWith('https'))) {
       throw new Error(`FATAL: Insecure redirect_uri generated for production: ${redirectUri}.`);
     }
-    if (redirectUri.includes('0.0.0.0')) {
-        throw new Error(`FATAL: Invalid redirect_uri generated: ${redirectUri}.`);
-    }
 
     // 5. Generate state for CSRF protection and session bridging
-    const state = crypto.randomBytes(16).toString("hex");
+    const state = crypto.randomBytes(24).toString("hex");
 
-    // Store state with UID in Firestore with a TTL for session bridging
-    const stateDocRef = adminDb.collection('oauthStates').doc(state);
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minute TTL
-    await stateDocRef.set({ uid, expiresAt });
+    // Store state and UID in Firestore with a TTL for session bridging
+    const oauthSessionRef = adminDb.collection('oauthStates').doc(state);
+    const expiresAt = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000); // 10 minute TTL
+    await oauthSessionRef.set({ 
+        uid,
+        provider: 'instagram',
+        createdAt: Timestamp.now(),
+        expiresAt,
+    });
     
     // 6. Set CSRF state in a secure, httpOnly cookie
     const cookieStore = await cookies();
@@ -64,7 +74,7 @@ export async function GET(req: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 10, // 10 minutes
+      maxAge: 600, // 10 minutes
     });
 
     const scope = [
@@ -87,6 +97,6 @@ export async function GET(req: NextRequest) {
 
   } catch (error: any) {
     console.error("[OAuth Start Error]", error);
-    return redirectWithError(baseUrl, "start_failed", error.message || "Could not initiate the authentication flow.");
+    return await redirectWithError(baseUrl, "start_failed", error.message || "Could not initiate the authentication flow.");
   }
 }

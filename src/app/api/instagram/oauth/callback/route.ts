@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { getInstagramConfig } from "@/lib/instagram-config";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { serverTimestamp } from "firebase-admin/firestore";
+import { serverTimestamp, Timestamp } from "firebase-admin/firestore";
 import type { SocialMediaConnection } from "@/lib/types-backend";
 import { getAppBaseUrl } from "@/lib/get-app-base-url";
 
@@ -11,7 +11,7 @@ async function redirectWithError(baseUrl: string, error: string, description: st
   const url = new URL("/social-media/integrations", baseUrl);
   url.searchParams.set("error", error);
   url.searchParams.set("error_description", description);
-  return NextResponse.redirect(url);
+  return NextResponse.redirect(url.toString());
 }
 
 type FbTokenResponse = {
@@ -37,48 +37,55 @@ export async function GET(req: NextRequest) {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
     console.error("OAuth Callback Error: Failed to determine base URL.", error);
-    return new Response(`OAuth Callback Failed: Could not determine a valid application base URL. ${error.message}`, { status: 500 });
+    // Cannot redirect to a dynamic URL, so we construct a relative one.
+    const url = new URL("/social-media/integrations", "https://placeholder.com");
+    url.searchParams.set("error", "invalid_base_url");
+    url.searchParams.set("error_description", error.message);
+    return NextResponse.redirect(url.pathname + url.search);
   }
+  
+  const savedState = cookieStore.get("ig_oauth_state")?.value;
+  cookieStore.delete("ig_oauth_state"); // Cleanup state cookie immediately
 
   try {
     // 1. Handle explicit errors from Meta
     const oauthError = req.nextUrl.searchParams.get("error");
     if (oauthError) {
       const oauthErrorDesc = req.nextUrl.searchParams.get("error_description") || `OAuth error: ${oauthError}. This can happen if you deny the request in the Facebook login popup.`;
-      return redirectWithError(baseUrl, "oauth_denied", oauthErrorDesc);
+      return await redirectWithError(baseUrl, "oauth_denied", oauthErrorDesc);
     }
     
     // 2. Validate CSRF state
-    const savedState = cookieStore.get("ig_oauth_state")?.value;
     const stateFromParams = req.nextUrl.searchParams.get("state");
-    
-    cookieStore.delete("ig_oauth_state"); // Delete state cookie immediately after reading
-
     if (!savedState || !stateFromParams || savedState !== stateFromParams) {
-      return redirectWithError(baseUrl, "invalid_state", "Invalid or expired authorization request. Please try again.");
+      return await redirectWithError(baseUrl, "invalid_state", "Invalid or expired authorization request. Please try again.");
     }
     
     // 3. Get UID from our session bridging mechanism (Firestore)
     const stateDocRef = adminDb.collection('oauthStates').doc(stateFromParams);
     const stateDoc = await stateDocRef.get();
 
-    if (!stateDoc.exists || stateDoc.data()?.expiresAt.toDate() < new Date()) {
+    if (!stateDoc.exists) {
+        return await redirectWithError(baseUrl, "session_expired", "Your connection attempt has expired. Please try again.");
+    }
+    const stateData = stateDoc.data();
+    if (stateData?.expiresAt.toDate() < new Date()) {
         await stateDocRef.delete(); // Cleanup expired state
-        return redirectWithError(baseUrl, "session_expired", "Your connection attempt expired. Please try again.");
+        return await redirectWithError(baseUrl, "session_expired", "Your connection attempt has expired. Please try again.");
     }
 
-    const { uid: userId } = stateDoc.data() as { uid: string };
+    const { uid: userId } = stateData as { uid: string };
     await stateDocRef.delete(); // State is single-use, delete it now
 
     // 4. Get App config and authorization code
     const config = await getInstagramConfig();
     if (!config) {
-      return redirectWithError(baseUrl, "server_misconfigured", "Instagram App ID/Secret is not configured on the server.");
+      return await redirectWithError(baseUrl, "server_misconfigured", "Instagram App ID/Secret is not configured on the server.");
     }
     
     const code = req.nextUrl.searchParams.get("code");
     if (!code) {
-      return redirectWithError(baseUrl, "oauth_failed", "Authorization code not found in callback. Please try again.");
+      return await redirectWithError(baseUrl, "oauth_failed", "Authorization code not found in callback. Please try again.");
     }
 
     // 5. Exchange code for tokens
@@ -132,8 +139,8 @@ export async function GET(req: NextRequest) {
         instagramUserId: pageWithIg.instagram_business_account.id,
         instagramUsername: pageWithIg.instagram_business_account.username,
         accessToken: longToken.access_token,
-        expiresAt: serverTimestamp.fromMillis(Date.now() + longToken.expires_in * 1000),
-        connectedAt: serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + longToken.expires_in * 1000),
+        connectedAt: Timestamp.now(),
     };
     
     const connectionId = `${companyId}_instagram`;
@@ -142,10 +149,10 @@ export async function GET(req: NextRequest) {
     // 8. Redirect to integrations page with success status
     const successUrl = new URL('/social-media/integrations', baseUrl);
     successUrl.searchParams.set('success', 'instagram_connected');
-    return NextResponse.redirect(successUrl);
+    return NextResponse.redirect(successUrl.toString());
 
   } catch (error: any) {
     console.error("OAuth Callback Error:", error);
-    return redirectWithError(baseUrl, "callback_failed", error.message || "An unknown error occurred during the connection process.");
+    return await redirectWithError(baseUrl, "callback_failed", error.message || "An unknown error occurred during the connection process.");
   }
 }
