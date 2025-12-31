@@ -16,7 +16,7 @@ import { adminDb } from '@/lib/firebase-admin';
  *
  * @param {NextRequest} request The incoming Next.js request object.
  * @returns {Promise<string>} The determined, validated base URL.
- * @throws {Error} If a valid base URL cannot be determined or resolves to an invalid local address in production.
+ * @throws {Error} If a valid base URL cannot be determined or resolves to an invalid address in production.
  */
 export async function getAppBaseUrl(request: NextRequest): Promise<string> {
   const isProduction = process.env.NODE_ENV === 'production';

@@ -11,7 +11,7 @@ async function redirectWithError(baseUrl: string, error: string, description: st
     const integrationsUrl = new URL("/social-media/integrations", baseUrl);
     integrationsUrl.searchParams.set("error", error);
     integrationsUrl.searchParams.set("error_description", description);
-    return NextResponse.redirect(integrationsUrl);
+    return NextResponse.redirect(integrationsUrl.toString());
 }
 
 export async function GET(req: NextRequest) {
@@ -19,16 +19,16 @@ export async function GET(req: NextRequest) {
   try {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
-    // Cannot redirect without a base URL, but we can try a relative path if it's a non-fatal error.
-    const url = new URL("/social-media/integrations", "https://placeholder.com"); // Placeholder base
-    url.searchParams.set("error", "invalid_base_url");
-    url.searchParams.set("error_description", error.message);
-    return NextResponse.redirect(url.pathname + url.search);
+    // If we can't even get a base URL, we can't safely redirect.
+    // This is a critical server misconfiguration.
+    console.error("CRITICAL: Could not determine a valid base URL for OAuth start.", error);
+    return NextResponse.json({ message: "Server is misconfigured. Could not determine application base URL.", error: error.message }, { status: 500 });
   }
 
   try {
     // 1. Verify user is logged in and has the correct role
-    const sessionCookie = (await cookies()).get('__session')?.value;
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get('__session')?.value;
     if (!sessionCookie) {
         return await redirectWithError(baseUrl, "not_authenticated", "Please log in and try again.");
     }
@@ -46,9 +46,9 @@ export async function GET(req: NextRequest) {
       return await redirectWithError(baseUrl, "server_misconfigured", "Instagram App ID/Secret has not been configured. Please ask an administrator to set it up.");
     }
 
-    // 3. Build the correct redirect URI
+    // 3. Build the correct redirect URI using the robust helper
     const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
-
+    
     // 4. Protection Guard (already inside getAppBaseUrl, but an extra check is good)
     if (process.env.NODE_ENV === "production" && (redirectUri.includes('localhost') || !redirectUri.startsWith('https'))) {
       throw new Error(`FATAL: Insecure redirect_uri generated for production: ${redirectUri}.`);
@@ -68,7 +68,6 @@ export async function GET(req: NextRequest) {
     });
     
     // 6. Set CSRF state in a secure, httpOnly cookie
-    const cookieStore = await cookies();
     cookieStore.set("ig_oauth_state", state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
