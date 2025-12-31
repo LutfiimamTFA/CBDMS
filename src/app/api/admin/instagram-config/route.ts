@@ -1,3 +1,4 @@
+
 // src/app/api/admin/instagram-config/route.ts
 import { NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
@@ -60,8 +61,8 @@ export async function POST(request: Request) {
     try {
         const { appId, appSecret } = await request.json();
         
-        if (!appId || !appId.trim()) {
-            return NextResponse.json({ message: 'App ID cannot be empty.' }, { status: 400 });
+        if (!appId || !/^\d+$/.test(appId)) {
+            return NextResponse.json({ message: 'App ID must be a numeric string.' }, { status: 400 });
         }
         if (!appSecret || appSecret.trim().length < 10) {
             return NextResponse.json({ message: 'App Secret is required and must be at least 10 characters.' }, { status: 400 });

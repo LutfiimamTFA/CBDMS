@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,14 +18,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogTrigger, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
+import { formatDistanceToNow, isAfter, isBefore, subDays } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
-import { useSearchParams } from 'next/navigation';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { Alert, AlertDescription as AlertDescriptionUI, AlertTitle } from '@/components/ui/alert';
 
 
 const InstagramIcon = () => (
@@ -116,6 +117,7 @@ export default function SocialMediaIntegrationsPage() {
     const auth = useAuth();
     const { toast } = useToast();
     const searchParams = useSearchParams();
+    const router = useRouter();
 
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isRedirecting, setIsRedirecting] = useState(false);
@@ -177,9 +179,9 @@ export default function SocialMediaIntegrationsPage() {
                 duration: 10000,
             });
             // Clear URL parameters
-            window.history.replaceState({}, '', '/social-media/integrations');
+            router.replace('/social-media/integrations', { scroll: false });
         }
-    }, [searchParams, toast]);
+    }, [searchParams, toast, router]);
 
     const { isTokenExpiring, isTokenExpired } = useMemo(() => {
         if (!instagramConnection?.expiresAt) return { isTokenExpiring: false, isTokenExpired: false };
@@ -200,10 +202,30 @@ export default function SocialMediaIntegrationsPage() {
         setIsRedirecting(true);
         try {
             const token = await auth.currentUser.getIdToken();
-            // The API route will handle the full redirect.
-            window.location.href = `/api/instagram/oauth/start?token=${token}`;
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Authentication Error', description: 'Could not get authentication token. Please log in again.'});
+            
+            // Fetch the redirect URL from our API
+            const response = await fetch('/api/instagram/oauth/start', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                if(data.error === 'not_authenticated') {
+                    router.push('/login?next=/social-media/integrations');
+                    return;
+                }
+                throw new Error(data.message || 'Failed to start OAuth flow.');
+            }
+
+            if (data.redirectUrl) {
+                window.location.href = data.redirectUrl;
+            } else {
+                throw new Error('No redirect URL received from server.');
+            }
+
+        } catch (error: any) {
+            toast({ variant: 'destructive', title: 'Connection Error', description: error.message });
             setIsRedirecting(false);
         }
     };
@@ -243,13 +265,13 @@ export default function SocialMediaIntegrationsPage() {
                         {instagramConnection.expiresAt && <p className={`text-xs ${isTokenExpired ? 'text-destructive' : 'text-muted-foreground'}`}>Token expires {formatDistanceToNow(instagramConnection.expiresAt.toDate(), { addSuffix: true })}</p>}
                     </div>
                     {(isTokenExpired || isTokenExpiring) && (
-                        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md flex items-start gap-3">
-                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                            <div>
-                                <p className="font-semibold">Attention Required</p>
-                                <p>Your connection token is {isTokenExpired ? 'expired' : 'expiring soon'}. Please renew it to ensure uninterrupted service.</p>
-                            </div>
-                        </div>
+                        <Alert variant="destructive">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Attention Required</AlertTitle>
+                            <AlertDescriptionUI>
+                                Your connection token is {isTokenExpired ? 'expired' : 'expiring soon'}. Please renew it to ensure uninterrupted service.
+                            </AlertDescriptionUI>
+                        </Alert>
                     )}
                 </div>
             );
@@ -346,7 +368,7 @@ export default function SocialMediaIntegrationsPage() {
                         <Alert variant="destructive">
                             <AlertCircle className="h-4 w-4" />
                             <AlertTitle>Cannot Read Status</AlertTitle>
-                            <AlertDescription>{statusError}</AlertDescription>
+                            <AlertDescriptionUI>{statusError}</AlertDescriptionUI>
                         </Alert>
                         <Button onClick={checkConfig}>
                             <RefreshCw className="mr-2 h-4 w-4"/>

@@ -1,3 +1,4 @@
+
 import { NextResponse, type NextRequest } from "next/server";
 import crypto from "crypto";
 import { cookies } from "next/headers";
@@ -10,7 +11,7 @@ async function redirectWithError(baseUrl: string, error: string, description: st
     const integrationsUrl = new URL("/social-media/integrations", baseUrl);
     integrationsUrl.searchParams.set("error", error);
     integrationsUrl.searchParams.set("error_description", description);
-    return NextResponse.redirect(integrationsUrl.toString());
+    return NextResponse.json({ redirectUrl: integrationsUrl.toString(), error: true }, { status: 400 });
 }
 
 export async function GET(req: NextRequest) {
@@ -19,15 +20,16 @@ export async function GET(req: NextRequest) {
     baseUrl = await getAppBaseUrl(req);
   } catch (error: any) {
     console.error("CRITICAL: Could not determine a valid base URL for OAuth start.", error);
-    const errorUrl = new URL("/social-media/integrations", req.nextUrl.origin);
+    // Even if we can't build a full URL, we redirect to a relative path.
+    const errorUrl = new URL("/social-media/integrations", "https://placeholder.com");
     errorUrl.searchParams.set("error", "invalid_base_url");
     errorUrl.searchParams.set("error_description", error.message);
-    return NextResponse.redirect(errorUrl.toString());
+    return NextResponse.json({ redirectUrl: errorUrl.pathname + errorUrl.search, error: true }, { status: 500 });
   }
   
   const authHeader = req.headers.get('Authorization');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return await redirectWithError(baseUrl, "not_authenticated", "Your session is invalid. Please log in again.");
+    return NextResponse.json({ message: "Unauthorized: Not authenticated.", error: 'not_authenticated' }, { status: 401 });
   }
   const idToken = authHeader.split('Bearer ')[1];
 
@@ -60,20 +62,16 @@ export async function GET(req: NextRequest) {
     });
     
     const cookieStore = cookies();
-    cookieStore.set("ig_oauth_state", state, {
+    const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "lax" as const,
       path: "/",
-      maxAge: 600,
-    });
-     cookieStore.set("ig_oauth_session", oauthSessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: 600,
-    });
+      maxAge: 600, // 10 minutes
+    };
+
+    cookieStore.set("ig_oauth_state", state, cookieOptions);
+    cookieStore.set("ig_oauth_session", oauthSessionId, cookieOptions);
 
     const scope = [
       "instagram_basic",
@@ -89,8 +87,9 @@ export async function GET(req: NextRequest) {
     authUrl.searchParams.set("state", state);
     authUrl.searchParams.set("scope", scope);
     authUrl.searchParams.set("response_type", "code");
-
-    return NextResponse.redirect(authUrl.toString());
+    
+    // Instead of redirecting from the server, return the URL to the client
+    return NextResponse.json({ redirectUrl: authUrl.toString() });
 
   } catch (error: any) {
     console.error("[OAuth Start Error]", error);
