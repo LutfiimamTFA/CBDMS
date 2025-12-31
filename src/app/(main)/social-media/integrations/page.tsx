@@ -9,7 +9,7 @@ import { useUserProfile, useCollection, useFirestore, useAuth } from '@/firebase
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
@@ -37,8 +37,8 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
     
     const handleSaveConfig = async () => {
         setFormErrorMessage(null);
-        if (!appIdInput.trim() || !appSecretInput.trim()) {
-            setFormErrorMessage("App ID and App Secret cannot be empty.");
+        if (!appIdInput.trim()) {
+            setFormErrorMessage("App ID cannot be empty.");
             return;
         }
         if (appSecretInput.trim().length < 10) {
@@ -114,12 +114,13 @@ export default function SocialMediaIntegrationsPage() {
 
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isRedirecting, setIsRedirecting] = useState(false);
-    const [refreshKey, setRefreshKey] = useState(0); 
-    const [configJustSaved, setConfigJustSaved] = useState(false);
     
     const [configStatus, setConfigStatus] = useState<{ configured: boolean; missing?: string[]; appIdMasked?: string; } | null>(null);
     const [statusLoading, setStatusLoading] = useState(true);
     const [statusError, setStatusError] = useState<string | null>(null);
+
+    const [configJustSaved, setConfigJustSaved] = useState(false);
+
     
     const connectionsQuery = useMemo(() => {
         if (!firestore || !profile) return null;
@@ -127,9 +128,9 @@ export default function SocialMediaIntegrationsPage() {
             collection(firestore, 'socialMediaConnections'),
             where('companyId', '==', profile.companyId)
         )
-    }, [firestore, profile, refreshKey]);
+    }, [firestore, profile]);
     
-    const { data: connections, isLoading: connectionsLoading } = useCollection<SocialMediaConnection>(connectionsQuery);
+    const { data: connections, isLoading: connectionsLoading, error: connectionsError } = useCollection<SocialMediaConnection>(connectionsQuery);
     const instagramConnection = useMemo(() => connections?.find(c => c.platform === 'instagram'), [connections]);
 
     const checkConfig = useCallback(async () => {
@@ -176,7 +177,6 @@ export default function SocialMediaIntegrationsPage() {
 
     const { isTokenExpiring, isTokenExpired } = useMemo(() => {
         if (!instagramConnection?.expiresAt) return { isTokenExpiring: false, isTokenExpired: false };
-        // Firestore timestamps can be directly converted to Date objects
         const expiryDate = instagramConnection.expiresAt.toDate();
         const tenDaysFromNow = subDays(expiryDate, 10);
         const now = new Date();
@@ -198,7 +198,6 @@ export default function SocialMediaIntegrationsPage() {
         try {
             await deleteDoc(connectionRef);
             toast({ title: 'Disconnected', description: 'Your Instagram account has been disconnected.' });
-            setRefreshKey(k => k + 1);
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Error', description: 'Could not disconnect the account.' });
         } finally {
@@ -210,6 +209,14 @@ export default function SocialMediaIntegrationsPage() {
     const isLoading = profileLoading || connectionsLoading || statusLoading;
 
     const renderConnectionStatus = () => {
+        if (connectionsLoading) {
+            return (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin"/>
+                    <span>Checking connection...</span>
+                </div>
+            )
+        }
         if (instagramConnection) {
             return (
                 <div className="space-y-4">
@@ -233,19 +240,17 @@ export default function SocialMediaIntegrationsPage() {
         return <p className="text-sm text-muted-foreground">No account connected. Configure the integration and connect an account to start auto-posting.</p>;
     }
     
-    const renderActionButtons = () => {
-        const showConnectButton = configJustSaved || configStatus?.configured;
-        
+     const renderActionButtons = () => {
         if (!isManagerOrAdmin) {
             return (
-                <div className="p-4 border-t">
-                    <p className="text-sm text-muted-foreground">Configuration and connection management can only be performed by a Manager or Administrator.</p>
-                </div>
+                <p className="text-sm text-muted-foreground">Configuration and connection management can only be performed by a Manager or Administrator.</p>
             )
         }
 
+        const showConnectButton = configJustSaved || configStatus?.configured;
+        
         return (
-             <div className="p-4 border-t flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-center">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-center">
                 <div className="flex-1 flex flex-wrap gap-2">
                     {showConnectButton ? (
                         <Button onClick={handleConnectOrRenew} disabled={isRedirecting}>
@@ -253,7 +258,7 @@ export default function SocialMediaIntegrationsPage() {
                             {isRedirecting ? 'Redirecting...' : (instagramConnection ? 'Renew Connection' : 'Connect with Instagram')}
                         </Button>
                     ) : (
-                        <p className="text-sm text-muted-foreground">Please set up the configuration before connecting.</p>
+                       <p className="text-sm text-muted-foreground">Set up the configuration to connect.</p>
                     )}
                     
                     <ConfigDialog onConfigSaved={() => { setConfigJustSaved(true); checkConfig(); }}>
@@ -284,50 +289,52 @@ export default function SocialMediaIntegrationsPage() {
             </div>
         );
     }
-
+    
     const renderCardContent = () => {
-        if (isLoading) {
+        if (profileLoading) {
             return (
-                <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
+                <div className="flex items-center justify-center h-48 gap-2 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Loading Status...</span>
                 </div>
             )
         }
-        
-        if (statusError) {
+
+        if (!isManagerOrAdmin) {
              return (
-                <div className="p-4 space-y-4">
-                    <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md flex items-start gap-3">
-                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                 <CardContent>
+                    <p className="text-sm text-muted-foreground py-4">Integration status can be viewed here, but configuration must be handled by an Administrator or Manager.</p>
+                    <Separator/>
+                     <div className="pt-4">
+                        {renderConnectionStatus()}
+                     </div>
+                 </CardContent>
+             )
+        }
+
+        // Main view for Admin/Manager
+        return (
+            <CardContent className="space-y-4">
+                 {statusLoading ? (
+                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin"/>
+                        <span>Checking server configuration...</span>
+                    </div>
+                 ) : statusError ? (
+                     <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md flex items-center justify-between gap-3">
                         <div>
                             <p className="font-semibold">Could Not Read Status</p>
                             <p>{statusError}</p>
                         </div>
+                        <Button variant="ghost" onClick={checkConfig}><RefreshCw className="mr-2 h-4 w-4" /> Try Again</Button>
                     </div>
-                    <Button variant="outline" onClick={checkConfig}>
-                        <RefreshCw className="mr-2 h-4 w-4" /> Try Again
-                    </Button>
-                </div>
-            )
-        }
-        
-        if (!configStatus) {
-            return (
-                 <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
-                    <AlertCircle className="h-5 w-5" />
-                    <span>Could not determine configuration status.</span>
-                </div>
-            )
-        }
-
-        return (
-            <>
-                <CardContent className="space-y-4">
-                    {renderConnectionStatus()}
-                </CardContent>
-                {renderActionButtons()}
-            </>
+                 ) : (
+                     <>
+                         {renderConnectionStatus()}
+                         <Separator/>
+                         {renderActionButtons()}
+                     </>
+                 )}
+            </CardContent>
         )
     }
 
