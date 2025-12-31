@@ -86,20 +86,20 @@ export async function GET(request: NextRequest) {
   // 1. CSRF Protection: Validate state
   if (!receivedState || !storedState || receivedState !== storedState) {
     errorUrl.searchParams.set('error', 'invalid_state');
-    errorUrl.searchParams.set('error_description', encodeURIComponent('Authentication session has expired or is invalid. Please try again.'));
+    errorUrl.searchParams.set('error_description', 'Authentication session has expired or is invalid. Please try again.');
     return NextResponse.redirect(errorUrl);
   }
 
   if (searchParams.has('error')) {
     const errorDescription = searchParams.get('error_description') || 'An error occurred during authentication.';
     errorUrl.searchParams.set('error', 'oauth_failed');
-    errorUrl.searchParams.set('error_description', encodeURIComponent(errorDescription));
+    errorUrl.searchParams.set('error_description', errorDescription);
     return NextResponse.redirect(errorUrl);
   }
 
   if (!code) {
     errorUrl.searchParams.set('error', 'invalid_callback');
-    errorUrl.searchParams.set('error_description', encodeURIComponent('Missing authorization code from Meta callback.'));
+    errorUrl.searchParams.set('error_description', 'Missing authorization code from Meta callback.');
     return NextResponse.redirect(errorUrl);
   }
 
@@ -130,7 +130,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Exchange code for token and save connection (only after all validations pass)
-    const redirectUri = `${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/oauth/callback`;
+    // The redirect URI MUST be constructed dynamically from the request origin to match what was sent in the /start route.
+    const redirectUri = new URL('/api/instagram/oauth/callback', request.nextUrl.origin).toString();
     const tokenInfo = await getLongLivedAccessToken(code, redirectUri);
     const longLivedToken = tokenInfo.access_token;
     
@@ -168,7 +169,7 @@ export async function GET(request: NextRequest) {
         errorCode = 'not_logged_in';
     }
     errorUrl.searchParams.set('error', errorCode);
-    errorUrl.searchParams.set('error_description', encodeURIComponent(error.message));
+    errorUrl.searchParams.set('error_description', error.message);
     return NextResponse.redirect(errorUrl);
   }
 }

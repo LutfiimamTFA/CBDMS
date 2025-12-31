@@ -2,18 +2,20 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { cookies } from 'next/headers';
-import { adminAuth } from '@/lib/firebase-admin';
 
 export async function GET(request: NextRequest) {
     const errorUrl = new URL('/social-media/integrations', request.nextUrl.origin);
 
     const clientId = process.env.INSTAGRAM_APP_ID;
-    const redirectUri = `${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/oauth/callback`;
+    
+    // The redirect URI MUST be constructed dynamically from the request origin.
+    // This removes the dependency on NEXT_PUBLIC_BASE_URL and fixes the 0.0.0.0 bug.
+    const redirectUri = new URL('/api/instagram/oauth/callback', request.nextUrl.origin).toString();
 
-    if (!clientId || !redirectUri) {
+    if (!clientId) {
         console.error("CRITICAL: Instagram OAuth environment variables are not set.");
         errorUrl.searchParams.set('error', 'server_misconfigured');
-        errorUrl.searchParams.set('error_description', encodeURIComponent('The server is not configured for Instagram integration. Please contact support.'));
+        errorUrl.searchParams.set('error_description', 'The server is not configured for Instagram integration. Please contact support.');
         return NextResponse.redirect(errorUrl);
     }
     
