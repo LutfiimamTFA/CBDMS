@@ -68,8 +68,6 @@ service cloud.firestore {
     }
     
     // --- SHARE VIEW RULES (PUBLIC READ) ---
-    // Anyone with a link can read the sharedLinks document to get the snapshot.
-    // All other data access for the share view happens via this snapshot, not direct reads.
     match /sharedLinks/{linkId} {
       allow get: if true;
       allow list: if false; // Users should not be able to list all share links
@@ -144,9 +142,22 @@ service cloud.firestore {
                                  (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
                                  (isOwnRecord(resource.data.createdBy) && resource.data.status == 'Draft');
     }
+    
+    match /socialMediaConnections/{connectionId} {
+        allow read: if isSignedIn() && isSameCompanyAsRequestingUser(resource.data.companyId);
+        allow write: if isSuperAdmin() || 
+                      (isRole('Manager') && isSameCompanyAsRequestingUser(request.resource.data.companyId));
+    }
 
     match /permissions/{docId} {
       allow read, write: if isSuperAdmin();
+    }
+    
+    // System Settings can be read by any authenticated user (e.g. for base URL)
+    // but only written to by Super Admins.
+    match /systemSettings/{settingId} {
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin();
     }
 
     match /companySettings/{companyId} {
@@ -163,6 +174,13 @@ service cloud.firestore {
         allow read: if isSuperAdmin() || 
                      (isRole('Manager') && isManagerOf(resource.data.userId));
         allow write: if (isRole('Employee') || isRole('PIC')) && isOwnRecord(resource.data.userId);
+    }
+    
+    // Temporary storage for OAuth states.
+    // Can be read/written publicly as the state itself is a secure random string.
+    // Documents should have a TTL to auto-delete.
+    match /oauthStates/{stateId} {
+      allow read, write: if true;
     }
   }
 }

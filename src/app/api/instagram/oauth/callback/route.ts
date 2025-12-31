@@ -36,6 +36,10 @@ async function fbFetchJson<T>(url: string): Promise<T> {
 }
 
 export async function GET(req: NextRequest) {
+  const cookieStore = await cookies();
+  const savedState = cookieStore.get("ig_oauth_state")?.value;
+  cookieStore.delete("ig_oauth_state");
+
   try {
     const baseUrl = await getAppBaseUrl(req);
     const config = await getInstagramConfig();
@@ -51,19 +55,14 @@ export async function GET(req: NextRequest) {
     const { appId, appSecret } = config;
     const redirectUri = new URL("/api/instagram/oauth/callback", baseUrl).toString();
     
-    // Protection Guard
     if (process.env.NODE_ENV === 'production') {
-      if (redirectUri.includes('0.0.0.0') || redirectUri.includes('localhost') || !redirectUri.startsWith('https://')) {
+      if (!redirectUri.startsWith('https') || redirectUri.includes('localhost')) {
           throw new Error(`Invalid redirect_uri detected in callback: ${redirectUri}.`);
       }
     }
      if (redirectUri.includes('0.0.0.0')) {
         throw new Error(`Invalid redirect_uri generated: ${redirectUri}. Aborting OAuth flow.`);
     }
-    
-    const cookieStore = await cookies();
-    const savedState = cookieStore.get("ig_oauth_state")?.value;
-    cookieStore.delete("ig_oauth_state");
 
     const oauthError = req.nextUrl.searchParams.get("error");
     const oauthErrorDesc = req.nextUrl.searchParams.get("error_description");
@@ -82,12 +81,18 @@ export async function GET(req: NextRequest) {
       return redirectWithError(req, "oauth_failed", "Authorization code not found in callback. Please try again.");
     }
     
-    const sessionCookie = cookieStore.get('__session')?.value;
-    if (!sessionCookie) {
-        throw new Error("User session not found. Please log in and try again.");
+    // Retrieve the UID from the Firestore state document
+    const stateDocRef = adminDb.collection('oauthStates').doc(state);
+    const stateDoc = await stateDocRef.get();
+
+    if (!stateDoc.exists || stateDoc.data()?.expiresAt.toDate() < new Date()) {
+        await stateDocRef.delete();
+        return redirectWithError(req, "session_expired", "Your connection attempt expired. Please try again.");
     }
-    const decodedToken = await adminAuth.verifySessionCookie(sessionCookie, true);
-    const userId = decodedToken.uid;
+
+    const { uid: userId } = stateDoc.data() as { uid: string };
+    await stateDocRef.delete(); // State is single-use
+
     const userDoc = await adminDb.collection('users').doc(userId).get();
     if (!userDoc.exists) throw new Error("Authenticated user not found in the database.");
 
