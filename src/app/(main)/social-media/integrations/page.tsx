@@ -16,6 +16,7 @@ import type { SocialMediaConnection } from '@/lib/types';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { useSearchParams } from 'next/navigation';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -114,11 +115,11 @@ export default function SocialMediaIntegrationsPage() {
     const [isDisconnecting, setIsDisconnecting] = useState(false);
     const [isRedirecting, setIsRedirecting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0); 
-
+    const [configJustSaved, setConfigJustSaved] = useState(false);
+    
     const [configStatus, setConfigStatus] = useState<{ configured: boolean; missing?: string[]; appIdMasked?: string; } | null>(null);
     const [statusLoading, setStatusLoading] = useState(true);
     const [statusError, setStatusError] = useState<string | null>(null);
-    const [configJustSaved, setConfigJustSaved] = useState(false);
     
     const connectionsQuery = useMemo(() => {
         if (!firestore || !profile) return null;
@@ -244,19 +245,21 @@ export default function SocialMediaIntegrationsPage() {
         }
 
         return (
-            <div className="p-4 border-t flex flex-wrap gap-4 items-center">
-                {showConnectButton ? (
-                    <Button onClick={handleConnectOrRenew} disabled={isRedirecting}>
-                        {isRedirecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
-                        {isRedirecting ? 'Redirecting...' : (instagramConnection ? 'Renew Connection' : 'Connect with Instagram')}
-                    </Button>
-                ) : (
-                    <p className="text-sm text-muted-foreground">Please set up the configuration before connecting.</p>
-                )}
-                
-                <ConfigDialog onConfigSaved={() => { setConfigJustSaved(true); checkConfig(); }}>
-                    <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
-                </ConfigDialog>
+             <div className="p-4 border-t flex flex-col sm:flex-row flex-wrap gap-4 items-start sm:items-center">
+                <div className="flex-1 flex flex-wrap gap-2">
+                    {showConnectButton ? (
+                        <Button onClick={handleConnectOrRenew} disabled={isRedirecting}>
+                            {isRedirecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
+                            {isRedirecting ? 'Redirecting...' : (instagramConnection ? 'Renew Connection' : 'Connect with Instagram')}
+                        </Button>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">Please set up the configuration before connecting.</p>
+                    )}
+                    
+                    <ConfigDialog onConfigSaved={() => { setConfigJustSaved(true); checkConfig(); }}>
+                        <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
+                    </ConfigDialog>
+                </div>
 
                 {instagramConnection && (
                     <AlertDialog>
