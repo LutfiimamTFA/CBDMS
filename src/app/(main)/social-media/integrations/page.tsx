@@ -9,15 +9,12 @@ import { useUserProfile, useCollection, useFirestore, useAuth } from '@/firebase
 import { collection, query, where, doc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { formatDistanceToNow, isAfter, isBefore, subDays, parseISO } from 'date-fns';
 import type { SocialMediaConnection } from '@/lib/types';
 import Link from 'next/link';
-import { Textarea } from '@/components/ui/textarea';
-import { useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 
 const InstagramIcon = () => (
@@ -31,7 +28,7 @@ const InstagramIcon = () => (
 function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, children: React.ReactNode }) {
     const [open, setOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
-    const [errorMessage, setFormErrorMessage] = useState<string | null>(null);
+    const [formErrorMessage, setFormErrorMessage] = useState<string | null>(null);
     const [appIdInput, setAppIdInput] = useState('');
     const [appSecretInput, setAppSecretInput] = useState('');
     const auth = useAuth();
@@ -47,6 +44,7 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
             setFormErrorMessage("App Secret seems too short. Please double-check.");
             return;
         }
+
         if (!auth?.currentUser) return;
 
         setIsSaving(true);
@@ -76,7 +74,7 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Instagram API Setup</DialogTitle>
-                    <DialogDescription>Provide your Instagram App credentials. This is a one-time setup.</DialogDescription>
+                    <DialogDescription>Provide your Instagram App credentials. This is a one-time setup and can be changed later.</DialogDescription>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
                     <div className="space-y-2">
@@ -87,12 +85,11 @@ function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, 
                         <Label htmlFor="app-secret">App Secret</Label>
                         <Input id="app-secret" type="password" value={appSecretInput} onChange={(e) => setAppSecretInput(e.target.value)} placeholder="Enter your Instagram App Secret" />
                     </div>
-                    {errorMessage && (
-                        <Alert variant="destructive">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle>Save Failed</AlertTitle>
-                            <AlertDescription>{errorMessage}</AlertDescription>
-                        </Alert>
+                    {formErrorMessage && (
+                       <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                        <p className="font-semibold">Save Failed</p>
+                        <p>{formErrorMessage}</p>
+                       </div>
                     )}
                 </div>
                 <DialogFooter>
@@ -115,12 +112,13 @@ export default function SocialMediaIntegrationsPage() {
     const searchParams = useSearchParams();
 
     const [isDisconnecting, setIsDisconnecting] = useState(false);
-    const [isConnecting, setIsConnecting] = useState(false);
+    const [isRedirecting, setIsRedirecting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0); 
 
     const [configStatus, setConfigStatus] = useState<{ configured: boolean; missing?: string[]; appIdMasked?: string; } | null>(null);
     const [statusLoading, setStatusLoading] = useState(true);
     const [statusError, setStatusError] = useState<string | null>(null);
+    const [configJustSaved, setConfigJustSaved] = useState(false);
     
     const connectionsQuery = useMemo(() => {
         if (!firestore || !profile) return null;
@@ -128,7 +126,6 @@ export default function SocialMediaIntegrationsPage() {
             collection(firestore, 'socialMediaConnections'),
             where('companyId', '==', profile.companyId)
         )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [firestore, profile, refreshKey]);
     
     const { data: connections, isLoading: connectionsLoading } = useCollection<SocialMediaConnection>(connectionsQuery);
@@ -148,6 +145,7 @@ export default function SocialMediaIntegrationsPage() {
                 throw new Error(data.message || 'Failed to check server configuration.');
             }
             setConfigStatus(data);
+            console.log("Config status fetched:", data);
         } catch (error: any) {
             console.error("Failed to fetch config status:", error);
             setStatusError(error.message);
@@ -170,11 +168,14 @@ export default function SocialMediaIntegrationsPage() {
                 description: errorDescription || 'An unknown error occurred during the Instagram connection process.',
                 duration: 10000,
             });
+            // Clear URL params after showing toast
+            window.history.replaceState({}, '', '/social-media/integrations');
         }
     }, [searchParams, toast]);
 
     const { isTokenExpiring, isTokenExpired } = useMemo(() => {
         if (!instagramConnection?.expiresAt) return { isTokenExpiring: false, isTokenExpired: false };
+        // Firestore timestamps can be directly converted to Date objects
         const expiryDate = instagramConnection.expiresAt.toDate();
         const tenDaysFromNow = subDays(expiryDate, 10);
         const now = new Date();
@@ -185,7 +186,7 @@ export default function SocialMediaIntegrationsPage() {
     }, [instagramConnection]);
     
     const handleConnectOrRenew = () => {
-        setIsConnecting(true);
+        setIsRedirecting(true);
         window.location.href = "/api/instagram/oauth/start";
     };
     
@@ -205,7 +206,7 @@ export default function SocialMediaIntegrationsPage() {
     };
     
     const isManagerOrAdmin = profile?.role === 'Super Admin' || profile?.role === 'Manager';
-    const isLoading = profileLoading || connectionsLoading;
+    const isLoading = profileLoading || connectionsLoading || statusLoading;
 
     const renderConnectionStatus = () => {
         if (instagramConnection) {
@@ -213,73 +214,117 @@ export default function SocialMediaIntegrationsPage() {
                 <div className="space-y-4">
                     <div className="p-4 bg-secondary/50 rounded-lg border">
                         <p className="text-sm font-semibold">Account: <span className="font-bold text-foreground">@{instagramConnection.instagramUsername}</span></p>
-                        <p className="text-xs text-muted-foreground">Connected {instagramConnection.connectedAt ? formatDistanceToNow(parseISO(instagramConnection.connectedAt), { addSuffix: true }) : 'N/A'}</p>
+                        <p className="text-xs text-muted-foreground">Connected {instagramConnection.connectedAt ? formatDistanceToNow(instagramConnection.connectedAt.toDate(), { addSuffix: true }) : 'N/A'}</p>
                         {instagramConnection.expiresAt && <p className={`text-xs ${isTokenExpired ? 'text-destructive' : 'text-muted-foreground'}`}>Token expires {formatDistanceToNow(instagramConnection.expiresAt.toDate(), { addSuffix: true })}</p>}
                     </div>
                     {(isTokenExpired || isTokenExpiring) && (
-                        <Alert variant="destructive">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle>Attention Required</AlertTitle>
-                            <AlertDescription>Your connection token is {isTokenExpired ? 'expired' : 'expiring soon'}. Please renew it to ensure uninterrupted service.</AlertDescription>
-                        </Alert>
+                        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md flex items-start gap-3">
+                            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                            <div>
+                                <p className="font-semibold">Attention Required</p>
+                                <p>Your connection token is {isTokenExpired ? 'expired' : 'expiring soon'}. Please renew it to ensure uninterrupted service.</p>
+                            </div>
+                        </div>
                     )}
                 </div>
             );
         }
-        return <p className="text-sm text-muted-foreground">No account connected. Connect an account to start auto-posting.</p>;
+        return <p className="text-sm text-muted-foreground">No account connected. Configure the integration and connect an account to start auto-posting.</p>;
     }
     
     const renderActionButtons = () => {
-        if (isManagerOrAdmin) {
+        const showConnectButton = configJustSaved || configStatus?.configured;
+        
+        if (!isManagerOrAdmin) {
             return (
-                <div className="flex flex-wrap gap-4 items-center">
-                    {!configStatus?.configured ? (
-                        <ConfigDialog onConfigSaved={checkConfig}>
-                             <Button><Edit className="mr-2 h-4 w-4" /> Set Up Configuration</Button>
-                        </ConfigDialog>
-                    ) : (
-                         <Button onClick={handleConnectOrRenew} disabled={isConnecting}>
-                            {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
-                            {instagramConnection ? 'Renew Connection' : 'Connect with Instagram'}
-                        </Button>
-                    )}
-
-                    {instagramConnection && (
-                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="destructive" disabled={isDisconnecting}>
-                                    {isDisconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PowerOff className="mr-2 h-4 w-4" />}
-                                    Disconnect
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                    <AlertDialogDescription>This will disconnect your Instagram account. You will need to reconnect to continue publishing posts.</AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={handleDisconnect}>Confirm Disconnect</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    )}
-
-                     {configStatus?.configured && (
-                        <ConfigDialog onConfigSaved={checkConfig}>
-                            <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
-                        </ConfigDialog>
-                    )}
+                <div className="p-4 border-t">
+                    <p className="text-sm text-muted-foreground">Configuration and connection management can only be performed by a Manager or Administrator.</p>
                 </div>
-            );
+            )
+        }
+
+        return (
+            <div className="p-4 border-t flex flex-wrap gap-4 items-center">
+                {showConnectButton ? (
+                    <Button onClick={handleConnectOrRenew} disabled={isRedirecting}>
+                        {isRedirecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
+                        {isRedirecting ? 'Redirecting...' : (instagramConnection ? 'Renew Connection' : 'Connect with Instagram')}
+                    </Button>
+                ) : (
+                    <p className="text-sm text-muted-foreground">Please set up the configuration before connecting.</p>
+                )}
+                
+                <ConfigDialog onConfigSaved={() => { setConfigJustSaved(true); checkConfig(); }}>
+                    <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
+                </ConfigDialog>
+
+                {instagramConnection && (
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" disabled={isDisconnecting}>
+                                {isDisconnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PowerOff className="mr-2 h-4 w-4" />}
+                                Disconnect
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>This will disconnect your Instagram account. You will need to reconnect to continue publishing posts.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDisconnect}>Confirm Disconnect</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
+            </div>
+        );
+    }
+
+    const renderCardContent = () => {
+        if (isLoading) {
+            return (
+                <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Loading Status...</span>
+                </div>
+            )
         }
         
-        return (
-            !configStatus?.configured ? (
-                 <p className="text-sm text-muted-foreground p-4 border-t">The Instagram integration has not been configured by an administrator yet.</p>
-            ) : (
-                 <p className="text-sm text-muted-foreground p-4 border-t">Configuration and connection management can only be performed by a Manager or Administrator.</p>
+        if (statusError) {
+             return (
+                <div className="p-4 space-y-4">
+                    <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md flex items-start gap-3">
+                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                        <div>
+                            <p className="font-semibold">Could Not Read Status</p>
+                            <p>{statusError}</p>
+                        </div>
+                    </div>
+                    <Button variant="outline" onClick={checkConfig}>
+                        <RefreshCw className="mr-2 h-4 w-4" /> Try Again
+                    </Button>
+                </div>
             )
+        }
+        
+        if (!configStatus) {
+            return (
+                 <div className="flex items-center justify-center h-32 gap-2 text-muted-foreground">
+                    <AlertCircle className="h-5 w-5" />
+                    <span>Could not determine configuration status.</span>
+                </div>
+            )
+        }
+
+        return (
+            <>
+                <CardContent className="space-y-4">
+                    {renderConnectionStatus()}
+                </CardContent>
+                {renderActionButtons()}
+            </>
         )
     }
 
@@ -293,57 +338,27 @@ export default function SocialMediaIntegrationsPage() {
                     </p>
                 </div>
                 <div className="max-w-2xl mx-auto">
-                    {isLoading ? (
-                        <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin" /></div>
-                    ) : (
-                        <Card>
-                            <CardHeader className="flex flex-row items-start justify-between">
-                                <div className="flex items-center gap-4">
-                                    <InstagramIcon />
-                                    <div>
-                                        <CardTitle>Instagram Business</CardTitle>
-                                        <CardDescription>Connect your professional account to publish content and track insights.</CardDescription>
-                                    </div>
+                    <Card>
+                        <CardHeader className="flex flex-row items-start justify-between">
+                            <div className="flex items-center gap-4">
+                                <InstagramIcon />
+                                <div>
+                                    <CardTitle>Instagram Business</CardTitle>
+                                    <CardDescription>Connect your professional account to publish content and track insights.</CardDescription>
                                 </div>
-                                {instagramConnection ? (
-                                    isTokenExpired ? (
-                                        <Badge variant="destructive"><AlertCircle className="mr-2 h-4 w-4"/>Expired</Badge>
-                                    ) : (
-                                        <Badge variant="secondary" className="text-green-600 border-green-600 bg-green-100 dark:bg-green-900/50"><CheckCircle className="mr-2 h-4 w-4"/>Connected</Badge>
-                                    )
+                            </div>
+                            {instagramConnection ? (
+                                isTokenExpired ? (
+                                    <Badge variant="destructive"><AlertCircle className="mr-2 h-4 w-4"/>Expired</Badge>
                                 ) : (
-                                     <Badge variant="outline"><AlertCircle className="mr-2 h-4 w-4"/>Not Connected</Badge>
-                                )}
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {statusLoading && (
-                                     <div className="flex items-center gap-2 p-4 text-muted-foreground">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span>Checking configuration...</span>
-                                    </div>
-                                )}
-                                {statusError && (
-                                    <Alert variant="destructive">
-                                        <AlertCircle className="h-4 w-4" />
-                                        <AlertTitle>Could Not Check Status</AlertTitle>
-                                        <AlertDescription>
-                                            {statusError}
-                                            <Button variant="link" onClick={checkConfig} className="p-0 h-auto ml-2">Try again</Button>
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-                                {!statusLoading && !statusError && (
-                                    <>
-                                        {renderConnectionStatus()}
-                                        <Separator/>
-                                        <div className="p-4">
-                                            {renderActionButtons()}
-                                        </div>
-                                    </>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
+                                    <Badge variant="secondary" className="text-green-600 border-green-600 bg-green-100 dark:bg-green-900/50"><CheckCircle className="mr-2 h-4 w-4"/>Connected</Badge>
+                                )
+                            ) : (
+                                <Badge variant="outline"><AlertCircle className="mr-2 h-4 w-4"/>Not Connected</Badge>
+                            )}
+                        </CardHeader>
+                        {renderCardContent()}
+                    </Card>
                 </div>
             </main>
         </div>
