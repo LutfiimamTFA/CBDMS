@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -26,79 +27,6 @@ const InstagramIcon = () => (
     <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"></line>
   </svg>
 );
-
-function ManualUpdateDialog({ onTokenUpdated, children }: { onTokenUpdated: () => void, children: React.ReactNode }) {
-    const [open, setOpen] = useState(false);
-    const [token, setToken] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const { toast } = useToast();
-    const { user } = useUserProfile();
-
-    const handleUpdate = async () => {
-        if (!token.trim()) {
-            toast({ variant: 'destructive', title: 'Token is required' });
-            return;
-        }
-        if (!user) {
-            toast({ variant: 'destructive', title: 'Authentication Error' });
-            return;
-        }
-        setIsLoading(true);
-        try {
-            const idToken = await user.getIdToken();
-            const response = await fetch('/api/instagram/token/manual', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                },
-                body: JSON.stringify({ manualToken: token }),
-            });
-
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || 'Failed to validate and save the token.');
-            toast({ title: 'Success!', description: data.message });
-            onTokenUpdated();
-            setOpen(false);
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Emergency: Update Instagram Access Token</DialogTitle>
-                    <DialogDescription>
-                        This is a fallback method. Paste your new long-lived access token below.
-                        For help, consult the <Link href="/guide" target='_blank' className='text-primary underline'>official guide</Link>.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-2">
-                    <Label htmlFor="token-input">Long-Lived Access Token</Label>
-                    <Textarea id="token-input" value={token} onChange={(e) => setToken(e.target.value)} placeholder="Paste your token here..." rows={5}/>
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-                    <Button onClick={handleUpdate} disabled={isLoading}>
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                        Validate & Save Token
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-type ConfigStatus = {
-    isConfigured: boolean;
-    missing?: string[];
-    appIdMasked?: string;
-};
 
 function ConfigDialog({ onConfigSaved, children }: { onConfigSaved: () => void, children: React.ReactNode }) {
     const [open, setOpen] = useState(false);
@@ -190,7 +118,7 @@ export default function SocialMediaIntegrationsPage() {
     const [isConnecting, setIsConnecting] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0); 
 
-    const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
+    const [configStatus, setConfigStatus] = useState<{ configured: boolean; missing?: string[]; appIdMasked?: string; } | null>(null);
     const [statusLoading, setStatusLoading] = useState(true);
     const [statusError, setStatusError] = useState<string | null>(null);
     
@@ -277,7 +205,7 @@ export default function SocialMediaIntegrationsPage() {
     };
     
     const isManagerOrAdmin = profile?.role === 'Super Admin' || profile?.role === 'Manager';
-    const isLoading = profileLoading || connectionsLoading || statusLoading;
+    const isLoading = profileLoading || connectionsLoading;
 
     const renderConnectionStatus = () => {
         if (instagramConnection) {
@@ -302,16 +230,71 @@ export default function SocialMediaIntegrationsPage() {
     }
     
     const renderActionButtons = () => {
+        if (statusLoading) {
+            return (
+                 <div className="flex items-center gap-2 p-4 text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Checking configuration...</span>
+                    <Button variant="outline" size="sm" onClick={checkConfig}>Refresh</Button>
+                </div>
+            )
+        }
+        
+        if (statusError) {
+             return (
+                 <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Could Not Check Status</AlertTitle>
+                    <AlertDescription>
+                        {statusError}
+                        <Button variant="link" onClick={checkConfig} className="p-0 h-auto ml-2">Try again</Button>
+                    </AlertDescription>
+                </Alert>
+            )
+        }
+
+        if (!configStatus) {
+             return (
+                 <div className="p-4 border-t space-y-4">
+                    <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Cannot Read Status</AlertTitle>
+                        <AlertDescription>The connection status could not be determined. Please try refreshing.</AlertDescription>
+                    </Alert>
+                     {isManagerOrAdmin && (
+                        <ConfigDialog onConfigSaved={checkConfig}>
+                            <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Set Up Configuration</Button>
+                        </ConfigDialog>
+                     )}
+                </div>
+             )
+        }
+
+
         if (isManagerOrAdmin) {
             return (
                 <div className="flex flex-wrap gap-4 items-center">
-                    <Button onClick={handleConnectOrRenew} disabled={isConnecting || !configStatus?.isConfigured}>
-                        {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
-                        {instagramConnection ? 'Renew Connection' : 'Connect with Instagram'}
-                    </Button>
-                    <ConfigDialog onConfigSaved={checkConfig}>
-                        <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
-                    </ConfigDialog>
+                   
+                    {!configStatus.configured ? (
+                         <div className="w-full">
+                            <Alert>
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>Configuration Required</AlertTitle>
+                                <AlertDescription>
+                                    Please provide your Instagram App credentials to enable this integration. This is a one-time setup.
+                                </AlertDescription>
+                            </Alert>
+                            <ConfigDialog onConfigSaved={checkConfig}>
+                                <Button className="mt-4"><Edit className="mr-2 h-4 w-4" /> Set Up Configuration</Button>
+                            </ConfigDialog>
+                        </div>
+                    ) : (
+                         <Button onClick={handleConnectOrRenew} disabled={isConnecting}>
+                            {isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}
+                            {instagramConnection ? 'Renew Connection' : 'Connect with Instagram'}
+                        </Button>
+                    )}
+
                     {instagramConnection && (
                          <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -332,10 +315,23 @@ export default function SocialMediaIntegrationsPage() {
                             </AlertDialogContent>
                         </AlertDialog>
                     )}
+
+                     {configStatus.configured && (
+                        <ConfigDialog onConfigSaved={checkConfig}>
+                            <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Change Configuration</Button>
+                        </ConfigDialog>
+                    )}
                 </div>
             );
         }
-        return <p className="text-sm text-muted-foreground">Configuration and connection management can only be performed by a Manager or Administrator.</p>
+        
+        return (
+            !configStatus.configured ? (
+                 <p className="text-sm text-muted-foreground p-4 border-t">The Instagram integration has not been configured by an administrator yet.</p>
+            ) : (
+                 <p className="text-sm text-muted-foreground p-4 border-t">Configuration and connection management can only be performed by a Manager or Administrator.</p>
+            )
+        )
     }
 
     return (
@@ -348,7 +344,7 @@ export default function SocialMediaIntegrationsPage() {
                     </p>
                 </div>
                 <div className="max-w-2xl mx-auto">
-                    {isLoading && !configStatus ? (
+                    {isLoading ? (
                         <div className="flex justify-center items-center h-48"><Loader2 className="h-8 w-8 animate-spin" /></div>
                     ) : (
                         <Card>
@@ -391,7 +387,9 @@ export default function SocialMediaIntegrationsPage() {
                                     <>
                                         {renderConnectionStatus()}
                                         <Separator/>
-                                        {renderActionButtons()}
+                                        <div className="p-4">
+                                            {renderActionButtons()}
+                                        </div>
                                     </>
                                 )}
                             </CardContent>
@@ -402,6 +400,3 @@ export default function SocialMediaIntegrationsPage() {
         </div>
     );
 }
-
-
-    
