@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { Textarea } from '@/components/ui/textarea';
 import { useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const InstagramIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-8 w-8">
@@ -95,105 +96,6 @@ function ManualUpdateDialog({ onTokenUpdated }: { onTokenUpdated: () => void }) 
     );
 }
 
-function ConfigForm({ onConfigSaved }: { onConfigSaved: () => void }) {
-    const [appId, setAppId] = useState('');
-    const [appSecret, setAppSecret] = useState('');
-    const [isSaving, setIsSaving] = useState(false);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [isEditing, setIsEditing] = useState(false);
-
-    const { toast } = useToast();
-    const { user } = useUserProfile();
-
-    const handleSave = async () => {
-        setErrorMessage(null);
-        if (!/^\d+$/.test(appId)) {
-            setErrorMessage("App ID must only contain numbers.");
-            return;
-        }
-        if (appSecret.trim().length < 10) {
-            setErrorMessage("App Secret seems too short. Please double-check.");
-            return;
-        }
-        if (!user) {
-            toast({ variant: 'destructive', title: 'Authentication Error' });
-            return;
-        }
-        setIsSaving(true);
-        try {
-            const idToken = await user.getIdToken();
-            const response = await fetch('/api/admin/instagram-config', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${idToken}`
-                },
-                body: JSON.stringify({ appId, appSecret }),
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(data.message || 'Failed to save configuration.');
-            
-            toast({ title: 'Configuration Saved', description: 'You can now connect your Instagram account.' });
-            setIsEditing(false);
-            onConfigSaved();
-
-        } catch (error: any) {
-            setErrorMessage(error.message);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-    
-    if (!isEditing) {
-        return (
-             <div className="p-4 border-t space-y-4">
-                <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Action Required</AlertTitle>
-                    <AlertDescription>
-                       The Instagram integration requires setup. Please provide your Instagram App credentials to continue.
-                    </AlertDescription>
-                </Alert>
-                <Button onClick={() => setIsEditing(true)}>Set Up Configuration</Button>
-            </div>
-        )
-    }
-
-    return (
-        <div className="p-4 border-t space-y-4">
-            <h3 className="font-semibold text-lg">Instagram API Setup</h3>
-            <p className="text-sm text-muted-foreground">
-                Please provide your Instagram App ID and App Secret to enable the integration.
-                These credentials are required for the OAuth connection.
-            </p>
-            <div className="space-y-2">
-                <Label htmlFor="app-id">App ID</Label>
-                <Input id="app-id" value={appId} onChange={(e) => setAppId(e.target.value)} placeholder="Enter your Instagram App ID" />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="app-secret">App Secret</Label>
-                <Input id="app-secret" type="password" value={appSecret} onChange={(e) => setAppSecret(e.target.value)} placeholder="Enter your Instagram App Secret" />
-            </div>
-            {errorMessage && (
-                <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Save Failed</AlertTitle>
-                    <AlertDescription>{errorMessage}</AlertDescription>
-                </Alert>
-            )}
-            <div className="flex gap-2">
-                <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Configuration
-                </Button>
-                <Button variant="ghost" onClick={() => { setIsEditing(false); setErrorMessage(null); }}>
-                    Cancel
-                </Button>
-            </div>
-        </div>
-    );
-}
-
 type ConfigStatus = {
     configured: boolean;
     missing?: string[];
@@ -221,7 +123,7 @@ export default function SocialMediaIntegrationsPage() {
 
     // Status check states
     const [configStatus, setConfigStatus] = useState<ConfigStatus | null>(null);
-    const [isCheckingConfig, setIsCheckingConfig] = useState(true);
+    const [statusLoading, setStatusLoading] = useState(true);
     const [statusError, setStatusError] = useState<string | null>(null);
     
     const connectionsQuery = useMemo(() => {
@@ -238,7 +140,7 @@ export default function SocialMediaIntegrationsPage() {
 
     const checkConfig = useCallback(async () => {
         if (!auth?.currentUser) return;
-        setIsCheckingConfig(true);
+        setStatusLoading(true);
         setStatusError(null);
         try {
             const idToken = await auth.currentUser.getIdToken();
@@ -254,7 +156,7 @@ export default function SocialMediaIntegrationsPage() {
             console.error("Failed to fetch config status:", error);
             setStatusError(error.message);
         } finally {
-            setIsCheckingConfig(false);
+            setStatusLoading(false);
         }
     }, [auth]);
 
@@ -340,15 +242,14 @@ export default function SocialMediaIntegrationsPage() {
     };
 
     const isManagerOrAdmin = profile?.role === 'Super Admin' || profile?.role === 'Manager';
-    const isLoading = profileLoading || connectionsLoading || isCheckingConfig;
+    const isLoading = profileLoading || connectionsLoading || statusLoading;
 
     const renderActionContent = () => {
-        if (isCheckingConfig) {
+        if (statusLoading) {
             return (
                 <div className="flex items-center gap-2 p-4 text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Checking configuration...</span>
-                     <Button variant="outline" size="sm" onClick={checkConfig}>Refresh</Button>
                 </div>
             );
         }
@@ -424,7 +325,7 @@ export default function SocialMediaIntegrationsPage() {
 
         if (instagramConnection) {
             return (
-                <div className="space-y-4">
+                <div className="space-y-4 p-4">
                     <div className="p-4 bg-secondary/50 rounded-lg border">
                         <p className="text-sm font-semibold">Account: <span className="font-bold text-foreground">@{instagramConnection.instagramUsername}</span></p>
                         <p className="text-xs text-muted-foreground">Connected {instagramConnection.connectedAt ? formatDistanceToNow(parseISO(instagramConnection.connectedAt), { addSuffix: true }) : 'N/A'}</p>
@@ -447,13 +348,13 @@ export default function SocialMediaIntegrationsPage() {
         if (configStatus?.configured === true) {
             if (isManagerOrAdmin) {
                 return (
-                    <div className="space-y-4">
+                    <div className="space-y-4 p-4">
                         <p className="text-sm text-muted-foreground">No account connected. Connect an account to start auto-posting. For help, consult the <Button variant="link" asChild className="p-0 h-auto text-sm"><Link href="/guide" target="_blank">official guide</Link></Button>.</p>
                         <Button onClick={handleConnectOrRenew} disabled={isConnecting}>{isConnecting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Instagram className="mr-2 h-4 w-4" />}Connect with Instagram</Button>
                     </div>
                 );
             }
-             return <p className="text-sm text-muted-foreground">No Instagram account is currently connected to this company.</p>;
+             return <p className="text-sm text-muted-foreground p-4">No Instagram account is currently connected to this company.</p>;
         }
 
         return (
@@ -511,3 +412,5 @@ export default function SocialMediaIntegrationsPage() {
         </div>
     );
 }
+
+    
