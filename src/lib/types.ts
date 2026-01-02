@@ -191,7 +191,7 @@ export type RevisionItem = {
 
 export type RevisionCycle = {
     cycleNumber: number;
-    requestedAt: any; // Timestamp
+    requestedAt: any; // Can be Date or Timestamp
     requestedBy: {
         id: string;
         name: string;
