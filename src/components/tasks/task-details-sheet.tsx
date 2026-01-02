@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -31,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -1377,7 +1378,7 @@ export function TaskDetailsSheet({
                         <TabsList className="grid w-full grid-cols-5">
                           <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                           <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                          <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                          <TabsTrigger value="deliverables"><UploadCloud className="mr-2"/>Deliverables</TabsTrigger>
                           <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
                           <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                         </TabsList>
@@ -1951,9 +1952,10 @@ export function TaskDetailsSheet({
                 <DialogHeader>
                     <DialogTitle>Final Review</DialogTitle>
                     <DialogDescription>
-                        You are about to mark this task as "Done". Please review the sub-tasks and attachments to ensure everything is complete.
+                        You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
                     </DialogDescription>
                 </DialogHeader>
+                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
                 <div className="py-4 space-y-6">
                     <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
                     <Separator />
@@ -1974,22 +1976,29 @@ export function TaskDetailsSheet({
                             )}
                         </div>
                     </div>
-                    <div className="space-y-3">
-                        <h4 className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h4>
-                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                            {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
-                                finalReviewState.task.attachments.map(att => (
-                                    <div key={att.id} className="flex items-center gap-2 text-sm">
-                                        <span>-</span>
-                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No attachments for this item.</p>
-                            )}
+                     <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => (
+                                <div key={cycleNum} className="space-y-2">
+                                    <h5 className="font-semibold text-xs text-muted-foreground">
+                                        {Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${Number(cycleNum)}`}
+                                    </h5>
+                                    {deliverables.map(att => (
+                                         <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                {getFileIcon(att.name)}
+                                                <span className="truncate" title={att.name}>{att.name}</span>
+                                            </a>
+                                        </div>
+                                    ))}
+                                </div>
+                           ))}
+                          {(initialTask.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}
                         </div>
                     </div>
                 </div>
+                </ScrollArea>
                 <DialogFooter>
                     <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
                     <Button variant="default" onClick={handleFinalReviewAndComplete}>
