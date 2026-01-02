@@ -100,7 +100,7 @@ function MainAppLayout({
   const handleLogout = () => {
     if(auth) {
         initiateSignOut(auth);
-        router.push('/login');
+        router.push('/');
     }
   }
 

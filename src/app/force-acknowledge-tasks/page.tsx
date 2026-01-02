@@ -79,7 +79,7 @@ export default function ForceAcknowledgeTasksPage() {
     } finally {
         setIsAcknowledging(false);
         // Force a redirect to login as a final fallback.
-        router.push('/login');
+        router.push('/');
     }
   };
   
