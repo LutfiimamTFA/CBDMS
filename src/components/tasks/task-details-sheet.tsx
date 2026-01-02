@@ -1264,8 +1264,8 @@ export function TaskDetailsSheet({
           <div className="flex-1 min-h-0">
             <Form {...form}>
               <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="h-full">
-                <ScrollArea className="h-[calc(100vh_-_120px)]">
-                  <div className="grid md:grid-cols-3 h-full">
+                <ScrollArea className="h-full">
+                  <div className="grid md:grid-cols-3">
                     <div className="md:col-span-2 p-6 space-y-6">
                       {/* Left Column Content */}
                       {showTimeTracker && (
@@ -1374,11 +1374,12 @@ export function TaskDetailsSheet({
                       </div>
                       
                       <Tabs defaultValue="comments" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4">
+                        <TabsList className="grid w-full grid-cols-5">
                           <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                           <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                           <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
                           <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                          <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                         </TabsList>
                          <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                               <ScrollArea className="max-h-48 pr-2">
@@ -1503,7 +1504,7 @@ export function TaskDetailsSheet({
                            {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => (
                                 <div key={cycleNum} className="space-y-2">
                                     <h4 className="font-semibold text-sm">
-                                        {Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum) - 1}`}
+                                        {Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${Number(cycleNum)}`}
                                     </h4>
                                     {deliverables.map(att => (
                                          <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
@@ -1531,6 +1532,33 @@ export function TaskDetailsSheet({
                         </TabsContent>
                          <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
                           {/* Dependencies content here */}
+                        </TabsContent>
+                        <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
+                            {(initialTask.revisionHistory && initialTask.revisionHistory.length > 0) ? (
+                                <Accordion type="single" collapsible>
+                                    {initialTask.revisionHistory.slice().sort((a,b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                        <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
+                                            <AccordionTrigger>
+                                                <div className="flex flex-col items-start text-left">
+                                                    <span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span>
+                                                    <span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <ul className="list-disc pl-5 space-y-1">
+                                                    {cycle.items.map(item => (
+                                                        <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>
+                                                            {item.text}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    ))}
+                                </Accordion>
+                            ) : (
+                                <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this task.</p>
+                            )}
                         </TabsContent>
                       </Tabs>
                     </div>
