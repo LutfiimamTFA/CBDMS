@@ -70,7 +70,11 @@ export type Attachment = {
   type: 'local' | 'gdrive';
   url: string;
   submittedAt?: string;
-  submittedBy?: User;
+  submittedBy?: {
+      id: string;
+      name: string;
+      avatarUrl: string;
+  };
   forRevisionCycle?: number;
 };
 
@@ -218,12 +222,12 @@ export type Task = {
   subtasks?: Subtask[];
   revisionItems?: RevisionItem[];
   revisionHistory?: RevisionCycle[];
+  attachments?: Attachment[];
+  deliverables?: Attachment[]; 
   recurring?: string;
   isMandatory?: boolean;
   tags?: Tag[];
   comments?: Comment[];
-  attachments?: Attachment[];
-  deliverables?: Attachment[]; // Added for submitted work
   activities?: Activity[];
   lastActivity?: Activity | null;
   createdAt: any;

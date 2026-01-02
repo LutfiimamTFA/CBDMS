@@ -750,7 +750,7 @@ export function TaskDetailsSheet({
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
-    if (!event.target.files || !storage || !initialTask?.id || !firestore) return;
+    if (!event.target.files || !storage || !initialTask?.id || !firestore || !currentUser) return;
 
     setIsUploading(true);
     const files = Array.from(event.target.files);
@@ -766,6 +766,13 @@ export function TaskDetailsSheet({
                 name: file.name,
                 type: 'local' as const,
                 url: url,
+                submittedAt: new Date().toISOString(),
+                submittedBy: {
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    avatarUrl: currentUser.avatarUrl || '',
+                },
+                forRevisionCycle: (initialTask.revisionHistory || []).length,
             };
         });
 
@@ -791,12 +798,19 @@ export function TaskDetailsSheet({
   };
 
   const handleConfirmGdriveLink = async (fileType: 'attachment' | 'deliverable') => {
-    if (gdriveLink && gdriveName && firestore) {
+    if (gdriveLink && gdriveName && firestore && currentUser) {
       const newFile: Attachment = {
         id: `gdrive-${Date.now()}`,
         name: gdriveName,
         type: 'gdrive',
         url: gdriveLink,
+        submittedAt: new Date().toISOString(),
+        submittedBy: {
+            id: currentUser.id,
+            name: currentUser.name,
+            avatarUrl: currentUser.avatarUrl || '',
+        },
+        forRevisionCycle: (initialTask.revisionHistory || []).length,
       };
 
       const taskDocRef = doc(firestore, 'tasks', initialTask.id);
@@ -1178,6 +1192,18 @@ export function TaskDetailsSheet({
   
   const descriptionValue = form.watch('description');
 
+  const groupedDeliverables = useMemo(() => {
+    const groups: Record<number, Attachment[]> = {};
+    (initialTask.deliverables || []).forEach(d => {
+        const cycle = d.forRevisionCycle ?? 0;
+        if (!groups[cycle]) {
+            groups[cycle] = [];
+        }
+        groups[cycle].push(d);
+    });
+    return groups;
+  }, [initialTask.deliverables]);
+
 
   return (
     <>
@@ -1462,22 +1488,27 @@ export function TaskDetailsSheet({
                               )}
                         </TabsContent>
                          <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
-                          <div className="space-y-2">
-                            {(initialTask.deliverables || []).map((att) => (
-                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                  {getFileIcon(att.name)}
-                                  <span className="truncate" title={att.name}>{att.name}</span>
-                                </a>
-                                {canUploadDeliverables && (
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}>
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            ))}
-                            {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
-                          </div>
+                           {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => (
+                                <div key={cycleNum} className="space-y-2">
+                                    <h4 className="font-semibold text-sm">
+                                        {Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${cycleNum}`}
+                                    </h4>
+                                    {deliverables.map(att => (
+                                         <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                {getFileIcon(att.name)}
+                                                <span className="truncate" title={att.name}>{att.name}</span>
+                                            </a>
+                                            {canUploadDeliverables && (
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}>
+                                                <X className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                           ))}
+                          {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
                           {canUploadDeliverables && (
                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
                               <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
