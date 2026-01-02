@@ -980,9 +980,14 @@ export function TaskDetailsSheet({
   
   const allSubtasksCompleted = useMemo(() => (initialTask.subtasks || []).every(st => st.completed), [initialTask.subtasks]);
   const allRevisionsCompleted = useMemo(() => (initialTask.revisionItems || []).every(item => item.completed), [initialTask.revisionItems]);
-  const hasDeliverables = useMemo(() => (initialTask.deliverables || []).length > 0, [initialTask.deliverables]);
+  
+  const hasDeliverablesForCurrentRevision = useMemo(() => {
+    const currentCycle = (initialTask.revisionHistory || []).length;
+    return (initialTask.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+  }, [initialTask.deliverables, initialTask.revisionHistory]);
+  
+  const canSubmit = allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentRevision;
 
-  const canSubmit = allSubtasksCompleted && allRevisionsCompleted && hasDeliverables;
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
