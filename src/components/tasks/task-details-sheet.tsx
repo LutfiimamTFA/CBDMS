@@ -251,6 +251,7 @@ export function TaskDetailsSheet({
   const isManagerOfBrand = currentUser?.role === 'Manager' && initialTask.brandId && currentUser.brandIds?.includes(initialTask.brandId);
   const isAssignee = !!currentUser && initialTask.assigneeIds.includes(currentUser.id);
   const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
+  const isEmployeeOrPIC = currentUser?.role === 'Employee' || currentUser?.role === 'PIC';
 
   const canEditContent = isSharedView 
     ? false
@@ -277,9 +278,8 @@ export function TaskDetailsSheet({
   const canChangeStatus = useMemo(() => {
     if (isSharedView) return sharedTaskConfig?.allowedActions.includes('changeStatus') ?? false;
     if (!currentUser) return false;
-    if ((currentUser.role === 'Employee' || currentUser.role === 'PIC') && currentFormStatus !== 'Done') return true;
-    return isManagerOrAdmin;
-  }, [isSharedView, sharedTaskConfig, currentUser, isManagerOrAdmin, currentFormStatus]);
+    return true; // The logic is now inside the select item
+  }, [isSharedView, sharedTaskConfig, currentUser]);
   
   const canAssignUsers = isSharedView ? false : canEditContent;
   
@@ -295,9 +295,8 @@ export function TaskDetailsSheet({
   const showTimeTracker = useMemo(() => {
       if (isSharedView) return false;
       if (!isAssignee) return false;
-      // Hide tracker during Preview and Revisi statuses
       return !['Preview', 'Revisi', 'Done'].includes(form.getValues('status'));
-  }, [isAssignee, isSharedView, form.watch('status')]);
+  }, [isAssignee, isSharedView, form]);
 
   useEffect(() => {
     if (initialTask && open) {
@@ -1031,25 +1030,24 @@ export function TaskDetailsSheet({
             text: item.text,
             completed: false,
         }));
+        
+        // Archive the current revision checklist before replacing it
+        const currentRevisionCycle: RevisionCycle = {
+            cycleNumber: (initialTask.revisionHistory || []).length + 1,
+            requestedAt: new Date(),
+            requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+            items: initialTask.revisionItems || []
+        };
+        const newRevisionHistory = [...(initialTask.revisionHistory || []), currentRevisionCycle];
+
 
         const newActivity = createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`);
         const updatedActivities = [...(initialTask.activities || []), newActivity];
 
-        const newRevisionCycle: RevisionCycle = {
-            cycleNumber: (initialTask.revisionHistory || []).length + 1,
-            requestedAt: new Date(),
-            requestedBy: {
-                id: currentUser.id,
-                name: currentUser.name,
-                avatarUrl: currentUser.avatarUrl || '',
-            },
-            items: newRevisionItems
-        };
-
         batch.update(taskRef, {
             status: newStatus,
-            revisionItems: newRevisionItems,
-            revisionHistory: [...(initialTask.revisionHistory || []), newRevisionCycle],
+            revisionItems: newRevisionItems, // Set the new checklist
+            revisionHistory: newRevisionHistory, // Append the old one to history
             activities: updatedActivities,
             lastActivity: newActivity,
             updatedAt: serverTimestamp(),
@@ -1265,10 +1263,10 @@ export function TaskDetailsSheet({
              </div>
           </SheetHeader>
           <Form {...form}>
-            <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0">
-               <ScrollArea className="h-full">
-                <div className="grid grid-cols-1 md:grid-cols-3">
-                  <div className="md:col-span-2 p-6 space-y-6">
+          <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)}>
+            <ScrollArea className="h-full">
+              <div className="grid md:grid-cols-3">
+                <div className="md:col-span-2 p-6 space-y-6">
                       
                       {showTimeTracker && (
                         <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
@@ -1536,8 +1534,8 @@ export function TaskDetailsSheet({
                         </TabsContent>
                       </Tabs>
                       
-                  </div>
-                  <div className="md:col-span-1 border-l p-6 space-y-6">
+                </div>
+                <div className="md:col-span-1 border-l p-6 space-y-6">
                   {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && (
                        <div className="space-y-2">
                          <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
@@ -1619,7 +1617,13 @@ export function TaskDetailsSheet({
                                     </FormControl>
                                     <SelectContent>
                                       {(allStatuses || []).map(status => (
-                                        <SelectItem key={status.id} value={status.name} disabled={!canChangeStatus || (isSharedView && !sharedTaskConfig?.allowedStatuses.includes(status.name))}>{status.name}</SelectItem>
+                                        <SelectItem 
+                                          key={status.id} 
+                                          value={status.name} 
+                                          disabled={!canChangeStatus || (isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi'))}
+                                        >
+                                          {status.name}
+                                        </SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
@@ -1814,15 +1818,15 @@ export function TaskDetailsSheet({
               </div>
             </ScrollArea>
           </form>
-        </Form>
-        <SheetFooter className="p-4 border-t flex-shrink-0">
+          </Form>
+          <SheetFooter className="p-4 border-t flex-shrink-0">
             {canEditContent && (
               <Button type="submit" form="task-details-form" disabled={isSaving}>
                 {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
                 Save Changes
               </Button>
             )}
-        </SheetFooter>
+          </SheetFooter>
         </SheetContent>
       </Sheet>
       <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
