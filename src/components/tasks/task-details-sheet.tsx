@@ -817,7 +817,7 @@ export function TaskDetailsSheet({
       const currentFiles = fileType === 'attachment' ? (initialTask.attachments || []) : (initialTask.deliverables || []);
       const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
       
-      await updateDoc(taskDocRef, { [fieldToUpdate]: [...currentFiles, newFile] });
+      await updateDoc(taskDocRef, { [fieldToUpdate]: [...currentFiles, ...newFile] });
 
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
@@ -1031,10 +1031,9 @@ export function TaskDetailsSheet({
             completed: false,
         }));
         
-        // Archive the current revision checklist before replacing it
         const currentRevisionCycle: RevisionCycle = {
             cycleNumber: (initialTask.revisionHistory || []).length + 1,
-            requestedAt: new Date(),
+            requestedAt: serverTimestamp(),
             requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
             items: initialTask.revisionItems || []
         };
@@ -1046,8 +1045,8 @@ export function TaskDetailsSheet({
 
         batch.update(taskRef, {
             status: newStatus,
-            revisionItems: newRevisionItems, // Set the new checklist
-            revisionHistory: newRevisionHistory, // Append the old one to history
+            revisionItems: newRevisionItems,
+            revisionHistory: newRevisionHistory,
             activities: updatedActivities,
             lastActivity: newActivity,
             updatedAt: serverTimestamp(),
@@ -1263,12 +1262,11 @@ export function TaskDetailsSheet({
              </div>
           </SheetHeader>
           <div className="flex-1 min-h-0">
-            <Form {...form}>
-              <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="h-full">
-                <ScrollArea className="h-full">
-                  <div className="grid md:grid-cols-3">
-                    <div className="md:col-span-2 p-6 space-y-6">
-                      {/* Left Column Content */}
+          <Form {...form}>
+            <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)}>
+              <ScrollArea className="h-full" style={{height: 'calc(100vh - 128px)'}}>
+                <div className="grid md:grid-cols-3">
+                  <div className="md:col-span-2 p-6 space-y-6">
                       {showTimeTracker && (
                         <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                             <div className="flex items-center justify-between">
@@ -1562,36 +1560,35 @@ export function TaskDetailsSheet({
                             )}
                         </TabsContent>
                       </Tabs>
-                    </div>
-                    <div className="md:col-span-1 p-6 space-y-6">
-                      {/* Right Column Content */}
+                  </div>
+                  <div className="md:col-span-1 p-6 space-y-6">
                       {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && (
-                       <div className="space-y-2">
-                         <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
-                             {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                             Submit for Review
-                         </Button>
-                         {!canSubmit && (
-                             <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file untuk melanjutkan.</p>
-                         )}
-                       </div>
+                      <div className="space-y-2">
+                        <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
+                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            Submit for Review
+                        </Button>
+                        {!canSubmit && (
+                            <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file untuk melanjutkan.</p>
+                        )}
+                      </div>
                   )}
                   
                   {isManagerOrAdmin && initialTask.status === 'Preview' && !isSharedView && (
                       <div className="space-y-2">
-                         <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}>
+                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}>
                             <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
-                         </Button>
-                         <Button variant="outline" className="w-full" onClick={handleRequestRevisions} disabled={isSaving}>
+                        </Button>
+                        <Button variant="outline" className="w-full" onClick={handleRequestRevisions} disabled={isSaving}>
                             <RefreshCcw className="mr-2 h-4 w-4" />Request Revisions
-                         </Button>
+                        </Button>
                       </div>
                   )}
 
                   {(isAssignee || isCreator) && initialTask.status === 'Done' && !isSharedView && (
-                       <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>
+                      <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>
                           {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                           <RefreshCcw className="mr-2 h-4 w-4" />
+                          <RefreshCcw className="mr-2 h-4 w-4" />
                           Reopen Task
                       </Button>
                   )}
@@ -1636,9 +1633,9 @@ export function TaskDetailsSheet({
                       <FormItem className="grid grid-cols-3 items-center gap-2">
                           <FormLabel className="text-muted-foreground">Status</FormLabel>
                           <div className="col-span-2">
-                             <FormField control={form.control} name="status" render={({ field }) => {
+                            <FormField control={form.control} name="status" render={({ field }) => {
                                 return (
-                                 <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}>
+                                <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}>
                                     <FormControl>
                                       <SelectTrigger>
                                         <SelectValue placeholder="Select status" />
@@ -1656,14 +1653,14 @@ export function TaskDetailsSheet({
                                       ))}
                                     </SelectContent>
                                   </Select>
-                               )
-                             }}/>
+                              )
+                            }}/>
                           </div>
                       </FormItem>
-                     <FormField control={form.control} name="priority" render={({ field }) => {
+                    <FormField control={form.control} name="priority" render={({ field }) => {
                         const priority = priorityInfo[field.value];
                         return (
-                         <FormItem className="grid grid-cols-3 items-center gap-2">
+                        <FormItem className="grid grid-cols-3 items-center gap-2">
                             <FormLabel className="text-muted-foreground">Priority</FormLabel>
                             <div className="col-span-2 flex items-center gap-2">
                                 { !canChangePriority ? (
@@ -1681,36 +1678,36 @@ export function TaskDetailsSheet({
                                 </>
                                 )}
                             </div>
-                         </FormItem>
+                        </FormItem>
                         )
-                     }}/>
+                    }}/>
                       <FormField control={form.control} name="dueDate" render={({ field }) => (
                           <FormItem className="grid grid-cols-3 items-center gap-2">
-                             <FormLabel className="text-muted-foreground">Due Date</FormLabel>
-                             <div className="col-span-2">
-                               {!canEditContent ? (
-                                   <div className="text-sm font-medium">
-                                       {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}
-                                   </div>
-                               ) : (
-                                   <Input type="date" {...field} value={field.value || ''} />
-                               )}
-                             </div>
+                            <FormLabel className="text-muted-foreground">Due Date</FormLabel>
+                            <div className="col-span-2">
+                              {!canEditContent ? (
+                                  <div className="text-sm font-medium">
+                                      {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}
+                                  </div>
+                              ) : (
+                                  <Input type="date" {...field} value={field.value || ''} />
+                              )}
+                            </div>
                           </FormItem>
                       )}/>
                       {initialTask.actualCompletionDate && (
-                           <div className="grid grid-cols-3 items-center gap-2">
-                             <FormLabel className="text-muted-foreground">Completed</FormLabel>
-                             <div className="col-span-2 flex items-center gap-2">
-                               <span className="text-sm font-medium">
+                          <div className="grid grid-cols-3 items-center gap-2">
+                            <FormLabel className="text-muted-foreground">Completed</FormLabel>
+                            <div className="col-span-2 flex items-center gap-2">
+                              <span className="text-sm font-medium">
                                   {format(parseISO(initialTask.actualCompletionDate), 'MMM d, yyyy')}
-                               </span>
-                               {completionStatus && (
+                              </span>
+                              {completionStatus && (
                                   <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>
                                       {completionStatus}
                                   </Badge>
-                               )}
-                             </div>
+                              )}
+                            </div>
                           </div>
                       )}
                   </div>
@@ -1720,7 +1717,7 @@ export function TaskDetailsSheet({
                     <Separator/>
                     <FormItem>
                         <FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
-                         {currentAssignees.map((user) => (
+                        {currentAssignees.map((user) => (
                             <div key={user.id} className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-3">
                                     <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
@@ -1728,7 +1725,7 @@ export function TaskDetailsSheet({
                                 </div>
                                 {canAssignUsers && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
                             </div>
-                         ))}
+                        ))}
                         {canAssignUsers && (
                             <Popover>
                                 <PopoverTrigger asChild><Button type="button" variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button></PopoverTrigger>
@@ -1771,7 +1768,7 @@ export function TaskDetailsSheet({
                     <Separator/>
                     <FormItem>
                         <FormLabel className="text-muted-foreground text-sm">Tags</FormLabel>
-                         <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2">
                             {currentTags.map((tag) => (
                                 <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
                                     {tag.label}
@@ -1779,12 +1776,12 @@ export function TaskDetailsSheet({
                                 </div>
                             ))}
                             {canEditContent && (
-                                 <Popover>
+                                <Popover>
                                     <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
                                     <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
                                 </Popover>
                             )}
-                         </div>
+                        </div>
                     </FormItem>
                   </div>
 
@@ -1793,8 +1790,8 @@ export function TaskDetailsSheet({
                       <h3 className='font-semibold text-sm'>Time Management</h3>
                     </div>
                     <Separator/>
-                     <FormField control={form.control} name="timeEstimate" render={({ field }) => (
-                       <FormItem className="grid grid-cols-3 items-center gap-2">
+                    <FormField control={form.control} name="timeEstimate" render={({ field }) => (
+                      <FormItem className="grid grid-cols-3 items-center gap-2">
                           <FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel>
                           <div className="col-span-2">
                             {!canEditContent ? (
@@ -1803,16 +1800,16 @@ export function TaskDetailsSheet({
                               <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" />
                             )}
                           </div>
-                       </FormItem>
-                     )}/>
-                     
-                     <div className="space-y-2">
+                      </FormItem>
+                    )}/>
+                    
+                    <div className="space-y-2">
                         <div className="grid grid-cols-3 items-center gap-2">
                             <span className="text-sm text-muted-foreground">Total Logged</span>
                             <span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span>
                         </div>
                         <Progress value={timeTrackingProgress} />
-                     </div>
+                    </div>
 
                   </div>
                   
@@ -1836,26 +1833,26 @@ export function TaskDetailsSheet({
                           {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
                       </div>
                       {canEditContent && (
-                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
                           <Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="animate-spin"/> : <Upload/>}Upload from Local</Button>
                           <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
                         </div>
                       )}
                   </div>
-                    </div>
-                  </div>
-                </ScrollArea>
-              </form>
-            </Form>
-          </div>
+                </div>
+              </div>
+              </ScrollArea>
+             </form>
+           </Form>
+        </div>
           <SheetFooter className="p-4 border-t flex-shrink-0">
-            {canEditContent && (
-              <Button type="submit" form="task-details-form" disabled={isSaving}>
-                {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
-                Save Changes
-              </Button>
-            )}
+              {canEditContent && (
+                <Button type="submit" form="task-details-form" disabled={isSaving}>
+                  {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
+                  Save Changes
+                </Button>
+              )}
           </SheetFooter>
         </SheetContent>
       </Sheet>
