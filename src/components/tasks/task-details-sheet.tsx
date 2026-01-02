@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -1262,12 +1261,13 @@ export function TaskDetailsSheet({
                 </div>
              </div>
           </SheetHeader>
-          <Form {...form}>
-          <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)}>
-            <ScrollArea className="h-full">
-              <div className="grid md:grid-cols-3">
-                <div className="md:col-span-2 p-6 space-y-6">
-                      
+          <div className="flex-1 min-h-0">
+            <Form {...form}>
+              <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="h-full">
+                <ScrollArea className="h-[calc(100vh_-_120px)]">
+                  <div className="grid md:grid-cols-3 h-full">
+                    <div className="md:col-span-2 p-6 space-y-6">
+                      {/* Left Column Content */}
                       {showTimeTracker && (
                         <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
                             <div className="flex items-center justify-between">
@@ -1533,10 +1533,10 @@ export function TaskDetailsSheet({
                           {/* Dependencies content here */}
                         </TabsContent>
                       </Tabs>
-                      
-                </div>
-                <div className="md:col-span-1 border-l p-6 space-y-6">
-                  {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && (
+                    </div>
+                    <div className="md:col-span-1 p-6 space-y-6">
+                      {/* Right Column Content */}
+                      {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && (
                        <div className="space-y-2">
                          <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
                              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
@@ -1814,11 +1814,12 @@ export function TaskDetailsSheet({
                         </div>
                       )}
                   </div>
-                </div>
-              </div>
-            </ScrollArea>
-          </form>
-          </Form>
+                    </div>
+                  </div>
+                </ScrollArea>
+              </form>
+            </Form>
+          </div>
           <SheetFooter className="p-4 border-t flex-shrink-0">
             {canEditContent && (
               <Button type="submit" form="task-details-form" disabled={isSaving}>
