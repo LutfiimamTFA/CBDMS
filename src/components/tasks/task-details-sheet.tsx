@@ -296,8 +296,8 @@ export function TaskDetailsSheet({
       if (isSharedView) return false;
       if (!isAssignee) return false;
       // Hide tracker during Preview and Revisi statuses
-      return ['To Do', 'Doing'].includes(form.getValues('status'));
-  }, [isAssignee, isSharedView, form, form.watch('status')]);
+      return !['Preview', 'Revisi', 'Done'].includes(form.getValues('status'));
+  }, [isAssignee, isSharedView, form.watch('status')]);
 
   useEffect(() => {
     if (initialTask && open) {
@@ -984,7 +984,7 @@ export function TaskDetailsSheet({
   
   const hasDeliverablesForCurrentRevision = useMemo(() => {
     const currentCycle = (initialTask.revisionHistory || []).length;
-    return (initialTask.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+    return (initialTask.deliverables || []).some(d => (d.forRevisionCycle ?? 0) === currentCycle);
   }, [initialTask.deliverables, initialTask.revisionHistory]);
   
   const canSubmit = allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentRevision;
