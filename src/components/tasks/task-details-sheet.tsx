@@ -773,7 +773,7 @@ export function TaskDetailsSheet({
                     name: currentUser.name,
                     avatarUrl: currentUser.avatarUrl || '',
                 },
-                forRevisionCycle: (initialTask.revisionHistory || []).length,
+                forRevisionCycle: (initialTask.revisionHistory || []).length + 1,
             };
         });
 
@@ -811,7 +811,7 @@ export function TaskDetailsSheet({
             name: currentUser.name,
             avatarUrl: currentUser.avatarUrl || '',
         },
-        forRevisionCycle: (initialTask.revisionHistory || []).length,
+        forRevisionCycle: (initialTask.revisionHistory || []).length + 1,
       };
 
       const taskDocRef = doc(firestore, 'tasks', initialTask.id);
@@ -983,6 +983,7 @@ export function TaskDetailsSheet({
   const allRevisionsCompleted = useMemo(() => (initialTask.revisionItems || []).every(item => item.completed), [initialTask.revisionItems]);
   
   const hasDeliverablesForCurrentRevision = useMemo(() => {
+    if (isSharedView && (!sharedTaskConfig?.snapshot?.task.deliverables || sharedTaskConfig?.snapshot.task.deliverables.length === 0)) return false;
     if (!isSharedView && (!initialTask.deliverables || initialTask.deliverables.length === 0)) return false;
     
     const currentCycle = (initialTask.revisionHistory || []).length + 1;
@@ -992,7 +993,7 @@ export function TaskDetailsSheet({
     }
     
     return (initialTask.deliverables || []).length > 0;
-  }, [initialTask, isSharedView]);
+  }, [initialTask, isSharedView, sharedTaskConfig]);
   
   const canSubmit = allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentRevision;
 
@@ -1264,10 +1265,10 @@ export function TaskDetailsSheet({
              </div>
           </SheetHeader>
           <Form {...form}>
-            <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0 flex flex-col">
-              <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-3">
-                <ScrollArea className="md:col-span-2 p-6">
-                  <div className="space-y-6">
+            <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="flex-1 min-h-0">
+               <ScrollArea className="h-full">
+                <div className="grid grid-cols-1 md:grid-cols-3">
+                  <div className="md:col-span-2 p-6 space-y-6">
                       
                       {showTimeTracker && (
                         <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
@@ -1504,7 +1505,7 @@ export function TaskDetailsSheet({
                            {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => (
                                 <div key={cycleNum} className="space-y-2">
                                     <h4 className="font-semibold text-sm">
-                                        {Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${cycleNum}`}
+                                        {Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum) - 1}`}
                                     </h4>
                                     {deliverables.map(att => (
                                          <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
@@ -1536,8 +1537,7 @@ export function TaskDetailsSheet({
                       </Tabs>
                       
                   </div>
-                </ScrollArea>
-                <div className="md:col-span-1 border-l p-6 space-y-6">
+                  <div className="md:col-span-1 border-l p-6 space-y-6">
                   {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && (
                        <div className="space-y-2">
                          <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
@@ -1812,16 +1812,17 @@ export function TaskDetailsSheet({
                   </div>
                 </div>
               </div>
-            </form>
-          </Form>
-          <SheetFooter className="p-4 border-t flex-shrink-0">
-              {canEditContent && (
-                <Button type="submit" form="task-details-form" disabled={isSaving}>
-                  {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
-                  Save Changes
-                </Button>
-              )}
-          </SheetFooter>
+            </ScrollArea>
+          </form>
+        </Form>
+        <SheetFooter className="p-4 border-t flex-shrink-0">
+            {canEditContent && (
+              <Button type="submit" form="task-details-form" disabled={isSaving}>
+                {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
+                Save Changes
+              </Button>
+            )}
+        </SheetFooter>
         </SheetContent>
       </Sheet>
       <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
