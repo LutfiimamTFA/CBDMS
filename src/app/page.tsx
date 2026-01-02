@@ -23,7 +23,7 @@ export default function RootPage() {
       }
       // If not logged in, the user will see the landing page.
     }
-  }, [user, profile, isLoading, router]);
+  }, [user, profile, isLoading]);
 
   useEffect(() => {
     const timer = setInterval(() => {
