@@ -295,7 +295,8 @@ export function TaskDetailsSheet({
   const showTimeTracker = useMemo(() => {
       if (isSharedView) return false;
       if (!isAssignee) return false;
-      return ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
+      // Hide tracker during Preview and Revisi statuses
+      return ['To Do', 'Doing'].includes(form.getValues('status'));
   }, [isAssignee, isSharedView, form, form.watch('status')]);
 
   useEffect(() => {
