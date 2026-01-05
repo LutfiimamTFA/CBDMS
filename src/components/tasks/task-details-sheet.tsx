@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -61,6 +61,7 @@ import { ShareTaskDialog } from '../share/share-task-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandList } from '../ui/command';
 
 
 const taskDetailsSchema = z.object({
@@ -188,6 +189,12 @@ export function TaskDetailsSheet({
   const storage = useStorage();
   
   const { user: authUser, profile: currentUser } = useUserProfile();
+
+  const allTasksQuery = useMemo(() => {
+    if (!firestore || !currentUser) return null;
+    return query(collection(firestore, 'tasks'), where('companyId', '==', currentUser.companyId));
+  }, [firestore, currentUser]);
+  const { data: allTasks, isLoading: areAllTasksLoading } = useCollection<Task>(allTasksQuery);
   
  const usersQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
@@ -1530,7 +1537,68 @@ export function TaskDetailsSheet({
                           )}
                         </TabsContent>
                          <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                          {/* Dependencies content here */}
+                            <Command>
+                                <CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent} />
+                                <CommandList>
+                                    <CommandEmpty>No tasks found.</CommandEmpty>
+                                    <CommandGroup>
+                                    {(allTasks || []).filter(task => !initialTask.dependencies?.includes(task.id) && task.id !== initialTask.id).map(task => (
+                                        <CommandItem key={task.id} onSelect={() => {
+                                            if (!canEditContent) return;
+                                            const newDeps = [...(initialTask.dependencies || []), task.id];
+                                            updateDoc(doc(firestore!, 'tasks', initialTask.id), { dependencies: newDeps });
+                                        }}>
+                                        {task.title}
+                                        </CommandItem>
+                                    ))}
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                            <div className="space-y-2">
+                                <Label>Depends on:</Label>
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : (
+                                <div className="flex flex-wrap gap-2">
+                                    {(initialTask.dependencies || []).map(depId => {
+                                    const task = allTasks?.find(t => t.id === depId);
+                                    if (!task) return null;
+
+                                    const statusIcon =
+                                        task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> :
+                                        task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> :
+                                        <Circle className="h-4 w-4 text-muted-foreground" />;
+                                    
+                                    return (
+                                        <TooltipProvider key={depId}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Link href={`/tasks/${depId}`}>
+                                                        <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
+                                                            {statusIcon}
+                                                            <span className="ml-2 truncate">{task.title}</span>
+                                                            {canEditContent && (
+                                                                <button onClick={(e) => {
+                                                                    e.preventDefault(); e.stopPropagation();
+                                                                    const newDeps = initialTask.dependencies?.filter(id => id !== depId);
+                                                                    updateDoc(doc(firestore!, 'tasks', initialTask.id), { dependencies: newDeps });
+                                                                }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                                                                <X className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                        </Badge>
+                                                    </Link>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>Status: {task.status}</p>
+                                                    <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
+                                                    <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    );
+                                    })}
+                                </div>
+                                )}
+                            </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
                             {(initialTask.revisionHistory && initialTask.revisionHistory.length > 0) ? (
