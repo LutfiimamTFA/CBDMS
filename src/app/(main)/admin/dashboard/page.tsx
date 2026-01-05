@@ -28,37 +28,37 @@ export default function AdminDashboardPage() {
 
   const usersQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
-
     let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
-
     if (profile.role === 'Manager') {
-      // For managers, fetch their direct reports and themselves
       q = query(q, where('managerId', '==', profile.id));
     }
-    
     return q;
   }, [firestore, companyId, profile]);
-  const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
+    if (profile.role === 'Manager' && (!profile.brandIds || profile.brandIds.length === 0)) {
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'dummy-id-to-get-empty-result'));
+    }
     
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
     if (profile.role === 'Manager') {
-      if (!profile.brandIds || profile.brandIds.length === 0) {
-        return null; // Manager has no brands, sees no tasks.
-      }
       q = query(q, where('brandId', 'in', profile.brandIds));
     }
 
     return q;
   }, [firestore, companyId, profile]);
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
   
-  const isLoading = isProfileLoading || isUsersLoading || isTasksLoading;
+  const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: allCompanyUsers, isLoading: isAllUsersLoading } = useCollection<User>(
+      useMemo(() => (firestore && companyId ? query(collection(firestore, 'users'), where('companyId', '==', companyId)) : null), [firestore, companyId])
+  );
 
-  const totalUsers = profile?.role === 'Manager' ? (users?.length || 0) : useCollection<User>(query(collection(firestore!, 'users'), where('companyId', '==', companyId)))?.data?.length || 0;
+  const isLoading = isProfileLoading || isUsersLoading || isTasksLoading || (profile?.role === 'Manager' && isAllUsersLoading);
+
+  const totalUsers = profile?.role === 'Manager' ? (users?.length || 0) : allCompanyUsers?.length || 0;
   const totalTasks = tasks?.length || 0;
   const completedTasks =
     tasks?.filter((t) => t.status === 'Done').length || 0;

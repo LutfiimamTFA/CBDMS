@@ -75,46 +75,38 @@ export default function CalendarPage() {
   
   const activeCompanyId = session ? session.companyId : companyId;
 
-  // --- Data Fetching (Role-aware) ---
   const tasksQuery = useMemo(() => {
     if (!firestore || !activeCompanyId) return null;
-
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', activeCompanyId));
-    
-    // In a normal session, employees only see their own tasks
     if (!session && currentUser?.role === 'Employee') {
       q = query(q, where('assigneeIds', 'array-contains', currentUser.id));
     }
     return q;
-
   }, [firestore, activeCompanyId, currentUser, session]);
 
-  const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
-
   const usersQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'users'), where('companyId', '==', activeCompanyId), orderBy('name')) : null), [firestore, activeCompanyId]);
-  const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
   const brandsQuery = useMemo(() => {
-    if (!firestore || !activeCompanyId) return null;
+    if (!firestore || !activeCompanyId || !currentUser) return null;
     let q = query(collection(firestore, 'brands'), orderBy('name'));
 
-    // If Manager, only fetch the brands they are assigned to, if any
-    if (currentUser?.role === 'Manager' && currentUser.brandIds && currentUser.brandIds.length > 0) {
-      q = query(q, where('__name__', 'in', currentUser.brandIds));
-    } else if (currentUser?.role === 'Manager') {
-        return null; // Manager with no brands sees no brands.
-    }
-    
-    // For other roles, fetch all brands for the company
-    if (currentUser?.role !== 'Manager') {
+    if (currentUser?.role === 'Manager') {
+        if (!currentUser.brandIds || currentUser.brandIds.length === 0) {
+            return query(collection(firestore, 'brands'), where('__name__', '==', 'dummy-id-to-get-empty-result'));
+        }
+        q = query(q, where('__name__', 'in', currentUser.brandIds));
+    } else {
       q = query(q, where('companyId', '==', activeCompanyId));
     }
-
+    
     return q;
   }, [firestore, activeCompanyId, currentUser]);
-  const { data: allBrands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   
   const statusesQuery = useMemo(() => (firestore && activeCompanyId ? query(collection(firestore, 'statuses'), where('companyId', '==', activeCompanyId), orderBy('order')) : null), [firestore, activeCompanyId]);
+  
+  const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
+  const { data: allBrands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   const { data: allStatuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
   const isLoading = isTasksLoading || areUsersLoading || areBrandsLoading || areStatusesLoading || isSessionLoading;

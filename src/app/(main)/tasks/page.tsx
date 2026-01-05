@@ -1,3 +1,4 @@
+
 'use client';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import { useI18n } from '@/context/i18n-provider';
@@ -22,36 +23,35 @@ export default function TasksPage() {
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
 
-    if (profile.role === 'Super Admin') {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-    }
-    
-    if (profile.role === 'Manager') {
-      if (!profile.brandIds || profile.brandIds.length === 0) {
-        return null;
-      }
-      return query(
-        collection(firestore, 'tasks'), 
-        where('companyId', '==', companyId),
-        where('brandId', 'in', profile.brandIds)
-      );
-    }
-    
-    if (profile.role === 'Employee' || profile.role === 'PIC') {
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+    if (profile.role === 'Manager' && (!profile.brandIds || profile.brandIds.length === 0)) {
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'dummy-id-to-get-empty-result'));
     }
 
-    return null;
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+
+    if (profile.role === 'Manager') {
+      q = query(q, where('brandId', 'in', profile.brandIds));
+    } else if (profile.role === 'Employee' || profile.role === 'PIC') {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    }
+    
+    return q;
   }, [firestore, companyId, profile]);
 
-  const { data: allVisibleTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const teamUsersQuery = React.useMemo(() => {
+    if (!firestore || !profile || profile.role !== 'Manager') return null;
+    return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+  }, [firestore, profile]);
   
-  const statusesQuery = React.useMemo(() => 
-    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
-  
+  const usersQuery = React.useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
+    if (profile.role === 'Manager') {
+      q = query(q, where('managerId', '==', profile.id));
+    }
+    return q;
+  }, [firestore, companyId, profile]);
+
   const brandsQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
     let q = query(collection(firestore, 'brands'), orderBy('name'));
@@ -60,25 +60,18 @@ export default function TasksPage() {
     }
     return q;
   }, [firestore, profile]);
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   
-  const teamUsersQuery = React.useMemo(() => {
-    if (!firestore || !profile || profile.role !== 'Manager') return null;
-    return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
-  }, [firestore, profile]);
+  const statusesQuery = React.useMemo(() => 
+    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    [firestore]
+  );
+  
+  const { data: allVisibleTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   const { data: teamUsers, isLoading: isTeamUsersLoading } = useCollection<User>(teamUsersQuery);
-
-  const usersQuery = React.useMemo(() => {
-    if (!firestore || !companyId) return null;
-    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
-    if (profile?.role === 'Manager') {
-      // For managers, we fetch their own team to display in the assignee filter.
-      // This is simpler than fetching all users and filtering on the client.
-      q = query(q, where('managerId', '==', profile.id));
-    }
-    return q;
-  }, [firestore, companyId, profile]);
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
+
 
   // Client-side filtering based on the active tab
   const filteredTasks = useMemo(() => {

@@ -21,25 +21,19 @@ export default function SchedulePage() {
   const tasksQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
     
-    // For Managers, filter tasks by the brands they are assigned to.
-    if (profile.role === 'Manager') {
-      if (!profile.brandIds || profile.brandIds.length === 0) {
-        return null; // Manager has no brands, so they see no tasks.
-      }
-      return query(
-        collection(firestore, 'tasks'), 
-        where('companyId', '==', companyId),
-        where('brandId', 'in', profile.brandIds)
-      );
+    if (profile.role === 'Manager' && (!profile.brandIds || profile.brandIds.length === 0)) {
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'dummy-id-to-get-empty-result'));
     }
 
-    // For Employees, show only tasks assigned to them.
-    if (profile.role === 'Employee') {
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+
+    if (profile.role === 'Manager') {
+      q = query(q, where('brandId', 'in', profile.brandIds));
+    } else if (profile.role === 'Employee') {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
     
-    // For Super Admin and other general cases.
-    return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+    return q;
 
   }, [firestore, companyId, profile]);
   

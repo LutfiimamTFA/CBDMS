@@ -348,43 +348,36 @@ export default function ReportsPage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
 
-  // --- Data Fetching Logic ---
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(useMemo(() => {
-    if (!firestore || !companyId || isProfileLoading) return null;
+  const tasksQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
     
-    // Super Admin: Fetch all tasks for the company
-    if (profile?.role === 'Super Admin') {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-    }
-    // Employee: Fetch only tasks assigned to them
-    if (profile?.role === 'Employee') {
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
-    }
-    // Manager: Fetch tasks of all their direct reports + their own
-    if (profile?.role === 'Manager') {
-      // Note: This requires a separate query for users first, so we handle it below
-      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-    }
-    return null;
-  }, [firestore, companyId, profile, isProfileLoading]));
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
-  const { data: users, isLoading: isUsersLoading } = useCollection<User>(useMemo(() => {
-    if (!firestore || !companyId || isProfileLoading) return null;
+    if (profile.role === 'Employee') {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    }
+    
+    return q;
+  }, [firestore, companyId, profile]);
 
-    if (profile?.role === 'Super Admin') {
-        return query(collection(firestore, 'users'), where('companyId', '==', companyId));
+  const usersQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile || profile.role === 'Employee') return null;
+
+    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
+    
+    if (profile.role === 'Manager') {
+        q = query(q, where('managerId', '==', profile.id));
     }
-    if (profile?.role === 'Manager') {
-        return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
-    }
-    return null; // Employees don't need to fetch other users for their report
-  }, [firestore, companyId, profile, isProfileLoading]));
-  
+    return q;
+  }, [firestore, companyId, profile]);
+
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
+
   const teamTasks = useMemo(() => {
     if (!profile || profile.role !== 'Manager' || !tasks || !users) return tasks;
     const teamMemberIds = users.map(u => u.id);
-    // Include manager's own tasks as well
-    teamMemberIds.push(profile.id);
+    teamMemberIds.push(profile.id); // Include manager's own tasks
     return tasks.filter(task => task.assigneeIds.some(id => teamMemberIds.includes(id)));
   }, [tasks, users, profile]);
 
