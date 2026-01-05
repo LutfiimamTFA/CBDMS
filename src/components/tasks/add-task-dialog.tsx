@@ -40,7 +40,7 @@ import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, 
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
-import { suggestPriority } from '@/ai/flows/suggest-priority';
+import { suggestPriority } from '@/ai/flows/smart-task-suggestions';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
 import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment, Notification, WorkflowStatus, Brand } from '@/lib/types';
@@ -1149,7 +1149,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                                   <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
                                                   {users.map(user => (
                                                       <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
+                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
                                                           <span className="truncate">{user.name}</span>
                                                       </Button>
                                                   ))}
@@ -1309,5 +1309,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
+
+    
 
     
