@@ -2,14 +2,14 @@
 'use client';
 
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger,
-} from '@/components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,6 +63,7 @@ import remarkGfm from 'remark-gfm';
 import { getInitials } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 
 const taskSchema = z.object({
@@ -844,441 +845,443 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle>{t('addtask.title')}</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>{children}</SheetTrigger>
+      <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-4xl">
+        <SheetHeader className="p-6 pb-0">
+          <SheetTitle>{t('addtask.title')}</SheetTitle>
+          <SheetDescription>
             {t('addtask.description')}
-          </DialogDescription>
-        </DialogHeader>
-        <ScrollArea className="px-6">
-          <div className="pt-4">
-            <Form {...form}>
-              <form
-                id="add-task-form"
-                onSubmit={form.handleSubmit(onSubmit)}
-                className="space-y-6"
-              >
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left Column */}
-                  <div className="space-y-6">
-                    <FormField
-                      control={form.control}
-                      name="title"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('addtask.form.title')}</FormLabel>
-                          <FormControl>
-                            <Input placeholder={t('addtask.form.title.placeholder')} {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="brandId"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Brand</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select a brand for this task" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {areBrandsLoading ? (
-                                <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                              ) : (
-                                brands?.map((brand) => (
-                                  <SelectItem key={brand.id} value={brand.id}>
-                                    <div className="flex items-center gap-2">
-                                      <Building2 className="h-4 w-4" />
-                                      {brand.name}
-                                    </div>
-                                  </SelectItem>
-                                ))
-                              )}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <div className="space-y-2">
-                      <Label>Description</Label>
-                      <div className="rounded-md border">
-                        <div className="p-2 border-b flex items-center gap-1">
-                           <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
-                           <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
-                           <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
-                           <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('numbered-list')}><ListOrdered /></Button>
-                           <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
-                              <PopoverTrigger asChild>
-                                  <Button type="button" variant="ghost" size="icon"><TableIcon /></Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-60 p-4 space-y-4">
-                                  <h4 className="font-medium text-sm">Insert Table</h4>
-                                  <div className="grid grid-cols-2 gap-2">
-                                      <Input type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" />
-                                      <Input type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" />
-                                  </div>
-                                  <Button onClick={handleGenerateTable} className="w-full">Generate</Button>
-                              </PopoverContent>
-                          </Popover>
-                        </div>
-                       <FormField control={form.control} name="description" render={({ field }) => (
+          </SheetDescription>
+        </SheetHeader>
+        <div className="flex-1 min-h-0">
+          <ScrollArea className="h-full">
+            <div className="p-6">
+              <Form {...form}>
+                <form
+                  id="add-task-form"
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Left Column */}
+                    <div className="space-y-6">
+                      <FormField
+                        control={form.control}
+                        name="title"
+                        render={({ field }) => (
                           <FormItem>
-                              <FormControl>
-                              <Textarea
-                                  placeholder={t('addtask.form.description.placeholder')}
-                                  {...field}
-                                  rows={8}
-                                  className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-t-none"
-                              />
-                              </FormControl>
-                              <FormMessage />
+                            <FormLabel>{t('addtask.form.title')}</FormLabel>
+                            <FormControl>
+                              <Input placeholder={t('addtask.form.title.placeholder')} {...field} />
+                            </FormControl>
+                            <FormMessage />
                           </FormItem>
-                        )}/>
-                         <div className="prose dark:prose-invert prose-sm max-w-none p-4 min-h-[10rem] bg-secondary/30 rounded-b-md">
-                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {descriptionValue || "Description preview will appear here..."}
-                           </ReactMarkdown>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right Column */}
-                  <div className="space-y-6">
-                    <FormField
-                      control={form.control}
-                      name="priority"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>{t('addtask.form.priority')}</FormLabel>
-                          <div className="flex items-center gap-2">
-                            <Select onValueChange={field.onChange} value={field.value}>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="brandId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Brand</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
-                                  <SelectValue placeholder="Select priority" />
+                                  <SelectValue placeholder="Select a brand for this task" />
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                {Object.values(priorityInfo).map((p) => (
-                                  <SelectItem key={p.value} value={p.value}>
-                                    <div className="flex items-center gap-2">
-                                      <p.icon className={`h-4 w-4 ${p.color}`} />
-                                      {p.label}
-                                    </div>
-                                  </SelectItem>
-                                ))}
+                                {areBrandsLoading ? (
+                                  <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                                ) : (
+                                  brands?.map((brand) => (
+                                    <SelectItem key={brand.id} value={brand.id}>
+                                      <div className="flex items-center gap-2">
+                                        <Building2 className="h-4 w-4" />
+                                        {brand.name}
+                                      </div>
+                                    </SelectItem>
+                                  ))
+                                )}
                               </SelectContent>
                             </Select>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="icon"
-                              onClick={handleSuggestPriority}
-                              disabled={isSuggesting}
-                              title="Suggest Priority (AI)"
-                            >
-                              {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                            </Button>
-                          </div>
-                          {suggestionReason && <FormDescription className="text-primary">{t('addtask.form.priority.aisays')} {suggestionReason}</FormDescription>}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
 
-                    <FormField
-                      control={form.control}
-                      name="assigneeIds"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Assign To</FormLabel>
-                          {areUsersLoading ? (
-                            <Loader2 className="animate-spin h-5 w-5" />
-                          ) : (
-                            <MultiSelect
-                              options={userOptions}
-                              onValueChange={(value) => {
-                                form.setValue('assigneeIds', value);
-                                setSelectedUsers(
-                                  allUsers?.filter((u) => value.includes(u.id)) || []
-                                );
-                              }}
-                              defaultValue={field.value || []}
-                              placeholder="Select team members..."
-                            />
-                          )}
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <div className="space-y-4 rounded-lg border p-4">
-                        <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.startdate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
-                             <FormField
-                                control={form.control}
-                                name="dueDate"
-                                render={({ field }) => (
-                                  <FormItem className="flex flex-col">
-                                    <FormLabel>{t('addtask.form.duedate')}</FormLabel>
-                                    <Popover>
-                                      <PopoverTrigger asChild>
-                                        <FormControl>
-                                          <Button
-                                            variant={"outline"}
-                                            className={cn(
-                                              "w-full pl-3 text-left font-normal",
-                                              !field.value && "text-muted-foreground"
-                                            )}
-                                          >
-                                            {field.value ? (
-                                              format(field.value, "PPP")
-                                            ) : (
-                                              <span>Pick a date</span>
-                                            )}
-                                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                          </Button>
-                                        </FormControl>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-auto p-0" align="start">
-                                        <CalendarComponent
-                                          mode="single"
-                                          selected={field.value}
-                                          onSelect={field.onChange}
-                                          disabled={(date) => date < new Date("1900-01-01")}
-                                          initialFocus
-                                          modifiers={modifiers}
-                                          modifiersClassNames={modifiersClassNames}
-                                        />
-                                      </PopoverContent>
-                                    </Popover>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
+                      <div className="space-y-2">
+                        <Label>Description</Label>
+                        <div className="rounded-md border">
+                          <div className="p-2 border-b flex items-center gap-1">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('numbered-list')}><ListOrdered /></Button>
+                            <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button type="button" variant="ghost" size="icon"><TableIcon /></Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-60 p-4 space-y-4">
+                                    <h4 className="font-medium text-sm">Insert Table</h4>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Input type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" />
+                                        <Input type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" />
+                                    </div>
+                                    <Button onClick={handleGenerateTable} className="w-full">Generate</Button>
+                                </PopoverContent>
+                            </Popover>
+                          </div>
+                        <FormField control={form.control} name="description" render={({ field }) => (
+                            <FormItem>
+                                <FormControl>
+                                <Textarea
+                                    placeholder={t('addtask.form.description.placeholder')}
+                                    {...field}
+                                    rows={8}
+                                    className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-t-none"
+                                />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                          )}/>
+                          <div className="prose dark:prose-invert prose-sm max-w-none p-4 min-h-[10rem] bg-secondary/30 rounded-b-md">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {descriptionValue || "Description preview will appear here..."}
+                            </ReactMarkdown>
+                          </div>
                         </div>
-                        <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>{t('addtask.form.quickselect.clear')}</Button></div></div>
+                      </div>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-6">
+                      <FormField
+                        control={form.control}
+                        name="priority"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>{t('addtask.form.priority')}</FormLabel>
+                            <div className="flex items-center gap-2">
+                              <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select priority" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {Object.values(priorityInfo).map((p) => (
+                                    <SelectItem key={p.value} value={p.value}>
+                                      <div className="flex items-center gap-2">
+                                        <p.icon className={`h-4 w-4 ${p.color}`} />
+                                        {p.label}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                onClick={handleSuggestPriority}
+                                disabled={isSuggesting}
+                                title="Suggest Priority (AI)"
+                              >
+                                {isSuggesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                              </Button>
+                            </div>
+                            {suggestionReason && <FormDescription className="text-primary">{t('addtask.form.priority.aisays')} {suggestionReason}</FormDescription>}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="assigneeIds"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Assign To</FormLabel>
+                            {areUsersLoading ? (
+                              <Loader2 className="animate-spin h-5 w-5" />
+                            ) : (
+                              <MultiSelect
+                                options={userOptions}
+                                onValueChange={(value) => {
+                                  form.setValue('assigneeIds', value);
+                                  setSelectedUsers(
+                                    allUsers?.filter((u) => value.includes(u.id)) || []
+                                  );
+                                }}
+                                defaultValue={field.value || []}
+                                placeholder="Select team members..."
+                              />
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <div className="space-y-4 rounded-lg border p-4">
+                          <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{t('addtask.form.dates')}</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>{t('addtask.form.startdate')}</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
+                              <FormField
+                                  control={form.control}
+                                  name="dueDate"
+                                  render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                      <FormLabel>{t('addtask.form.duedate')}</FormLabel>
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <FormControl>
+                                            <Button
+                                              variant={"outline"}
+                                              className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                              )}
+                                            >
+                                              {field.value ? (
+                                                format(field.value, "PPP")
+                                              ) : (
+                                                <span>Pick a date</span>
+                                              )}
+                                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                          </FormControl>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                          <CalendarComponent
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            disabled={(date) => date < new Date("1900-01-01")}
+                                            initialFocus
+                                            modifiers={modifiers}
+                                            modifiersClassNames={modifiersClassNames}
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                          </div>
+                          <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>{t('addtask.form.quickselect.clear')}</Button></div></div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <Tabs defaultValue="subtasks" className="w-full">
-                  <TabsList className="grid w-full grid-cols-5">
-                    <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                    <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
-                    <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
-                    <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                    <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                    <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                        {subtasks.map((subtask) => (
-                            <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
-                                <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
-                                <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                
-                                <Popover>
-                                  <PopoverTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                                      {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
-                                    </Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-60 p-1">
-                                      <ScrollArea className="max-h-60">
-                                          <div className="space-y-1">
-                                              <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
-                                              {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
-                                                users.length > 0 && (
-                                                  <React.Fragment key={group}>
-                                                      <Separator />
-                                                      <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
-                                                      {users.map(user => (
-                                                        <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                  <Tabs defaultValue="subtasks" className="w-full">
+                    <TabsList className="grid w-full grid-cols-5">
+                      <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                      <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
+                      <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                      <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                      <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                          {subtasks.map((subtask) => (
+                              <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
+                                  <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
+                                  <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                  
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                                        {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-60 p-1">
+                                        <ScrollArea className="max-h-60">
+                                            <div className="space-y-1">
+                                                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
+                                                {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                                  users.length > 0 && (
+                                                    <React.Fragment key={group}>
+                                                        <Separator />
+                                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                        {users.map(user => (
+                                                          <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                            <span className="truncate">{user.name}</span>
+                                                          </Button>
+                                                        ))}
+                                                    </React.Fragment>
+                                                  )
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </PopoverContent>
+                                  </Popover>
+                                  
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
+                              </div>
+                          ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                {newSubtaskAssignee ? (
+                                  <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
+                                ) : (
+                                  <UserPlus className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-60 p-1">
+                              <ScrollArea className="max-h-60">
+                                  <div className="space-y-1">
+                                      <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                      {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                          users.length > 0 && (
+                                              <React.Fragment key={group}>
+                                                  <Separator />
+                                                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                  {users.map(user => (
+                                                      <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
                                                           <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
                                                           <span className="truncate">{user.name}</span>
-                                                        </Button>
-                                                      ))}
-                                                  </React.Fragment>
-                                                )
-                                              ))}
-                                          </div>
-                                      </ScrollArea>
-                                  </PopoverContent>
-                                </Popover>
-                                
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-muted-foreground">
-                              {newSubtaskAssignee ? (
-                                <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
-                              ) : (
-                                <UserPlus className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-60 p-1">
-                            <ScrollArea className="max-h-60">
-                                <div className="space-y-1">
-                                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                     {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
-                                        users.length > 0 && (
-                                            <React.Fragment key={group}>
-                                                <Separator />
-                                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
-                                                {users.map(user => (
-                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                        <span className="truncate">{user.name}</span>
-                                                    </Button>
-                                                ))}
-                                            </React.Fragment>
-                                        )
-                                    ))}
-                                </div>
-                            </ScrollArea>
-                          </PopoverContent>
-                        </Popover>
-                        <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
-                     <div className="space-y-2">
-                        {attachments.map((att) => (
-                            <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                {getFileIcon(att.name)}
-                                <span className="truncate" title={att.name}>{att.name}</span>
-                                </a>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
-                                    <X className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        ))}
-                        {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
-                     </div>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-                        <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
-                        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                        <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
-                     </div>
-                  </TabsContent>
-                  <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
-                     <div className="space-y-2">
-                        {deliverables.map((att) => (
-                            <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                {getFileIcon(att.name)}
-                                <span className="truncate" title={att.name}>{att.name}</span>
-                                </a>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveDeliverable(att.id)}>
-                                <X className="h-4 w-4" />
-                                </Button>
-                            </div>
-                        ))}
-                        {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
-                     </div>
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-                        <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
-                        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                        <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
-                     </div>
-                  </TabsContent>
-                  <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                    <Command>
-                      <CommandInput placeholder="Search tasks to add as dependency..." />
-                      <CommandList>
-                        <CommandEmpty>No tasks found.</CommandEmpty>
-                        <CommandGroup>
-                          {(allTasks || []).filter(task => !dependencies.includes(task.id)).map(task => (
-                            <CommandItem key={task.id} onSelect={() => handleAddDependency(task.id)}>
-                              {task.title}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                    <div className="space-y-2">
-                      <Label>Depends on:</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {dependencies.map(depId => {
-                          const task = allTasks?.find(t => t.id === depId);
-                          return task ? (
-                            <Badge key={depId} variant="secondary">
-                              {task.title}
-                              <button onClick={() => handleRemoveDependency(depId)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                                <X className="h-3 w-3" />
-                              </button>
-                            </Badge>
-                          ) : null;
-                        })}
+                                                      </Button>
+                                                  ))}
+                                              </React.Fragment>
+                                          )
+                                      ))}
+                                  </div>
+                              </ScrollArea>
+                            </PopoverContent>
+                          </Popover>
+                          <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
                       </div>
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                      <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
-                        {comments.map((comment) => (
-                           <div key={comment.id} className="flex items-start gap-3">
-                              <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar>
-                              <div>
-                                 <p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p>
-                                 <p className="text-sm">{comment.text}</p>
+                    </TabsContent>
+                    <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <div className="space-y-2">
+                          {attachments.map((att) => (
+                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                  {getFileIcon(att.name)}
+                                  <span className="truncate" title={att.name}>{att.name}</span>
+                                  </a>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
+                                      <X className="h-4 w-4" />
+                                  </Button>
                               </div>
-                           </div>
-                        ))}
-                        {comments.length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                          ))}
+                          {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
                       </div>
-                      <div className="flex items-start gap-2 pt-4 border-t">
-                          <Avatar className="h-9 w-9"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{getInitials(currentUserProfile?.name)}</AvatarFallback></Avatar>
-                          <div className="flex-1 relative">
-                            <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
-                            {isMentioning && (
-                                <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
-                                <CardContent className="p-1">
-                                    {mentionSuggestions.map(user => (
-                                    <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}>
-                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
-                                        {user.name}
-                                    </Button>
-                                    ))}
-                                </CardContent>
-                                </Card>
-                            )}
-                          </div>
-                          <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                          <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
                       </div>
-                  </TabsContent>
-                </Tabs>
-              </form>
-            </Form>
-          </div>
-        </ScrollArea>
-        <DialogFooter className="p-6 pt-4 border-t">
+                    </TabsContent>
+                    <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <div className="space-y-2">
+                          {deliverables.map((att) => (
+                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                  {getFileIcon(att.name)}
+                                  <span className="truncate" title={att.name}>{att.name}</span>
+                                  </a>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveDeliverable(att.id)}>
+                                  <X className="h-4 w-4" />
+                                  </Button>
+                              </div>
+                          ))}
+                          {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                          <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <Command>
+                        <CommandInput placeholder="Search tasks to add as dependency..." />
+                        <CommandList>
+                          <CommandEmpty>No tasks found.</CommandEmpty>
+                          <CommandGroup>
+                            {(allTasks || []).filter(task => !dependencies.includes(task.id)).map(task => (
+                              <CommandItem key={task.id} onSelect={() => handleAddDependency(task.id)}>
+                                {task.title}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                      <div className="space-y-2">
+                        <Label>Depends on:</Label>
+                        <div className="flex flex-wrap gap-2">
+                          {dependencies.map(depId => {
+                            const task = allTasks?.find(t => t.id === depId);
+                            return task ? (
+                              <Badge key={depId} variant="secondary">
+                                {task.title}
+                                <button onClick={() => handleRemoveDependency(depId)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                        <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
+                          {comments.map((comment) => (
+                            <div key={comment.id} className="flex items-start gap-3">
+                                <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar>
+                                <div>
+                                  <p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p>
+                                  <p className="text-sm">{comment.text}</p>
+                                </div>
+                            </div>
+                          ))}
+                          {comments.length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                        </div>
+                        <div className="flex items-start gap-2 pt-4 border-t">
+                            <Avatar className="h-9 w-9"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{getInitials(currentUserProfile?.name)}</AvatarFallback></Avatar>
+                            <div className="flex-1 relative">
+                              <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                              {isMentioning && (
+                                  <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
+                                  <CardContent className="p-1">
+                                      {mentionSuggestions.map(user => (
+                                      <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}>
+                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                          {user.name}
+                                      </Button>
+                                      ))}
+                                  </CardContent>
+                                  </Card>
+                              )}
+                            </div>
+                            <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                        </div>
+                    </TabsContent>
+                  </Tabs>
+                </form>
+              </Form>
+            </div>
+          </ScrollArea>
+        </div>
+        <SheetFooter className="p-6 pt-4 border-t">
           <Button type="submit" form="add-task-form">
             {t('addtask.form.create')}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
      <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
         <DialogContent>
             <DialogHeader>
