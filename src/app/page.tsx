@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from "react";
@@ -23,7 +24,7 @@ export default function RootPage() {
       }
       // If not logged in, the user will see the landing page.
     }
-  }, [user, profile, isLoading]);
+  }, [user, profile, isLoading, router]);
 
   useEffect(() => {
     const timer = setInterval(() => {
