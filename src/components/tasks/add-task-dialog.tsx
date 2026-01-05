@@ -40,7 +40,7 @@ import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, 
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
-import { suggestPriority } from '@/ai/flows/smart-task-suggestions';
+import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '../ui/textarea';
 import type { Tag as TagType, TimeLog, Task, User as UserType, Subtask, Comment, Attachment, Notification, WorkflowStatus, Brand } from '@/lib/types';
@@ -1313,3 +1313,4 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
 
     
+
