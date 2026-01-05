@@ -255,13 +255,16 @@ export function TaskDetailsSheet({
 
   const dependencyOptions = useMemo(() => {
     if (!allTasks || !currentUser) return [];
-    if (currentUser.role === 'Super Admin') {
-      return allTasks.filter(task => task.id !== initialTask.id);
-    }
+    
+    let relevantTasks = allTasks.filter(task => task.id !== initialTask.id);
+
     if (currentUser.role === 'Manager') {
-      return allTasks.filter(task => currentUser.brandIds?.includes(task.brandId) && task.id !== initialTask.id);
+        relevantTasks = relevantTasks.filter(task => currentUser.brandIds?.includes(task.brandId));
+    } else if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
+        relevantTasks = relevantTasks.filter(task => task.brandId === initialTask.brandId);
     }
-    return allTasks.filter(task => task.brandId === initialTask.brandId && task.id !== initialTask.id);
+    
+    return relevantTasks;
   }, [allTasks, currentUser, initialTask]);
 
   
@@ -1888,11 +1891,10 @@ export function TaskDetailsSheet({
                             <span className="text-sm text-muted-foreground">Total Logged</span>
                             <span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span>
                         </div>
-                         <div className="col-span-3">
-                           <Progress value={timeTrackingProgress} />
+                        <div className="col-span-3">
+                          <Progress value={timeTrackingProgress} />
                         </div>
                     </div>
-
                   </div>
                   
                   <div className="space-y-4 p-4 rounded-lg border">
@@ -2141,5 +2143,3 @@ export function TaskDetailsSheet({
     </>
   );
 }
-
-    
