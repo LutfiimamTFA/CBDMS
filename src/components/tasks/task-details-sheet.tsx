@@ -141,7 +141,7 @@ export function TaskDetailsSheet({
   const router = useRouter();
   const params = useParams();
   const [isUploading, setIsUploading] = React.useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSaving, setIsSaving] = useState(isSaving);
 
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -261,7 +261,10 @@ export function TaskDetailsSheet({
     if (currentUser.role === 'Manager') {
         relevantTasks = relevantTasks.filter(task => currentUser.brandIds?.includes(task.brandId));
     } else if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
-        relevantTasks = relevantTasks.filter(task => task.brandId === initialTask.brandId);
+        const userBrandIds = new Set(
+            allTasks.filter(t => t.assigneeIds.includes(currentUser.id)).map(t => t.brandId)
+        );
+        relevantTasks = relevantTasks.filter(task => userBrandIds.has(task.brandId));
     }
     
     return relevantTasks;
@@ -1556,7 +1559,7 @@ export function TaskDetailsSheet({
                                 <CommandList>
                                     <CommandEmpty>No tasks found.</CommandEmpty>
                                     <CommandGroup>
-                                    {(dependencyOptions || []).map(task => (
+                                    {(dependencyOptions || []).filter(task => !(initialTask.dependencies || []).includes(task.id)).map(task => (
                                         <CommandItem key={task.id} onSelect={() => {
                                             if (!canEditContent || !firestore) return;
                                             const newDeps = [...(initialTask.dependencies || []), task.id];
@@ -1871,6 +1874,7 @@ export function TaskDetailsSheet({
                   <div className='space-y-4 p-4 rounded-lg border'>
                     <div className="flex justify-between items-center">
                       <h3 className='font-semibold text-sm'>Time Management</h3>
+                      <div></div>
                     </div>
                     <Separator/>
                     <FormField control={form.control} name="timeEstimate" render={({ field }) => (
