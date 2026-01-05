@@ -105,19 +105,15 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
-    if (profile.role === 'Super Admin') {
-        toast({ variant: 'destructive', title: 'Action Not Allowed', description: 'Super Admins cannot create share links.' });
-        return;
-    }
 
     setIsLoading(true);
     setGeneratedLink(null);
 
     try {
         let tasksQuery;
-        if (profile.role === 'Manager') {
-            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds || ['__dummy_id__']));
-        } else { // Employee, PIC, Client
+        if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
+            tasksQuery = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds));
+        } else { // Employee, PIC, Client, and Super Admin (who sees all)
             tasksQuery = query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
         }
         

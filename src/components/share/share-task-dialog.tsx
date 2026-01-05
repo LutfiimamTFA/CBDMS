@@ -16,8 +16,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useUserProfile } from '@/firebase';
-import type { Task, SharedTask } from '@/lib/types';
-import { Link as LinkIcon, Copy, Loader2, KeyRound, Clock, Calendar as CalendarIcon, Eye, ListTodo, Edit, List } from 'lucide-react';
+import type { Task } from '@/lib/types';
+import { Link as LinkIcon, Copy, Loader2, KeyRound, Clock, Calendar as CalendarIcon, Eye, ListTodo, Edit } from 'lucide-react';
 import { Switch } from '../ui/switch';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar } from '../ui/calendar';
@@ -35,7 +35,7 @@ export function ShareTaskDialog({ children, task }: ShareTaskDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
 
-  const { user: authUser } = useUserProfile(); // Get the authUser to generate token
+  const { user: authUser } = useUserProfile(); 
   const { toast } = useToast();
 
   const [usePassword, setUsePassword] = useState(false);

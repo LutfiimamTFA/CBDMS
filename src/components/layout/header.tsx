@@ -26,8 +26,10 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
   const { profile } = useUserProfile();
 
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
-  const canCreateShareView = profile?.role === 'Manager' || profile?.role === 'Super Admin';
-  const showShareButton = canCreateShareView && shareableViews.includes(pathname);
+  
+  // Allow all authenticated users (except Client) to share their view.
+  const canCreateShareView = profile && profile.role !== 'Client';
+  const showShareButton = !isSharedView && canCreateShareView && shareableViews.includes(pathname);
 
 
   return (
