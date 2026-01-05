@@ -61,7 +61,7 @@ import { ShareTaskDialog } from '../share/share-task-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandList } from '../ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 
 
 const taskDetailsSchema = z.object({
@@ -252,6 +252,17 @@ export function TaskDetailsSheet({
     return { managers: [], employees: [], clients: [] };
 
   }, [allUsers, currentUser]);
+
+  const dependencyOptions = useMemo(() => {
+    if (!allTasks || !currentUser) return [];
+    if (currentUser.role === 'Super Admin') {
+      return allTasks.filter(task => task.id !== initialTask.id);
+    }
+    if (currentUser.role === 'Manager') {
+      return allTasks.filter(task => currentUser.brandIds?.includes(task.brandId) && task.id !== initialTask.id);
+    }
+    return allTasks.filter(task => task.brandId === initialTask.brandId && task.id !== initialTask.id);
+  }, [allTasks, currentUser, initialTask]);
 
   
   const isCreator = currentUser?.id === initialTask.createdBy.id;
@@ -1527,7 +1538,7 @@ export function TaskDetailsSheet({
                                     ))}
                                 </div>
                            ))}
-                          {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
+                          {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables were submitted for this task.</p>}
                           {canUploadDeliverables && (
                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
                               <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
@@ -1538,15 +1549,15 @@ export function TaskDetailsSheet({
                         </TabsContent>
                          <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
                             <Command>
-                                <CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent} />
+                                <CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} />
                                 <CommandList>
                                     <CommandEmpty>No tasks found.</CommandEmpty>
                                     <CommandGroup>
-                                    {(allTasks || []).filter(task => !initialTask.dependencies?.includes(task.id) && task.id !== initialTask.id).map(task => (
+                                    {(dependencyOptions || []).map(task => (
                                         <CommandItem key={task.id} onSelect={() => {
-                                            if (!canEditContent) return;
+                                            if (!canEditContent || !firestore) return;
                                             const newDeps = [...(initialTask.dependencies || []), task.id];
-                                            updateDoc(doc(firestore!, 'tasks', initialTask.id), { dependencies: newDeps });
+                                            updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps });
                                         }}>
                                         {task.title}
                                         </CommandItem>
@@ -1578,8 +1589,9 @@ export function TaskDetailsSheet({
                                                             {canEditContent && (
                                                                 <button onClick={(e) => {
                                                                     e.preventDefault(); e.stopPropagation();
+                                                                    if (!firestore) return;
                                                                     const newDeps = initialTask.dependencies?.filter(id => id !== depId);
-                                                                    updateDoc(doc(firestore!, 'tasks', initialTask.id), { dependencies: newDeps });
+                                                                    updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps });
                                                                 }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
                                                                 <X className="h-3 w-3" />
                                                                 </button>
@@ -1876,7 +1888,9 @@ export function TaskDetailsSheet({
                             <span className="text-sm text-muted-foreground">Total Logged</span>
                             <span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span>
                         </div>
-                        <Progress value={timeTrackingProgress} />
+                         <div className="col-span-3">
+                           <Progress value={timeTrackingProgress} />
+                        </div>
                     </div>
 
                   </div>
@@ -1909,7 +1923,6 @@ export function TaskDetailsSheet({
                       )}
                   </div>
                 </div>
-              </div>
               </ScrollArea>
              </form>
            </Form>
@@ -2128,3 +2141,5 @@ export function TaskDetailsSheet({
     </>
   );
 }
+
+    

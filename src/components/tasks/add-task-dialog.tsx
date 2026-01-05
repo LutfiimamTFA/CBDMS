@@ -205,6 +205,21 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
+  const dependencyOptions = useMemo(() => {
+    if (!allTasks || !currentUserProfile) return [];
+    if (currentUserProfile.role === 'Super Admin') {
+      return allTasks;
+    }
+    if (currentUserProfile.role === 'Manager') {
+      return allTasks.filter(task => currentUserProfile.brandIds?.includes(task.brandId));
+    }
+    // For Employee/PIC, scope is smaller, maybe only tasks within the same brand they can see.
+    // This part assumes employees can see tasks from their brand.
+    const employeeBrandIds = new Set(allTasks.filter(t => t.assigneeIds.includes(currentUserProfile.id)).map(t => t.brandId));
+    return allTasks.filter(task => employeeBrandIds.has(task.brandId));
+
+  }, [allTasks, currentUserProfile]);
+
   const userWorkload = useMemo(() => {
     const workloadMap = new Map<string, number>();
     if (!allTasks || !allUsers) return workloadMap;
@@ -1211,7 +1226,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         <CommandList>
                           <CommandEmpty>No tasks found.</CommandEmpty>
                           <CommandGroup>
-                            {(allTasks || []).filter(task => !dependencies.includes(task.id)).map(task => (
+                            {(dependencyOptions || []).filter(task => !dependencies.includes(task.id)).map(task => (
                               <CommandItem key={task.id} onSelect={() => handleAddDependency(task.id)}>
                                 {task.title}
                               </CommandItem>
@@ -1309,3 +1324,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
+
+    
