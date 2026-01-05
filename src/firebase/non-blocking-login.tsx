@@ -26,13 +26,14 @@ export function initiateEmailSignIn(
   });
 }
 
-/** Initiate sign-out (non-blocking). */
-export function initiateSignOut(authInstance: Auth): Promise<void> {
-  return signOut(authInstance).catch((error) => {
+/** Initiate sign-out (now blocking/awaitable). */
+export async function initiateSignOut(authInstance: Auth): Promise<void> {
+  try {
+    await signOut(authInstance);
+  } catch (error) {
     // This is generally a safe operation, but we log errors just in case.
     console.error('Sign-out Error:', error);
-    // Even if sign-out fails on the server, we might want to ensure the client state is cleared.
-    // For now, we just log the error and let the promise reject.
-    return Promise.reject(error);
-  });
+    // Propagate the error.
+    throw error;
+  }
 }

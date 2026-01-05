@@ -97,9 +97,9 @@ function MainAppLayout({
     }
   }, [user, profile, isUserLoading, auth, router, pathname]);
   
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if(auth) {
-        initiateSignOut(auth);
+        await initiateSignOut(auth);
         router.push('/');
     }
   }

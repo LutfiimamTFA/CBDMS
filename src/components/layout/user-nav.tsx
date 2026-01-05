@@ -26,9 +26,9 @@ export function UserNav() {
   const { user, profile, isLoading } = useUserProfile();
   const { t } = useI18n();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (auth) {
-      initiateSignOut(auth);
+      await initiateSignOut(auth);
       router.push('/');
     }
   };
