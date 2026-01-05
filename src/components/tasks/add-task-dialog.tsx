@@ -847,7 +847,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     <>
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-4xl">
+      <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-full">
         <SheetHeader className="p-6 pb-0">
           <SheetTitle>{t('addtask.title')}</SheetTitle>
           <SheetDescription>
