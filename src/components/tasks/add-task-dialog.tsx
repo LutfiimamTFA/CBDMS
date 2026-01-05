@@ -1142,14 +1142,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                               <ScrollArea className="max-h-60">
                                   <div className="space-y-1">
                                       <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                      {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                       {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
                                           users.length > 0 && (
                                               <React.Fragment key={group}>
                                                   <Separator />
                                                   <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
                                                   {users.map(user => (
                                                       <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
                                                           <span className="truncate">{user.name}</span>
                                                       </Button>
                                                   ))}
@@ -1309,3 +1309,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
+
+    
