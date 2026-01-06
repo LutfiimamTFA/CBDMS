@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle, SharedTask } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -108,6 +108,8 @@ interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  isSharedView: boolean;
+  sharedTaskConfig?: SharedTask;
   accessLevel?: SharedLink['accessLevel'];
 }
 
@@ -132,15 +134,18 @@ export function TaskDetailsSheet({
   task: initialTask, 
   open,
   onOpenChange,
-  accessLevel = 'view',
+  isSharedView,
+  sharedTaskConfig,
+  accessLevel: propAccessLevel,
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
-  const linkId = params.linkId as string;
-  const { session } = useSharedSession();
-  const isSharedView = !!session;
+  
+  const { session } = isSharedView ? useSharedSession() : { session: null };
+  const linkId = isSharedView ? (params.linkId as string) : null;
+  const accessLevel = isSharedView ? propAccessLevel || 'view' : 'view';
 
   const [isUploading, setIsUploading] = React.useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -216,8 +221,9 @@ export function TaskDetailsSheet({
   
   const statuses = useMemo(() => {
     if (isSharedView && session) return session.snapshot.statuses || [];
+    if (isSharedView && sharedTaskConfig) return sharedTaskConfig.snapshot.statuses || [];
     return allStatusesData || [];
-  }, [isSharedView, session, allStatusesData]);
+  }, [isSharedView, session, sharedTaskConfig, allStatusesData]);
 
   const brandsQuery = useMemo(() => {
     if (isSharedView || !firestore || !currentUser) return null;
@@ -564,41 +570,57 @@ export function TaskDetailsSheet({
     setIsMentioning(false);
   };
   
-  const handlePostComment = async (isRevisionRequest: boolean = false) => {
-    if (!newComment.trim()) {
-      toast({ variant: 'destructive', title: 'Cannot Post', description: 'Comment cannot be empty.' });
-      return;
-    }
-    setIsUploadingCommentAttachment(true);
-  
-    try {
-        const payload: any = {
-          linkId,
-          taskId: taskState.id,
-          newComment: { text: newComment, isRevisionRequest },
-        };
+  const handlePostComment = async () => {
+    if (!newComment.trim()) return;
+
+    if (isSharedView) {
+      if (!linkId) return;
+      setIsUploadingCommentAttachment(true);
+      try {
         const response = await fetch('/api/share/update-task', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ linkId, taskId: taskState.id, newComment: { text: newComment } }),
         });
-  
-        if (!response.ok) {
-          throw new Error((await response.json()).message || 'Failed to post comment.');
-        }
-  
+        if (!response.ok) { throw new Error((await response.json()).message || 'Failed to post comment.'); }
         const data = await response.json();
-        if (data.updatedTask) {
-          setTaskState(data.updatedTask);
-        }
-        toast({ title: 'Success', description: `Your ${isRevisionRequest ? 'revision request' : 'comment'} has been posted.` });
-      
-  
+        if (data.updatedTask) { setTaskState(data.updatedTask); }
+        toast({ title: 'Success', description: 'Your comment has been posted.' });
+        setNewComment('');
+      } catch (error: any) {
+        toast({ variant: "destructive", title: "Comment Failed", description: error.message });
+      } finally {
+        setIsUploadingCommentAttachment(false);
+      }
+      return;
+    }
+
+    if (!firestore || !currentUser) return;
+    setIsUploadingCommentAttachment(true);
+    try {
+      const newCommentData: Comment = {
+        id: crypto.randomUUID(),
+        user: {
+          id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '',
+          email: currentUser.email, role: currentUser.role, companyId: currentUser.companyId, createdAt: currentUser.createdAt
+        },
+        text: newComment,
+        timestamp: new Date().toISOString(),
+        replies: [],
+      };
+
+      const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
+      const updates = {
+        comments: [...(taskState.comments || []), newCommentData],
+        activities: [...(taskState.activities || []), newActivity],
+        lastActivity: newActivity,
+      };
+
+      await updateDoc(doc(firestore, 'tasks', taskState.id), updates);
+      toast({ title: 'Comment Posted' });
       setNewComment('');
-      setCommentAttachment(null);
-  
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Comment Failed", description: error.message });
+      toast({ variant: 'destructive', title: 'Comment Failed', description: error.message });
     } finally {
       setIsUploadingCommentAttachment(false);
     }
@@ -1054,13 +1076,13 @@ export function TaskDetailsSheet({
                                        <div className="flex justify-between items-center">
                                           <div className="flex-1">
                                               {(isSharedView && accessLevel !== 'view') && (
-                                                  <Button type="button" variant="destructive" onClick={() => handlePostComment(true)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                  <Button type="button" variant="destructive" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
                                                       {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
                                                       Request Revisions
                                                   </Button>
                                               )}
                                           </div>
-                                          <Button type="button" onClick={() => handlePostComment(false)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                          <Button type="button" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
                                                 {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
                                                 Post Comment
                                           </Button>
@@ -1096,7 +1118,28 @@ export function TaskDetailsSheet({
                                     if (!task) return null;
                                     const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
                                     return (
-                                        <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider>
+                                        <TooltipProvider key={depId}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <Link href={`/tasks/${depId}`}>
+                                                        <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
+                                                            {statusIcon}
+                                                            <span className="ml-2 truncate">{task.title}</span>
+                                                            {canEditContent && (
+                                                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                                                                    <X className="h-3 w-3" />
+                                                                </button>
+                                                            )}
+                                                        </Badge>
+                                                    </Link>
+                                                </TooltipTrigger>
+                                                <TooltipContent>
+                                                    <p>Status: {task.status}</p>
+                                                    <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
+                                                    <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
+                                                </TooltipContent>
+                                            </Tooltip>
+                                        </TooltipProvider>
                                     );
                                     })}
                                 </div>
@@ -1308,3 +1351,4 @@ export function TaskDetailsSheet({
 }
 
     
+

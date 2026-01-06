@@ -52,6 +52,7 @@ export default function TaskPage() {
             task={task} 
             open={isOpen}
             onOpenChange={handleOpenChange}
+            isSharedView={false}
         />
     </div>
   );
