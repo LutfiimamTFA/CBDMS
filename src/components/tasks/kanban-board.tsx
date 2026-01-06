@@ -19,6 +19,8 @@ import { Separator } from '../ui/separator';
 import { Checkbox } from '../ui/checkbox';
 import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 
 const createActivity = (user: User, action: string): Activity => {
@@ -398,9 +400,11 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
                   Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
                 </DialogDescription>
                 {revisionState.task?.description && (
-                    <p className="text-xs text-muted-foreground pt-1 border-l-2 pl-2 italic">
-                        {revisionState.task.description}
-                    </p>
+                    <div className="text-xs text-muted-foreground pt-1 border-l-2 pl-2 italic prose prose-sm dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {revisionState.task.description}
+                        </ReactMarkdown>
+                    </div>
                 )}
             </DialogHeader>
             <div className="py-4 space-y-4">
