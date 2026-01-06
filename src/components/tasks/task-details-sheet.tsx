@@ -550,46 +550,94 @@ export function TaskDetailsSheet({
   };
   
   const handlePostComment = async (isRevisionRequest: boolean = false) => {
-      if (!newComment.trim()) {
-        toast({ variant: 'destructive', title: 'Cannot Post', description: 'Comment cannot be empty.' });
-        return;
-      }
-      
-      setIsUploadingCommentAttachment(true);
-      
-      try {
+    if (!newComment.trim()) {
+      toast({ variant: 'destructive', title: 'Cannot Post', description: 'Comment cannot be empty.' });
+      return;
+    }
+    setIsUploadingCommentAttachment(true);
+  
+    try {
+      if (isSharedView) {
         const payload: any = {
-            linkId,
-            taskId: taskState.id,
-            newComment: {
-                text: newComment,
-                isRevisionRequest,
-            }
+          linkId,
+          taskId: taskState.id,
+          newComment: { text: newComment, isRevisionRequest },
         };
-        
         const response = await fetch('/api/share/update-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
         });
-
+  
         if (!response.ok) {
-            throw new Error((await response.json()).message || 'Failed to post comment.');
+          throw new Error((await response.json()).message || 'Failed to post comment.');
         }
-
+  
         const data = await response.json();
         if (data.updatedTask) {
           setTaskState(data.updatedTask);
         }
-
         toast({ title: 'Success', description: `Your ${isRevisionRequest ? 'revision request' : 'comment'} has been posted.` });
-        setNewComment('');
-        setCommentAttachment(null);
-      } catch (error: any) {
-        toast({ variant: "destructive", title: "Comment Failed", description: error.message });
-      } finally {
-        setIsUploadingCommentAttachment(false);
+        
+      } else {
+        if (!firestore || !currentUser) return;
+  
+        const taskRef = doc(firestore, 'tasks', taskState.id);
+        const batch = writeBatch(firestore);
+  
+        const newCommentObject: Comment = {
+          id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+          user: currentUser as User,
+          text: newComment,
+          timestamp: new Date().toISOString(),
+          replies: [],
+        };
+  
+        const newComments = [...(taskState.comments || []), newCommentObject];
+        const newActivity = createActivity(currentUser, `commented on the task`);
+        const newActivities = [...(taskState.activities || []), newActivity];
+  
+        batch.update(taskRef, {
+          comments: newComments,
+          activities: newActivities,
+          lastActivity: newActivity,
+        });
+        
+        const mentionedUsernames = newComment.match(/@(\w+)/g)?.map(m => m.substring(1).toLowerCase());
+        if (mentionedUsernames && allUsers) {
+          const mentionedUsers = allUsers.filter(u => mentionedUsernames.includes(u.name.split(' ')[0].toLowerCase()) && u.id !== currentUser.id);
+          
+          mentionedUsers.forEach(mentionedUser => {
+            const notifRef = doc(collection(firestore, `users/${mentionedUser.id}/notifications`));
+            const notification: Omit<Notification, 'id'> = {
+              userId: mentionedUser.id,
+              title: `You were mentioned by ${currentUser.name}`,
+              message: `in a comment on task: "${taskState.title}"`,
+              taskId: taskState.id,
+              isRead: false,
+              createdAt: serverTimestamp() as any,
+              createdBy: {
+                id: currentUser.id,
+                name: currentUser.name,
+                avatarUrl: currentUser.avatarUrl || '',
+              }
+            };
+            batch.set(notifRef, notification);
+          });
+        }
+  
+        await batch.commit();
+        toast({ title: 'Comment Posted' });
       }
+  
+      setNewComment('');
+      setCommentAttachment(null);
+  
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Comment Failed", description: error.message });
+    } finally {
+      setIsUploadingCommentAttachment(false);
+    }
   };
 
   const handleCommentFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1029,7 +1077,7 @@ export function TaskDetailsSheet({
                          <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                               <ScrollArea className="max-h-48 pr-2">
                                   <div className="space-y-4">
-                                      {(taskState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                      {(taskState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
                                       {(taskState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
                                   </div>
                               </ScrollArea>
@@ -1040,20 +1088,18 @@ export function TaskDetailsSheet({
                                           {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
                                       </div>
                                        <div className="flex justify-between items-center">
-                                        <div>
-                                            {(isSharedView && accessLevel !== 'view') && (
-                                                <Button type="button" variant="destructive" onClick={() => handlePostComment(true)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
-                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
-                                                    Post Comment & Request Revisions
-                                                </Button>
-                                            )}
-                                        </div>
-                                        {!(isSharedView && accessLevel !== 'view') && (
-                                            <Button type="button" onClick={() => handlePostComment(false)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                          <div className="flex-1">
+                                              {(isSharedView && accessLevel !== 'view') && (
+                                                  <Button type="button" variant="destructive" onClick={() => handlePostComment(true)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                      {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
+                                                      Request Revisions
+                                                  </Button>
+                                              )}
+                                          </div>
+                                          <Button type="button" onClick={() => handlePostComment(false)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
                                                 {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
                                                 Post Comment
-                                            </Button>
-                                        )}
+                                          </Button>
                                        </div>
                                   </div>
                               )}
@@ -1066,10 +1112,50 @@ export function TaskDetailsSheet({
                               {canManageSubtasks && ( <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="text-muted-foreground">{newSubtaskAssignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div> )}
                         </TabsContent>
                         <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                            <Command><CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} /><CommandList><CommandEmpty>No tasks found.</CommandEmpty><CommandGroup>{(dependencyOptions || []).filter(task => !(taskState.dependencies || []).includes(task.id)).map(task => ( <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(taskState.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }}>{task.title}</CommandItem> ))}</CommandGroup></CommandList></Command>
+                            <Command>
+                                <CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} />
+                                <CommandList>
+                                <CommandEmpty>No tasks found.</CommandEmpty>
+                                <CommandGroup>
+                                    {(dependencyOptions || []).filter(task => !(taskState.dependencies || []).includes(task.id)).map(task => (
+                                    <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(taskState.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }}>{task.title}</CommandItem>
+                                    ))}
+                                </CommandGroup>
+                                </CommandList>
+                            </Command>
                             <div className="space-y-2">
                                 <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(taskState.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider> ); })}</div>) }
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : (
+                                <div className="flex flex-wrap gap-2">
+                                    {(taskState.dependencies || []).map(depId => {
+                                    const task = allTasks?.find(t => t.id === depId);
+                                    if (!task) return null;
+                                    const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
+                                    return (
+                                        <TooltipProvider key={depId}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                            <Link href={`/tasks/${depId}`}>
+                                                <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
+                                                {statusIcon}
+                                                <span className="ml-2 truncate">{task.title}</span>
+                                                {canEditContent && (
+                                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
+                                                )}
+                                                </Badge>
+                                            </Link>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                            <p>Status: {task.status}</p>
+                                            <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
+                                            <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                        </TooltipProvider>
+                                    );
+                                    })}
+                                </div>
+                                )}
                             </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
