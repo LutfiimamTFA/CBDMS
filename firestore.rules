@@ -83,6 +83,7 @@ service cloud.firestore {
 
     match /brands/{brandId} {
         allow get: if isSignedIn();
+        allow list: if isSignedIn();
         allow write: if isSuperAdmin() || isRole('Manager');
     }
 
