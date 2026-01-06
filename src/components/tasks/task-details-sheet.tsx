@@ -174,6 +174,7 @@ export function TaskDetailsSheet({
 
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const deliverableFileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
@@ -409,7 +410,10 @@ export function TaskDetailsSheet({
         return;
     }
     
-    if (!firestore || !currentUser) return;
+    if (!firestore || !currentUser) {
+        form.setValue('status', oldStatus);
+        return;
+    }
     
     const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
     const taskRef = doc(firestore, 'tasks', initialTask.id);
@@ -665,17 +669,17 @@ export function TaskDetailsSheet({
     } finally {
         setIsUploading(false);
         if (fileInputRef.current) fileInputRef.current.value = '';
+        if (deliverableFileInputRef.current) deliverableFileInputRef.current.value = '';
     }
   };
 
-  const handleConfirmGdriveLink = async () => {
+  const handleConfirmGdriveLink = async (fileType: 'attachment' | 'deliverable') => {
     if (!gdriveLink || !gdriveName) {
         toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
         return;
     }
     if (isSharedView || !firestore || !currentUser) return;
     
-    const fileType = gdriveFileType;
     const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (initialTask.revisionHistory || []).length + 1 };
     const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
     await updateDoc(doc(firestore, 'tasks', initialTask.id), { [fieldToUpdate]: [...(initialTask[fieldToUpdate] || []), newFile] });
@@ -752,7 +756,6 @@ export function TaskDetailsSheet({
     const allSubtasksCompleted = (initialTask.subtasks || []).every(st => st.completed);
     const allRevisionsCompleted = (initialTask.revisionItems || []).every(item => item.completed);
     
-    // This is the key change. We check for deliverables in the CURRENT revision cycle.
     const currentRevisionCycle = (initialTask.revisionHistory || []).length + 1;
     const hasDeliverablesForCurrentCycle = (initialTask.deliverables || []).some(
         d => (d.forRevisionCycle ?? 1) === currentRevisionCycle
@@ -1030,65 +1033,40 @@ export function TaskDetailsSheet({
                         </Accordion>
                       </div>
 
-                      <div className="space-y-4 rounded-lg border p-4">
-                        <div className="flex items-center justify-between">
+                       <div className="space-y-4 rounded-lg border p-4">
                             <h3 className="font-semibold text-base">Files</h3>
-                            {(canUploadDeliverables || canEditContent) && (
-                                <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm" disabled={isUploading}>
-                                    {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-                                    Add File
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent>
-                                    <DropdownMenuLabel>Add where?</DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
+                            <Separator />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                <div>
+                                    <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                                    <div className="space-y-2">
+                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
+                                        {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                    </div>
                                     {canUploadDeliverables && (
-                                        <DropdownMenuItem onSelect={() => {setGdriveFileType('deliverable'); fileInputRef.current?.click();}}>
-                                            <Upload className="mr-2 h-4 w-4" /> Upload Deliverable
-                                        </DropdownMenuItem>
+                                        <div className="flex gap-2 mt-2">
+                                            <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
+                                        </div>
                                     )}
-                                    {canEditContent && (
-                                        <DropdownMenuItem onSelect={() => {setGdriveFileType('attachment'); fileInputRef.current?.click();}}>
-                                            <Paperclip className="mr-2 h-4 w-4" /> Upload Material
-                                        </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuSeparator />
-                                    {canUploadDeliverables && (
-                                        <DropdownMenuItem onSelect={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>
-                                            <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
-                                            Link Deliverable
-                                        </DropdownMenuItem>
-                                    )}
-                                    {canEditContent && (
-                                        <DropdownMenuItem onSelect={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>
-                                            <LinkIcon className="mr-2 h-4 w-4" /> Link Material
-                                        </DropdownMenuItem>
-                                    )}
-                                    <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, gdriveFileType)} multiple className="hidden" />
-                                </DropdownMenuContent>
-                                </DropdownMenu>
-                            )}
-                        </div>
-                        <Separator />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                            <div>
-                                <h4 className="font-medium text-sm mb-2">Deliverables</h4>
-                                <div className="space-y-2">
-                                {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
-                                {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                 </div>
-                            </div>
-                            <div>
-                                <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                                <div className="space-y-2">
-                                {(initialTask.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}
-                                {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                <div>
+                                    <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                    <div className="space-y-2">
+                                    {(initialTask.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}
+                                    {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                    </div>
+                                    {canEditContent && (
+                                        <div className="flex gap-2 mt-2">
+                                            <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Material</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Material</Button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
-                    </div>
                       
                       <Tabs defaultValue="comments" className="w-full">
                         <TabsList className="grid w-full grid-cols-4">
@@ -1126,7 +1104,39 @@ export function TaskDetailsSheet({
                             <Command><CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} /><CommandList><CommandEmpty>No tasks found.</CommandEmpty><CommandGroup>{(dependencyOptions || []).filter(task => !(initialTask.dependencies || []).includes(task.id)).map(task => ( <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(initialTask.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }}>{task.title}</CommandItem> ))}</CommandGroup></CommandList></Command>
                             <div className="space-y-2">
                                 <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(initialTask.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = initialTask.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider> ); })}</div> )}
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : (
+                                  <div className="flex flex-wrap gap-2">
+                                    {(initialTask.dependencies || []).map(depId => {
+                                      const task = allTasks?.find(t => t.id === depId);
+                                      if (!task) return null;
+                                      const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
+                                      return (
+                                        <TooltipProvider key={depId}>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Link href={`/tasks/${depId}`}>
+                                                <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
+                                                  {statusIcon}
+                                                  <span className="ml-2 truncate">{task.title}</span>
+                                                  {canEditContent && (
+                                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = initialTask.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                                                      <X className="h-3 w-3" />
+                                                    </button>
+                                                  )}
+                                                </Badge>
+                                              </Link>
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                              <p>Status: {task.status}</p>
+                                              <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
+                                              <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                             </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
