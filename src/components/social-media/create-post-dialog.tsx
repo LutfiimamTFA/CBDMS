@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
@@ -278,12 +277,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         } else if (post) {
             const postRef = doc(firestore, 'socialMediaPosts', post.id);
             
-            // Logic for re-submitting: Keep revision history, but clear current items as they are "done"
+            // Logic for re-submitting: archive current revision items to history
             if (status === 'Needs Approval' && post.status === 'Draft' && post.revisionItems) {
                 const completedCycle: RevisionCycle = {
-                    cycleNumber: post.revisionHistory ? post.revisionHistory.length + 1 : 1,
-                    requestedAt: post.updatedAt || serverTimestamp(), // Placeholder, should be the rejection time
-                    requestedBy: { id: '', name: 'Manager', avatarUrl: ''}, // Placeholder, needs actual rejector info
+                    cycleNumber: (post.revisionHistory || []).length + 1,
+                    requestedAt: post.updatedAt || serverTimestamp(), // Best guess for rejection time
+                    requestedBy: { id: 'manager', name: 'Manager', avatarUrl: ''}, // Placeholder, needs actual manager info
                     items: post.revisionItems,
                 };
                 
