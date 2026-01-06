@@ -205,15 +205,13 @@ export function TaskDetailsSheet({
   }, [firestore, currentUser, isSharedView]);
   const { data: allUsers } = useCollection<User>(usersQuery);
   
-  const { data: allStatusesData } = useCollection<WorkflowStatus>(useMemo(() => 
+  const allStatusesData = useCollection<WorkflowStatus>(useMemo(() => 
     !isSharedView && firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
     [firestore, isSharedView]
-  ));
+  )).data;
   
   const statuses = useMemo(() => {
-    if (isSharedView && initialTask.snapshot) {
-      return initialTask.snapshot.statuses || [];
-    }
+    if (isSharedView) return initialTask.snapshot?.statuses || [];
     return allStatusesData || [];
   }, [isSharedView, initialTask, allStatusesData]);
 
@@ -1017,27 +1015,27 @@ export function TaskDetailsSheet({
                       </div>
 
                        <div className="space-y-4 rounded-lg border p-4">
-                            <Tabs defaultValue="deliverables" className="w-full">
-                                <TabsList>
-                                    <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
-                                    <TabsTrigger value="materials">Supporting Materials</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="deliverables" className="mt-4">
-                                     <div className="space-y-2">
-                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${Number(cycleNum)}`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
-                                        {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables were submitted for this task.</p>}
-                                    </div>
-                                    {canUploadDeliverables && ( <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" /><Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="animate-spin"/> : <Upload/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button></div> )}
-                                </TabsContent>
-                                <TabsContent value="materials" className="mt-4">
-                                     <div className="space-y-2">
-                                        {(initialTask.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}
-                                        {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
-                                    </div>
-                                    {canEditContent && ( <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="animate-spin"/> : <Upload/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button></div> )}
-                                </TabsContent>
-                            </Tabs>
-                        </div>
+                          <Tabs defaultValue="deliverables" className="w-full">
+                              <TabsList className="grid w-full grid-cols-2">
+                                  <TabsTrigger value="deliverables">Deliverables</TabsTrigger>
+                                  <TabsTrigger value="materials">Supporting Materials</TabsTrigger>
+                              </TabsList>
+                              <TabsContent value="deliverables" className="mt-4">
+                                   <div className="space-y-2">
+                                      {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${Number(cycleNum)}`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
+                                      {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables were submitted for this task.</p>}
+                                  </div>
+                                  {canUploadDeliverables && ( <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" /><Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="animate-spin"/> : <Upload/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button></div> )}
+                              </TabsContent>
+                              <TabsContent value="materials" className="mt-4">
+                                   <div className="space-y-2">
+                                      {(initialTask.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}
+                                      {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
+                                  </div>
+                                  {canEditContent && ( <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="animate-spin"/> : <Upload/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button></div> )}
+                              </TabsContent>
+                          </Tabs>
+                      </div>
                       
                       <Tabs defaultValue="comments" className="w-full">
                         <TabsList className="grid w-full grid-cols-4">
