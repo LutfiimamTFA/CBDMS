@@ -62,6 +62,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
+import { Card, CardContent } from '../ui/card';
 
 
 const taskDetailsSchema = z.object({
@@ -547,7 +548,7 @@ export function TaskDetailsSheet({
       setIsUploadingCommentAttachment(true);
       
       try {
-        const payload = {
+        const payload: any = {
             linkId,
             taskId: initialTask.id,
             newComment: {
@@ -747,7 +748,6 @@ export function TaskDetailsSheet({
     const allSubtasksCompleted = (initialTask.subtasks || []).every(st => st.completed);
     const allRevisionsCompleted = (initialTask.revisionItems || []).every(item => item.completed);
     
-    // Check if there are deliverables for the current revision cycle.
     const currentRevisionCycle = (initialTask.revisionHistory || []).length + 1;
     const hasDeliverablesForCurrentCycle = (initialTask.deliverables || []).some(
         d => (d.forRevisionCycle ?? 1) === currentRevisionCycle
@@ -1029,7 +1029,7 @@ export function TaskDetailsSheet({
                                             {isSharedView && accessLevel !== 'view' && (
                                                 <Button type="button" variant="destructive" onClick={() => handlePostComment(true)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
                                                     {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
-                                                    Post & Request Revisions
+                                                    Request Revisions
                                                 </Button>
                                             )}
                                         </div>
@@ -1052,39 +1052,7 @@ export function TaskDetailsSheet({
                             <Command><CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} /><CommandList><CommandEmpty>No tasks found.</CommandEmpty><CommandGroup>{(dependencyOptions || []).filter(task => !(initialTask.dependencies || []).includes(task.id)).map(task => ( <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(initialTask.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }}>{task.title}</CommandItem> ))}</CommandGroup></CommandList></Command>
                             <div className="space-y-2">
                                 <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : (
-                                  <div className="flex flex-wrap gap-2">
-                                    {(initialTask.dependencies || []).map(depId => {
-                                      const task = allTasks?.find(t => t.id === depId);
-                                      if (!task) return null;
-                                      const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
-                                      return (
-                                        <TooltipProvider key={depId}>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Link href={`/tasks/${depId}`}>
-                                                <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
-                                                  {statusIcon}
-                                                  <span className="ml-2 truncate">{task.title}</span>
-                                                  {canEditContent && (
-                                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = initialTask.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                                                      <X className="h-3 w-3" />
-                                                    </button>
-                                                  )}
-                                                </Badge>
-                                              </Link>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                              <p>Status: {task.status}</p>
-                                              <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
-                                              <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      );
-                                    })}
-                                  </div>
-                                )}
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(initialTask.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = initialTask.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider> ); })}</div> )}
                             </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
@@ -1172,22 +1140,7 @@ export function TaskDetailsSheet({
           </SheetFooter>
         </SheetContent>
       </Sheet>
-      <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>AI Priority Guard</AlertDialogTitle>
-                <AlertDialogDescription>
-                    {aiValidation.reason}
-                    <br/><br/>
-                    Do you still want to set this task as Urgent?
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>AI Priority Guard</AlertDialogTitle><AlertDialogDescription>{aiValidation.reason}<br/><br/>Do you still want to set this task as Urgent?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
        <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">{initialTask.activities && initialTask.activities.length > 0 ? ( getUniqueActivities(initialTask.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> )) ) : ( <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> )}</div></ScrollArea></DialogContent></Dialog>
         <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}><DialogContent><DialogHeader><DialogTitle>Link Google Drive File</DialogTitle><DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div><div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div></div><DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter></DialogContent></Dialog>
         
@@ -1195,4 +1148,3 @@ export function TaskDetailsSheet({
     </>
   );
 }
-
