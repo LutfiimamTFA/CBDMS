@@ -81,7 +81,7 @@ export async function POST(request: Request) {
         // Handle Revision Request
         if (revisionItems && Array.isArray(revisionItems) && revisionItems.length > 0) {
             finalUpdates.status = 'Revisi';
-            finalUpdates.revisionItems = revisionItems.map(item => ({
+            finalUpdates.revisionItems = revisionItems.map((item: any) => ({
                 id: `rev-${crypto.randomUUID()}`,
                 text: item.text,
                 completed: false,
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         }
 
         if (actionDescription) {
-            const newActivity = createActivity(sharedActor, actionDescription, sharedLink.creatorName);
+            const newActivity = createActivity(sharedActor, actionDescription, sharedLink.creatorName || 'Unknown');
             const currentActivities = Array.isArray(initialTask.activities) ? initialTask.activities : [];
             finalUpdates.activities = [...currentActivities, newActivity];
             finalUpdates.lastActivity = newActivity;
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
         transaction.update(linkRef, { 'snapshot.tasks': updatedSnapshotTasks });
 
         if (actionDescription) {
-            const notifiedUserIds = new Set<string>(initialTask.assigneeIds);
+            const notifiedUserIds = new Set<string>(initialTask.assigneeIds || []);
             if (sharedLink.creatorId) {
                 notifiedUserIds.add(sharedLink.creatorId);
             }
