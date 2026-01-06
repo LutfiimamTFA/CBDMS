@@ -58,7 +58,7 @@ export async function POST(request: Request) {
         if (updates) {
             const requestedUpdateKeys = Object.keys(updates);
             if (!requestedUpdateKeys.every(key => permittedFields.includes(key))) {
-                return Promise.reject(new Error(`Forbidden: Your access level is "${sharedLink.accessLevel}". You cannot update these fields.`));
+                throw new Error(`Forbidden: Your access level is "${sharedLink.accessLevel}". You cannot update these fields.`);
             }
         }
         
@@ -72,10 +72,10 @@ export async function POST(request: Request) {
         if (updates?.status && updates.status !== initialTask.status) {
             const allowedStatuses = sharedLink.snapshot.statuses?.map(s => s.name) || [];
             if (!allowedStatuses.includes(updates.status)) {
-                return Promise.reject(new Error(`Forbidden: Status "${updates.status}" is not allowed for this shared link.`));
+                throw new Error(`Forbidden: Status "${updates.status}" is not allowed for this shared link.`);
             }
             actionDescription = `changed status from "${initialTask.status}" to "${updates.status}"`;
-            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) changed status to ${updates.status}.`;
+            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName || 'Unknown'}) changed status to ${updates.status}.`;
         }
 
         // Handle Revision Request
@@ -88,7 +88,7 @@ export async function POST(request: Request) {
             }));
             actionDescription = `requested revisions`;
             notificationTitle = 'Revisions Requested';
-            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) requested revisions on "${initialTask.title}".`;
+            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName || 'Unknown'}) requested revisions on "${initialTask.title}".`;
         }
 
         if (actionDescription) {

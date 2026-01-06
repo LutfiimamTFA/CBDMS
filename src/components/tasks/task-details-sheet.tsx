@@ -668,13 +668,18 @@ export function TaskDetailsSheet({
     }
   };
 
-  const handleConfirmGdriveLink = async (fileType: 'attachment' | 'deliverable') => {
-    if (gdriveLink && gdriveName && !isSharedView && firestore && currentUser) {
-      const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (initialTask.revisionHistory || []).length + 1 };
-      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
-      await updateDoc(doc(firestore, 'tasks', initialTask.id), { [fieldToUpdate]: [...(initialTask[fieldToUpdate] || []), newFile] });
-      setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
+  const handleConfirmGdriveLink = async () => {
+    if (!gdriveLink || !gdriveName) {
+        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
+        return;
     }
+    if (isSharedView || !firestore || !currentUser) return;
+    
+    const fileType = gdriveFileType;
+    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (initialTask.revisionHistory || []).length + 1 };
+    const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+    await updateDoc(doc(firestore, 'tasks', initialTask.id), { [fieldToUpdate]: [...(initialTask[fieldToUpdate] || []), newFile] });
+    setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
 
   const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
@@ -743,16 +748,18 @@ export function TaskDetailsSheet({
     toast({ title: 'Session Started' });
   }
   
-  const allSubtasksCompleted = useMemo(() => (initialTask.subtasks || []).every(st => st.completed), [initialTask.subtasks]);
-  const allRevisionsCompleted = useMemo(() => (initialTask.revisionItems || []).every(item => item.completed), [initialTask.revisionItems]);
-
-  const hasDeliverablesForCurrentRevision = useMemo(() => {
-    if (!initialTask.deliverables || initialTask.deliverables.length === 0) return false;
-    const currentCycle = (initialTask.revisionHistory || []).length + 1;
-    return initialTask.deliverables.some(d => (d.forRevisionCycle ?? 1) === currentCycle);
-  }, [initialTask.deliverables, initialTask.revisionHistory]);
-  
-  const canSubmit = allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentRevision;
+  const canSubmit = useMemo(() => {
+    const allSubtasksCompleted = (initialTask.subtasks || []).every(st => st.completed);
+    const allRevisionsCompleted = (initialTask.revisionItems || []).every(item => item.completed);
+    
+    // This is the key change. We check for deliverables in the CURRENT revision cycle.
+    const currentRevisionCycle = (initialTask.revisionHistory || []).length + 1;
+    const hasDeliverablesForCurrentCycle = (initialTask.deliverables || []).some(
+        d => (d.forRevisionCycle ?? 1) === currentRevisionCycle
+    );
+    
+    return allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentCycle;
+  }, [initialTask.subtasks, initialTask.revisionItems, initialTask.deliverables, initialTask.revisionHistory]);
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
@@ -912,7 +919,7 @@ export function TaskDetailsSheet({
   const groupedDeliverables = useMemo(() => {
     const groups: Record<number, Attachment[]> = {};
     (initialTask.deliverables || []).forEach(d => {
-        const cycle = d.forRevisionCycle ?? 0;
+        const cycle = d.forRevisionCycle ?? 1; // Default to cycle 1 for older data
         if (!groups[cycle]) groups[cycle] = [];
         groups[cycle].push(d);
     });
@@ -1035,14 +1042,31 @@ export function TaskDetailsSheet({
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent>
-                                    <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}>
-                                        <UploadCloud className="mr-2 h-4 w-4" /> Upload from Computer
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onSelect={() => setIsGdriveDialogOpen(true)}>
-                                         <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
-                                        Link from Google Drive
-                                    </DropdownMenuItem>
-                                    <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, canUploadDeliverables ? 'deliverable' : 'attachment')} multiple className="hidden" />
+                                    <DropdownMenuLabel>Add where?</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {canUploadDeliverables && (
+                                        <DropdownMenuItem onSelect={() => {setGdriveFileType('deliverable'); fileInputRef.current?.click();}}>
+                                            <Upload className="mr-2 h-4 w-4" /> Upload Deliverable
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canEditContent && (
+                                        <DropdownMenuItem onSelect={() => {setGdriveFileType('attachment'); fileInputRef.current?.click();}}>
+                                            <Paperclip className="mr-2 h-4 w-4" /> Upload Material
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuSeparator />
+                                    {canUploadDeliverables && (
+                                        <DropdownMenuItem onSelect={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>
+                                            <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
+                                            Link Deliverable
+                                        </DropdownMenuItem>
+                                    )}
+                                    {canEditContent && (
+                                        <DropdownMenuItem onSelect={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>
+                                            <LinkIcon className="mr-2 h-4 w-4" /> Link Material
+                                        </DropdownMenuItem>
+                                    )}
+                                    <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, gdriveFileType)} multiple className="hidden" />
                                 </DropdownMenuContent>
                                 </DropdownMenu>
                             )}
@@ -1052,7 +1076,7 @@ export function TaskDetailsSheet({
                             <div>
                                 <h4 className="font-medium text-sm mb-2">Deliverables</h4>
                                 <div className="space-y-2">
-                                {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${Number(cycleNum)}`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
+                                {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
                                 {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                 </div>
                             </div>
@@ -1196,7 +1220,7 @@ export function TaskDetailsSheet({
        <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">{initialTask.activities && initialTask.activities.length > 0 ? ( getUniqueActivities(initialTask.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> )) ) : ( <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> )}</div></ScrollArea></DialogContent></Dialog>
         <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}><DialogContent><DialogHeader><DialogTitle>Link Google Drive File</DialogTitle><DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div><div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div></div><DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter></DialogContent></Dialog>
         
-        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}><DialogContent><DialogHeader><DialogTitle>Final Review</DialogTitle><DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6"><h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3><Separator /><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( finalReviewState.task.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={cycleNum} className="space-y-2"><h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 0 ? 'Initial Submission' : `Revision ${Number(cycleNum)}`}</h5>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div> ))}</div> ))}{(initialTask.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}</div></div></div></ScrollArea><DialogFooter><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter></DialogContent></Dialog>
+        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}><DialogContent><DialogHeader><DialogTitle>Final Review</DialogTitle><DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6"><h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3><Separator /><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( finalReviewState.task.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={cycleNum} className="space-y-2"><h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h5>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div> ))}</div> ))}{(initialTask.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}</div></div></div></ScrollArea><DialogFooter><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter></DialogContent></Dialog>
 
         <Dialog open={rejectionState.isOpen} onOpenChange={(open) => !open && setRejectionState({ isOpen: false, items: [], currentItem: '' })}>
             <DialogContent>
