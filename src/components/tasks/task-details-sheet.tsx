@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -110,6 +109,16 @@ interface TaskDetailsSheetProps {
   sharedTaskConfig?: SharedTask;
 }
 
+// Internal component to safely use the shared session hook
+function useConditionalSharedSession(isSharedView: boolean) {
+    if (isSharedView) {
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useSharedSession();
+    }
+    return { session: null, isLoading: false, error: null };
+}
+
+
 const createActivity = (user: User, action: string): Activity => {
     return {
       id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -138,15 +147,16 @@ export function TaskDetailsSheet({
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
-  
-  const { session, isLoading: isSessionLoading } = useSharedSession();
+
+  const { session, isLoading: isSessionLoading } = useConditionalSharedSession(isSharedView);
+
   const linkId = isSharedView ? (params.linkId as string) : null;
   const accessLevel = useMemo(() => {
     if (isSharedView) {
       if (sharedTaskConfig) return sharedTaskConfig.allowedActions.includes('changeStatus') ? 'status' : 'view';
       if (session) return session.accessLevel;
     }
-    return 'view'; // Default for non-shared or if session is loading
+    return 'full'; // Default for non-shared views
   }, [isSharedView, session, sharedTaskConfig]);
 
 
@@ -1117,39 +1127,7 @@ export function TaskDetailsSheet({
                             </Command>
                             <div className="space-y-2">
                                 <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : (
-                                <div className="flex flex-wrap gap-2">
-                                    {(taskState.dependencies || []).map(depId => {
-                                    const task = allTasks?.find(t => t.id === depId);
-                                    if (!task) return null;
-                                    const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
-                                    return (
-                                        <TooltipProvider key={depId}>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Link href={`/tasks/${depId}`}>
-                                                        <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
-                                                            {statusIcon}
-                                                            <span className="ml-2 truncate">{task.title}</span>
-                                                            {canEditContent && (
-                                                                <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                                                                    <X className="h-3 w-3" />
-                                                                </button>
-                                                            )}
-                                                        </Badge>
-                                                    </Link>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <p>Status: {task.status}</p>
-                                                    <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
-                                                    <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    );
-                                    })}
-                                </div>
-                                )}
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(taskState.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider> ); })}</div> )}
                             </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
@@ -1355,5 +1333,3 @@ export function TaskDetailsSheet({
     </>
   );
 }
-
-    
