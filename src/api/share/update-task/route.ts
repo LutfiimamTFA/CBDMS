@@ -37,6 +37,7 @@ export async function POST(request: Request) {
 
     const linkRef = db.collection('sharedLinks').doc(linkId);
     const taskRef = db.collection('tasks').doc(taskId);
+    let updatedTaskData: Task | null = null;
 
     await db.runTransaction(async (transaction) => {
         const linkSnap = await transaction.get(linkRef);
@@ -118,6 +119,8 @@ export async function POST(request: Request) {
         );
         transaction.update(linkRef, { 'snapshot.tasks': updatedSnapshotTasks });
 
+        updatedTaskData = { ...initialTask, ...finalUpdates };
+
         if (actionDescription) {
             const notifiedUserIds = new Set<string>(initialTask.assigneeIds || []);
             if (sharedLink.creatorId) {
@@ -145,7 +148,7 @@ export async function POST(request: Request) {
         }
     });
 
-    return NextResponse.json({ message: 'Task updated successfully.' }, { status: 200 });
+    return NextResponse.json({ message: 'Task updated successfully.', updatedTask: updatedTaskData }, { status: 200 });
 
   } catch (error: any) {
     console.error('Error updating shared task:', error);

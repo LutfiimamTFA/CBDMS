@@ -171,6 +171,9 @@ export function TaskDetailsSheet({
   const [tableCols, setTableCols] = useState(3);
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
 
+  const [taskState, setTaskState] = useState(initialTask);
+  useEffect(() => { setTaskState(initialTask) }, [initialTask]);
+
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const deliverableFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -211,9 +214,9 @@ export function TaskDetailsSheet({
   ));
   
   const statuses = useMemo(() => {
-    if (isSharedView && initialTask?.snapshot) return initialTask.snapshot.statuses || [];
+    if (isSharedView && taskState?.snapshot) return taskState.snapshot.statuses || [];
     return allStatusesData || [];
-  }, [isSharedView, initialTask, allStatusesData]);
+  }, [isSharedView, taskState, allStatusesData]);
 
   const brandsQuery = useMemo(() => {
     if (isSharedView || !firestore || !currentUser) return null;
@@ -258,7 +261,7 @@ export function TaskDetailsSheet({
   const dependencyOptions = useMemo(() => {
     if (isSharedView || !allTasks || !currentUser) return [];
     
-    let relevantTasks = allTasks.filter(task => task.id !== initialTask.id);
+    let relevantTasks = allTasks.filter(task => task.id !== taskState.id);
 
     if (currentUser.role === 'Manager') {
         relevantTasks = relevantTasks.filter(task => currentUser.brandIds?.includes(task.brandId));
@@ -270,12 +273,12 @@ export function TaskDetailsSheet({
     }
     
     return relevantTasks;
-  }, [allTasks, currentUser, initialTask, isSharedView]);
+  }, [allTasks, currentUser, taskState, isSharedView]);
 
   
-  const isCreator = currentUser?.id === initialTask.createdBy.id;
-  const isManagerOfBrand = currentUser?.role === 'Manager' && initialTask.brandId && currentUser.brandIds?.includes(initialTask.brandId);
-  const isAssignee = !!currentUser && initialTask.assigneeIds.includes(currentUser.id);
+  const isCreator = currentUser?.id === taskState.createdBy.id;
+  const isManagerOfBrand = currentUser?.role === 'Manager' && taskState.brandId && currentUser.brandIds?.includes(taskState.brandId);
+  const isAssignee = !!currentUser && taskState.assigneeIds.includes(currentUser.id);
   const isManagerOrAdmin = !isSharedView && currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin');
   const isEmployeeOrPIC = !isSharedView && currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC');
 
@@ -287,7 +290,10 @@ export function TaskDetailsSheet({
       return currentUser.role === 'Super Admin' || currentUser.role === 'Manager';
   }, [currentUser, isSharedView, accessLevel]);
 
-  const canComment = isSharedView ? accessLevel !== 'view' : !!currentUser;
+  const canComment = useMemo(() => {
+    if (isSharedView) return accessLevel !== 'view';
+    return !!currentUser;
+  }, [isSharedView, accessLevel, currentUser]);
   
   const currentFormStatus = form.watch('status');
   
@@ -315,26 +321,26 @@ export function TaskDetailsSheet({
   }, [isAssignee, isSharedView, form]);
 
   useEffect(() => {
-    if (initialTask && open) {
+    if (taskState && open) {
         form.reset({
-            title: initialTask.title,
-            brandId: initialTask.brandId,
-            description: initialTask.description || '',
-            status: initialTask.status,
-            priority: initialTask.priority,
-            assigneeIds: initialTask.assignees?.map(a => a.id) || [],
-            timeEstimate: initialTask.timeEstimate,
-            dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
+            title: taskState.title,
+            brandId: taskState.brandId,
+            description: taskState.description || '',
+            status: taskState.status,
+            priority: taskState.priority,
+            assigneeIds: taskState.assignees?.map(a => a.id) || [],
+            timeEstimate: taskState.timeEstimate,
+            dueDate: taskState.dueDate ? format(parseISO(taskState.dueDate), 'yyyy-MM-dd') : undefined,
         });
         
-        setCurrentAssignees(initialTask.assignees || []);
-        setCurrentTags(initialTask.tags || []);
+        setCurrentAssignees(taskState.assignees || []);
+        setCurrentTags(taskState.tags || []);
         setNewComment('');
         setCommentAttachment(null);
         setNewSubtaskAssignee(null);
 
-        if (initialTask.currentSessionStartTime && !isSharedView) {
-            const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
+        if (taskState.currentSessionStartTime && !isSharedView) {
+            const startTime = parseISO(taskState.currentSessionStartTime).getTime();
             const now = Date.now();
             setElapsedTime(Math.floor((now - startTime) / 1000));
             setIsRunning(true);
@@ -343,18 +349,18 @@ export function TaskDetailsSheet({
             setIsRunning(false);
         }
     }
-  }, [initialTask, form, open, isSharedView]);
+  }, [taskState, form, open, isSharedView]);
 
 
   const handlePauseSession = useCallback(async () => {
-    if (!firestore || !currentUser || !initialTask.currentSessionStartTime) return;
+    if (!firestore || !currentUser || !taskState.currentSessionStartTime) return;
     
-    const taskRef = doc(firestore, "tasks", initialTask.id);
+    const taskRef = doc(firestore, "tasks", taskState.id);
     
-    const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
+    const startTime = parseISO(taskState.currentSessionStartTime).getTime();
     const now = Date.now();
     const sessionDurationInSeconds = (now - startTime) / 1000;
-    const newTimeTrackedInHours = (initialTask.timeTracked || 0) + (sessionDurationInSeconds / 3600);
+    const newTimeTrackedInHours = (taskState.timeTracked || 0) + (sessionDurationInSeconds / 3600);
     
     const newActivity: Activity = createActivity(currentUser, `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`);
     
@@ -363,7 +369,7 @@ export function TaskDetailsSheet({
             timeTracked: newTimeTrackedInHours,
             currentSessionStartTime: deleteField(),
             lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity]
+            activities: [...(taskState.activities || []), newActivity]
         });
         setIsRunning(false);
         setElapsedTime(0);
@@ -372,7 +378,7 @@ export function TaskDetailsSheet({
         console.error("Failed to pause session:", error);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
     }
-  }, [firestore, currentUser, initialTask, toast]);
+  }, [firestore, currentUser, taskState, toast]);
 
 
   const handleStatusChange = async (newStatus: string) => {
@@ -390,7 +396,7 @@ export function TaskDetailsSheet({
             const response = await fetch('/api/share/update-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { status: newStatus } }),
+              body: JSON.stringify({ linkId, taskId: taskState.id, updates: { status: newStatus } }),
             });
             if (!response.ok) {
               const errorData = await response.json();
@@ -410,27 +416,27 @@ export function TaskDetailsSheet({
     }
     
     const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
-    const taskRef = doc(firestore, 'tasks', initialTask.id);
+    const taskRef = doc(firestore, 'tasks', taskState.id);
     
     try {
         const batch = writeBatch(firestore);
-        const updates: Partial<Task> = { status: newStatus, activities: [...(initialTask.activities || []), newActivity], lastActivity: newActivity, updatedAt: serverTimestamp() as any };
+        const updates: Partial<Task> = { status: newStatus, activities: [...(taskState.activities || []), newActivity], lastActivity: newActivity, updatedAt: serverTimestamp() as any };
         if (oldStatus === 'Revisi' && newStatus === 'Doing') updates.isUnderRevision = true;
-        if (newStatus !== 'Doing' && initialTask.isUnderRevision) updates.isUnderRevision = deleteField() as any;
-        if (oldStatus === 'To Do' && newStatus !== 'To Do' && !initialTask.actualStartDate) updates.actualStartDate = new Date().toISOString();
+        if (newStatus !== 'Doing' && taskState.isUnderRevision) updates.isUnderRevision = deleteField() as any;
+        if (oldStatus === 'To Do' && newStatus !== 'To Do' && !taskState.actualStartDate) updates.actualStartDate = new Date().toISOString();
         if (newStatus === 'Done' && oldStatus !== 'Done') updates.actualCompletionDate = new Date().toISOString();
         if (newStatus !== 'Done' && oldStatus === 'Done') updates.actualCompletionDate = deleteField() as any;
 
-        const notificationTitle = `Status Changed: ${initialTask.title}`;
+        const notificationTitle = `Status Changed: ${taskState.title}`;
         const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
         
         const notifiedUserIds = new Set<string>();
-        initialTask.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
-        if (initialTask.createdBy.id !== currentUser.id) notifiedUserIds.add(initialTask.createdBy.id);
+        taskState.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
+        if (taskState.createdBy.id !== currentUser.id) notifiedUserIds.add(taskState.createdBy.id);
 
         notifiedUserIds.forEach(userId => {
             const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-            batch.set(notifRef, { userId, title: notificationTitle, message: notificationMessage, taskId: initialTask.id, isRead: false, createdAt: serverTimestamp() as any, createdBy: newActivity.user });
+            batch.set(notifRef, { userId, title: notificationTitle, message: notificationMessage, taskId: taskState.id, isRead: false, createdAt: serverTimestamp() as any, createdBy: newActivity.user });
         });
         
         batch.update(taskRef, updates);
@@ -464,7 +470,7 @@ export function TaskDetailsSheet({
               const response = await fetch('/api/share/update-task', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ linkId, taskId: initialTask.id, updates })
+                  body: JSON.stringify({ linkId, taskId: taskState.id, updates })
               });
               if (!response.ok) throw new Error('Failed to update priority.');
               toast({ title: 'Priority Updated', description: `Task priority set to ${priority}.` });
@@ -475,12 +481,12 @@ export function TaskDetailsSheet({
           }
       } else {
         if (!firestore || !currentUser) return;
-        const taskRef = doc(firestore, 'tasks', initialTask.id);
+        const taskRef = doc(firestore, 'tasks', taskState.id);
         const newActivity = createActivity(currentUser, `set priority from "${currentPriority}" to "${priority}"`);
         try {
             await updateDoc(taskRef, {
                 ...updates,
-                activities: [...(initialTask.activities || []), newActivity],
+                activities: [...(taskState.activities || []), newActivity],
                 lastActivity: newActivity,
                 updatedAt: serverTimestamp(),
             });
@@ -550,7 +556,7 @@ export function TaskDetailsSheet({
       try {
         const payload: any = {
             linkId,
-            taskId: initialTask.id,
+            taskId: taskState.id,
             newComment: {
                 text: newComment,
                 isRevisionRequest,
@@ -565,6 +571,11 @@ export function TaskDetailsSheet({
 
         if (!response.ok) {
             throw new Error((await response.json()).message || 'Failed to post comment.');
+        }
+
+        const data = await response.json();
+        if (data.updatedTask) {
+          setTaskState(data.updatedTask);
         }
 
         toast({ title: 'Success', description: `Your ${isRevisionRequest ? 'revision request' : 'comment'} has been posted.` });
@@ -599,14 +610,14 @@ export function TaskDetailsSheet({
 
   const handleToggleSubtask = async (subtaskId: string) => {
     if (isSharedView || !firestore) return;
-    const newSubtasks = initialTask.subtasks?.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st) || [];
-    await updateDoc(doc(firestore, 'tasks', initialTask.id), { subtasks: newSubtasks });
+    const newSubtasks = taskState.subtasks?.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st) || [];
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: newSubtasks });
   };
   
   const handleToggleRevisionItem = async (itemId: string) => {
     if (isSharedView || !isAssignee || !firestore) return;
-    const newItems = initialTask.revisionItems?.map(item => item.id === itemId ? { ...item, completed: !item.completed } : item);
-    await updateDoc(doc(firestore, 'tasks', initialTask.id), { revisionItems: newItems });
+    const newItems = taskState.revisionItems?.map(item => item.id === itemId ? { ...item, completed: !item.completed } : item);
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { revisionItems: newItems });
   };
 
 
@@ -614,19 +625,19 @@ export function TaskDetailsSheet({
     if (!newSubtask.trim() || isSharedView || !firestore) return;
     let assignedUser = newSubtaskAssignee || (currentAssignees.length === 1 ? currentAssignees[0] : (!isManagerOrAdmin && currentUser ? currentUser : null));
     const subtask: Subtask = { id: `st-${Date.now()}`, title: newSubtask, completed: false, ...(assignedUser && { assignee: { id: assignedUser.id, name: assignedUser.name, avatarUrl: assignedUser.avatarUrl || '' } }) };
-    await updateDoc(doc(firestore, 'tasks', initialTask.id), { subtasks: [...(initialTask.subtasks || []), subtask] });
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: [...(taskState.subtasks || []), subtask] });
     setNewSubtask(''); setNewSubtaskAssignee(null);
   };
   
   const handleRemoveSubtask = async (subtaskId: string) => {
     if (isSharedView || !firestore) return;
-    await updateDoc(doc(firestore, 'tasks', initialTask.id), { subtasks: initialTask.subtasks?.filter(st => st.id !== subtaskId) });
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: taskState.subtasks?.filter(st => st.id !== subtaskId) });
   }
   
   const handleAssignSubtask = async (subtaskId: string, user: User | null) => {
     if (isSharedView || !firestore) return;
-    const newSubtasks = initialTask.subtasks?.map(st => st.id === subtaskId ? { ...st, assignee: user ? { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' } : undefined } : st);
-    await updateDoc(doc(firestore, 'tasks', initialTask.id), { subtasks: newSubtasks });
+    const newSubtasks = taskState.subtasks?.map(st => st.id === subtaskId ? { ...st, assignee: user ? { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' } : undefined } : st);
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: newSubtasks });
   };
 
   const getFileIcon = (fileName: string) => {
@@ -637,20 +648,20 @@ export function TaskDetailsSheet({
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
-    if (isSharedView || !event.target.files || !storage || !initialTask?.id || !firestore || !currentUser) return;
+    if (isSharedView || !event.target.files || !storage || !taskState?.id || !firestore || !currentUser) return;
     setIsUploading(true);
     try {
         const files = Array.from(event.target.files);
         const uploadPromises = files.map(async (file) => {
             const attachmentId = `${Date.now()}-${file.name}`;
-            const storageRef = ref(storage, `attachments/${initialTask.id}/${attachmentId}`);
+            const storageRef = ref(storage, `attachments/${taskState.id}/${attachmentId}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
-            return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (initialTask.revisionHistory || []).length + 1 };
+            return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (taskState.revisionHistory || []).length + 1 };
         });
         const newFiles = await Promise.all(uploadPromises);
-        const currentFiles = fileType === 'attachment' ? (initialTask.attachments || []) : (initialTask.deliverables || []);
-        await updateDoc(doc(firestore, 'tasks', initialTask.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
+        const currentFiles = fileType === 'attachment' ? (taskState.attachments || []) : (taskState.deliverables || []);
+        await updateDoc(doc(firestore, 'tasks', taskState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
         toast({ title: 'Upload Successful' });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Upload Failed' });
@@ -668,35 +679,35 @@ export function TaskDetailsSheet({
     }
     if (isSharedView || !firestore || !currentUser) return;
     
-    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (initialTask.revisionHistory || []).length + 1 };
+    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (taskState.revisionHistory || []).length + 1 };
     const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
-    await updateDoc(doc(firestore, 'tasks', initialTask.id), { [fieldToUpdate]: [...(initialTask[fieldToUpdate] || []), newFile] });
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: [...(taskState[fieldToUpdate] || []), newFile] });
     setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
 
   const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
       if (isSharedView || !firestore) return;
       const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
-      await updateDoc(doc(firestore, 'tasks', initialTask.id), { [fieldToUpdate]: initialTask[fieldToUpdate]?.filter(att => att.id !== id) });
+      await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: taskState[fieldToUpdate]?.filter(att => att.id !== id) });
   };
 
 
   const subtaskProgress = useMemo(() => {
-    if (!initialTask.subtasks || initialTask.subtasks.length === 0) return 0;
-    return (initialTask.subtasks.filter(st => st.completed).length / initialTask.subtasks.length) * 100;
-  }, [initialTask.subtasks]);
+    if (!taskState.subtasks || taskState.subtasks.length === 0) return 0;
+    return (taskState.subtasks.filter(st => st.completed).length / taskState.subtasks.length) * 100;
+  }, [taskState.subtasks]);
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if (isSharedView || !firestore || !currentUser) return;
     setIsSaving(true);
     const updates: Partial<Task> = { title: data.title, description: data.description, dueDate: data.dueDate, brandId: data.brandId, assigneeIds: currentAssignees.map(a => a.id), assignees: currentAssignees, tags: currentTags, timeEstimate: data.timeEstimate };
     
-    const taskDocRef = doc(firestore!, 'tasks', initialTask.id);
+    const taskDocRef = doc(firestore!, 'tasks', taskState.id);
     const actionDescription = 'updated task details';
     const newActivity: Activity = createActivity(currentUser, actionDescription);
     
     try {
-        await updateDoc(taskDocRef, { ...updates, lastActivity: newActivity, activities: [...(initialTask.activities || []), newActivity], updatedAt: serverTimestamp() });
+        await updateDoc(taskDocRef, { ...updates, lastActivity: newActivity, activities: [...(taskState.activities || []), newActivity], updatedAt: serverTimestamp() });
         toast({ title: 'Task Updated' });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Update Failed' });
@@ -705,8 +716,8 @@ export function TaskDetailsSheet({
     }
   };
   
-  const timeEstimateValue = form.watch('timeEstimate') ?? initialTask.timeEstimate ?? 0;
-  const timeTracked = useMemo(() => initialTask.timeTracked || 0, [initialTask.timeTracked]);
+  const timeEstimateValue = form.watch('timeEstimate') ?? taskState.timeEstimate ?? 0;
+  const timeTracked = useMemo(() => taskState.timeTracked || 0, [taskState.timeTracked]);
   const timeTrackingProgress = timeEstimateValue > 0 ? (timeTracked / timeEstimateValue) * 100 : 0;
     
   const handleSelectUser = (user: User) => {
@@ -719,24 +730,24 @@ export function TaskDetailsSheet({
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
   const brand = useMemo(() => {
-    if (isSharedView && initialTask.snapshot) return initialTask.snapshot.brand;
+    if (isSharedView && taskState.snapshot) return taskState.snapshot.brand;
     return brands?.find(b => b.id === brandId);
-  }, [brands, brandId, isSharedView, initialTask]);
+  }, [brands, brandId, isSharedView, taskState]);
   
   const handleStartSession = async () => {
     if (isSharedView || !firestore || !currentUser) return;
-    const taskRef = doc(firestore, "tasks", initialTask.id);
+    const taskRef = doc(firestore, "tasks", taskState.id);
     const activitiesToAdd: Activity[] = [];
     const updates: Partial<Task> = { currentSessionStartTime: new Date().toISOString() };
 
-    if (initialTask.status === 'To Do') {
+    if (taskState.status === 'To Do') {
         updates.status = 'Doing';
         activitiesToAdd.push(createActivity(currentUser, 'changed status from "To Do" to "Doing"'));
     }
     activitiesToAdd.push(createActivity(currentUser, 'started a work session'));
-    updates.activities = [...(initialTask.activities || []), ...activitiesToAdd];
+    updates.activities = [...(taskState.activities || []), ...activitiesToAdd];
     updates.lastActivity = activitiesToAdd[activitiesToAdd.length - 1];
-    if (!initialTask.actualStartDate) updates.actualStartDate = new Date().toISOString();
+    if (!taskState.actualStartDate) updates.actualStartDate = new Date().toISOString();
     
     await updateDoc(taskRef, updates);
     setIsRunning(true);
@@ -744,17 +755,17 @@ export function TaskDetailsSheet({
   }
   
   const canSubmit = useMemo(() => {
-    if (!initialTask) return false;
-    const allSubtasksCompleted = (initialTask.subtasks || []).every(st => st.completed);
-    const allRevisionsCompleted = (initialTask.revisionItems || []).every(item => item.completed);
+    if (!taskState) return false;
+    const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
+    const allRevisionsCompleted = (taskState.revisionItems || []).every(item => item.completed);
     
-    const currentRevisionCycle = (initialTask.revisionHistory || []).length + 1;
-    const hasDeliverablesForCurrentCycle = (initialTask.deliverables || []).some(
+    const currentRevisionCycle = (taskState.revisionHistory || []).length + 1;
+    const hasDeliverablesForCurrentCycle = (taskState.deliverables || []).some(
         d => (d.forRevisionCycle ?? 1) === currentRevisionCycle
     );
     
     return allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentCycle;
-  }, [initialTask]);
+  }, [taskState]);
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
@@ -767,10 +778,10 @@ export function TaskDetailsSheet({
   };
   
   const completionStatus = useMemo(() => {
-    if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
-    const isLate = isAfter(parseISO(initialTask.actualCompletionDate), endOfDay(parseISO(initialTask.dueDate)));
+    if (taskState.status !== 'Done' || !taskState.actualCompletionDate || !taskState.dueDate) return null;
+    const isLate = isAfter(parseISO(taskState.actualCompletionDate), endOfDay(parseISO(taskState.dueDate)));
     return isLate ? 'Late' : 'On Time';
-  }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
+  }, [taskState.status, taskState.actualCompletionDate, taskState.dueDate]);
   
   const getUniqueActivities = (activities: Activity[]): Activity[] => {
     if (!activities) return [];
@@ -857,13 +868,13 @@ export function TaskDetailsSheet({
 
   const groupedDeliverables = useMemo(() => {
     const groups: Record<number, Attachment[]> = {};
-    (initialTask.deliverables || []).forEach(d => {
+    (taskState.deliverables || []).forEach(d => {
         const cycle = d.forRevisionCycle ?? 1; // Default to cycle 1 for older data
         if (!groups[cycle]) groups[cycle] = [];
         groups[cycle].push(d);
     });
     return groups;
-  }, [initialTask.deliverables]);
+  }, [taskState.deliverables]);
 
 
   return (
@@ -871,13 +882,13 @@ export function TaskDetailsSheet({
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-full">
           <SheetHeader className="p-4 border-b flex-shrink-0">
-             <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
+             <SheetTitle className='sr-only'>Task Details for {taskState.title}</SheetTitle>
              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    {initialTask.createdBy && (
+                    {taskState.createdBy && (
                         <div className='flex items-center gap-2'>
-                           <Avatar className="h-6 w-6"><AvatarImage src={initialTask.createdBy.avatarUrl} /><AvatarFallback>{initialTask.createdBy.name.charAt(0)}</AvatarFallback></Avatar>
-                           <span>Created by {initialTask.createdBy.name}</span>
+                           <Avatar className="h-6 w-6"><AvatarImage src={taskState.createdBy.avatarUrl} /><AvatarFallback>{taskState.createdBy.name.charAt(0)}</AvatarFallback></Avatar>
+                           <span>Created by {taskState.createdBy.name}</span>
                         </div>
                     )}
                 </div>
@@ -888,7 +899,7 @@ export function TaskDetailsSheet({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                           {!isSharedView && canShareTask && (
-                              <ShareTaskDialog task={initialTask}>
+                              <ShareTaskDialog task={taskState}>
                                   <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                       <Share2 className="mr-2 h-4 w-4"/>
                                       Share Task
@@ -934,11 +945,11 @@ export function TaskDetailsSheet({
                       
                       <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
 
-                      {initialTask.revisionItems && initialTask.revisionItems.length > 0 && (
+                      {taskState.revisionItems && taskState.revisionItems.length > 0 && (
                           <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
                               <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
                               <div className="space-y-2">
-                                  {initialTask.revisionItems.map(item => (
+                                  {taskState.revisionItems.map(item => (
                                       <div key={item.id} className="flex items-center gap-3">
                                           <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee && !isSharedView} />
                                           <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
@@ -977,7 +988,7 @@ export function TaskDetailsSheet({
                                     <h4 className="font-medium text-sm mb-2">Deliverables</h4>
                                     <div className="space-y-2">
                                         {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
-                                        {(initialTask.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                        {(taskState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                     </div>
                                     {canUploadDeliverables && (
                                         <div className="flex gap-2 mt-2">
@@ -990,8 +1001,8 @@ export function TaskDetailsSheet({
                                 <div>
                                     <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
                                     <div className="space-y-2">
-                                    {(initialTask.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}
-                                    {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                    {(taskState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}
+                                    {(taskState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
                                     </div>
                                     {canEditContent && (
                                         <div className="flex gap-2 mt-2">
@@ -1014,8 +1025,8 @@ export function TaskDetailsSheet({
                          <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                               <ScrollArea className="max-h-48 pr-2">
                                   <div className="space-y-4">
-                                      {(initialTask.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
-                                      {(initialTask.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                      {(taskState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                      {(taskState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
                                   </div>
                               </ScrollArea>
                               {canComment && (
@@ -1042,23 +1053,23 @@ export function TaskDetailsSheet({
                               )}
                         </TabsContent>
                         <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                              <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(initialTask.subtasks || []).filter(st => st.completed).length}/{(initialTask.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
+                              <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(taskState.subtasks || []).filter(st => st.completed).length}/{(taskState.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
                               <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                  {(initialTask.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canManageSubtasks} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild disabled={!canManageSubtasks}><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover>{canManageSubtasks && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}</div> ))}
+                                  {(taskState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canManageSubtasks} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild disabled={!canManageSubtasks}><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover>{canManageSubtasks && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}</div> ))}
                               </div>
                               {canManageSubtasks && ( <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="text-muted-foreground">{newSubtaskAssignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div> )}
                         </TabsContent>
                         <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                            <Command><CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} /><CommandList><CommandEmpty>No tasks found.</CommandEmpty><CommandGroup>{(dependencyOptions || []).filter(task => !(initialTask.dependencies || []).includes(task.id)).map(task => ( <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(initialTask.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }}>{task.title}</CommandItem> ))}</CommandGroup></CommandList></Command>
+                            <Command><CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} /><CommandList><CommandEmpty>No tasks found.</CommandEmpty><CommandGroup>{(dependencyOptions || []).filter(task => !(taskState.dependencies || []).includes(task.id)).map(task => ( <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(taskState.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }}>{task.title}</CommandItem> ))}</CommandGroup></CommandList></Command>
                             <div className="space-y-2">
                                 <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(initialTask.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = initialTask.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', initialTask.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider> ); })}</div> )}
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(taskState.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</TooltipContent></Tooltip></TooltipProvider> ); })}</div> )}
                             </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
-                            {(initialTask.revisionHistory && initialTask.revisionHistory.length > 0) ? (
+                            {(taskState.revisionHistory && taskState.revisionHistory.length > 0) ? (
                                 <Accordion type="single" collapsible>
-                                    {initialTask.revisionHistory.slice().sort((a,b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                    {taskState.revisionHistory.slice().sort((a,b) => b.cycleNumber - a.cycleNumber).map(cycle => (
                                         <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
                                             <AccordionTrigger>
                                                 <div className="flex flex-col items-start text-left">
@@ -1081,11 +1092,11 @@ export function TaskDetailsSheet({
                       </Tabs>
                   </div>
                   <div className="md:col-span-1 p-6 space-y-6">
-                      {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && ( <div className="space-y-2"><Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Submit for Review</Button>{!canSubmit && ( <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file untuk melanjutkan.</p> )}</div> )}
+                      {(isAssignee && !isManagerOrAdmin && !isSharedView && (taskState.status === 'Doing' || taskState.status === 'Revisi')) && ( <div className="space-y-2"><Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Submit for Review</Button>{!canSubmit && ( <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file untuk melanjutkan.</p> )}</div> )}
                   
-                  {isManagerOrAdmin && initialTask.status === 'Preview' && !isSharedView && ( <div className="space-y-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button></div> )}
+                  {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( <div className="space-y-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button></div> )}
 
-                  {(isAssignee || isCreator) && initialTask.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
+                  {(isAssignee || isCreator) && taskState.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
                   <div className='space-y-4 p-4 rounded-lg border'>
                     <h3 className='font-semibold text-sm'>Task Details</h3>
                     <Separator/>
@@ -1098,7 +1109,7 @@ export function TaskDetailsSheet({
                       </FormItem>
                     <FormField control={form.control} name="priority" render={({ field }) => { const priority = priorityInfo[field.value]; return ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2">{ !canChangePriority ? ( <div className="flex items-center gap-2 text-sm font-medium"><priority.icon className={`h-4 w-4 ${priority.color}`} />{priority.label}</div> ) : ( <><Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent></Select>{aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}</> )}</div></FormItem> ) }}/>
                       <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2">{!canEditContent ? ( <div className="text-sm font-medium">{field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}</div> ) : ( <Input type="date" {...field} value={field.value || ''} /> )}</div></FormItem> )}/>
-                      {initialTask.actualCompletionDate && ( <div className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Completed</FormLabel><div className="col-span-2 flex items-center gap-2"><span className="text-sm font-medium">{format(parseISO(initialTask.actualCompletionDate), 'MMM d, yyyy')}</span>{completionStatus && ( <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>{completionStatus}</Badge> )}</div></div> )}
+                      {taskState.actualCompletionDate && ( <div className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Completed</FormLabel><div className="col-span-2 flex items-center gap-2"><span className="text-sm font-medium">{format(parseISO(taskState.actualCompletionDate), 'MMM d, yyyy')}</span>{completionStatus && ( <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>{completionStatus}</Badge> )}</div></div> )}
                   </div>
 
                   <div className='space-y-4 p-4 rounded-lg border'>
@@ -1141,10 +1152,10 @@ export function TaskDetailsSheet({
         </SheetContent>
       </Sheet>
       <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>AI Priority Guard</AlertDialogTitle><AlertDialogDescription>{aiValidation.reason}<br/><br/>Do you still want to set this task as Urgent?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">{initialTask.activities && initialTask.activities.length > 0 ? ( getUniqueActivities(initialTask.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> )) ) : ( <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> )}</div></ScrollArea></DialogContent></Dialog>
+       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Task Activity Log: {taskState?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">{taskState.activities && taskState.activities.length > 0 ? ( getUniqueActivities(taskState.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> )) ) : ( <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> )}</div></ScrollArea></DialogContent></Dialog>
         <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}><DialogContent><DialogHeader><DialogTitle>Link Google Drive File</DialogTitle><DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div><div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div></div><DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter></DialogContent></Dialog>
         
-        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}><DialogContent><DialogHeader><DialogTitle>Final Review</DialogTitle><DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6"><h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3><Separator /><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( finalReviewState.task.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={cycleNum} className="space-y-2"><h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h5>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div> ))}</div> ))}{(initialTask.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}</div></div></div></ScrollArea><DialogFooter><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter></DialogContent></Dialog>
+        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}><DialogContent><DialogHeader><DialogTitle>Final Review</DialogTitle><DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6"><h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3><Separator /><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( finalReviewState.task.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={cycleNum} className="space-y-2"><h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h5>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div> ))}</div> ))}{(taskState.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}</div></div></div></ScrollArea><DialogFooter><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter></DialogContent></Dialog>
     </>
   );
 }
