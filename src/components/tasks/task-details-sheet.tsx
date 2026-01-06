@@ -48,8 +48,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -148,7 +146,7 @@ export function TaskDetailsSheet({
       if (sharedTaskConfig) return sharedTaskConfig.allowedActions.includes('changeStatus') ? 'status' : 'view';
       if (session) return session.accessLevel;
     }
-    return 'view';
+    return 'view'; // Default for non-shared or if session is loading
   }, [isSharedView, session, sharedTaskConfig]);
 
 
