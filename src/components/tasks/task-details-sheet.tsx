@@ -110,7 +110,6 @@ interface TaskDetailsSheetProps {
   onOpenChange: (open: boolean) => void;
   isSharedView: boolean;
   sharedTaskConfig?: SharedTask;
-  accessLevel?: SharedLink['accessLevel'];
 }
 
 const createActivity = (user: User, action: string): Activity => {
@@ -136,16 +135,22 @@ export function TaskDetailsSheet({
   onOpenChange,
   isSharedView,
   sharedTaskConfig,
-  accessLevel: propAccessLevel,
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
   
-  const { session } = isSharedView ? useSharedSession() : { session: null };
+  const { session, isLoading: isSessionLoading } = useSharedSession();
   const linkId = isSharedView ? (params.linkId as string) : null;
-  const accessLevel = isSharedView ? propAccessLevel || 'view' : 'view';
+  const accessLevel = useMemo(() => {
+    if (isSharedView) {
+      if (sharedTaskConfig) return sharedTaskConfig.allowedActions.includes('changeStatus') ? 'status' : 'view';
+      if (session) return session.accessLevel;
+    }
+    return 'view';
+  }, [isSharedView, session, sharedTaskConfig]);
+
 
   const [isUploading, setIsUploading] = React.useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -204,7 +209,8 @@ export function TaskDetailsSheet({
   const { data: allTasks, isLoading: areAllTasksLoading } = useCollection<Task>(allTasksQuery);
   
   const usersQuery = useMemo(() => {
-    if (isSharedView || !firestore || !currentUser) return null;
+    if (isSharedView) return null;
+    if (!firestore || !currentUser) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
     
     if (currentUser.role === 'Employee' && currentUser.managerId) {
@@ -289,8 +295,16 @@ export function TaskDetailsSheet({
   const isManagerOrAdmin = !isSharedView && currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin');
   const isEmployeeOrPIC = !isSharedView && currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC');
 
-  const creatorIsEmployee = session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
-  const taskIsFromManager = taskState.createdBy.id !== session?.creatorId;
+  const creatorIsEmployee = useMemo(() => {
+    if (isSharedView) return session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
+    return false;
+  }, [isSharedView, session]);
+  
+  const taskIsFromManager = useMemo(() => {
+    if (isSharedView) return taskState.createdBy.id !== session?.creatorId;
+    return false;
+  }, [isSharedView, taskState.createdBy.id, session?.creatorId]);
+
 
   const canEditContent = isSharedView ? false : (!!currentUser && (currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator));
       
@@ -936,7 +950,7 @@ export function TaskDetailsSheet({
                           <Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
-                          {!isSharedView && canShareTask && (
+                          {!isSharedView && (
                               <ShareTaskDialog task={taskState}>
                                   <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                       <Share2 className="mr-2 h-4 w-4"/>
@@ -1075,12 +1089,6 @@ export function TaskDetailsSheet({
                                       </div>
                                        <div className="flex justify-between items-center">
                                           <div className="flex-1">
-                                              {(isSharedView && accessLevel !== 'view') && (
-                                                  <Button type="button" variant="destructive" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
-                                                      {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
-                                                      Request Revisions
-                                                  </Button>
-                                              )}
                                           </div>
                                           <Button type="button" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
                                                 {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
@@ -1351,4 +1359,3 @@ export function TaskDetailsSheet({
 }
 
     
-
