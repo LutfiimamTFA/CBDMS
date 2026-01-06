@@ -113,9 +113,8 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
-    lastActivity: false,
-    assigneeIds: false,
-    dueDate: false,
+    lastActivity: false, // Keep this hidden by default as it's less critical for a table view
+    // Other columns will now be visible by default
   });
   const [rowSelection, setRowSelection] = React.useState({})
   const { toast } = useToast();
@@ -711,5 +710,3 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
     </>
   );
 }
-
-    
