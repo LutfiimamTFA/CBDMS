@@ -60,6 +60,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { Card, CardContent } from '../ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSharedSession } from '@/context/shared-session-provider';
 
 
@@ -1127,7 +1128,39 @@ export function TaskDetailsSheet({
                             </Command>
                             <div className="space-y-2">
                                 <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(taskState.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider> ); })}</div> )}
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : (
+                                <div className="flex flex-wrap gap-2">
+                                  {(taskState.dependencies || []).map(depId => {
+                                      const task = allTasks?.find(t => t.id === depId);
+                                      if (!task) return null;
+                                      const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
+                                      return (
+                                          <TooltipProvider key={depId}>
+                                              <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                      <Link href={`/tasks/${depId}`}>
+                                                          <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
+                                                              {statusIcon}
+                                                              <span className="ml-2 truncate">{task.title}</span>
+                                                              {canEditContent && (
+                                                                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                                                                      <X className="h-3 w-3" />
+                                                                  </button>
+                                                              )}
+                                                          </Badge>
+                                                      </Link>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>
+                                                      <p>Status: {task.status}</p>
+                                                      <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
+                                                      <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
+                                                  </TooltipContent>
+                                              </Tooltip>
+                                          </TooltipProvider>
+                                      );
+                                  })}
+                                </div>
+                                )}
                             </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
