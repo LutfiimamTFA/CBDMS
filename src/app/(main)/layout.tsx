@@ -31,8 +31,9 @@ import { collection, query, orderBy } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
 import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
-import { AppProviders } from '@/components/app-providers';
 import { SidebarInset } from '@/components/ui/sidebar';
+import { CompanyProvider } from '@/context/company-provider';
+import { PermissionsProvider } from '@/context/permissions-provider';
 
 const Icon = ({
   name,
@@ -270,8 +271,10 @@ function MainAppLayout({
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   // This component now solely acts as the provider wrapper for the main authenticated app section.
   return (
-    <AppProviders>
-      <MainAppLayout>{children}</MainAppLayout>
-    </AppProviders>
+    <CompanyProvider>
+      <PermissionsProvider>
+        <MainAppLayout>{children}</MainAppLayout>
+      </PermissionsProvider>
+    </CompanyProvider>
   );
 }

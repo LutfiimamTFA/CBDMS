@@ -3,6 +3,7 @@
 import './globals.css';
 import { useEffect, useState } from 'react';
 import { AppShell } from './app-shell';
+import { Toaster } from '@/components/ui/toaster';
 
 export default function RootLayout({
   children,
@@ -45,6 +46,7 @@ export default function RootLayout({
       <body className="font-body antialiased">
         <AppShell>
           {children}
+          <Toaster />
         </AppShell>
       </body>
     </html>

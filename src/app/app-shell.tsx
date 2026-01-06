@@ -1,12 +1,12 @@
 'use client';
 
-import { usePathname } from 'next/navigation';
-import { FirebaseClientProvider } from '@/firebase';
 import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from '@/components/ui/toaster';
+import { I18nProvider } from '@/context/i18n-provider';
+import { FirebaseClientProvider } from '@/firebase';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  // This component now only provides the most basic, universal providers
-  // that are safe for both public and private routes.
   return (
     <ThemeProvider
       attribute="class"
@@ -14,7 +14,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       enableSystem
       disableTransitionOnChange
     >
-      <FirebaseClientProvider>{children}</FirebaseClientProvider>
+      <I18nProvider>
+        <FirebaseClientProvider>
+          <TooltipProvider>
+            {children}
+          </TooltipProvider>
+        </FirebaseClientProvider>
+      </I18nProvider>
     </ThemeProvider>
   );
 }
