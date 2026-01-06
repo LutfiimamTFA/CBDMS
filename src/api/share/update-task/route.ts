@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
-import type { SharedLink, Task, User, Activity, Notification, Comment } from '@/lib/types-backend';
+import type { SharedLink, Task, User, Activity, Notification, RevisionItem, Comment } from '@/lib/types-backend';
 
 // This is a simplified "guest" user object for logging activities from a shared link.
 const createSharedActor = (session: SharedLink): User => {
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
                 throw new Error(`Forbidden: Status "${updates.status}" is not allowed for this shared link.`);
             }
             actionDescription = `changed status from "${initialTask.status}" to "${updates.status}"`;
-            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName || 'Unknown'}) changed status to ${updates.status}.`;
+            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) changed status to ${updates.status}.`;
         }
 
         // Handle New Comment / Revision Request
@@ -95,16 +95,16 @@ export async function POST(request: Request) {
                 finalUpdates.status = 'Revisi';
                 actionDescription = `requested revisions via comment`;
                 notificationTitle = 'Revisions Requested';
-                notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName || 'Unknown'}) requested revisions on "${initialTask.title}".`;
+                notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) requested revisions on "${initialTask.title}".`;
             } else {
                  actionDescription = `commented on the task`;
-                 notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName || 'Unknown'}) commented on "${initialTask.title}".`;
+                 notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) commented on "${initialTask.title}".`;
             }
         }
 
 
         if (actionDescription) {
-            const newActivity = createActivity(sharedActor, actionDescription, sharedLink.creatorName || 'Unknown');
+            const newActivity = createActivity(sharedActor, actionDescription, sharedLink.creatorName);
             const currentActivities = Array.isArray(initialTask.activities) ? initialTask.activities : [];
             finalUpdates.activities = [...currentActivities, newActivity];
             finalUpdates.lastActivity = newActivity;
