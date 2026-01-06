@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -39,6 +40,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Calendar as CalendarComponent } from '../ui/calendar';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 interface SharedTasksTableProps {
     tasks: Task[];
@@ -52,6 +54,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
   const router = useRouter();
   const params = useParams();
   const linkId = params.linkId as string;
+  const { session } = useSharedSession();
   
   const [data, setData] = React.useState<Task[]>(tasks);
   React.useEffect(() => {
@@ -65,6 +68,8 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
   const { toast } = useToast();
 
   const [updatingCells, setUpdatingCells] = React.useState<Record<string, boolean>>({});
+  
+  const creatorIsEmployee = session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
 
   const canChangeStatus = accessLevel === 'status' || accessLevel === 'limited-edit';
   const canEditLimited = accessLevel === 'limited-edit';
@@ -194,7 +199,11 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
         const priority = priorityInfo[currentPriority];
         if (!priority) return null;
 
-        if (!canEditLimited) {
+        const creatorIsEmployee = session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
+        const taskIsFromManager = task.createdBy.id !== session?.creatorId;
+        const isPriorityEditable = canEditLimited && !(creatorIsEmployee && taskIsFromManager);
+
+        if (!isPriorityEditable) {
             return (
               <Badge variant="outline" className='font-normal'>
                   <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
@@ -290,7 +299,11 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
         const task = row.original;
         const dueDate = task.dueDate;
 
-        if (!canEditLimited) {
+        const creatorIsEmployee = session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
+        const taskIsFromManager = task.createdBy.id !== session?.creatorId;
+        const isDateEditable = canEditLimited && !(creatorIsEmployee && taskIsFromManager);
+
+        if (!isDateEditable) {
           return dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>;
         }
 
@@ -352,7 +365,11 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
                 </SelectTrigger>
                 <SelectContent>
                     {(statuses || []).map(s => (
-                        <SelectItem key={s.id} value={s.name}>
+                        <SelectItem 
+                          key={s.id} 
+                          value={s.name}
+                          disabled={creatorIsEmployee && (s.name === 'Done' || s.name === 'Revisi')}
+                        >
                             <div className="flex items-center gap-2">
                                 <div className="h-3 w-3 rounded-full" style={{ backgroundColor: s.color }}></div>
                                 {s.name}
@@ -432,10 +449,6 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
                   data-state={row.getIsSelected() && 'selected'}
                   className="group cursor-pointer"
                   onClick={() => {
-                      if (accessLevel === 'view') {
-                        toast({ variant: 'destructive', title: 'Permission Denied', description: 'Viewing task details is not allowed with this link.' });
-                        return;
-                      }
                       const task = row.original;
                       const path = `/share/${linkId}/tasks/${task.id}`;
                       router.push(path);
@@ -459,3 +472,5 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
     </div>
   );
 }
+
+    

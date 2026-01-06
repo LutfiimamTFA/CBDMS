@@ -63,6 +63,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { Card, CardContent } from '../ui/card';
+import { useSharedSession } from '@/context/shared-session-provider';
 
 
 const taskDetailsSchema = z.object({
@@ -108,7 +109,6 @@ interface TaskDetailsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   accessLevel?: SharedLink['accessLevel'];
-  isSharedView?: boolean;
 }
 
 const createActivity = (user: User, action: string): Activity => {
@@ -133,13 +133,14 @@ export function TaskDetailsSheet({
   open,
   onOpenChange,
   accessLevel = 'view',
-  isSharedView = false,
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
   const linkId = params.linkId as string;
+  const { session } = useSharedSession();
+  const isSharedView = !!session;
 
   const [isUploading, setIsUploading] = React.useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -214,9 +215,9 @@ export function TaskDetailsSheet({
   ));
   
   const statuses = useMemo(() => {
-    if (isSharedView && taskState?.snapshot) return taskState.snapshot.statuses || [];
+    if (isSharedView && session) return session.snapshot.statuses || [];
     return allStatusesData || [];
-  }, [isSharedView, taskState, allStatusesData]);
+  }, [isSharedView, session, allStatusesData]);
 
   const brandsQuery = useMemo(() => {
     if (isSharedView || !firestore || !currentUser) return null;
@@ -282,13 +283,27 @@ export function TaskDetailsSheet({
   const isManagerOrAdmin = !isSharedView && currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin');
   const isEmployeeOrPIC = !isSharedView && currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC');
 
+  const creatorIsEmployee = session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
+  const taskIsFromManager = taskState.createdBy.id !== session?.creatorId;
+
   const canEditContent = isSharedView ? false : (!!currentUser && (currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator));
       
   const canChangePriority = useMemo(() => {
-      if (isSharedView) return accessLevel === 'limited-edit';
+      if (isSharedView) {
+        if (accessLevel !== 'limited-edit') return false;
+        return !(creatorIsEmployee && taskIsFromManager);
+      }
       if (!currentUser) return false;
       return currentUser.role === 'Super Admin' || currentUser.role === 'Manager';
-  }, [currentUser, isSharedView, accessLevel]);
+  }, [currentUser, isSharedView, accessLevel, creatorIsEmployee, taskIsFromManager]);
+  
+  const canEditDueDate = useMemo(() => {
+    if (isSharedView) {
+      if (accessLevel !== 'limited-edit') return false;
+      return !(creatorIsEmployee && taskIsFromManager);
+    }
+    return canEditContent;
+  }, [isSharedView, accessLevel, canEditContent, creatorIsEmployee, taskIsFromManager]);
 
   const canComment = useMemo(() => {
     if (isSharedView) return accessLevel !== 'view';
@@ -557,7 +572,6 @@ export function TaskDetailsSheet({
     setIsUploadingCommentAttachment(true);
   
     try {
-      if (isSharedView) {
         const payload: any = {
           linkId,
           taskId: taskState.id,
@@ -578,57 +592,7 @@ export function TaskDetailsSheet({
           setTaskState(data.updatedTask);
         }
         toast({ title: 'Success', description: `Your ${isRevisionRequest ? 'revision request' : 'comment'} has been posted.` });
-        
-      } else {
-        if (!firestore || !currentUser) return;
-  
-        const taskRef = doc(firestore, 'tasks', taskState.id);
-        const batch = writeBatch(firestore);
-  
-        const newCommentObject: Comment = {
-          id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          user: currentUser as User,
-          text: newComment,
-          timestamp: new Date().toISOString(),
-          replies: [],
-        };
-  
-        const newComments = [...(taskState.comments || []), newCommentObject];
-        const newActivity = createActivity(currentUser, `commented on the task`);
-        const newActivities = [...(taskState.activities || []), newActivity];
-  
-        batch.update(taskRef, {
-          comments: newComments,
-          activities: newActivities,
-          lastActivity: newActivity,
-        });
-        
-        const mentionedUsernames = newComment.match(/@(\w+)/g)?.map(m => m.substring(1).toLowerCase());
-        if (mentionedUsernames && allUsers) {
-          const mentionedUsers = allUsers.filter(u => mentionedUsernames.includes(u.name.split(' ')[0].toLowerCase()) && u.id !== currentUser.id);
-          
-          mentionedUsers.forEach(mentionedUser => {
-            const notifRef = doc(collection(firestore, `users/${mentionedUser.id}/notifications`));
-            const notification: Omit<Notification, 'id'> = {
-              userId: mentionedUser.id,
-              title: `You were mentioned by ${currentUser.name}`,
-              message: `in a comment on task: "${taskState.title}"`,
-              taskId: taskState.id,
-              isRead: false,
-              createdAt: serverTimestamp() as any,
-              createdBy: {
-                id: currentUser.id,
-                name: currentUser.name,
-                avatarUrl: currentUser.avatarUrl || '',
-              }
-            };
-            batch.set(notifRef, notification);
-          });
-        }
-  
-        await batch.commit();
-        toast({ title: 'Comment Posted' });
-      }
+      
   
       setNewComment('');
       setCommentAttachment(null);
@@ -782,9 +746,9 @@ export function TaskDetailsSheet({
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
   const brand = useMemo(() => {
-    if (isSharedView && taskState.snapshot) return taskState.snapshot.brand;
+    if (isSharedView && session) return session.snapshot.brands.find(b => b.id === taskState.brandId);
     return brands?.find(b => b.id === brandId);
-  }, [brands, brandId, isSharedView, taskState]);
+  }, [brands, brandId, isSharedView, session, taskState.brandId]);
   
   const handleStartSession = async () => {
     if (isSharedView || !firestore || !currentUser) return;
@@ -1132,26 +1096,7 @@ export function TaskDetailsSheet({
                                     if (!task) return null;
                                     const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
                                     return (
-                                        <TooltipProvider key={depId}>
-                                        <Tooltip>
-                                            <TooltipTrigger asChild>
-                                            <Link href={`/tasks/${depId}`}>
-                                                <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
-                                                {statusIcon}
-                                                <span className="ml-2 truncate">{task.title}</span>
-                                                {canEditContent && (
-                                                    <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
-                                                )}
-                                                </Badge>
-                                            </Link>
-                                            </TooltipTrigger>
-                                            <TooltipContent>
-                                            <p>Status: {task.status}</p>
-                                            <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
-                                            <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
-                                            </TooltipContent>
-                                        </Tooltip>
-                                        </TooltipProvider>
+                                        <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider>
                                     );
                                     })}
                                 </div>
@@ -1196,11 +1141,11 @@ export function TaskDetailsSheet({
                       <FormItem className="grid grid-cols-3 items-center gap-2">
                           <FormLabel className="text-muted-foreground">Status</FormLabel>
                           <div className="col-span-2">
-                            <FormField control={form.control} name="status" render={({ field }) => { return ( <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}><FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{(statuses || []).map(status => ( <SelectItem key={status.id} value={status.name} disabled={!canChangeStatus || (isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi')) || (isSharedView && status.name === 'Revisi') }>{status.name}</SelectItem> ))}</SelectContent></Select> ) }}/>
+                            <FormField control={form.control} name="status" render={({ field }) => { return ( <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}><FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{(statuses || []).map(status => ( <SelectItem key={status.id} value={status.name} disabled={!canChangeStatus || (creatorIsEmployee && (status.name === 'Done' || status.name === 'Revisi')) || (isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi')) }>{status.name}</SelectItem> ))}</SelectContent></Select> ) }}/>
                           </div>
                       </FormItem>
                     <FormField control={form.control} name="priority" render={({ field }) => { const priority = priorityInfo[field.value]; return ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2">{ !canChangePriority ? ( <div className="flex items-center gap-2 text-sm font-medium"><priority.icon className={`h-4 w-4 ${priority.color}`} />{priority.label}</div> ) : ( <><Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent></Select>{aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}</> )}</div></FormItem> ) }}/>
-                      <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2">{!canEditContent ? ( <div className="text-sm font-medium">{field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}</div> ) : ( <Input type="date" {...field} value={field.value || ''} /> )}</div></FormItem> )}/>
+                      <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2">{!canEditDueDate ? ( <div className="text-sm font-medium">{field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}</div> ) : ( <Input type="date" {...field} value={field.value || ''} /> )}</div></FormItem> )}/>
                       {taskState.actualCompletionDate && ( <div className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Completed</FormLabel><div className="col-span-2 flex items-center gap-2"><span className="text-sm font-medium">{format(parseISO(taskState.actualCompletionDate), 'MMM d, yyyy')}</span>{completionStatus && ( <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>{completionStatus}</Badge> )}</div></div> )}
                   </div>
 
@@ -1361,3 +1306,5 @@ export function TaskDetailsSheet({
     </>
   );
 }
+
+    
