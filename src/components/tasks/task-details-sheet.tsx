@@ -402,6 +402,10 @@ export function TaskDetailsSheet({
               const errorData = await response.json();
               throw new Error(errorData.message || 'Failed to update status');
             }
+            const data = await response.json();
+            if (data.updatedTask) {
+              setTaskState(data.updatedTask);
+            }
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
         } catch (error: any) {
             form.setValue('status', oldStatus); // Revert on failure
@@ -1037,17 +1041,19 @@ export function TaskDetailsSheet({
                                       </div>
                                        <div className="flex justify-between items-center">
                                         <div>
-                                            {isSharedView && accessLevel !== 'view' && (
+                                            {(isSharedView && accessLevel !== 'view') && (
                                                 <Button type="button" variant="destructive" onClick={() => handlePostComment(true)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
                                                     {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
-                                                    Request Revisions
+                                                    Post Comment & Request Revisions
                                                 </Button>
                                             )}
                                         </div>
-                                        <Button type="button" onClick={() => handlePostComment(false)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
-                                            {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                            Post Comment
-                                        </Button>
+                                        {!(isSharedView && accessLevel !== 'view') && (
+                                            <Button type="button" onClick={() => handlePostComment(false)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                                Post Comment
+                                            </Button>
+                                        )}
                                        </div>
                                   </div>
                               )}
@@ -1063,7 +1069,7 @@ export function TaskDetailsSheet({
                             <Command><CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} /><CommandList><CommandEmpty>No tasks found.</CommandEmpty><CommandGroup>{(dependencyOptions || []).filter(task => !(taskState.dependencies || []).includes(task.id)).map(task => ( <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(taskState.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }}>{task.title}</CommandItem> ))}</CommandGroup></CommandList></Command>
                             <div className="space-y-2">
                                 <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(taskState.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</TooltipContent></Tooltip></TooltipProvider> ); })}</div> )}
+                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : ( <div className="flex flex-wrap gap-2">{(taskState.dependencies || []).map(depId => { const task = allTasks?.find(t => t.id === depId); if (!task) return null; const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />; return ( <TooltipProvider key={depId}><Tooltip><TooltipTrigger asChild><Link href={`/tasks/${depId}`}><Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">{statusIcon}<span className="ml-2 truncate">{task.title}</span>{canEditContent && ( <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button> )}</Badge></Link></TooltipTrigger><TooltipContent><p>Status: {task.status}</p><p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p><p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p></TooltipContent></Tooltip></TooltipProvider> ); })}</div>) }
                             </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
@@ -1151,11 +1157,121 @@ export function TaskDetailsSheet({
           </SheetFooter>
         </SheetContent>
       </Sheet>
-      <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>AI Priority Guard</AlertDialogTitle><AlertDialogDescription>{aiValidation.reason}<br/><br/>Do you still want to set this task as Urgent?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
-       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Task Activity Log: {taskState?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">{taskState.activities && taskState.activities.length > 0 ? ( getUniqueActivities(taskState.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> )) ) : ( <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> )}</div></ScrollArea></DialogContent></Dialog>
-        <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}><DialogContent><DialogHeader><DialogTitle>Link Google Drive File</DialogTitle><DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div><div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div></div><DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter></DialogContent></Dialog>
+      <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>AI Priority Guard</AlertDialogTitle>
+                <AlertDialogDescription>{aiValidation.reason}<br/><br/>Do you still want to set this task as Urgent?</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle>
+                <DialogDescription>A complete history of all changes made to this task.</DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                <div className="space-y-6 py-4">
+                    {initialTask.activities && initialTask.activities.length > 0 ? ( 
+                        getUniqueActivities(initialTask.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( 
+                            <div key={activity.id} className="flex items-start gap-4">
+                                <Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar>
+                                <div>
+                                    <p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p>
+                                </div>
+                            </div> 
+                        )) 
+                    ) : ( 
+                        <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> 
+                    )}
+                </div>
+            </ScrollArea>
+        </DialogContent>
+       </Dialog>
+        <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Link Google Drive File</DialogTitle>
+                    <DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                    <div className="space-y-2">
+                        <Label htmlFor="gdrive-name-details">File Name</Label>
+                        <Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="gdrive-link-details">File Link</Label>
+                        <Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
         
-        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}><DialogContent><DialogHeader><DialogTitle>Final Review</DialogTitle><DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6"><h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3><Separator /><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( finalReviewState.task.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={cycleNum} className="space-y-2"><h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h5>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div> ))}</div> ))}{(taskState.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}</div></div></div></ScrollArea><DialogFooter><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter></DialogContent></Dialog>
+        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Final Review</DialogTitle>
+                    <DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                    <div className="py-4 space-y-6">
+                        <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
+                        <Separator />
+                        <div className="space-y-3">
+                            <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                            <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                                {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( 
+                                    finalReviewState.task.subtasks.map(subtask => ( 
+                                        <div key={subtask.id} className="flex items-center gap-3">
+                                            <Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled />
+                                            <label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                        </div> 
+                                    )) 
+                                ) : ( 
+                                    <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
+                                )}
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                            <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                                {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( 
+                                    <div key={cycleNum} className="space-y-2">
+                                        <h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h5>
+                                        {deliverables.map(att => ( 
+                                            <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                    {getFileIcon(att.name)}
+                                                    <span className="truncate" title={att.name}>{att.name}</span>
+                                                </a>
+                                            </div> 
+                                        ))}
+                                    </div> 
+                                ))}
+                                {(taskState.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}
+                            </div>
+                        </div>
+                    </div>
+                </ScrollArea>
+                <DialogFooter>
+                    <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
+                    <Button variant="default" onClick={handleFinalReviewAndComplete}>
+                        <Check className="mr-2 h-4 w-4" />
+                        Confirm & Complete
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </>
   );
 }
