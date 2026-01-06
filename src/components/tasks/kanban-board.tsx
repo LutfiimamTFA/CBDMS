@@ -3,11 +3,11 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem, Attachment } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
-import { Loader2, Plus, Check, ListChecks, Paperclip } from 'lucide-react';
+import { Loader2, Plus, Check, ListChecks, Paperclip, UploadCloud, FileText, FileImage } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
@@ -47,6 +47,20 @@ interface FinalReviewState {
   isOpen: boolean;
   task: Task | null;
 }
+
+const getFileIcon = (fileName: string): React.ReactElement => {
+    if (fileName.match(/\.(pdf)$/i)) {
+      return <FileText className="h-5 w-5 text-red-500" />;
+    }
+    if (fileName.match(/\.(doc|docx)$/i)) {
+      return <FileText className="h-5 w-5 text-blue-500" />;
+    }
+    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
+      return <FileImage className="h-5 w-5 text-green-500" />;
+    }
+    return <FileText className="h-5 w-5 text-muted-foreground" />;
+};
+
 
 export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const [tasks, setTasks] = useState(initialTasks);
@@ -399,36 +413,63 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
                 <DialogDescription>
                   Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
                 </DialogDescription>
-                {revisionState.task?.description && (
-                    <div className="text-xs text-muted-foreground pt-1 border-l-2 pl-2 italic prose prose-sm dark:prose-invert">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {revisionState.task.description}
-                        </ReactMarkdown>
-                    </div>
-                )}
             </DialogHeader>
-            <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                    {revisionState.items.map((item, index) => (
-                        <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
-                            <span className="flex-1 text-sm">{item.text}</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                <div className="space-y-4 px-6 py-4">
+                    {revisionState.task?.description && (
+                         <div className="space-y-2">
+                             <h4 className="font-semibold text-sm">Task Description</h4>
+                            <div className="text-xs text-muted-foreground pt-1 border-l-2 pl-2 italic prose prose-sm dark:prose-invert max-w-none">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {revisionState.task.description}
+                                </ReactMarkdown>
+                            </div>
                         </div>
-                    ))}
+                    )}
+                    
+                    <div className="space-y-2">
+                        <h4 className="font-semibold text-sm">Files for Review</h4>
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {revisionState.task?.deliverables && revisionState.task.deliverables.length > 0 ? (
+                                revisionState.task.deliverables.map(att => (
+                                    <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                            {getFileIcon(att.name)}
+                                            <span className="truncate" title={att.name}>{att.name}</span>
+                                        </a>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground">No files were submitted for this task.</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
-                 <div className="flex items-center gap-2">
-                    <Input 
-                        value={revisionState.currentItemText}
-                        onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
-                        placeholder="e.g., Fix the logo placement"
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
-                    />
-                    <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
-                        <Plus className="mr-2 h-4 w-4"/> Add
-                    </Button>
+                <Separator/>
+                <div className="p-6 space-y-4">
+                     <h4 className="font-semibold text-sm">Revision Points</h4>
+                    <div className="space-y-2">
+                        {revisionState.items.map((item, index) => (
+                            <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                <span className="flex-1 text-sm">{item.text}</span>
+                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Input 
+                            value={revisionState.currentItemText}
+                            onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                            placeholder="e.g., Fix the logo placement"
+                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
+                        />
+                        <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                            <Plus className="mr-2 h-4 w-4"/> Add
+                        </Button>
+                    </div>
                 </div>
-            </div>
-            <DialogFooter>
+            </ScrollArea>
+            <DialogFooter className="p-6 pt-4 border-t">
                 <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
                 <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
