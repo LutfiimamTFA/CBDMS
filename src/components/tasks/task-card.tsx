@@ -1,4 +1,3 @@
-
 'use client';
 import { useMemo } from 'react';
 import type { Task, User } from '@/lib/types';
@@ -35,7 +34,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   const brandColor = getBrandColor(task.brandId);
 
   const assignees = task.assignees || [];
-  const creatorId = task.createdBy.id;
+  const creatorId = task.createdBy?.id;
 
   const lastActivityText = useMemo(() => {
       if (!task.lastActivity) return null;

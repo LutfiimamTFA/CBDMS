@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -15,7 +14,6 @@ import { SharedScheduleView } from '@/components/share/shared-schedule-view';
 import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 import { SidebarInset } from '@/components/ui/sidebar';
 import { SharedHeader } from '@/components/share/shared-header';
-import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -73,7 +71,6 @@ export default function ShareScopePage() {
 
   const snapshotData = session.snapshot;
   
-  // Runtime validation to prevent rendering a broken UI if the snapshot is incomplete
   const isWorkflowValid = snapshotData.statuses && snapshotData.statuses.length >= 2;
   
   if (!isWorkflowValid) {
@@ -93,7 +90,7 @@ export default function ShareScopePage() {
   
   const navItemForScope = (session.navItems || []).find(item => {
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
-    return itemPath === scope.split('/')[0]; // Compare with base path
+    return itemPath === scope.split('/')[0];
   });
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
@@ -113,7 +110,6 @@ export default function ShareScopePage() {
         return <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />;
     }
 
-    // Always render the base page content, the sheet will overlay it if taskId exists
     switch (`/${scope.split('/')[0]}`) {
         case '/dashboard':
             return <SharedDashboardView {...viewProps} />;

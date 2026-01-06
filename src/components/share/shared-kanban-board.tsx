@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -22,9 +21,6 @@ export function SharedKanbanBoard({
   accessLevel,
   linkId,
 }: SharedKanbanBoardProps) {
-  // This component is now fully controlled. It receives tasks from its parent
-  // which gets data from the real-time SharedSessionProvider.
-  // No more local `useState` for tasks.
   const { toast } = useToast();
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const router = useRouter();
@@ -62,9 +58,7 @@ export function SharedKanbanBoard({
           const errorData = await response.json();
           throw new Error(errorData.message || 'Failed to update task.');
         }
-
-        // No more optimistic update or fire-and-forget here.
-        // The snapshot listener in SharedSessionProvider will handle the UI update.
+        
         toast({
           title: 'Status Updated',
           description: `Task moved to "${newStatus}".`,
@@ -84,7 +78,6 @@ export function SharedKanbanBoard({
     router.push(path);
   };
   
-  // Strict validation as required.
   if (!statuses || statuses.length < 2) {
     return (
       <div className="flex h-full items-center justify-center p-8 w-full">

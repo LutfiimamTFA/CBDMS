@@ -41,6 +41,12 @@ export type Notification = {
   };
 };
 
+export type RevisionItem = {
+    id: string;
+    text: string;
+    completed: boolean;
+}
+
 export type Task = {
   id: string;
   title: string;
@@ -52,6 +58,7 @@ export type Task = {
     avatarUrl: string;
   };
   activities?: Activity[];
+  revisionItems?: RevisionItem[];
   [key: string]: any;
 };
 
@@ -100,7 +107,14 @@ export type SharedLink = {
   id: string;
   name: string;
   companyId: string;
+  creatorId: string;
+  creatorName: string;
   creatorRole: User['role'];
+  snapshot: {
+    tasks: Task[];
+    statuses: any[]; // Use `any` for simplicity on backend
+    [key: string]: any;
+  };
   [key: string]: any; // Allow other properties
 };
 

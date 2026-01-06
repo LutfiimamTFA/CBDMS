@@ -18,6 +18,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <FirebaseClientProvider>
           <TooltipProvider>
             {children}
+            <Toaster />
           </TooltipProvider>
         </FirebaseClientProvider>
       </I18nProvider>

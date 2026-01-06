@@ -130,10 +130,14 @@ export type DailyReport = {
   companyId: string;
 };
 
+// This represents the Firestore document for a shared link.
+// It includes a snapshot of all necessary data.
 export type SharedLink = {
   id: string;
   name: string;
   companyId: string;
+  creatorId: string;
+  creatorName: string;
   creatorRole: User['role'];
   allowedNavItems: string[];
   navItems: NavigationItem[];
@@ -148,9 +152,7 @@ export type SharedLink = {
     brands: Brand[];
     socialMediaPosts?: SocialMediaPost[];
   };
-  createdBy: string;
   createdAt: any;
-  permissions?: any;
 };
 
 export type SharedTask = {
@@ -322,28 +324,4 @@ export type Notification = {
     name: string;
     avatarUrl: string;
   };
-};
-
-// This represents the Firestore document for a shared link.
-// It includes a snapshot of all necessary data.
-export type SharedView = {
-  id: string;
-  name: string;
-  companyId: string;
-  creatorRole: User['role'];
-  allowedNavItems: string[];
-  navItems: NavigationItem[];
-  brandIds?: string[];
-  password?: string;
-  expiresAt?: any;
-  accessLevel: 'view' | 'status' | 'limited-edit';
-  snapshot: {
-    tasks: Task[];
-    statuses: WorkflowStatus[];
-    users: User[];
-    brands: Brand[];
-    socialMediaPosts?: SocialMediaPost[];
-  };
-  createdBy: string;
-  createdAt: any;
 };

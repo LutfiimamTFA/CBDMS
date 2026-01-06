@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo, useEffect, useState } from 'react';
@@ -16,7 +15,6 @@ import { isAfter } from 'date-fns';
 const getScopeFromPath = (path: string): string | undefined => {
     if (!path) return undefined;
     const cleanPath = path.startsWith('/') ? path.substring(1) : path;
-    // Don't generate a scope for paths that are just group folders
     if (cleanPath === 'admin' || cleanPath === 'admin/settings' || cleanPath === 'social-media') {
         return undefined;
     }
@@ -71,26 +69,24 @@ const PasswordFormComponent = ({ company, linkId, onAuthenticated }: { company: 
     const [password, setPassword] = useState('');
     const [authError, setAuthError] = useState<string | null>(null);
     const [isChecking, setIsChecking] = useState(false);
-    const router = useRouter();
-    const [firestore, setFirestore] = useState<Firestore | null>(null);
-
-    useEffect(() => {
-        setFirestore(getFirestore(initializeFirebase().firebaseApp));
-    }, []);
-
+    
     const handleAuth = async () => {
-        if (!firestore) return;
         setIsChecking(true);
         setAuthError(null);
 
-        const linkDocRef = doc(firestore, 'sharedLinks', linkId);
         try {
+            // Note: In a real app, this should call a serverless function to securely check the password
+            // and return a session token (e.g., in an HTTP-only cookie).
+            // For this prototype, we'll continue with the client-side check for simplicity.
+            const db = getFirestore(initializeFirebase().firebaseApp);
+            const linkDocRef = doc(db, 'sharedLinks', linkId);
             const docSnap = await getDoc(linkDocRef);
+            
             if (docSnap.exists() && docSnap.data().password === password) {
                 if (typeof window !== 'undefined') {
                     sessionStorage.setItem(`share_token_${linkId}`, 'true');
                 }
-                onAuthenticated(); // Signal successful authentication
+                onAuthenticated();
             } else {
                 setAuthError('Invalid password.');
             }
@@ -141,7 +137,6 @@ export default function SharedLinkRedirectorPage() {
     const [company, setCompany] = useState<Company | null>(null);
     const [error, setError] = useState<string | null>(null);
     
-    // New state to track authentication status
     const [isAuthenticated, setIsAuthenticated] = useState(() => {
         if (typeof window === 'undefined') return false;
         return sessionStorage.getItem(`share_token_${linkId}`) === 'true';
@@ -167,7 +162,6 @@ export default function SharedLinkRedirectorPage() {
                 const linkData = { ...linkSnap.data(), id: linkSnap.id } as SharedLink;
                 setSharedLink(linkData);
 
-                // If link doesn't require a password, it's authenticated by default
                 if (!linkData.password) {
                     setIsAuthenticated(true);
                 }
@@ -193,7 +187,6 @@ export default function SharedLinkRedirectorPage() {
 
 
     useEffect(() => {
-        // Now depends on isAuthenticated state
         if (isLoading || !linkId || !sharedLink || error || !isAuthenticated) return;
 
         if (sharedLink.expiresAt && isAfter(new Date(), (sharedLink.expiresAt as any).toDate())) {
@@ -214,7 +207,7 @@ export default function SharedLinkRedirectorPage() {
                 router.replace(`/share/${linkId}/${scope}`);
             }
         }
-    }, [sharedLink, isLoading, error, linkId, router, isAuthenticated]); // Added isAuthenticated dependency
+    }, [sharedLink, isLoading, error, linkId, router, isAuthenticated]);
 
 
     if (isLoading) {

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -27,9 +26,9 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
 
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
   
-  // Allow all authenticated users (except Client) to share their view.
+  // Allow sharing if the user is authenticated and not a client.
   const canCreateShareView = profile && profile.role !== 'Client';
-  const showShareButton = !isSharedView && canCreateShareView && shareableViews.includes(pathname);
+  const showShareButton = !isSharedView && canCreateShareView && shareableViews.some(p => pathname.startsWith(p));
 
 
   return (
