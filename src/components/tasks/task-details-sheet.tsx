@@ -1008,9 +1008,10 @@ export function TaskDetailsSheet({
                       </div>
                       
                       <Tabs defaultValue="comments" className="w-full">
-                        <TabsList className="grid w-full grid-cols-5">
+                        <TabsList className="grid w-full grid-cols-6">
                           <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                           <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                          <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
                           <TabsTrigger value="deliverables"><UploadCloud className="mr-2"/>Deliverables</TabsTrigger>
                           <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
                           <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
@@ -1040,7 +1041,32 @@ export function TaskDetailsSheet({
                               </div>
                               {canManageSubtasks && ( <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="text-muted-foreground">{newSubtaskAssignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div> )}
                         </TabsContent>
-                         <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                        <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
+                          <div className="space-y-2">
+                              {(initialTask.attachments || []).map((att) => (
+                                  <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                      <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                      {getFileIcon(att.name)}
+                                      <span className="truncate" title={att.name}>{att.name}</span>
+                                      </a>
+                                      {canEditContent && (
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}>
+                                              <X className="h-4 w-4" />
+                                          </Button>
+                                      )}
+                                  </div>
+                              ))}
+                              {(initialTask.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
+                          </div>
+                          {canEditContent && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                                  <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                                  <Button type="button" variant="outline" className="flex items-center gap-2" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="animate-spin"/> : <Upload/>}Upload from Local</Button>
+                                  <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                              </div>
+                          )}
+                        </TabsContent>
+                        <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
                            {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => (
                                 <div key={cycleNum} className="space-y-2">
                                     <h4 className="font-semibold text-sm">
