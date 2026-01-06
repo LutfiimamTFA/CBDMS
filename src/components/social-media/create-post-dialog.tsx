@@ -332,16 +332,19 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     if (newStatus === 'Scheduled') {
         notificationTitle = 'Post Approved';
         notificationMessage = `Your post "${post.caption.substring(0, 30)}..." has been approved and scheduled.`;
+
+        // If approving a post that had revisions, archive them.
         if (post.revisionItems) {
-             const completedCycle: RevisionCycle = {
+            const completedCycle: RevisionCycle = {
                 cycleNumber: (post.revisionHistory || []).length + 1,
-                requestedAt: post.updatedAt || serverTimestamp(), 
-                requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' }, 
+                requestedAt: post.updatedAt || serverTimestamp(), // Best guess for rejection timestamp
+                requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' }, // The approver
                 items: post.revisionItems,
             };
             updateData.revisionHistory = [...(post.revisionHistory || []), completedCycle];
-            updateData.revisionItems = deleteField() as any;
+            updateData.revisionItems = deleteField(); // Clear the active revision items
         }
+
     } else { // Rejected, status becomes 'Draft'
         notificationTitle = 'Post Needs Revision';
         notificationMessage = `${profile.name} requested revisions for your post: "${post.caption.substring(0, 30)}...". See the checklist for details.`;
