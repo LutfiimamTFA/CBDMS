@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -205,15 +206,15 @@ export function TaskDetailsSheet({
   }, [firestore, currentUser, isSharedView]);
   const { data: allUsers } = useCollection<User>(usersQuery);
   
-  const statuses = useMemo(() => {
-    if (isSharedView) return initialTask.snapshot?.statuses || [];
-    return allStatusesData;
-  }, [isSharedView, initialTask]);
-
   const { data: allStatusesData } = useCollection<WorkflowStatus>(useMemo(() => 
     !isSharedView && firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
     [firestore, isSharedView]
   ));
+  
+  const statuses = useMemo(() => {
+    if (isSharedView) return initialTask.snapshot?.statuses || [];
+    return allStatusesData;
+  }, [isSharedView, initialTask, allStatusesData]);
 
   const brandsQuery = useMemo(() => {
     if (isSharedView || !firestore || !currentUser) return null;
