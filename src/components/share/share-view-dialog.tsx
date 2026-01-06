@@ -94,16 +94,15 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const userTasksQuery = useMemo(() => {
     if (!firestore || !profile) return null;
     
-    // Super Admins see all tasks in the company
     if (profile.role === 'Super Admin') {
         return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
     }
-    // Managers see only tasks from the brands they are assigned to
+    
     if (profile.role === 'Manager') {
         if (!profile.brandIds || profile.brandIds.length === 0) return null;
         return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds));
     }
-    // Employees see tasks assigned to them
+    
     return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('assigneeIds', 'array-contains', profile.id));
 
   }, [firestore, profile]);
@@ -135,6 +134,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     }
   }, [isOpen, shareableNavItems]);
 
+  const isEmployeeRole = profile?.role === 'Employee' || profile?.role === 'PIC';
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
@@ -317,14 +317,14 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                                 <RadioGroupItem value="status" id="perm-status" />
                                 <Label htmlFor="perm-status" className="flex flex-col gap-1 leading-normal cursor-pointer">
                                     <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
-                                    <span className="font-normal text-xs text-muted-foreground">Can view pages, change task statuses, and request revisions.</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Can view pages, change task statuses, and request revisions. {isEmployeeRole && "(Revisi & Done disabled)"}</span>
                                 </Label>
                               </div>
                               <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                                <RadioGroupItem value="limited-edit" id="perm-edit" />
-                                <Label htmlFor="perm-edit" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                                    <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
-                                    <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority.</span>
+                                <RadioGroupItem value="limited-edit" id="perm-edit" disabled={isEmployeeRole} />
+                                <Label htmlFor="perm-edit" className={cn("flex flex-col gap-1 leading-normal", isEmployeeRole ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}>
+                                    <span className={cn("font-semibold flex items-center gap-2", !isEmployeeRole && "text-foreground")}><Edit className='h-4 w-4'/> Limited Edit</span>
+                                    <span className="font-normal text-xs">Can change status, due date, and priority. (Only for Managers/Admins)</span>
                                 </Label>
                               </div>
                             </RadioGroup>
