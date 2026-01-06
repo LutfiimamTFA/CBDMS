@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -18,7 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
 import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo } from 'lucide-react';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo, ChevronDown } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
@@ -32,6 +33,7 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { Badge } from '../ui/badge';
 import { X } from 'lucide-react';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -92,16 +94,20 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const userTasksQuery = useMemo(() => {
     if (!firestore || !profile) return null;
     
+    // Super Admins see all tasks in the company
     if (profile.role === 'Super Admin') {
         return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
     }
+    // Managers see only tasks from the brands they are assigned to
     if (profile.role === 'Manager') {
         if (!profile.brandIds || profile.brandIds.length === 0) return null;
-        return query(collection(firestore, 'tasks'), where('brandId', 'in', profile.brandIds));
+        return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds));
     }
-    return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+    // Employees see tasks assigned to them
+    return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('assigneeIds', 'array-contains', profile.id));
 
   }, [firestore, profile]);
+  
   const { data: userTasks, isLoading: tasksLoading } = useCollection<Task>(userTasksQuery);
 
   const searchedTasks = useMemo(() => {
@@ -230,143 +236,140 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
          <ScrollArea className="max-h-[70vh] -mx-6 px-6">
           <div className="space-y-6 py-4">
               <div className="space-y-2">
-                <Label htmlFor="link-name">Link Name</Label>
+                <Label htmlFor="link-name">Link Name (Optional)</Label>
                 <Input id="link-name" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="e.g., Q3 Client Preview" />
               </div>
-
-              <div className="space-y-4 rounded-md border p-4">
-                  <h4 className="text-sm font-medium">Tasks to Share ({selectedTasks.length})</h4>
-                  <Command className="rounded-lg border shadow-md">
-                      <CommandInput placeholder="Type to search for tasks..." value={searchTerm} onValueChange={setSearchTerm} />
-                      <CommandList>
-                          {tasksLoading && <div className="p-4 text-center text-sm">Loading tasks...</div>}
-                          {!tasksLoading && searchTerm && searchedTasks.length === 0 && (
-                            <CommandEmpty>No tasks found.</CommandEmpty>
-                          )}
-                          <CommandGroup>
-                              {searchedTasks.map((task) => (
-                              <CommandItem
-                                  key={task.id}
-                                  onSelect={() => {
-                                      setSelectedTasks(prev => [...prev, task]);
-                                      setSearchTerm('');
-                                  }}
-                              >
-                                  <span>{task.title}</span>
-                              </CommandItem>
-                              ))}
-                          </CommandGroup>
-                      </CommandList>
-                  </Command>
-                   {selectedTasks.length > 0 && (
-                       <div className="space-y-2">
-                           <Label className="text-xs">Selected Tasks</Label>
-                           <div className="flex flex-wrap gap-2">
-                               {selectedTasks.map(task => (
-                                   <Badge key={task.id} variant="secondary">
-                                       {task.title}
-                                       <button onClick={() => setSelectedTasks(prev => prev.filter(t => t.id !== task.id))} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                                           <X className="h-3 w-3" />
-                                       </button>
-                                   </Badge>
-                               ))}
-                           </div>
-                       </div>
-                   )}
-              </div>
-              
-              <div className="space-y-4 rounded-md border p-4">
-                <h4 className="text-sm font-medium">Available Pages</h4>
-                <p className="text-xs text-muted-foreground">Select which pages the recipient can view.</p>
-                <div className="space-y-2">
-                    {shareableNavItems.map(item => (
-                        <div key={item.id} className="flex items-center space-x-2">
-                            <Checkbox
-                                id={item.id}
-                                checked={selectedNavIds.includes(item.id)}
-                                onCheckedChange={(checked) => {
-                                    setSelectedNavIds(prev => 
-                                        checked ? [...prev, item.id] : prev.filter(id => id !== item.id)
-                                    );
-                                }}
-                            />
-                            <label htmlFor={item.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
-                                <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
-                                {t(item.label as any) || item.label}
-                            </label>
-                        </div>
-                    ))}
-                </div>
-              </div>
-
-               <div className="space-y-4 rounded-md border p-4">
-                  <h4 className="text-sm font-medium">Permissions for Viewer</h4>
-                   <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)}>
-                      <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                        <RadioGroupItem value="view" id="perm-view" />
-                        <Label htmlFor="perm-view" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                            <span className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4' /> View Only</span>
-                            <span className="font-normal text-xs text-muted-foreground">Can view shared pages and task details. Cannot make any changes.</span>
-                        </Label>
-                      </div>
-                       <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                        <RadioGroupItem value="status" id="perm-status" />
-                        <Label htmlFor="perm-status" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                            <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
-                            <span className="font-normal text-xs text-muted-foreground">Can view pages and change task statuses (including drag & drop).</span>
-                        </Label>
-                      </div>
-                       <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                        <RadioGroupItem value="limited-edit" id="perm-edit" />
-                        <Label htmlFor="perm-edit" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                            <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
-                            <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority. Cannot edit content.</span>
-                        </Label>
-                      </div>
-                    </RadioGroup>
-              </div>
-
-             <div className="space-y-4 rounded-md border p-4">
-                <h4 className="text-sm font-medium">Access Control</h4>
-                <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                        <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword} />
-                        <Label htmlFor="use-password">Protect with password</Label>
-                    </div>
-                    {usePassword && (
-                        <div className="flex items-center gap-2">
-                            <KeyRound className="h-4 w-4 text-muted-foreground" />
-                            <Input type="password" placeholder="Enter a password" value={password} onChange={(e) => setPassword(e.target.value)} />
-                        </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                       <Clock className="h-4 w-4 text-muted-foreground" />
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-[240px] justify-start text-left font-normal",
-                                    !expiresAt && "text-muted-foreground"
+              <Accordion type="single" collapsible defaultValue="tasks" className="w-full space-y-4">
+                <AccordionItem value="tasks" className="border rounded-lg">
+                    <AccordionTrigger className="p-4 text-sm font-medium hover:no-underline">
+                      Tasks to Share ({selectedTasks.length})
+                    </AccordionTrigger>
+                    <AccordionContent className="p-4 pt-0">
+                      <div className="space-y-4">
+                        <Command className="rounded-lg border shadow-sm">
+                            <CommandInput placeholder="Type to search for tasks..." value={searchTerm} onValueChange={setSearchTerm} />
+                            <CommandList>
+                                {tasksLoading && <div className="p-4 text-center text-sm">Loading tasks...</div>}
+                                {!tasksLoading && searchTerm && searchedTasks.length === 0 && (
+                                  <CommandEmpty>No tasks found.</CommandEmpty>
                                 )}
-                                >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {expiresAt ? format(expiresAt, "PPP") : <span>Set expiration date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                mode="single"
-                                selected={expiresAt}
-                                onSelect={setExpiresAt}
-                                disabled={(date) => date < new Date()}
-                                initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                </div>
-            </div>
+                                <CommandGroup>
+                                    {searchedTasks.map((task) => (
+                                    <CommandItem
+                                        key={task.id}
+                                        onSelect={() => {
+                                            setSelectedTasks(prev => [...prev, task]);
+                                            setSearchTerm('');
+                                        }}
+                                    >
+                                        <span>{task.title}</span>
+                                    </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            </CommandList>
+                        </Command>
+                        {selectedTasks.length > 0 && (
+                            <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground">Selected</Label>
+                                <div className="flex flex-wrap gap-1">
+                                    {selectedTasks.map(task => (
+                                        <Badge key={task.id} variant="secondary">
+                                            {task.title}
+                                            <button onClick={() => setSelectedTasks(prev => prev.filter(t => t.id !== task.id))} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                      </div>
+                    </AccordionContent>
+                </AccordionItem>
+                 <AccordionItem value="pages" className="border rounded-lg">
+                    <AccordionTrigger className="p-4 text-sm font-medium hover:no-underline">
+                        Pages & Permissions
+                    </AccordionTrigger>
+                    <AccordionContent className="p-4 pt-0 space-y-4">
+                         <div className="space-y-2">
+                            <h4 className="text-xs font-medium text-muted-foreground">Available Pages</h4>
+                            {shareableNavItems.map(item => (
+                                <div key={item.id} className="flex items-center space-x-2">
+                                    <Checkbox id={item.id} checked={selectedNavIds.includes(item.id)} onCheckedChange={(checked) => setSelectedNavIds(prev => checked ? [...prev, item.id] : prev.filter(id => id !== item.id))}/>
+                                    <label htmlFor={item.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                        <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
+                                        {t(item.label as any) || item.label}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-medium text-muted-foreground">Viewer Permissions</h4>
+                          <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)}>
+                              <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                                <RadioGroupItem value="view" id="perm-view" />
+                                <Label htmlFor="perm-view" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                                    <span className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4' /> View Only</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Can view pages and task details. Cannot make any changes.</span>
+                                </Label>
+                              </div>
+                              <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                                <RadioGroupItem value="status" id="perm-status" />
+                                <Label htmlFor="perm-status" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                                    <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Can view pages, change task statuses, and request revisions.</span>
+                                </Label>
+                              </div>
+                              <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                                <RadioGroupItem value="limited-edit" id="perm-edit" />
+                                <Label htmlFor="perm-edit" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                                    <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority.</span>
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="security" className="border rounded-lg">
+                    <AccordionTrigger className="p-4 text-sm font-medium hover:no-underline">Access Control</AccordionTrigger>
+                    <AccordionContent className="p-4 pt-0 space-y-4">
+                        <div className="flex items-center space-x-2">
+                            <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword} />
+                            <Label htmlFor="use-password">Protect with password</Label>
+                        </div>
+                        {usePassword && (
+                            <div className="flex items-center gap-2">
+                                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                                <Input type="password" placeholder="Enter a password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                            </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                           <Clock className="h-4 w-4 text-muted-foreground" />
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn("w-[240px] justify-start text-left font-normal", !expiresAt && "text-muted-foreground")}
+                                    >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {expiresAt ? format(expiresAt, "PPP") : <span>Set expiration date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                    mode="single"
+                                    selected={expiresAt}
+                                    onSelect={setExpiresAt}
+                                    disabled={(date) => date < new Date()}
+                                    initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+              </Accordion>
           </div>
          </ScrollArea>
         ) : (
