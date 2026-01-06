@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -62,6 +63,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Card, CardContent } from '../ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSharedSession } from '@/context/shared-session-provider';
+import { tags as allTags } from '@/lib/data';
 
 
 const taskDetailsSchema = z.object({
@@ -106,17 +108,19 @@ interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  isSharedView: boolean;
-  sharedTaskConfig?: SharedTask;
 }
 
 // Internal component to safely use the shared session hook
-function useConditionalSharedSession(isSharedView: boolean) {
-    if (isSharedView) {
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      return useSharedSession();
-    }
-    return { session: null, isLoading: false, error: null };
+function SharedViewLogic({ onDataLoaded }: { onDataLoaded: (data: any) => void }) {
+    const { session, isLoading, error } = useSharedSession();
+
+    useEffect(() => {
+        if (!isLoading) {
+            onDataLoaded({ session, error });
+        }
+    }, [session, isLoading, error, onDataLoaded]);
+
+    return null; // This component doesn't render anything itself
 }
 
 
@@ -141,17 +145,19 @@ export function TaskDetailsSheet({
   task: initialTask, 
   open,
   onOpenChange,
-  isSharedView,
-  sharedTaskConfig,
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
 
-  const { session, isLoading: isSessionLoading } = useConditionalSharedSession(isSharedView);
+  const isSharedView = !!params.linkId;
 
+  const [sharedData, setSharedData] = useState<any>({ session: null, error: null });
+  const { session, error: sharedError } = sharedData;
   const linkId = isSharedView ? (params.linkId as string) : null;
+  const sharedTaskConfig = null; // This needs to be determined based on context if needed
+  
   const accessLevel = useMemo(() => {
     if (isSharedView) {
       if (sharedTaskConfig) return sharedTaskConfig.allowedActions.includes('changeStatus') ? 'status' : 'view';
@@ -940,6 +946,7 @@ export function TaskDetailsSheet({
 
   return (
     <>
+      {isSharedView && <SharedViewLogic onDataLoaded={setSharedData} />}
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-full">
           <SheetHeader className="p-4 border-b flex-shrink-0">
@@ -1366,3 +1373,5 @@ export function TaskDetailsSheet({
     </>
   );
 }
+
+    
