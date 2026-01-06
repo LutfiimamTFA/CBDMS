@@ -1,8 +1,8 @@
 
 import { NextResponse } from 'next/server';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { SharedLink, Task, User, Activity, Notification } from '@/lib/types-backend';
 import { adminDb } from '@/lib/firebase-admin';
+import { Timestamp } from 'firebase-admin/firestore';
+import type { SharedLink, Task, User, Activity, Notification, RevisionItem } from '@/lib/types-backend';
 
 // This is a simplified "guest" user object for logging activities from a shared link.
 const createSharedActor = (session: SharedLink): User => {
@@ -16,11 +16,11 @@ const createSharedActor = (session: SharedLink): User => {
     };
 };
 
-const createActivity = (actor: User, action: string, sharedBy: { id: string, role: string }): Activity => {
+const createActivity = (actor: User, action: string, creatorName: string): Activity => {
   return {
     id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     user: { id: actor.id, name: actor.name, avatarUrl: actor.avatarUrl || '' },
-    action: `${action} (shared by ${sharedBy.id} - ${sharedBy.role})`,
+    action: `${action} (via link by ${creatorName})`,
     timestamp: Timestamp.now(),
   };
 };
@@ -29,98 +29,97 @@ export async function POST(request: Request) {
   try {
     const db = adminDb;
 
-    const { linkId, taskId, updates } = await request.json();
+    const { linkId, taskId, updates, revisionItems } = await request.json();
 
-    if (!linkId || !taskId || !updates) {
-      return NextResponse.json({ message: 'Missing required fields.' }, { status: 400 });
+    if (!linkId || !taskId) {
+      return NextResponse.json({ message: 'Missing required fields linkId or taskId.' }, { status: 400 });
     }
 
     const linkRef = db.collection('sharedLinks').doc(linkId);
     const taskRef = db.collection('tasks').doc(taskId);
 
-    // Use a transaction to ensure atomicity
     await db.runTransaction(async (transaction) => {
         const linkSnap = await transaction.get(linkRef);
         const taskSnap = await transaction.get(taskRef);
 
-        if (!linkSnap.exists) {
-            throw new Error('Share link not found.');
-        }
-        if (!taskSnap.exists) {
-            throw new Error('Task not found.');
-        }
+        if (!linkSnap.exists) throw new Error('Share link not found.');
+        if (!taskSnap.exists) throw new Error('Task not found.');
 
         const sharedLink = linkSnap.data() as SharedLink;
         const initialTask = taskSnap.data() as Task;
         const sharedActor = createSharedActor(sharedLink);
-
-        // --- Permission Validation based on creator's role at time of link creation ---
-        const allowedUpdates: Record<string, string[]> = {
-            'view': [],
-            'status': ['status', 'attachments'],
-            'limited-edit': ['status', 'dueDate', 'priority', 'revisionItems', 'attachments'],
-        };
-        const permittedFields = allowedUpdates[sharedLink.accessLevel] || [];
-        const requestedUpdateKeys = Object.keys(updates);
-        const isUpdateAllowed = requestedUpdateKeys.every(key => permittedFields.includes(key));
         
-        if (!isUpdateAllowed) {
-            return Promise.reject(new Error(`Forbidden: Your access level is "${sharedLink.accessLevel}". You cannot update these fields.`));
-        }
+        const permittedFields = {
+            'view': [],
+            'status': ['status'],
+            'limited-edit': ['status', 'dueDate', 'priority'],
+        }[sharedLink.accessLevel] || [];
 
-        // --- Workflow Status Identity Locking ---
-        if (updates.status) {
-            // Determine allowed statuses based on the creator's role, not the task owner's.
-            const creatorIsPrivileged = sharedLink.creatorRole === 'Super Admin' || sharedLink.creatorRole === 'Manager';
-            const allowedStatuses = creatorIsPrivileged
-                ? sharedLink.snapshot.statuses?.map(s => s.name) || []
-                : ['To Do', 'Doing', 'Preview'];
-            
+        if (updates) {
+            const requestedUpdateKeys = Object.keys(updates);
+            if (!requestedUpdateKeys.every(key => permittedFields.includes(key))) {
+                return Promise.reject(new Error(`Forbidden: Your access level is "${sharedLink.accessLevel}". You cannot update these fields.`));
+            }
+        }
+        
+        const finalUpdates: any = { ...(updates || {}), updatedAt: Timestamp.now() };
+
+        let actionDescription: string | null = null;
+        let notificationTitle: string = `Update on: ${initialTask.title}`;
+        let notificationMessage: string = `${sharedActor.name} made changes to a task.`;
+
+        // Handle Status Change
+        if (updates?.status && updates.status !== initialTask.status) {
+            const allowedStatuses = sharedLink.snapshot.statuses?.map(s => s.name) || [];
             if (!allowedStatuses.includes(updates.status)) {
                 return Promise.reject(new Error(`Forbidden: Status "${updates.status}" is not allowed for this shared link.`));
             }
+            actionDescription = `changed status from "${initialTask.status}" to "${updates.status}"`;
+            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) changed status to ${updates.status}.`;
         }
 
-        const serverTimestamp = Timestamp.now();
+        // Handle Revision Request
+        if (revisionItems && Array.isArray(revisionItems) && revisionItems.length > 0) {
+            finalUpdates.status = 'Revisi';
+            finalUpdates.revisionItems = revisionItems.map(item => ({
+                id: `rev-${crypto.randomUUID()}`,
+                text: item.text,
+                completed: false,
+            }));
+            actionDescription = `requested revisions`;
+            notificationTitle = 'Revisions Requested';
+            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) requested revisions on "${initialTask.title}".`;
+        }
 
-        // --- Prepare Updates for the Original Task Document ---
-        const finalUpdates: any = {
-            ...updates,
-            updatedAt: serverTimestamp,
-        };
-
-        let actionDescription: string | null = null;
-        if (updates.status && updates.status !== initialTask.status) {
-            actionDescription = `changed status from "${initialTask.status}" to "${updates.status}"`;
-            const newActivity = createActivity(sharedActor, actionDescription, { id: sharedLink.createdBy, role: sharedLink.creatorRole });
+        if (actionDescription) {
+            const newActivity = createActivity(sharedActor, actionDescription, sharedLink.creatorName);
             const currentActivities = Array.isArray(initialTask.activities) ? initialTask.activities : [];
             finalUpdates.activities = [...currentActivities, newActivity];
             finalUpdates.lastActivity = newActivity;
         }
 
-        // 1. Update the original task document
         transaction.update(taskRef, finalUpdates);
-
-        // 2. Update the snapshot within the sharedLink document
+        
         const snapshotTasks = sharedLink.snapshot.tasks || [];
         const updatedSnapshotTasks = snapshotTasks.map(task => 
-            task.id === taskId ? { ...task, ...updates, updatedAt: serverTimestamp.toDate().toISOString() } : task
+            task.id === taskId ? { ...task, ...finalUpdates, updatedAt: Timestamp.now().toDate().toISOString() } : task
         );
         transaction.update(linkRef, { 'snapshot.tasks': updatedSnapshotTasks });
 
-        // --- Handle Notifications ---
         if (actionDescription) {
-            const notificationTitle = `Status Changed: ${initialTask.title}`;
-            const notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorRole}) changed status to ${updates.status}.`;
-            
             const notifiedUserIds = new Set<string>(initialTask.assigneeIds);
-            notifiedUserIds.add(sharedLink.createdBy); // Also notify the person who created the link
-             
+            notifiedUserIds.add(sharedLink.creatorId);
+
             notifiedUserIds.forEach(userId => {
+                if (!userId) return; // FIX: Prevent creating notifications for undefined userIds.
                 const notifRef = db.collection(`users/${userId}/notifications`).doc();
                 const newNotification: Omit<Notification, 'id'> = {
-                    userId, title: notificationTitle, message: notificationMessage, taskId: taskId, isRead: false,
-                    createdAt: serverTimestamp,
+                    userId, // FIX: Ensure userId is correctly passed.
+                    title: notificationTitle,
+                    message: notificationMessage,
+                    taskId: taskId,
+                    isRead: false,
+                    createdAt: Timestamp.now(),
                     createdBy: {
                         id: sharedActor.id,
                         name: sharedActor.name,
