@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
-import type { SharedLink, Task, User, Activity, Notification, RevisionItem, Comment } from '@/lib/types-backend';
+import type { SharedLink, Task, User, Activity, Notification, RevisionItem } from '@/lib/types-backend';
 
 // This is a simplified "guest" user object for logging activities from a shared link.
 const createSharedActor = (session: SharedLink): User => {
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   try {
     const db = adminDb;
 
-    const { linkId, taskId, updates, newComment } = await request.json();
+    const { linkId, taskId, updates, newComment, revisionItems } = await request.json();
 
     if (!linkId || !taskId) {
       return NextResponse.json({ message: 'Missing required fields linkId or taskId.' }, { status: 400 });
@@ -79,9 +79,9 @@ export async function POST(request: Request) {
             notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) changed status to ${updates.status}.`;
         }
 
-        // Handle New Comment / Revision Request
+        // Handle New Comment
         if (newComment && newComment.text?.trim()) {
-            const newCommentObject: Comment = {
+            const newCommentObject = {
                 id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                 user: sharedActor,
                 text: newComment.text,
@@ -102,6 +102,19 @@ export async function POST(request: Request) {
                  notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) commented on "${initialTask.title}".`;
             }
         }
+        
+        // Handle direct Revision Request (from Kanban drop)
+        if (revisionItems && Array.isArray(revisionItems) && revisionItems.length > 0) {
+            finalUpdates.status = 'Revisi';
+            finalUpdates.revisionItems = revisionItems.map((item: any) => ({
+                id: `rev-${crypto.randomUUID()}`,
+                text: item.text,
+                completed: false,
+            }));
+            actionDescription = `requested revisions`;
+            notificationTitle = 'Revisions Requested';
+            notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) requested revisions on "${initialTask.title}".`;
+        }
 
 
         if (actionDescription) {
@@ -119,7 +132,11 @@ export async function POST(request: Request) {
         );
         transaction.update(linkRef, { 'snapshot.tasks': updatedSnapshotTasks });
 
+        // Merge initialTask with finalUpdates for the response
         updatedTaskData = { ...initialTask, ...finalUpdates };
+        // Since Timestamps are not serializable, convert them for the response
+        if (updatedTaskData?.updatedAt) updatedTaskData.updatedAt = updatedTaskData.updatedAt.toDate().toISOString();
+
 
         if (actionDescription) {
             const notifiedUserIds = new Set<string>(initialTask.assigneeIds || []);
