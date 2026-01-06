@@ -54,12 +54,15 @@ export async function POST(request: Request) {
         const creatorIsEmployee = sharedLink.creatorRole === 'Employee' || sharedLink.creatorRole === 'PIC';
         const taskIsFromManager = initialTask.createdBy.id !== sharedLink.creatorId;
 
+        // Determine which fields can be updated based on access level and context.
         const permittedFieldsBase = {
             'view': [],
             'status': ['status'],
             'limited-edit': ['status', 'dueDate', 'priority'],
         }[sharedLink.accessLevel] || [];
         
+        // If the link creator is an Employee AND they are sharing a task created by a Manager,
+        // we downgrade their 'limited-edit' permission to just 'status' for this specific task.
         const finalPermittedFields = (creatorIsEmployee && taskIsFromManager && sharedLink.accessLevel === 'limited-edit')
             ? ['status'] 
             : permittedFieldsBase;
@@ -67,7 +70,7 @@ export async function POST(request: Request) {
         if (updates) {
             const requestedUpdateKeys = Object.keys(updates);
             if (!requestedUpdateKeys.every(key => finalPermittedFields.includes(key))) {
-                return Promise.reject(new Error(`Forbidden: Your access level is "${sharedLink.accessLevel}", but permissions are restricted for this specific task.`));
+                return Promise.reject(new Error(`Forbidden: Your access level is "${sharedLink.accessLevel}", but permissions are restricted for this specific task. You cannot update: ${requestedUpdateKeys.join(', ')}`));
             }
         }
         
