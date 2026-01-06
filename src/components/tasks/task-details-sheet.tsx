@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -212,8 +211,10 @@ export function TaskDetailsSheet({
   ));
   
   const statuses = useMemo(() => {
-    if (isSharedView) return initialTask.snapshot?.statuses || [];
-    return allStatusesData;
+    if (isSharedView && initialTask.snapshot) {
+      return initialTask.snapshot.statuses || [];
+    }
+    return allStatusesData || [];
   }, [isSharedView, initialTask, allStatusesData]);
 
   const brandsQuery = useMemo(() => {
@@ -387,6 +388,12 @@ export function TaskDetailsSheet({
     form.setValue('status', newStatus);
 
     if (isSharedView) {
+        if (newStatus === 'Revisi') {
+            setRejectionState({ isOpen: true, items: [], currentItem: '' });
+            form.setValue('status', oldStatus); // Revert optimistic change
+            return;
+        }
+
         try {
             const response = await fetch('/api/share/update-task', {
               method: 'POST',
@@ -542,7 +549,7 @@ export function TaskDetailsSheet({
     try {
         const batch = writeBatch(firestore);
         const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-        const actor = currentUser || createSharedActor({ creatorName: 'Guest' } as SharedLink).user;
+        const actor = currentUser || createActivity({ name: 'Guest' } as User, '').user;
 
         let attachmentData;
         if (commentAttachment) {
@@ -714,7 +721,7 @@ export function TaskDetailsSheet({
 
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
-  const brand = useMemo(() => (isSharedView ? initialTask.snapshot?.brand : brands?.find(b => b.id === brandId)), [brands, brandId, isSharedView, initialTask]);
+  const brand = useMemo(() => (isSharedView && initialTask.snapshot ? initialTask.snapshot.brand : brands?.find(b => b.id === brandId)), [brands, brandId, isSharedView, initialTask]);
   
   const handleStartSession = async () => {
     if (isSharedView || !firestore || !currentUser) return;
@@ -778,6 +785,8 @@ export function TaskDetailsSheet({
             });
             if (!response.ok) throw new Error((await response.json()).message || 'Failed to request revisions.');
             toast({ title: 'Revisions Requested' });
+            // Manually update local state after successful API call
+            form.setValue('status', 'Revisi');
         } catch (error: any) {
             toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
         } finally {
@@ -1008,7 +1017,6 @@ export function TaskDetailsSheet({
                       </div>
 
                        <div className="space-y-4 rounded-lg border p-4">
-                            <h3 className="text-sm font-medium">Files</h3>
                             <Tabs defaultValue="deliverables" className="w-full">
                                 <TabsList>
                                     <TabsTrigger value="deliverables">Deliverables</TabsTrigger>

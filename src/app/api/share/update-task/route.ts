@@ -108,13 +108,15 @@ export async function POST(request: Request) {
 
         if (actionDescription) {
             const notifiedUserIds = new Set<string>(initialTask.assigneeIds);
-            notifiedUserIds.add(sharedLink.creatorId);
+            if (sharedLink.creatorId) {
+                notifiedUserIds.add(sharedLink.creatorId);
+            }
 
             notifiedUserIds.forEach(userId => {
-                if (!userId) return; // FIX: Prevent creating notifications for undefined userIds.
+                if (!userId) return;
                 const notifRef = db.collection(`users/${userId}/notifications`).doc();
                 const newNotification: Omit<Notification, 'id'> = {
-                    userId, // FIX: Ensure userId is correctly passed.
+                    userId,
                     title: notificationTitle,
                     message: notificationMessage,
                     taskId: taskId,
