@@ -8,7 +8,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, SharedTask, RevisionCycle } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -44,7 +44,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
@@ -158,8 +158,6 @@ export function TaskDetailsSheet({
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
-  const [rejectionState, setRejectionState] = useState({ isOpen: false, items: [] as {text:string}[], currentItem: '' });
-  
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
@@ -212,7 +210,7 @@ export function TaskDetailsSheet({
   ));
   
   const statuses = useMemo(() => {
-    if (isSharedView) return initialTask.snapshot?.statuses || [];
+    if (isSharedView && initialTask?.snapshot) return initialTask.snapshot.statuses || [];
     return allStatusesData || [];
   }, [isSharedView, initialTask, allStatusesData]);
 
@@ -387,12 +385,6 @@ export function TaskDetailsSheet({
     form.setValue('status', newStatus);
 
     if (isSharedView) {
-        if (newStatus === 'Revisi') {
-            setRejectionState({ isOpen: true, items: [], currentItem: '' });
-            form.setValue('status', oldStatus); // Revert optimistic change
-            return;
-        }
-
         try {
             const response = await fetch('/api/share/update-task', {
               method: 'POST',
@@ -400,11 +392,12 @@ export function TaskDetailsSheet({
               body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { status: newStatus } }),
             });
             if (!response.ok) {
-              throw new Error((await response.json()).message || 'Failed to update status');
+              const errorData = await response.json();
+              throw new Error(errorData.message || 'Failed to update status');
             }
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
         } catch (error: any) {
-            form.setValue('status', oldStatus);
+            form.setValue('status', oldStatus); // Revert on failure
             toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
         }
         return;
@@ -443,9 +436,9 @@ export function TaskDetailsSheet({
         await batch.commit();
 
         toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Failed to update status:', error);
-        form.setValue('status', oldStatus); 
+        form.setValue('status', oldStatus); // Revert on failure
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task status.' });
     }
   };
@@ -491,7 +484,7 @@ export function TaskDetailsSheet({
                 updatedAt: serverTimestamp(),
             });
             toast({ title: 'Priority Updated', description: `Task priority set to ${priority}.` });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update priority:', error);
             form.setValue('priority', currentPriority); 
             toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task priority.' });
@@ -545,48 +538,42 @@ export function TaskDetailsSheet({
     setIsMentioning(false);
   };
   
-  const handlePostComment = async () => {
-    if ((!newComment.trim() && !commentAttachment) || (!currentUser && !isSharedView) || !firestore || !storage) return;
-
-    setIsUploadingCommentAttachment(true);
-    
-    try {
-        const batch = writeBatch(firestore);
-        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-        const actor = currentUser || createActivity({ name: 'Guest' } as User, '').user;
-
-        let attachmentData;
-        if (commentAttachment) {
-            const attachmentId = `${Date.now()}-${commentAttachment.name}`;
-            const storageRef = ref(storage, `attachments/${initialTask.id}/comments/${attachmentId}`);
-            await uploadBytes(storageRef, commentAttachment);
-            const url = await getDownloadURL(storageRef);
-            attachmentData = { name: commentAttachment.name, url: url };
-        }
+  const handlePostComment = async (isRevisionRequest: boolean = false) => {
+      if (!newComment.trim()) {
+        toast({ variant: 'destructive', title: 'Cannot Post', description: 'Comment cannot be empty.' });
+        return;
+      }
+      
+      setIsUploadingCommentAttachment(true);
+      
+      try {
+        const payload = {
+            linkId,
+            taskId: initialTask.id,
+            newComment: {
+                text: newComment,
+                isRevisionRequest,
+            }
+        };
         
-        const newActivity = createActivity(actor, `commented: "${newComment.substring(0, 50)}..."`);
-        const comment: Comment = { id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`, user: actor, text: newComment, timestamp: new Date().toISOString(), replies: [], ...(attachmentData && { attachment: attachmentData }), };
-        
-        batch.update(taskDocRef, { comments: [...(initialTask.comments || []), comment], lastActivity: newActivity, activities: [...(initialTask.activities || []), newActivity] });
+        const response = await fetch('/api/share/update-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
 
-        if (!isSharedView) {
-            const notificationTitle = `New Comment: ${initialTask.title}`;
-            const notificationMessage = `${actor.name} commented on "${initialTask.title.substring(0, 30)}..."`;
-            const notifiedUserIds = new Set<string>();
-            initialTask.assigneeIds.forEach(id => { if (id !== actor.id) notifiedUserIds.add(id); });
-            if (initialTask.createdBy.id !== actor.id) notifiedUserIds.add(initialTask.createdBy.id);
-            notifiedUserIds.forEach(userId => {
-                const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-                batch.set(notifRef, { userId, title: notificationTitle, message: notificationMessage, taskId: initialTask.id, isRead: false, createdAt: serverTimestamp() as any, createdBy: newActivity.user });
-            });
+        if (!response.ok) {
+            throw new Error((await response.json()).message || 'Failed to post comment.');
         }
-        await batch.commit();
-        setNewComment(''); setCommentAttachment(null);
-    } catch (error) {
-        toast({ variant: "destructive", title: "Comment Failed" });
-    } finally {
+
+        toast({ title: 'Success', description: `Your ${isRevisionRequest ? 'revision request' : 'comment'} has been posted.` });
+        setNewComment('');
+        setCommentAttachment(null);
+      } catch (error: any) {
+        toast({ variant: "destructive", title: "Comment Failed", description: error.message });
+      } finally {
         setIsUploadingCommentAttachment(false);
-    }
+      }
   };
 
   const handleCommentFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -730,7 +717,10 @@ export function TaskDetailsSheet({
 
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
-  const brand = useMemo(() => (isSharedView && initialTask.snapshot ? initialTask.snapshot.brand : brands?.find(b => b.id === brandId)), [brands, brandId, isSharedView, initialTask]);
+  const brand = useMemo(() => {
+    if (isSharedView && initialTask.snapshot) return initialTask.snapshot.brand;
+    return brands?.find(b => b.id === brandId);
+  }, [brands, brandId, isSharedView, initialTask]);
   
   const handleStartSession = async () => {
     if (isSharedView || !firestore || !currentUser) return;
@@ -753,16 +743,18 @@ export function TaskDetailsSheet({
   }
   
   const canSubmit = useMemo(() => {
+    if (!initialTask) return false;
     const allSubtasksCompleted = (initialTask.subtasks || []).every(st => st.completed);
     const allRevisionsCompleted = (initialTask.revisionItems || []).every(item => item.completed);
     
+    // Check if there are deliverables for the current revision cycle.
     const currentRevisionCycle = (initialTask.revisionHistory || []).length + 1;
     const hasDeliverablesForCurrentCycle = (initialTask.deliverables || []).some(
         d => (d.forRevisionCycle ?? 1) === currentRevisionCycle
     );
     
     return allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentCycle;
-  }, [initialTask.subtasks, initialTask.revisionItems, initialTask.deliverables, initialTask.revisionHistory]);
+  }, [initialTask]);
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
@@ -774,62 +766,6 @@ export function TaskDetailsSheet({
     await handleStatusChange('Preview');
   };
   
-  const handleRequestRevisions = () => {
-      setRejectionState({ isOpen: true, items: [], currentItem: '' });
-  };
-  
-  const handleConfirmRejection = async () => {
-    const { items } = rejectionState;
-    if (items.length === 0) {
-        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
-        return;
-    }
-
-    if (isSharedView) {
-        setIsSaving(true);
-        try {
-            const response = await fetch('/api/share/update-task', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ linkId, taskId: initialTask.id, revisionItems: items }),
-            });
-            if (!response.ok) throw new Error((await response.json()).message || 'Failed to request revisions.');
-            toast({ title: 'Revisions Requested' });
-            form.setValue('status', 'Revisi');
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
-        } finally {
-            setIsSaving(false);
-            setRejectionState({ isOpen: false, items: [], currentItem: '' });
-        }
-    } else {
-        if (!currentUser || !firestore) return;
-        setIsSaving(true);
-        const taskRef = doc(firestore, 'tasks', initialTask.id);
-        try {
-            const batch = writeBatch(firestore);
-            const newRevisionItems: RevisionItem[] = items.map(item => ({ id: `rev-${crypto.randomUUID()}`, text: item.text, completed: false }));
-            const newActivity = createActivity(currentUser, `requested revisions and moved task to "Revisi"`);
-            batch.update(taskRef, { status: 'Revisi', revisionItems: newRevisionItems, activities: [...(initialTask.activities || []), newActivity], lastActivity: newActivity, updatedAt: serverTimestamp(), actualCompletionDate: deleteField() });
-            initialTask.assigneeIds.forEach(assigneeId => {
-                if (assigneeId !== currentUser.id) {
-                    const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
-                    batch.set(notifRef, { userId: assigneeId, title: 'Revisions Required', message: `${currentUser.name} requested revisions on "${initialTask.title}"`, taskId: initialTask.id, isRead: false, createdAt: serverTimestamp() as any, createdBy: newActivity.user });
-                }
-            });
-            await batch.commit();
-            form.setValue('status', 'Revisi');
-            toast({ title: 'Revisions Requested' });
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Update Failed' });
-        } finally {
-            setIsSaving(false);
-            setRejectionState({ isOpen: false, items: [], currentItem: '' });
-        }
-    }
-  };
-
-
   const completionStatus = useMemo(() => {
     if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
     const isLate = isAfter(parseISO(initialTask.actualCompletionDate), endOfDay(parseISO(initialTask.dueDate)));
@@ -1083,13 +1019,25 @@ export function TaskDetailsSheet({
                                   </div>
                               </ScrollArea>
                               {canComment && (
-                                  <div className="flex items-start gap-2 pt-4 border-t">
-                                      <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
+                                  <div className="space-y-2 pt-4 border-t">
                                       <div className="flex-1 relative">
                                           <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
                                           {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
                                       </div>
-                                      <Button type="button" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>{isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}</Button>
+                                       <div className="flex justify-between items-center">
+                                        <div>
+                                            {isSharedView && accessLevel !== 'view' && (
+                                                <Button type="button" variant="destructive" onClick={() => handlePostComment(true)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCcw className="mr-2 h-4 w-4"/>}
+                                                    Post & Request Revisions
+                                                </Button>
+                                            )}
+                                        </div>
+                                        <Button type="button" onClick={() => handlePostComment(false)} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                            {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                            Post Comment
+                                        </Button>
+                                       </div>
                                   </div>
                               )}
                         </TabsContent>
@@ -1167,9 +1115,7 @@ export function TaskDetailsSheet({
                   <div className="md:col-span-1 p-6 space-y-6">
                       {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && ( <div className="space-y-2"><Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Submit for Review</Button>{!canSubmit && ( <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file untuk melanjutkan.</p> )}</div> )}
                   
-                  {isManagerOrAdmin && initialTask.status === 'Preview' && !isSharedView && ( <div className="space-y-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button><Button variant="outline" className="w-full" onClick={handleRequestRevisions} disabled={isSaving}><RefreshCcw className="mr-2 h-4 w-4" />Request Revisions</Button></div> )}
-
-                  {(isSharedView && accessLevel !== 'view') && ( <Button variant="outline" className="w-full" onClick={handleRequestRevisions} disabled={isSaving}><RefreshCcw className="mr-2 h-4 w-4" />Request Revisions</Button>)}
+                  {isManagerOrAdmin && initialTask.status === 'Preview' && !isSharedView && ( <div className="space-y-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button></div> )}
 
                   {(isAssignee || isCreator) && initialTask.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
                   <div className='space-y-4 p-4 rounded-lg border'>
@@ -1179,7 +1125,7 @@ export function TaskDetailsSheet({
                       <FormItem className="grid grid-cols-3 items-center gap-2">
                           <FormLabel className="text-muted-foreground">Status</FormLabel>
                           <div className="col-span-2">
-                            <FormField control={form.control} name="status" render={({ field }) => { return ( <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}><FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{(statuses || []).map(status => ( <SelectItem key={status.id} value={status.name} disabled={!canChangeStatus || (isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi'))}>{status.name}</SelectItem> ))}</SelectContent></Select> ) }}/>
+                            <FormField control={form.control} name="status" render={({ field }) => { return ( <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}><FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{(statuses || []).map(status => ( <SelectItem key={status.id} value={status.name} disabled={!canChangeStatus || (isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi')) || (isSharedView && status.name === 'Revisi') }>{status.name}</SelectItem> ))}</SelectContent></Select> ) }}/>
                           </div>
                       </FormItem>
                     <FormField control={form.control} name="priority" render={({ field }) => { const priority = priorityInfo[field.value]; return ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2">{ !canChangePriority ? ( <div className="flex items-center gap-2 text-sm font-medium"><priority.icon className={`h-4 w-4 ${priority.color}`} />{priority.label}</div> ) : ( <><Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent></Select>{aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}</> )}</div></FormItem> ) }}/>
@@ -1226,43 +1172,27 @@ export function TaskDetailsSheet({
           </SheetFooter>
         </SheetContent>
       </Sheet>
-      <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>AI Priority Guard</AlertDialogTitle><AlertDialogDescription>{aiValidation.reason}<br/><br/>Do you still want to set this task as Urgent?</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog open={aiValidation.isOpen} onOpenChange={(open) => setAiValidation(prev => ({...prev, isOpen: open}))}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>AI Priority Guard</AlertDialogTitle>
+                <AlertDialogDescription>
+                    {aiValidation.reason}
+                    <br/><br/>
+                    Do you still want to set this task as Urgent?
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
        <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">{initialTask.activities && initialTask.activities.length > 0 ? ( getUniqueActivities(initialTask.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> )) ) : ( <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> )}</div></ScrollArea></DialogContent></Dialog>
         <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}><DialogContent><DialogHeader><DialogTitle>Link Google Drive File</DialogTitle><DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription></DialogHeader><div className="space-y-4 py-2"><div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div><div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div></div><DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter></DialogContent></Dialog>
         
         <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}><DialogContent><DialogHeader><DialogTitle>Final Review</DialogTitle><DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader><ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6"><h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3><Separator /><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( finalReviewState.task.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={cycleNum} className="space-y-2"><h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h5>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div> ))}</div> ))}{(initialTask.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}</div></div></div></ScrollArea><DialogFooter><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter></DialogContent></Dialog>
-
-        <Dialog open={rejectionState.isOpen} onOpenChange={(open) => !open && setRejectionState({ isOpen: false, items: [], currentItem: '' })}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Create Revision Checklist</DialogTitle>
-                    <DialogDescription>
-                        Revisions for task: <span className="font-bold text-foreground">{initialTask?.title}</span>
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4 space-y-4">
-                    <div className="space-y-2">
-                        {rejectionState.items.map((item, index) => (
-                            <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
-                                <span className="flex-1 text-sm">{item.text}</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRejectionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Input value={rejectionState.currentItem} onChange={(e) => setRejectionState(prev => ({ ...prev, currentItem: e.target.value }))} placeholder="e.g., Fix the logo placement" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if(rejectionState.currentItem.trim()){ setRejectionState(prev => ({...prev, items: [...prev.items, {text: prev.currentItem}], currentItem: ''})); } } }} />
-                         <Button onClick={() => { if(rejectionState.currentItem.trim()){ setRejectionState(prev => ({...prev, items: [...prev.items, {text: prev.currentItem}], currentItem: ''})); } }} disabled={!rejectionState.currentItem.trim()}><Plus className="mr-2 h-4 w-4"/> Add</Button>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setRejectionState({ isOpen: false, items: [], currentItem: '' })}>Cancel</Button>
-                    <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || rejectionState.items.length === 0}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Request Revisions
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
     </>
   );
 }
+
