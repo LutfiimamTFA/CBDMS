@@ -246,7 +246,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       header: 'Title',
       cell: ({ row }) => {
         const task = row.original;
-        const hasDescription = task.description && task.description.trim() !== '';
+        const hasDescription = typeof task.description === 'string' && task.description.trim() !== '';
         
         const completionStatus = React.useMemo(() => {
             if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
