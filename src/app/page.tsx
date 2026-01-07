@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from "react";
@@ -15,18 +14,6 @@ export default function RootPage() {
   const router = useRouter();
 
   useEffect(() => {
-    // If the user state has been determined
-    if (!isLoading) {
-      if (user && profile) {
-        // User is logged in, redirect them to the appropriate dashboard
-        const destination = (profile.role === 'Employee' || profile.role === 'PIC') ? '/my-work' : '/dashboard';
-        router.replace(destination);
-      }
-      // If not logged in, the user will see the landing page.
-    }
-  }, [user, profile, isLoading, router]);
-
-  useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
@@ -36,8 +23,23 @@ export default function RootPage() {
     };
   }, []);
 
-  // While loading auth state, show a loader to prevent flicker
-  if (isLoading || (user && profile)) {
+  // This effect handles the redirection logic once the authentication state is determined.
+  useEffect(() => {
+    // Only run the redirection logic when loading is complete.
+    if (!isLoading) {
+      if (user && profile) {
+        // User is logged in, redirect them to the appropriate dashboard
+        const destination = (profile.role === 'Employee' || profile.role === 'PIC') ? '/my-work' : '/dashboard';
+        router.replace(destination);
+      }
+      // If not logged in, do nothing and let the landing page render.
+    }
+  }, [isLoading, user, profile, router]);
+
+  // While loading auth state, show a loader. Also, if a user is found,
+  // continue showing the loader to prevent a flicker of the landing page
+  // before the redirection happens.
+  if (isLoading || user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -45,7 +47,7 @@ export default function RootPage() {
     );
   }
 
-  // Render the landing page only if the user is not logged in
+  // Render the landing page only if the user is confirmed to be not logged in.
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
       <div className="text-center space-y-8">
