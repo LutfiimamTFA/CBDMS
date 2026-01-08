@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -107,6 +108,20 @@ interface FinalReviewState {
 interface EndOfDayState {
   isOpen: boolean;
 }
+
+const getCurrentSubmissionCycle = (task: Task | null): number => {
+    if (!task) return 1;
+    const historyLength = task.revisionHistory?.length ?? 0;
+    if (historyLength > 0) {
+        return historyLength + 1;
+    }
+    // Legacy case: Task is in revision, but has no history yet.
+    // This means the upcoming submission is for the first revision cycle, which is cycle 2.
+    if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
+        return 2;
+    }
+    return 1; // Default to the first submission cycle
+};
 
 
 interface TaskDetailsSheetProps {
@@ -795,42 +810,45 @@ export function TaskDetailsSheet({
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
-    if (isSharedView || !event.target.files || !storage || !taskState?.id || !firestore || !currentUser) return;
-    setIsUploading(true);
-    try {
-        const files = Array.from(event.target.files);
-        const uploadPromises = files.map(async (file) => {
-            const attachmentId = `${Date.now()}-${file.name}`;
-            const storageRef = ref(storage, `attachments/${taskState.id}/${attachmentId}`);
-            await uploadBytes(storageRef, file);
-            const url = await getDownloadURL(storageRef);
-            return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (taskState.revisionHistory || []).length + 1 };
-        });
-        const newFiles = await Promise.all(uploadPromises);
-        const currentFiles = fileType === 'attachment' ? (taskState.attachments || []) : (taskState.deliverables || []);
-        await updateDoc(doc(firestore, 'tasks', taskState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
-        toast({ title: 'Upload Successful' });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Upload Failed' });
-    } finally {
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        if (deliverableFileInputRef.current) deliverableFileInputRef.current.value = '';
-    }
+      if (isSharedView || !event.target.files || !storage || !taskState?.id || !firestore || !currentUser) return;
+      setIsUploading(true);
+      try {
+          const files = Array.from(event.target.files);
+          const currentCycle = getCurrentSubmissionCycle(taskState);
+          const uploadPromises = files.map(async (file) => {
+              const attachmentId = `${Date.now()}-${file.name}`;
+              const storageRef = ref(storage, `attachments/${taskState.id}/${attachmentId}`);
+              await uploadBytes(storageRef, file);
+              const url = await getDownloadURL(storageRef);
+              return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
+          });
+          const newFiles = await Promise.all(uploadPromises);
+          const currentFiles = fileType === 'attachment' ? (taskState.attachments || []) : (taskState.deliverables || []);
+          await updateDoc(doc(firestore, 'tasks', taskState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
+          toast({ title: 'Upload Successful' });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Upload Failed' });
+      } finally {
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          if (deliverableFileInputRef.current) deliverableFileInputRef.current.value = '';
+      }
   };
 
   const handleConfirmGdriveLink = async (fileType: 'attachment' | 'deliverable') => {
-    if (!gdriveLink || !gdriveName) {
-        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
-        return;
-    }
-    if (isSharedView || !firestore || !currentUser) return;
-    
-    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: (taskState.revisionHistory || []).length + 1 };
-    const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
-    await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: [...(taskState[fieldToUpdate] || []), newFile] });
-    setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
+      if (!gdriveLink || !gdriveName) {
+          toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
+          return;
+      }
+      if (isSharedView || !firestore || !currentUser) return;
+      
+      const currentCycle = getCurrentSubmissionCycle(taskState);
+      const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+      await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: [...(taskState[fieldToUpdate] || []), newFile] });
+      setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
+
 
   const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
       if (isSharedView || !firestore) return;
@@ -882,16 +900,21 @@ export function TaskDetailsSheet({
   }, [brands, brandId, isSharedView, session, taskState.brandId]);
   
   const canSubmit = useMemo(() => {
-    if (!taskState) return false;
-    const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
-    const allRevisionsCompleted = (taskState.revisionItems || []).every(item => item.completed);
-    
-    const currentRevisionCycle = (taskState.revisionHistory || []).length + 1;
-    const hasDeliverablesForCurrentCycle = (taskState.deliverables || []).some(
-        d => (d.forRevisionCycle ?? 1) === currentRevisionCycle
-    );
-    
-    return allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentCycle;
+      if (!taskState) return false;
+      const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
+      
+      const isInRevision = taskState.status === 'Revisi' || (taskState.revisionItems && taskState.revisionItems.length > 0);
+      const allRevisionsCompleted = !isInRevision || (taskState.revisionItems || []).every(item => item.completed);
+      
+      const currentCycle = getCurrentSubmissionCycle(taskState);
+      const hasDeliverablesForCurrentCycle = (taskState.deliverables || []).some(
+          d => (d.forRevisionCycle ?? 1) === currentCycle
+      );
+      
+      // If in revision, must have new deliverables. Otherwise, it's optional.
+      const deliverablesMet = isInRevision ? hasDeliverablesForCurrentCycle : true;
+      
+      return allSubtasksCompleted && allRevisionsCompleted && deliverablesMet;
   }, [taskState]);
   
   const handleFinalReviewAndComplete = async () => {
@@ -1248,7 +1271,21 @@ export function TaskDetailsSheet({
                       </Tabs>
                   </div>
                   <div className="md:col-span-1 p-6 space-y-6">
-                      {(isAssignee && !isManagerOrAdmin && !isSharedView && (taskState.status === 'Doing' || taskState.status === 'Revisi')) && ( <div className="space-y-2"><Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Submit for Review</Button>{!canSubmit && ( <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file untuk melanjutkan.</p> )}</div> )}
+                      {(isAssignee && !isManagerOrAdmin && !isSharedView) && (
+                          <div className="space-y-2">
+                              <Button
+                                  className="w-full"
+                                  onClick={handleSubmitForReview}
+                                  disabled={!canSubmit || isSaving || taskState.status === 'Preview'}
+                              >
+                                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                  {taskState.status === 'Preview' ? 'Waiting for Review' : 'Submit for Review'}
+                              </Button>
+                              {!canSubmit && taskState.status !== 'Preview' && (
+                                  <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk melanjutkan.</p>
+                              )}
+                          </div>
+                      )}
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( <div className="space-y-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button></div> )}
 

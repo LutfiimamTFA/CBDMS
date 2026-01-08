@@ -1,3 +1,4 @@
+
 // This file is intended for server-side type definitions only.
 // Do not import this file in any client-side components.
 // It exists to prevent circular dependencies between server and client modules.
@@ -47,6 +48,18 @@ export type RevisionItem = {
     completed: boolean;
 }
 
+export type RevisionCycle = {
+    cycleNumber: number;
+    requestedAt: FirebaseFirestore.Timestamp;
+    requestedBy: {
+        id: string;
+        name: string;
+        avatarUrl: string;
+    };
+    items: RevisionItem[];
+}
+
+
 export type Task = {
   id: string;
   title: string;
@@ -59,6 +72,7 @@ export type Task = {
   };
   activities?: Activity[];
   revisionItems?: RevisionItem[];
+  revisionHistory?: RevisionCycle[];
   [key: string]: any;
 };
 

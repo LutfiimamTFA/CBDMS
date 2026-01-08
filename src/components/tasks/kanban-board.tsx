@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem, Attachment } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem, Attachment, RevisionCycle } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
@@ -269,67 +269,80 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   };
   
   const handleConfirmRejection = async () => {
-    if (!revisionState.task || revisionState.items.length === 0 || !firestore || !profile) return;
-    setIsSaving(true);
-    
-    const task = revisionState.task;
-    const taskRef = doc(firestore, 'tasks', task.id);
-    const newStatus = 'Revisi';
-    
-    const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({
-        id: crypto.randomUUID(),
-        text: item.text,
-        completed: false,
-    }));
-
-    try {
-        const batch = writeBatch(firestore);
-        
-        const newActivity = createActivity(profile, `requested revisions and moved task to "${newStatus}"`);
-        const updatedActivities = [...(task.activities || []), newActivity];
-
-        batch.update(taskRef, {
-            status: newStatus,
-            revisionItems: newRevisionItems,
-            activities: updatedActivities,
-            lastActivity: newActivity,
-            updatedAt: serverTimestamp(),
-            // Ensure we clear the completion date if a done task is sent for revision
-            actualCompletionDate: deleteField(),
-        });
-        
-        const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...". See task for revision checklist.`;
-        task.assigneeIds.forEach(assigneeId => {
-            if (assigneeId !== profile.id) {
-                const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
-                const newNotification: Omit<Notification, 'id'> = {
-                    userId: assigneeId,
-                    title: 'Revisions Required',
-                    message: notificationMessage,
-                    taskId: task.id,
-                    isRead: false,
-                    createdAt: serverTimestamp() as any,
-                    createdBy: newActivity.user,
-                };
-                batch.set(notifRef, newNotification);
-            }
-        });
-
-        await batch.commit();
-
-        setTasks(currentTasks => 
-            currentTasks.map(t => t.id === task.id ? { ...t, status: newStatus, revisionItems: newRevisionItems } : t)
-        );
-        toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
-
-    } catch (error) {
-        console.error("Failed to request revisions:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision.' });
-    } finally {
-        setIsSaving(false);
-        setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
-    }
-  }
+      if (!revisionState.task || revisionState.items.length === 0 || !firestore || !profile) {
+          toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
+          return;
+      }
+      setIsSaving(true);
+      
+      const task = revisionState.task;
+      const taskRef = doc(firestore, 'tasks', task.id);
+      const newStatus = 'Revisi';
+      
+      const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({
+          id: crypto.randomUUID(),
+          text: item.text,
+          completed: false,
+      }));
+  
+      const newRevisionCycle: RevisionCycle = {
+          cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
+          requestedAt: serverTimestamp() as any,
+          requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
+          items: newRevisionItems,
+      };
+      
+      const taskUpdateData: Partial<Task> = {
+          status: newStatus,
+          revisionItems: newRevisionItems,
+          revisionHistory: [...(task.revisionHistory || []), newRevisionCycle],
+          lastActivity: createActivity(profile, `requested revisions and moved task to "${newStatus}"`),
+          updatedAt: serverTimestamp() as any,
+          actualCompletionDate: deleteField() as any,
+      };
+  
+      // Local state update first
+      setTasks(currentTasks => 
+          currentTasks.map(t => t.id === task.id ? { ...t, ...taskUpdateData } as Task : t)
+      );
+      
+      try {
+          // --- Critical Operation: Update the task document ---
+          await updateDoc(taskRef, taskUpdateData);
+          toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
+  
+          // --- Non-Critical Operation: Send notifications ---
+          const notificationBatch = writeBatch(firestore);
+          const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...". See task for revision checklist.`;
+          task.assigneeIds.forEach(assigneeId => {
+              if (assigneeId !== profile.id) {
+                  const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+                  notificationBatch.set(notifRef, {
+                      userId: assigneeId,
+                      title: 'Revisions Required',
+                      message: notificationMessage,
+                      taskId: task.id,
+                      isRead: false,
+                      createdAt: serverTimestamp(),
+                      createdBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
+                  });
+              }
+          });
+          await notificationBatch.commit().catch(notifError => {
+              console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, errorCode: (notifError as any).code, message: (notifError as any).message });
+              toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
+          });
+  
+      } catch (error: any) {
+          console.error('[requestRevisions] Critical task update failed:', { taskId: task.id, errorCode: error.code, message: error.message });
+          // Revert local state if the critical update fails
+          setTasks(initialTasks); 
+          toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
+      } finally {
+          setIsSaving(false);
+          setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
+      }
+  };
   
   const handleAddRevisionItem = () => {
     if (revisionState.currentItemText.trim()) {
@@ -494,16 +507,14 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
                     <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                         {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
-                             finalReviewState.task.subtasks.map(subtask => (
+                             finalReviewState.task.subtasks.map(subtask => ( 
                                 <div key={subtask.id} className="flex items-center gap-3">
                                     <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
-                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>
-                                        {subtask.title}
-                                    </label>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p>
+                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                </div> 
+                            )) 
+                        ) : ( 
+                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
                         )}
                     </div>
                 </div>
@@ -511,14 +522,14 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
                     <h4 className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h4>
                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                         {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
-                             finalReviewState.task.attachments.map(att => (
+                             finalReviewState.task.attachments.map(att => ( 
                                 <div key={att.id} className="flex items-center gap-2 text-sm">
                                     <span>-</span>
                                     <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
                                 </div>
-                            ))
-                        ) : (
-                            <p className="text-sm text-muted-foreground">No attachments for this item.</p>
+                            )) 
+                        ) : ( 
+                            <p className="text-sm text-muted-foreground">No attachments for this item.</p> 
                         )}
                     </div>
                 </div>
