@@ -64,6 +64,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useSharedSession } from '@/context/shared-session-provider';
 import { tags as allTags } from '@/lib/data';
 import { RichTextEditor } from '../ui/rich-text-editor';
+import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
 
 const taskDetailsSchema = z.object({
@@ -108,21 +109,31 @@ interface EndOfDayState {
   isOpen: boolean;
 }
 
+type BlockingReason = {
+  blocked: boolean;
+  title: string;
+  reasons: string[];
+  suggestion?: string;
+};
+
 const getCurrentSubmissionCycle = (task: Task | null): number => {
     if (!task) return 1;
     const historyLength = task.revisionHistory?.length ?? 0;
 
     if (historyLength > 0) {
+        // If there's history, the next cycle is always history length + 1
         return historyLength + 1;
     }
     
+    // Legacy case: If it's in revision with items but no history, it's the first revision.
+    // The submission for this will be cycle 2.
     if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
         return 2;
     }
 
+    // Default case for new tasks or tasks that have never been rejected.
     return 1;
 };
-
 
 interface TaskDetailsSheetProps {
   task: Task;
@@ -214,6 +225,9 @@ export function TaskDetailsSheet({
 
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
   const [endOfDayState, setEndOfDayState] = useState<EndOfDayState>({ isOpen: false });
+  const [blockingAlert, setBlockingAlert] = useState<{ isOpen: boolean, title: string, reasons: string[], suggestion?: string }>({ isOpen: false, title: '', reasons: [], suggestion: '' });
+  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
 
   const [taskState, setTaskState] = useState(initialTask);
   useEffect(() => { setTaskState(initialTask) }, [initialTask]);
@@ -233,6 +247,8 @@ export function TaskDetailsSheet({
   const storage = useStorage();
   
   const { user: authUser, profile: currentUser } = useUserProfile();
+  const { permissions, isLoading: arePermsLoading } = !isSharedView ? usePermissions() : { permissions: null, isLoading: false };
+
 
   const allTasksQuery = useMemo(() => {
     if (isSharedView || !firestore || !currentUser) return null;
@@ -386,8 +402,21 @@ export function TaskDetailsSheet({
       if (!isAssignee) return false;
       return !['Preview', 'Revisi', 'Done'].includes(form.getValues('status'));
   }, [isAssignee, isSharedView, form]);
-
   
+  const canDeleteTask = useMemo(() => {
+    if (isSharedView) return false;
+    if (!currentUser || !arePermsLoading) return false;
+    if (currentUser.role === 'Super Admin') return true;
+    if (currentUser.role === 'Manager') {
+      return permissions?.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(taskState.brandId);
+    }
+    if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
+      return taskState.createdBy?.id === currentUser.id;
+    }
+    return false;
+  }, [currentUser, permissions, arePermsLoading, taskState, isSharedView]);
+
+
   const handlePauseSession = useCallback(async (actionSource: 'auto-pause' | 'manual' = 'manual') => {
       if (!firestore || !currentUser || !taskState.currentSessionStartTime || !isRunning) return;
 
@@ -534,10 +563,53 @@ export function TaskDetailsSheet({
     }
   }, [taskState, form, open, isSharedView]);
 
+  const getBlockingReasonsForStatusChange = (targetStatus: string, currentTask: Task): BlockingReason => {
+    const reasons: string[] = [];
+    const baseResult = { blocked: false, title: '', reasons: [], suggestion: '' };
+
+    if (targetStatus === 'Preview') {
+        const allSubtasksCompleted = (currentTask.subtasks || []).every(st => st.completed);
+        if (!allSubtasksCompleted) reasons.push("Selesaikan semua subtasks dulu.");
+
+        const isInRevision = currentTask.status === 'Revisi' || (currentTask.revisionItems && currentTask.revisionItems.length > 0);
+        if (isInRevision) {
+            const allRevisionsCompleted = (currentTask.revisionItems || []).every(item => item.completed);
+            if (!allRevisionsCompleted) reasons.push("Checklist revisi belum selesai.");
+        }
+
+        const currentCycle = getCurrentSubmissionCycle(currentTask);
+        const hasDeliverableForCycle = (currentTask.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+        if (!hasDeliverableForCycle) reasons.push("Upload minimal 1 file BARU di Deliverables untuk submission cycle ini.");
+
+        if (reasons.length > 0) {
+            return { blocked: true, title: "Belum Siap untuk Direview", reasons, suggestion: "Mohon lengkapi item di atas sebelum mengirimkan tugas untuk review." };
+        }
+    }
+
+    if (targetStatus === 'Revisi') {
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus diatur melalui alur 'Request Revisions' oleh Manajer."], suggestion: "Gunakan tombol 'Reject' atau 'Request Revisions' pada tampilan Manajer untuk membuat checklist revisi." };
+    }
+
+    if (targetStatus === 'Done') {
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Penyelesaian tugas wajib melalui alur persetujuan."], suggestion: "Ubah status ke 'Preview' terlebih dahulu, lalu Manajer atau Admin dapat menyetujuinya menjadi 'Done'." };
+    }
+
+    return baseResult;
+  };
+
 
   const handleStatusChange = async (newStatus: string) => {
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
+
+    // --- STATUS GUARD ---
+    const block = getBlockingReasonsForStatusChange(newStatus, taskState);
+    if (block.blocked) {
+        setBlockingAlert({ isOpen: true, ...block });
+        // Revert the visual state of the dropdown
+        form.setValue('status', oldStatus); 
+        return;
+    }
 
     if (isRunning && !isSharedView) {
         await handlePauseSession();
@@ -899,22 +971,22 @@ export function TaskDetailsSheet({
     return brands?.find(b => b.id === brandId);
   }, [brands, brandId, isSharedView, session, taskState.brandId]);
   
-  const canSubmit = useMemo(() => {
-    if (!taskState) return false;
-    if (isSharedView) return false;
-    
-    const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
-    
-    const isInRevision = taskState.status === 'Revisi' || (taskState.revisionItems && taskState.revisionItems.length > 0);
-    const allRevisionsCompleted = !isInRevision || (taskState.revisionItems || []).every(item => item.completed);
-    
+ const canSubmit = useMemo(() => {
+    if (!taskState || isSharedView) return false;
+
     const currentCycle = getCurrentSubmissionCycle(taskState);
-    const hasDeliverablesForCurrentCycle = (taskState.deliverables || []).some(
-        d => (d.forRevisionCycle ?? 1) === currentCycle
-    );
+    const reasons = getBlockingReasonsForStatusChange('Preview', taskState);
     
-    return allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentCycle;
-}, [taskState, isSharedView]);
+    return !reasons.blocked;
+  }, [taskState, isSharedView]);
+  
+  const handleDelete = () => {
+    if (!firestore || !taskState || !canDeleteTask) return;
+    deleteDocumentNonBlocking(doc(firestore, 'tasks', taskState.id));
+    toast({ title: "Task Deleted", description: "The task is being removed." });
+    onOpenChange(false);
+    setDeleteConfirmOpen(false);
+  };
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
@@ -1035,10 +1107,12 @@ export function TaskDetailsSheet({
                               </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive focus:text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4"/>
-                              Delete Task
-                          </DropdownMenuItem>
+                          {canDeleteTask && (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirmOpen(true)}>
+                                <Trash2 className="mr-2 h-4 w-4"/>
+                                Delete Task
+                            </DropdownMenuItem>
+                          )}
                       </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1505,7 +1579,45 @@ export function TaskDetailsSheet({
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
-
+        <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        {blockingAlert.reasons.length > 0 && (
+                            <ul className="list-disc space-y-1 pl-5 mt-2">
+                                {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                            </ul>
+                        )}
+                        {blockingAlert.suggestion && <p className="mt-4 text-foreground">{blockingAlert.suggestion}</p>}
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, title: '', reasons: [] })}>OK</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Hapus tugas ini?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Anda akan menghapus tugas: <strong className="text-foreground">{taskState.title}</strong>
+                        <br/><br/>
+                        {['Doing', 'Preview', 'Revisi'].includes(taskState.status) && (
+                            <span className="text-destructive font-semibold">PERINGATAN: Tugas ini sedang berjalan. </span>
+                        )}
+                        Tindakan ini tidak dapat dibatalkan.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                        Ya, Hapus Tugas
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     </>
   );
 }

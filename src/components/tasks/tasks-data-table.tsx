@@ -437,16 +437,16 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         const task = row.original;
         
         const canDelete = React.useMemo(() => {
-            if (isShareView || !profile || !permissions) return false;
+            if (isShareView || !profile || arePermsLoading) return false;
             if (profile.role === 'Super Admin') return true;
-            if (profile.role === 'Manager') {
+            if (profile.role === 'Manager' && permissions) {
                 return permissions.Manager.canDeleteTasks && (profile.brandIds || []).includes(task.brandId);
             }
             if (profile.role === 'Employee' || profile.role === 'PIC') {
               return task.createdBy?.id === profile.id;
             }
             return false;
-        }, [profile, permissions, task, isShareView]);
+        }, [profile, permissions, arePermsLoading, task, isShareView]);
 
         if (isShareView) return null;
 
