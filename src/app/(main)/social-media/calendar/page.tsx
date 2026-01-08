@@ -101,13 +101,17 @@ export default function SocialMediaCalendarPage() {
 
     posts.forEach(post => {
       if (post.scheduledAt) {
-        const postDate = parseISO(post.scheduledAt);
-         if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
-          const dayKey = format(postDate, 'yyyy-MM-dd');
-          if (!map.has(dayKey)) {
-            map.set(dayKey, []);
+        try {
+          const postDate = parseISO(post.scheduledAt);
+          if (isWithinInterval(postDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+            const dayKey = format(postDate, 'yyyy-MM-dd');
+            if (!map.has(dayKey)) {
+              map.set(dayKey, []);
+            }
+            map.get(dayKey)?.push(post);
           }
-          map.get(dayKey)?.push(post);
+        } catch(e) {
+          console.error(`Invalid date format for post ${post.id}: ${post.scheduledAt}`, e);
         }
       }
     });

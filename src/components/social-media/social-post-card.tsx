@@ -4,7 +4,7 @@ import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { Instagram, FileText, Clapperboard, RefreshCw, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Instagram, FileText, Clapperboard, RefreshCw, AlertTriangle, HelpCircle, CheckCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CreatePostDialog } from './create-post-dialog';
@@ -18,14 +18,14 @@ const platformIcons: Record<string, React.ElementType> = {
     Instagram: Instagram,
 };
 
-const statusConfig: Record<string, { color: string; icon: React.ElementType }> = {
-    Draft: { color: 'bg-gray-400 border-gray-400 text-white', icon: HelpCircle },
-    'Needs Approval': { color: 'bg-yellow-500 border-yellow-500 text-yellow-900', icon: HelpCircle },
-    'Needs Revision': { color: 'bg-orange-500 border-orange-500 text-white', icon: RefreshCw },
-    Scheduled: { color: 'bg-blue-500 border-blue-500 text-white', icon: HelpCircle },
-    Publishing: { color: 'bg-blue-400 border-blue-400 text-white animate-pulse', icon: HelpCircle },
-    Posted: { color: 'bg-green-500 border-green-500 text-white', icon: HelpCircle },
-    Error: { color: 'bg-red-500 border-red-500 text-white', icon: AlertTriangle },
+const statusConfig: Record<string, { color: string; icon: React.ElementType, label: string }> = {
+    Draft: { color: 'bg-gray-400 border-gray-400 text-white', icon: HelpCircle, label: 'Draft' },
+    'Needs Approval': { color: 'bg-yellow-500 border-yellow-500 text-yellow-900', icon: HelpCircle, label: 'Needs Approval' },
+    'Needs Revision': { color: 'bg-orange-500 border-orange-500 text-white', icon: RefreshCw, label: 'Needs Revision' },
+    Scheduled: { color: 'bg-blue-500 border-blue-500 text-white', icon: HelpCircle, label: 'Scheduled' },
+    Publishing: { color: 'bg-blue-400 border-blue-400 text-white animate-pulse', icon: HelpCircle, label: 'Publishing' },
+    Posted: { color: 'bg-green-500 border-green-500 text-white', icon: CheckCircle, label: 'Posted' },
+    Error: { color: 'bg-red-500 border-red-500 text-white', icon: AlertTriangle, label: 'Error' },
 };
 
 const StatusIcon = ({ status }: { status: SocialMediaPost['status'] }) => {
@@ -83,7 +83,7 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
           <CardFooter className="p-2 flex justify-between items-center bg-background/80">
             <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs', statusStyling.color)}>
                 <StatusIcon status={post.status} />
-                <span className="font-medium">{post.status}</span>
+                <span className="font-medium">{statusStyling.label}</span>
             </Badge>
             <span className="text-xs font-semibold text-muted-foreground">
                 {format(parseISO(post.scheduledAt), 'p')}

@@ -57,6 +57,8 @@ export function InstagramPostPreview({
     '1.91:1': 'aspect-[1.91/1]',
     '9:16': 'aspect-[9/16]',
   };
+
+  const finalAspect = postType === 'Reels' ? '9:16' : (aspect || '4:5');
   
   const mediaStyle: React.CSSProperties = crop 
     ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%', objectFit: 'cover' }
@@ -77,7 +79,7 @@ export function InstagramPostPreview({
       {/* Media */}
       <div className={cn(
           "relative w-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden",
-          aspectRatios[aspect]
+          aspectRatios[finalAspect]
       )}>
         {mediaUrl ? (
           mediaType === 'image' ? (
