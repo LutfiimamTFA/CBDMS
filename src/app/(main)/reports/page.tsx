@@ -311,10 +311,10 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>{t('reports.chart.teamWorkload.title')}</CardTitle>
-              <CardDescription>{t('reports.chart.teamWorkload.description')}</CardDescription>
+              <CardTitle>Team Hours Breakdown</CardTitle>
+              <CardDescription>Total hours tracked for each team member.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className='h-[250px]'>
               <TeamWorkloadChart tasks={filteredTasks || []} users={filteredUsers || []} />
             </CardContent>
           </Card>

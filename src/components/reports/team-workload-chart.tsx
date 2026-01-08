@@ -11,8 +11,8 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { useMemo } from 'react';
 
 const chartConfig = {
-  tasks: {
-    label: 'Active Tasks',
+  hours: {
+    label: 'Tracked Hours',
     color: 'hsl(var(--chart-1))',
   },
 } satisfies ChartConfig;
@@ -27,24 +27,24 @@ export function TeamWorkloadChart({
   const workloadData = useMemo(() => {
     if (!users || !tasks) return [];
     return users
-      .filter((user) => user.role === 'Employee')
+      .filter((user) => user.role === 'Employee' || user.role === 'PIC')
       .map((user) => {
-        const activeTasks = tasks.filter(
-          (task) =>
-            task.assigneeIds.includes(user.id) && task.status !== 'Done'
-        );
+        const totalHours = tasks
+          .filter((task) => task.assigneeIds.includes(user.id))
+          .reduce((acc, task) => acc + (task.timeTracked || 0), 0);
         return {
           name: user.name.split(' ')[0], // Use first name for brevity
-          tasks: activeTasks.length,
+          hours: parseFloat(totalHours.toFixed(1)),
         };
       })
-      .sort((a, b) => b.tasks - a.tasks); // Sort by most tasks
+      .filter(data => data.hours > 0) // Only show users with tracked time
+      .sort((a, b) => b.hours - a.hours); // Sort by most hours
   }, [users, tasks]);
 
   if (!workloadData.length) {
     return (
       <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-          No active tasks assigned to team members in the selected period.
+          No time tracked by team members in the selected period.
       </div>
     );
   }
@@ -54,6 +54,7 @@ export function TeamWorkloadChart({
         <BarChart
           accessibilityLayer
           data={workloadData}
+          layout="vertical"
           margin={{
             top: 5,
             right: 20,
@@ -61,19 +62,21 @@ export function TeamWorkloadChart({
             bottom: 5,
           }}
         >
-          <CartesianGrid vertical={false} />
-          <XAxis
+          <CartesianGrid horizontal={false} />
+          <YAxis
             dataKey="name"
+            type="category"
             tickLine={false}
             tickMargin={10}
             axisLine={false}
+            width={60}
           />
-          <YAxis />
+          <XAxis type="number" dataKey="hours" />
           <ChartTooltip
             cursor={false}
             content={<ChartTooltipContent indicator="line" />}
           />
-          <Bar dataKey="tasks" fill="var(--color-tasks)" radius={4} />
+          <Bar dataKey="hours" fill="var(--color-hours)" radius={4} />
         </BarChart>
       </ChartContainer>
   );
