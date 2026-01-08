@@ -419,7 +419,6 @@ export function TaskDetailsSheet({
     if (currentUser.role === 'Manager' && permissions) {
         return permissions.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(taskState.brandId);
     }
-    // Employee/PIC can only delete tasks they created themselves
     if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
         return taskState.createdBy?.id === currentUser.id;
     }
@@ -1088,6 +1087,64 @@ export function TaskDetailsSheet({
     }
   };
 
+  const handleConfirmRejection = async () => {
+    if (!revisionState.task || revisionState.items.length === 0 || !firestore || !currentUser) {
+        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
+        return;
+    }
+    setIsSaving(true);
+    const task = revisionState.task;
+    const taskRef = doc(firestore, 'tasks', task.id);
+    const newStatus = 'Revisi';
+    const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({ id: crypto.randomUUID(), text: item.text, completed: false }));
+    const newRevisionCycle: RevisionCycle = {
+        cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
+        requestedAt: serverTimestamp() as any,
+        requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        items: newRevisionItems,
+    };
+    const taskUpdateData: any = {
+        status: newStatus,
+        revisionItems: newRevisionItems,
+        revisionHistory: [...(task.revisionHistory || []), newRevisionCycle],
+        lastActivity: createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`),
+        updatedAt: serverTimestamp() as any,
+        actualCompletionDate: deleteField(),
+    };
+    taskUpdateData['activities'] = [...(task.activities || []), taskUpdateData.lastActivity];
+    try {
+        await updateDoc(taskRef, taskUpdateData);
+        toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
+        const notificationBatch = writeBatch(firestore);
+        const notificationMessage = `${currentUser.name} requested revisions on "${task.title.substring(0, 30)}...".`;
+        task.assigneeIds.forEach(assigneeId => {
+            if (assigneeId !== currentUser.id) {
+                const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+                notificationBatch.set(notifRef, {
+                    userId: assigneeId,
+                    title: 'Revisions Required',
+                    message: notificationMessage,
+                    taskId: task.id,
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+                });
+            }
+        });
+        await notificationBatch.commit().catch(notifError => {
+            console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, errorCode: (notifError as any).code, message: (notifError as any).message });
+            toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
+        });
+    } catch (error: any) {
+        console.error('[requestRevisions] Critical task update failed:', { taskId: task.id, errorCode: error.code, message: error.message });
+        setTaskState(initialTask);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
+    } finally {
+        setIsSaving(false);
+        setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
+    }
+  };
+
 
   return (
     <>
@@ -1381,12 +1438,12 @@ export function TaskDetailsSheet({
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
                     <div className="flex flex-col w-full gap-2">
-                       <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
-                        <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
-                      </Button>
-                      <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
-                        <XCircle className="mr-2 h-4 w-4"/> Request Revisions
-                      </Button>
+                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
+                            <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                        </Button>
+                        <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
+                            <XCircle className="mr-2 h-4 w-4"/> Request Revisions
+                        </Button>
                     </div> 
                   )}
 
@@ -1661,7 +1718,7 @@ export function TaskDetailsSheet({
                     </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                    <div className="py-4 space-y-4">
+                    <div className="space-y-4 px-6 py-4">
                         <div className="space-y-2">
                             {revisionState.items.map((item, index) => (
                                 <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
@@ -1685,11 +1742,7 @@ export function TaskDetailsSheet({
                 </ScrollArea>
                 <DialogFooter className="p-6 pt-4 border-t">
                     <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
-                    <Button variant="destructive" onClick={() => {
-                        // This logic needs to be implemented based on the main kanban board's handler
-                        console.log("Confirming rejection with items:", revisionState.items);
-                        // handleConfirmRejection();
-                    }} disabled={isSaving || revisionState.items.length === 0}>
+                    <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Request Revisions
                     </Button>

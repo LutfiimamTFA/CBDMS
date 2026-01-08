@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -273,24 +274,16 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
         return;
     }
     setIsSaving(true);
-
     const task = revisionState.task;
     const taskRef = doc(firestore, 'tasks', task.id);
     const newStatus = 'Revisi';
-
-    const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({
-        id: crypto.randomUUID(),
-        text: item.text,
-        completed: false,
-    }));
-
+    const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({ id: crypto.randomUUID(), text: item.text, completed: false }));
     const newRevisionCycle: RevisionCycle = {
         cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
         requestedAt: serverTimestamp() as any,
         requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
         items: newRevisionItems,
     };
-    
     const taskUpdateData: any = {
         status: newStatus,
         revisionItems: newRevisionItems,
@@ -300,19 +293,11 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
         actualCompletionDate: deleteField(),
     };
     taskUpdateData['activities'] = [...(task.activities || []), taskUpdateData.lastActivity];
-
-
-    // Local state update first
-    setTasks(currentTasks => 
-        currentTasks.map(t => t.id === task.id ? { ...t, ...taskUpdateData, updatedAt: new Date() } as Task : t)
-    );
-    
     try {
         await updateDoc(taskRef, taskUpdateData);
         toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
-
         const notificationBatch = writeBatch(firestore);
-        const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...". See task for revision checklist.`;
+        const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...".`;
         task.assigneeIds.forEach(assigneeId => {
             if (assigneeId !== profile.id) {
                 const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
@@ -341,7 +326,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
         setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
     }
   };
-  
+
   const handleAddRevisionItem = () => {
     if (revisionState.currentItemText.trim()) {
         setRevisionState(prev => ({
@@ -498,40 +483,42 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
                     You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
                 </DialogDescription>
             </DialogHeader>
-            <div className="py-4 space-y-6">
-                <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
-                <Separator />
-                <div className="space-y-3">
-                    <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
-                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                        {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
-                             finalReviewState.task.subtasks.map(subtask => ( 
-                                <div key={subtask.id} className="flex items-center gap-3">
-                                    <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
-                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                </div> 
-                            )) 
-                        ) : ( 
-                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
-                        )}
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                <div className="py-4 space-y-6">
+                    <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
+                    <Separator />
+                    <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
+                                 finalReviewState.task.subtasks.map(subtask => ( 
+                                    <div key={subtask.id} className="flex items-center gap-3">
+                                        <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                        <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                    </div> 
+                                )) 
+                            ) : ( 
+                                <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
+                            )}
+                        </div>
+                    </div>
+                     <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
+                                 finalReviewState.task.attachments.map(att => ( 
+                                    <div key={att.id} className="flex items-center gap-2 text-sm">
+                                        <span>-</span>
+                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
+                                    </div>
+                                )) 
+                            ) : ( 
+                                <p className="text-sm text-muted-foreground">No attachments for this item.</p> 
+                            )}
+                        </div>
                     </div>
                 </div>
-                 <div className="space-y-3">
-                    <h4 className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h4>
-                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                        {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
-                             finalReviewState.task.attachments.map(att => ( 
-                                <div key={att.id} className="flex items-center gap-2 text-sm">
-                                    <span>-</span>
-                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
-                                </div>
-                            )) 
-                        ) : ( 
-                            <p className="text-sm text-muted-foreground">No attachments for this item.</p> 
-                        )}
-                    </div>
-                </div>
-            </div>
+            </ScrollArea>
             <DialogFooter>
                 <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
                 <Button variant="default" onClick={handleConfirmFinalReview}>
