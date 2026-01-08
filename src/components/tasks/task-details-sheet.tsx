@@ -122,18 +122,14 @@ const getCurrentSubmissionCycle = (task: Task | null): number => {
     if (!task) return 1;
     const historyLength = task.revisionHistory?.length ?? 0;
 
-    // Standard case: if there's history, the next submission is for the next cycle.
     if (historyLength > 0) {
         return historyLength + 1;
     }
     
-    // Legacy/Edge case: The task is in revision, has a checklist, but no history yet.
-    // This implies it's the *first* revision cycle. The upcoming submission will be for cycle 2.
     if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
         return 2;
     }
 
-    // Default case for new tasks or tasks that have never been rejected.
     return 1;
 };
 
@@ -143,7 +139,6 @@ interface TaskDetailsSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// Internal component to safely use the shared session hook
 function SharedViewLogic({ onDataLoaded }: { onDataLoaded: (data: any) => void }) {
     const { session, isLoading, error } = useSharedSession();
 
@@ -153,7 +148,7 @@ function SharedViewLogic({ onDataLoaded }: { onDataLoaded: (data: any) => void }
         }
     }, [session, isLoading, error, onDataLoaded]);
 
-    return null; // This component doesn't render anything itself
+    return null;
 }
 
 
@@ -195,14 +190,14 @@ export function TaskDetailsSheet({
   const [sharedData, setSharedData] = useState<any>({ session: null, error: null });
   const { session, error: sharedError } = sharedData;
   const linkId = isSharedView ? (params.linkId as string) : null;
-  const sharedTaskConfig = null; // This needs to be determined based on context if needed
+  const sharedTaskConfig = null;
   
   const accessLevel = useMemo(() => {
     if (isSharedView) {
       if (sharedTaskConfig) return sharedTaskConfig.allowedActions.includes('changeStatus') ? 'status' : 'view';
       if (session) return session.accessLevel;
     }
-    return 'full'; // Default for non-shared views
+    return 'full';
   }, [isSharedView, session, sharedTaskConfig]);
 
 
@@ -507,27 +502,23 @@ export function TaskDetailsSheet({
         const hours = now.getHours();
         const minutes = now.getMinutes();
 
-        // Auto-pause for lunch at 12:00
         if (hours === 12 && minutes === 0 && isRunning) {
             handlePauseSession('auto-pause');
         }
         
-        // Auto-resume after lunch at 13:00
         if (hours === 13 && minutes === 0 && !isRunning && taskState.status === 'Doing') {
-            // Check if the last activity was an auto-pause to avoid starting a session for someone who paused manually.
             const lastActivity = taskState.activities?.[taskState.activities.length - 1];
             if (lastActivity?.action.includes('auto-paused')) {
                 handleStartSession('auto-start');
             }
         }
 
-        // Show end of day prompt at 17:00
         if (hours === 17 && minutes === 0 && isRunning) {
             setEndOfDayState({ isOpen: true });
         }
     };
 
-    const timer = setInterval(checkTime, 60 * 1000); // Check every minute
+    const timer = setInterval(checkTime, 60 * 1000);
     return () => clearInterval(timer);
   }, [isRunning, handlePauseSession, handleStartSession, isSharedView, taskState]);
 
@@ -595,8 +586,8 @@ export function TaskDetailsSheet({
         }
     }
 
-    if (targetStatus === 'Revisi') {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus diatur melalui alur 'Request Revisions' oleh Manajer."], suggestion: "Gunakan fitur Request Revisions/Reject untuk membuat checklist revisi." };
+    if (targetStatus === 'Revisi' && !(currentTask.revisionItems && currentTask.status === 'Revisi')) {
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus diatur melalui alur 'Request Revisions'."], suggestion: "Gunakan fitur Request Revisions/Reject untuk membuat checklist revisi." };
     }
 
     if (targetStatus === 'Done') {
@@ -611,11 +602,9 @@ export function TaskDetailsSheet({
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
 
-    // --- STATUS GUARD ---
     const block = getBlockingReasonsForStatusChange(newStatus, taskState);
     if (block.blocked) {
         setBlockingAlert({ isOpen: true, ...block });
-        // Revert the visual state of the dropdown
         form.setValue('status', oldStatus); 
         return;
     }
@@ -643,7 +632,7 @@ export function TaskDetailsSheet({
             }
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
         } catch (error: any) {
-            form.setValue('status', oldStatus); // Revert on failure
+            form.setValue('status', oldStatus);
             toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
         }
         return;
@@ -684,7 +673,7 @@ export function TaskDetailsSheet({
         toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
     } catch (error: any) {
         console.error('Failed to update status:', error);
-        form.setValue('status', oldStatus); // Revert on failure
+        form.setValue('status', oldStatus);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task status.' });
     }
   };
@@ -1070,7 +1059,7 @@ export function TaskDetailsSheet({
   const groupedDeliverables = useMemo(() => {
     const groups: Record<number, Attachment[]> = {};
     (taskState.deliverables || []).forEach(d => {
-        const cycle = d.forRevisionCycle ?? 1; // Default to cycle 1 for older data
+        const cycle = d.forRevisionCycle ?? 1;
         if (!groups[cycle]) groups[cycle] = [];
         groups[cycle].push(d);
     });
@@ -1135,9 +1124,10 @@ export function TaskDetailsSheet({
             console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, errorCode: (notifError as any).code, message: (notifError as any).message });
             toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
         });
+
     } catch (error: any) {
-        console.error('[requestRevisions] Critical task update failed:', { taskId: task.id, errorCode: error.code, message: error.message });
-        setTaskState(initialTask);
+        console.error('[requestRevisions] Critical task update failed:', error instanceof Error ? { taskId: task.id, message: error.message } : { taskId: task.id, error });
+        setTaskState(task); // Revert UI
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
     } finally {
         setIsSaving(false);
@@ -1235,7 +1225,7 @@ export function TaskDetailsSheet({
                               <div className="space-y-2">
                                   {taskState.revisionItems.map(item => (
                                       <div key={item.id} className="flex items-center gap-3">
-                                          <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee && !isSharedView} />
+                                          <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee || isSharedView} />
                                           <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
                                       </div>
                                   ))}
@@ -1672,8 +1662,8 @@ export function TaskDetailsSheet({
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
-                     <AlertDialogDescription>
-                         {blockingAlert.suggestion}
+                    <AlertDialogDescription>
+                        {blockingAlert.suggestion}
                     </AlertDialogDescription>
                     {blockingAlert.reasons.length > 0 && (
                         <div className="pt-2">
@@ -1732,7 +1722,12 @@ export function TaskDetailsSheet({
                                 value={revisionState.currentItemText}
                                 onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
                                 placeholder="e.g., Fix the logo placement"
-                                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddRevisionItem();
+                                  }
+                                }}
                             />
                             <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
                                 <Plus className="mr-2 h-4 w-4"/> Add
