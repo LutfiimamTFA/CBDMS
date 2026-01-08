@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -1067,7 +1067,6 @@ export function TaskDetailsSheet({
   const handleAddRevisionItem = () => {
     if (revisionState.currentItemText.trim()) {
       setRevisionState(prev => ({ ...prev, items: [...prev.items, { text: prev.currentItemText }] }));
-      setCurrentItemText('');
     }
   };
 
@@ -1124,9 +1123,8 @@ export function TaskDetailsSheet({
             }
         });
         
-        // Attempt to commit notifications, but don't let it block the success flow.
         await notificationBatch.commit().catch(notifError => {
-            console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, notifError });
+            console.error('[requestRevisions] Notification failed but task was updated:', notifError);
             toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
         });
 
