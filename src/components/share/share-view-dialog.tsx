@@ -30,9 +30,6 @@ import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { Badge } from '../ui/badge';
-import { X } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
@@ -87,9 +84,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [password, setPassword] = useState('');
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
   const [accessLevel, setAccessLevel] = useState<SharedLink['accessLevel']>('view');
-  
-  const [selectedTasks, setSelectedTasks] = useState<Task[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
 
   const userTasksQuery = useMemo(() => {
     if (!firestore || !profile) return null;
@@ -107,16 +101,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
   }, [firestore, profile]);
   
-  const { data: userTasks, isLoading: tasksLoading } = useCollection<Task>(userTasksQuery);
-
-  const searchedTasks = useMemo(() => {
-      if (!searchTerm) return [];
-      if (!userTasks) return [];
-      return userTasks.filter(task => 
-          task.title.toLowerCase().includes(searchTerm.toLowerCase()) &&
-          !selectedTasks.some(st => st.id === task.id)
-      );
-  }, [userTasks, searchTerm, selectedTasks]);
+  const { data: allVisibleTasks, isLoading: tasksLoading } = useCollection<Task>(userTasksQuery);
   
   const userNavItems = useMemo(() => {
     if (!profile) return [];
@@ -138,8 +123,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
-    if (selectedTasks.length === 0) {
-        toast({ variant: 'destructive', title: 'No Tasks Selected', description: 'Please select at least one task to share.'});
+    if (!allVisibleTasks || allVisibleTasks.length === 0) {
+        toast({ variant: 'destructive', title: 'No Tasks to Share', description: 'There are no tasks in your current view to share.'});
         return;
     }
 
@@ -162,7 +147,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         }
 
         const snapshot = {
-            tasks: selectedTasks,
+            tasks: allVisibleTasks,
             statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
             users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
@@ -216,8 +201,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
       setLinkName('');
       setExpiresAt(undefined);
       setAccessLevel('view');
-      setSelectedTasks([]);
-      setSearchTerm('');
     }
   }, [isOpen]);
 
@@ -228,7 +211,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         <DialogHeader>
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Create a public link to share a specific set of tasks with external collaborators.
+            Create a public link to share all your currently visible tasks with external collaborators.
           </DialogDescription>
         </DialogHeader>
 
@@ -239,53 +222,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
                 <Label htmlFor="link-name">Link Name (Optional)</Label>
                 <Input id="link-name" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="e.g., Q3 Client Preview" />
               </div>
-              <Accordion type="single" collapsible defaultValue="tasks" className="w-full space-y-4">
-                <AccordionItem value="tasks" className="border rounded-lg">
-                    <AccordionTrigger className="p-4 text-sm font-medium hover:no-underline">
-                      Tasks to Share ({selectedTasks.length})
-                    </AccordionTrigger>
-                    <AccordionContent className="p-4 pt-0">
-                      <div className="space-y-4">
-                        <Command className="rounded-lg border shadow-sm">
-                            <CommandInput placeholder="Type to search for tasks..." value={searchTerm} onValueChange={setSearchTerm} />
-                            <CommandList>
-                                {tasksLoading && <div className="p-4 text-center text-sm">Loading tasks...</div>}
-                                {!tasksLoading && searchTerm && searchedTasks.length === 0 && (
-                                  <CommandEmpty>No tasks found.</CommandEmpty>
-                                )}
-                                <CommandGroup>
-                                    {searchedTasks.map((task) => (
-                                    <CommandItem
-                                        key={task.id}
-                                        onSelect={() => {
-                                            setSelectedTasks(prev => [...prev, task]);
-                                            setSearchTerm('');
-                                        }}
-                                    >
-                                        <span>{task.title}</span>
-                                    </CommandItem>
-                                    ))}
-                                </CommandGroup>
-                            </CommandList>
-                        </Command>
-                        {selectedTasks.length > 0 && (
-                            <div className="space-y-2">
-                                <Label className="text-xs text-muted-foreground">Selected</Label>
-                                <div className="flex flex-wrap gap-1">
-                                    {selectedTasks.map(task => (
-                                        <Badge key={task.id} variant="secondary">
-                                            {task.title}
-                                            <button onClick={() => setSelectedTasks(prev => prev.filter(t => t.id !== task.id))} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                                                <X className="h-3 w-3" />
-                                            </button>
-                                        </Badge>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                      </div>
-                    </AccordionContent>
-                </AccordionItem>
+              <Accordion type="single" collapsible defaultValue="pages" className="w-full space-y-4">
                  <AccordionItem value="pages" className="border rounded-lg">
                     <AccordionTrigger className="p-4 text-sm font-medium hover:no-underline">
                         Pages & Permissions
@@ -390,8 +327,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateLink} disabled={isLoading || selectedTasks.length === 0 || selectedNavIds.length === 0}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
+              <Button onClick={handleCreateLink} disabled={isLoading || tasksLoading || selectedNavIds.length === 0}>
+                {isLoading || tasksLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
                 Create Link
               </Button>
             </>
