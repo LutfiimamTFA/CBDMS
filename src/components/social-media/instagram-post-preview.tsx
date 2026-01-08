@@ -1,11 +1,14 @@
+
 'use client';
 
 import React from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle, Clapperboard } from 'lucide-react';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle, Clapperboard, Video } from 'lucide-react';
 import type { SocialMediaPost } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import Cropper from 'react-easy-crop';
+
 
 interface InstagramPostPreviewProps {
     profileName?: string;
@@ -14,6 +17,9 @@ interface InstagramPostPreviewProps {
     mediaType?: 'image' | 'video';
     caption?: string;
     postType?: 'Post' | 'Reels';
+    aspect?: '1:1' | '4:5' | '1.91:1' | '9:16';
+    crop?: { x: number; y: number; };
+    zoom?: number;
     objectPosition?: number;
 }
 
@@ -24,7 +30,10 @@ export function InstagramPostPreview({
     mediaType = 'image',
     caption,
     postType = 'Post',
-    objectPosition = 50,
+    aspect = '4:5',
+    crop = { x: 0, y: 0 },
+    zoom = 1,
+    objectPosition, // Fallback for old data
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -42,10 +51,16 @@ export function InstagramPostPreview({
     return formattedText;
   };
   
-  const mediaStyle: React.CSSProperties = {
-      objectFit: 'cover',
-      objectPosition: `center ${objectPosition}%`,
+  const aspectRatios = {
+    '1:1': 'aspect-square',
+    '4:5': 'aspect-[4/5]',
+    '1.91:1': 'aspect-[1.91/1]',
+    '9:16': 'aspect-[9/16]',
   };
+  
+  const mediaStyle: React.CSSProperties = crop 
+    ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%', objectFit: 'cover' }
+    : { objectFit: 'cover', objectPosition: `center ${objectPosition}%` };
 
   return (
     <div className="w-full max-w-[320px] bg-white dark:bg-black border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden shadow-xl">
@@ -61,16 +76,14 @@ export function InstagramPostPreview({
 
       {/* Media */}
       <div className={cn(
-          "relative w-full bg-zinc-200 dark:bg-zinc-800",
-          postType === 'Reels' ? 'aspect-[9/16]' : 'aspect-square'
+          "relative w-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden",
+          aspectRatios[aspect]
       )}>
         {mediaUrl ? (
           mediaType === 'image' ? (
             <Image src={mediaUrl} layout="fill" alt="Post preview" style={mediaStyle} />
           ) : (
-            <>
-              <video src={mediaUrl} loop autoPlay muted className="w-full h-full object-cover" />
-            </>
+            <video src={mediaUrl} controls muted className="w-full h-full object-cover" />
           )
         ) : (
             <div className="flex items-center justify-center h-full">

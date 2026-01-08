@@ -1,9 +1,10 @@
+
 'use client';
 import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { Instagram, FileText, Clapperboard, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Instagram, FileText, Clapperboard, RefreshCw, AlertTriangle, HelpCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { CreatePostDialog } from './create-post-dialog';
@@ -17,30 +18,28 @@ const platformIcons: Record<string, React.ElementType> = {
     Instagram: Instagram,
 };
 
-const statusColors: Record<string, string> = {
-    Draft: 'bg-gray-400 border-gray-400 text-white',
-    'Needs Approval': 'bg-yellow-500 border-yellow-500 text-yellow-900',
-    Scheduled: 'bg-blue-500 border-blue-500 text-white',
-    Publishing: 'bg-blue-400 border-blue-400 text-white animate-pulse',
-    Posted: 'bg-green-500 border-green-500 text-white',
-    Error: 'bg-red-500 border-red-500 text-white',
+const statusConfig: Record<string, { color: string; icon: React.ElementType }> = {
+    Draft: { color: 'bg-gray-400 border-gray-400 text-white', icon: HelpCircle },
+    'Needs Approval': { color: 'bg-yellow-500 border-yellow-500 text-yellow-900', icon: HelpCircle },
+    'Needs Revision': { color: 'bg-orange-500 border-orange-500 text-white', icon: RefreshCw },
+    Scheduled: { color: 'bg-blue-500 border-blue-500 text-white', icon: HelpCircle },
+    Publishing: { color: 'bg-blue-400 border-blue-400 text-white animate-pulse', icon: HelpCircle },
+    Posted: { color: 'bg-green-500 border-green-500 text-white', icon: HelpCircle },
+    Error: { color: 'bg-red-500 border-red-500 text-white', icon: AlertTriangle },
 };
 
 const StatusIcon = ({ status }: { status: SocialMediaPost['status'] }) => {
-    switch (status) {
-        case 'Needs Approval':
-            return <RefreshCw className="h-2 w-2" />;
-        case 'Error':
-            return <AlertTriangle className="h-2 w-2" />;
-        default:
-            return <div className="h-2 w-2 rounded-full bg-current"></div>;
-    }
+    const Icon = statusConfig[status]?.icon || HelpCircle;
+    return <Icon className="h-2 w-2" />;
 };
 
 
 export function SocialPostCard({ post }: SocialPostCardProps) {
   const PlatformIcon = platformIcons[post.platform];
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const statusStyling = statusConfig[post.status] || statusConfig['Draft'];
+  
+  const revisionCycleNumber = (post.revisionHistory?.length || 0) + 1;
 
   return (
     <>
@@ -51,7 +50,7 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
           <CardContent className="p-0">
             <div className="relative aspect-square w-full">
                 {post.mediaUrl ? (
-                    <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" />
+                    <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" style={{ objectPosition: `center ${post.objectPosition || 50}%` }}/>
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full bg-secondary text-muted-foreground p-2">
                         <FileText className="h-6 w-6 mb-1" />
@@ -72,10 +71,17 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
                         </Badge>
                     )}
                 </div>
+                 {post.status === 'Needs Revision' && (
+                    <div className="absolute bottom-2 left-2">
+                        <Badge className="bg-orange-500 text-white">
+                           Rev {revisionCycleNumber-1}
+                        </Badge>
+                    </div>
+                )}
             </div>
           </CardContent>
           <CardFooter className="p-2 flex justify-between items-center bg-background/80">
-            <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs', statusColors[post.status])}>
+            <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs', statusStyling.color)}>
                 <StatusIcon status={post.status} />
                 <span className="font-medium">{post.status}</span>
             </Badge>

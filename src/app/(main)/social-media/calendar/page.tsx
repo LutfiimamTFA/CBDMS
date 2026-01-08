@@ -1,6 +1,7 @@
+
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Plus } from 'lucide-react';
 import {
@@ -21,7 +22,7 @@ import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import type { SocialMediaPost } from '@/lib/types';
 import { SocialPostCard } from '@/components/social-media/social-post-card';
 import { parseISO } from 'date-fns';
@@ -34,30 +35,46 @@ export default function SocialMediaCalendarPage() {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const { permissions } = usePermissions();
+  
+  const [posts, setPosts] = useState<SocialMediaPost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
 
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // --- Data Fetching ---
+  // --- Data Fetching with onSnapshot ---
   const postsQuery = useMemo(() => {
     if (!firestore || !profile) return null;
-    let q = query(
+    return query(
         collection(firestore, 'socialMediaPosts'),
         where('companyId', '==', profile.companyId)
     );
-    // For managers, we fetch all and filter client-side based on their brands
-    // For employees, they see everything to know what's happening
-    return q;
   }, [firestore, profile]);
   
-  const { data: allPosts, isLoading: postsLoading } = useCollection<SocialMediaPost>(postsQuery);
-
-  const posts = useMemo(() => {
-    if (!allPosts || !profile) return [];
-    if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
-        return allPosts.filter(post => !post.brandId || profile.brandIds?.includes(post.brandId));
+  useEffect(() => {
+    if (!postsQuery) {
+      setPostsLoading(false);
+      return;
     }
-    return allPosts;
-  }, [allPosts, profile]);
+    
+    setPostsLoading(true);
+    const unsubscribe = onSnapshot(postsQuery, (snapshot) => {
+        const fetchedPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SocialMediaPost));
+        
+        // Client-side filtering for managers
+        if (profile?.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
+            setPosts(fetchedPosts.filter(post => !post.brandId || profile.brandIds?.includes(post.brandId)));
+        } else {
+            setPosts(fetchedPosts);
+        }
+
+        setPostsLoading(false);
+    }, (error) => {
+        console.error("Error fetching posts:", error);
+        setPostsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [postsQuery, profile]);
 
 
   const calendarGrid = useMemo(() => {
@@ -69,7 +86,6 @@ export default function SocialMediaCalendarPage() {
 
     const totalDaysInView = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
     
-    // Ensure we always have 6 weeks for a consistent layout
     if (totalDaysInView.length / 7 < 6) {
         calendarEnd = add(calendarEnd, { weeks: 6 - (totalDaysInView.length / 7) });
     }
