@@ -21,6 +21,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
 import { useEffect } from "react";
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const CustomTableCell = TableCell.extend({
   addAttributes() {
@@ -43,71 +44,141 @@ const CustomTableCell = TableCell.extend({
 const TipTapMenuBar = ({ editor }: { editor: Editor | null }) => {
   if (!editor) return null;
 
+  const handleInsertTable = () => {
+    editor.chain().focus()
+      .insertContent('<p><b>Judul Tabel</b></p><p><em>Deskripsi singkat tabel...</em></p>')
+      .insertTable({ rows: 2, cols: 2, withHeaderRow: true })
+      .run();
+  };
+
   return (
-    <div className="flex flex-wrap items-center gap-1 p-2 border-b">
-      <Button
-        type="button"
-        variant={editor.isActive("bold") ? "secondary" : "ghost"}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleBold().run()}
-      >
-        <Bold className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant={editor.isActive("italic") ? "secondary" : "ghost"}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleItalic().run()}
-      >
-        <Italic className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant={editor.isActive("bulletList") ? "secondary" : "ghost"}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleBulletList().run()}
-      >
-        <List className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant={editor.isActive("orderedList") ? "secondary" : "ghost"}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleOrderedList().run()}
-      >
-        <ListOrdered className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant={editor.isActive("heading", { level: 2 }) ? "secondary" : "ghost"}
-        size="icon"
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-      >
-        <Heading2 className="h-4 w-4" />
-      </Button>
-      <div className="flex items-center gap-1 border-l pl-2 ml-2">
-         <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => editor.chain().focus().insertTable({ rows: 2, cols: 2, withHeaderRow: true }).run()}
-        >
-            <TableIcon className="h-4 w-4" />
-        </Button>
-         <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().addColumnAfter().run()}>
-            <div className="flex items-center"><TableIcon className="h-3 w-3" /><Plus className="h-3 w-3" /></div>
-        </Button>
-        <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().deleteColumn().run()}>
-            <div className="flex items-center"><TableIcon className="h-3 w-3" /><Minus className="h-3 w-3" /></div>
-        </Button>
-         <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().addRowAfter().run()}>
-            <Plus className="h-4 w-4" />
-        </Button>
-        <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().deleteRow().run()}>
-            <Minus className="h-4 w-4" />
-        </Button>
+    <TooltipProvider>
+      <div className="flex flex-wrap items-center gap-1 p-2 border-b">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive("bold") ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              aria-label="Tebalkan (Bold)"
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Tebalkan (Bold)</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive("italic") ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              aria-label="Miring (Italic)"
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Miring (Italic)</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive("bulletList") ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              aria-label="Daftar poin"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Daftar poin</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive("orderedList") ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              aria-label="Daftar angka"
+            >
+              <ListOrdered className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Daftar angka</p></TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive("heading", { level: 2 }) ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              aria-label="Judul (H2)"
+            >
+              <Heading2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Judul (H2)</p></TooltipContent>
+        </Tooltip>
+
+        <div className="flex items-center gap-1 border-l pl-2 ml-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleInsertTable}
+                aria-label="Buat tabel (default 2x2)"
+              >
+                <TableIcon className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Buat tabel (default 2x2)</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().addColumnAfter().run()} aria-label="Tambah kolom">
+                <div className="flex items-center"><TableIcon className="h-3 w-3" /><Plus className="h-3 w-3" /></div>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Tambah kolom</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().deleteColumn().run()} aria-label="Hapus kolom">
+                <div className="flex items-center"><TableIcon className="h-3 w-3" /><Minus className="h-3 w-3" /></div>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Hapus kolom</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().addRowAfter().run()} aria-label="Tambah baris">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Tambah baris</p></TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button type="button" variant="ghost" size="icon" onClick={() => editor.chain().focus().deleteRow().run()} aria-label="Hapus baris">
+                <Minus className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent><p>Hapus baris</p></TooltipContent>
+          </Tooltip>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 };
 
@@ -144,7 +215,7 @@ export function RichTextEditor({ value, onChange, placeholder, readOnly = false,
                 class: "prose dark:prose-invert prose-sm sm:prose-base max-w-none focus:outline-none p-4",
             },
         },
-    });
+    }, []);
 
     useEffect(() => {
         if (editor) {
@@ -166,4 +237,3 @@ export function RichTextEditor({ value, onChange, placeholder, readOnly = false,
         </div>
     );
 }
-

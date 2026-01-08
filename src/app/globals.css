@@ -103,11 +103,16 @@
     td,
     th {
       @apply relative align-top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
   
     .column-resize-handle {
-      @apply absolute top-0 bottom-0 right-[-2px] w-1 cursor-col-resize;
-      background-color: hsl(var(--primary) / 0.5);
+      @apply absolute top-0 bottom-0 -right-0.5 w-1 cursor-col-resize bg-transparent;
+      transition: background-color 0.2s;
+    }
+    .column-resize-handle:hover {
+      @apply bg-primary;
     }
 
     &.resize-cursor {
@@ -115,4 +120,3 @@
     }
   }
 }
-
