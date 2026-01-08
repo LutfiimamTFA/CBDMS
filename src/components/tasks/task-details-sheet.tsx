@@ -127,7 +127,7 @@ const getCurrentSubmissionCycle = (task: Task | null): number => {
     }
     
     if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
-        return 2;
+        return 2; 
     }
 
     return 1;
@@ -587,7 +587,7 @@ export function TaskDetailsSheet({
     }
 
     if (targetStatus === 'Revisi' && !(currentTask.revisionItems && currentTask.status === 'Revisi')) {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus diatur melalui alur 'Request Revisions'."], suggestion: "Gunakan fitur Request Revisions/Reject untuk membuat checklist revisi." };
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus dibuat lewat alur Request Revisions (dengan checklist revisi)."], suggestion: "Gunakan fitur Request Revisions/Reject untuk membuat checklist revisi." };
     }
 
     if (targetStatus === 'Done') {
@@ -971,9 +971,7 @@ export function TaskDetailsSheet({
   
  const canSubmit = useMemo(() => {
     if (!taskState || isSharedView) return false;
-
     const reasons = getBlockingReasonsForStatusChange('Preview', taskState);
-    
     return !reasons.blocked;
   }, [taskState, isSharedView]);
   
@@ -1068,15 +1066,12 @@ export function TaskDetailsSheet({
 
   const handleAddRevisionItem = () => {
     if (revisionState.currentItemText.trim()) {
-        setRevisionState(prev => ({
-            ...prev,
-            items: [...prev.items, { text: prev.currentItemText }],
-            currentItemText: '',
-        }));
+      setRevisionState(prev => ({ ...prev, items: [...prev.items, { text: prev.currentItemText }] }));
+      setCurrentItemText('');
     }
   };
 
-  const handleConfirmRejection = async () => {
+ const handleConfirmRejection = async () => {
     if (!revisionState.task || revisionState.items.length === 0 || !firestore || !currentUser) {
         toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
         return;
@@ -1085,13 +1080,17 @@ export function TaskDetailsSheet({
     const task = revisionState.task;
     const taskRef = doc(firestore, 'tasks', task.id);
     const newStatus = 'Revisi';
+    
+    // Create new revision items with unique IDs
     const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({ id: crypto.randomUUID(), text: item.text, completed: false }));
+    
     const newRevisionCycle: RevisionCycle = {
         cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
         requestedAt: serverTimestamp() as any,
         requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        items: newRevisionItems,
+        items: newRevisionItems, // Use the new items with IDs
     };
+    
     const taskUpdateData: any = {
         status: newStatus,
         revisionItems: newRevisionItems,
@@ -1101,11 +1100,15 @@ export function TaskDetailsSheet({
         actualCompletionDate: deleteField(),
     };
     taskUpdateData['activities'] = [...(task.activities || []), taskUpdateData.lastActivity];
+    
     try {
         await updateDoc(taskRef, taskUpdateData);
         toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
+        
+        // --- Non-critical Notification Batch ---
         const notificationBatch = writeBatch(firestore);
         const notificationMessage = `${currentUser.name} requested revisions on "${task.title.substring(0, 30)}...".`;
+        
         task.assigneeIds.forEach(assigneeId => {
             if (assigneeId !== currentUser.id) {
                 const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
@@ -1120,13 +1123,15 @@ export function TaskDetailsSheet({
                 });
             }
         });
+        
+        // Attempt to commit notifications, but don't let it block the success flow.
         await notificationBatch.commit().catch(notifError => {
-            console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, errorCode: (notifError as any).code, message: (notifError as any).message });
+            console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, notifError });
             toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
         });
 
-    } catch (error: any) {
-        console.error('[requestRevisions] Critical task update failed:', error instanceof Error ? { taskId: task.id, message: error.message } : { taskId: task.id, error });
+    } catch (error) {
+        console.error('[requestRevisions] Critical task update failed:', error);
         setTaskState(task); // Revert UI
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
     } finally {
@@ -1427,14 +1432,14 @@ export function TaskDetailsSheet({
                       )}
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
-                    <div className="flex flex-col w-full gap-2">
+                     <div className="flex flex-col w-full gap-2">
                         <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
                             <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                         </Button>
-                        <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
+                         <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
                             <XCircle className="mr-2 h-4 w-4"/> Request Revisions
                         </Button>
-                    </div> 
+                    </div>
                   )}
 
                   {(isAssignee || isCreator) && taskState.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
@@ -1663,15 +1668,15 @@ export function TaskDetailsSheet({
                 <AlertDialogHeader>
                     <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
                     <AlertDialogDescription>
-                        {blockingAlert.suggestion}
+                      {blockingAlert.suggestion}
                     </AlertDialogDescription>
-                    {blockingAlert.reasons.length > 0 && (
-                        <div className="pt-2">
-                             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-                                {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
-                            </ul>
-                        </div>
-                    )}
+                      {blockingAlert.reasons.length > 0 && (
+                          <div className="pt-2">
+                               <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                  {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                              </ul>
+                          </div>
+                      )}
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, title: '', reasons: [] })}>OK</AlertDialogAction>
