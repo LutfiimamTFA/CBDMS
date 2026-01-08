@@ -1072,6 +1072,16 @@ export function TaskDetailsSheet({
     return groups;
   }, [taskState.deliverables]);
 
+  const handleAddRevisionItem = () => {
+    if (revisionState.currentItemText.trim()) {
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
+    }
+  };
+
 
   return (
     <>
@@ -1111,7 +1121,7 @@ export function TaskDetailsSheet({
                           )}
                           <DropdownMenuSeparator />
                           {canDeleteTask && (
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirmOpen(true)}>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => setDeleteConfirmOpen(true)}>
                                 <Trash2 className="mr-2 h-4 w-4"/>
                                 Delete Task
                             </DropdownMenuItem>
@@ -1341,7 +1351,7 @@ export function TaskDetailsSheet({
                                     ))}
                                 </Accordion>
                             ) : (
-                                <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this task.</p>
+                                <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this task.</p> 
                             )}
                         </TabsContent>
                       </Tabs>
@@ -1650,7 +1660,7 @@ export function TaskDetailsSheet({
                             {revisionState.items.map((item, index) => (
                                 <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
                                     <span className="flex-1 text-sm">{item.text}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button>
                                 </div>
                             ))}
                         </div>
