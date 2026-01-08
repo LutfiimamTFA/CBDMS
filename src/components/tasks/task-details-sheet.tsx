@@ -1590,13 +1590,15 @@ export function TaskDetailsSheet({
                 <AlertDialogHeader>
                     <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
                     <AlertDialogDescription>
-                        {blockingAlert.reasons.length > 0 && (
-                            <ul className="list-disc space-y-1 pl-5 mt-2">
+                         {blockingAlert.suggestion}
+                    </AlertDialogDescription>
+                    {blockingAlert.reasons.length > 0 && (
+                        <div className="pt-2">
+                            <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                                 {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
                             </ul>
-                        )}
-                        {blockingAlert.suggestion && <p className="mt-4 text-foreground">{blockingAlert.suggestion}</p>}
-                    </AlertDialogDescription>
+                        </div>
+                    )}
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, title: '', reasons: [] })}>OK</AlertDialogAction>
