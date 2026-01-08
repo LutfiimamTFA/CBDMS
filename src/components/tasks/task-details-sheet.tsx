@@ -104,6 +104,11 @@ interface FinalReviewState {
   task: Task | null;
 }
 
+interface EndOfDayState {
+  isOpen: boolean;
+}
+
+
 interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
@@ -193,6 +198,7 @@ export function TaskDetailsSheet({
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
 
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
+  const [endOfDayState, setEndOfDayState] = useState<EndOfDayState>({ isOpen: false });
 
   const [taskState, setTaskState] = useState(initialTask);
   useEffect(() => { setTaskState(initialTask) }, [initialTask]);
@@ -366,6 +372,122 @@ export function TaskDetailsSheet({
       return !['Preview', 'Revisi', 'Done'].includes(form.getValues('status'));
   }, [isAssignee, isSharedView, form]);
 
+  
+  const handlePauseSession = useCallback(async (actionSource: 'auto-pause' | 'manual' = 'manual') => {
+      if (!firestore || !currentUser || !taskState.currentSessionStartTime || !isRunning) return;
+
+      const taskRef = doc(firestore, "tasks", taskState.id);
+      
+      const startTime = parseISO(taskState.currentSessionStartTime).getTime();
+      const now = Date.now();
+      const sessionDurationInSeconds = (now - startTime) / 1000;
+      const newTimeTrackedInHours = (taskState.timeTracked || 0) + (sessionDurationInSeconds / 3600);
+      
+      const actionText = actionSource === 'auto-pause'
+          ? `session auto-paused at end of day`
+          : `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`;
+      
+      const newActivity: Activity = createActivity(currentUser, actionText);
+      
+      try {
+          await updateDoc(taskRef, {
+              timeTracked: newTimeTrackedInHours,
+              currentSessionStartTime: deleteField(),
+              lastActivity: newActivity,
+              activities: [...(taskState.activities || []), newActivity]
+          });
+          setIsRunning(false);
+          setElapsedTime(0);
+          if (actionSource === 'manual') {
+              toast({ title: 'Session Paused', description: 'Your work has been logged.' });
+          }
+      } catch (error) {
+          console.error("Failed to pause session:", error);
+          if (actionSource === 'manual') {
+              toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
+          }
+      }
+  }, [firestore, currentUser, taskState, toast, isRunning]);
+
+
+  const handleStartSession = useCallback(async (actionSource: 'auto-start' | 'manual' = 'manual') => {
+      if (isSharedView || !firestore || !currentUser || isRunning) return;
+
+      const taskRef = doc(firestore, "tasks", taskState.id);
+      const activitiesToAdd: Activity[] = [];
+      const updates: Partial<Task> = { currentSessionStartTime: new Date().toISOString() };
+
+      if (taskState.status === 'To Do') {
+          updates.status = 'Doing';
+          activitiesToAdd.push(createActivity(currentUser, 'changed status from "To Do" to "Doing"'));
+      }
+      
+      const actionText = actionSource === 'auto-start' 
+          ? 'session auto-started on task open' 
+          : 'started a work session';
+      activitiesToAdd.push(createActivity(currentUser, actionText));
+      
+      updates.activities = [...(taskState.activities || []), ...activitiesToAdd];
+      updates.lastActivity = activitiesToAdd[activitiesToAdd.length - 1];
+      if (!taskState.actualStartDate) updates.actualStartDate = new Date().toISOString();
+      
+      await updateDoc(taskRef, updates);
+      setIsRunning(true);
+      if (actionSource === 'manual') {
+          toast({ title: 'Session Started' });
+      }
+  }, [firestore, currentUser, taskState, toast, isRunning, isSharedView]);
+
+
+  useEffect(() => {
+      if (open && isAssignee && taskState.status === 'To Do' && !isSharedView) {
+          handleStartSession('auto-start');
+      }
+  }, [open, isAssignee, taskState.status, handleStartSession, isSharedView]);
+
+
+  useEffect(() => {
+    if (isSharedView) return;
+
+    const checkTime = () => {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+
+        // Auto-pause for lunch at 12:00
+        if (hours === 12 && minutes === 0 && isRunning) {
+            handlePauseSession('auto-pause');
+        }
+        
+        // Auto-resume after lunch at 13:00
+        if (hours === 13 && minutes === 0 && !isRunning && taskState.status === 'Doing') {
+            // Check if the last activity was an auto-pause to avoid starting a session for someone who paused manually.
+            const lastActivity = taskState.activities?.[taskState.activities.length - 1];
+            if (lastActivity?.action.includes('auto-paused')) {
+                handleStartSession('auto-start');
+            }
+        }
+
+        // Show end of day prompt at 17:00
+        if (hours === 17 && minutes === 0 && isRunning) {
+            setEndOfDayState({ isOpen: true });
+        }
+    };
+
+    const timer = setInterval(checkTime, 60 * 1000); // Check every minute
+    return () => clearInterval(timer);
+  }, [isRunning, handlePauseSession, handleStartSession, isSharedView, taskState]);
+
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isRunning) {
+      interval = setInterval(() => setElapsedTime(prevTime => prevTime + 1), 1000);
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [isRunning]);
+  
+  
   useEffect(() => {
     if (taskState && open) {
         form.reset({
@@ -396,35 +518,6 @@ export function TaskDetailsSheet({
         }
     }
   }, [taskState, form, open, isSharedView]);
-
-
-  const handlePauseSession = useCallback(async () => {
-    if (!firestore || !currentUser || !taskState.currentSessionStartTime) return;
-    
-    const taskRef = doc(firestore, "tasks", taskState.id);
-    
-    const startTime = parseISO(taskState.currentSessionStartTime).getTime();
-    const now = Date.now();
-    const sessionDurationInSeconds = (now - startTime) / 1000;
-    const newTimeTrackedInHours = (taskState.timeTracked || 0) + (sessionDurationInSeconds / 3600);
-    
-    const newActivity: Activity = createActivity(currentUser, `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`);
-    
-    try {
-        await updateDoc(taskRef, {
-            timeTracked: newTimeTrackedInHours,
-            currentSessionStartTime: deleteField(),
-            lastActivity: newActivity,
-            activities: [...(taskState.activities || []), newActivity]
-        });
-        setIsRunning(false);
-        setElapsedTime(0);
-        toast({ title: 'Session Paused', description: 'Your work has been logged.' });
-    } catch (error) {
-        console.error("Failed to pause session:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
-    }
-  }, [firestore, currentUser, taskState, toast]);
 
 
   const handleStatusChange = async (newStatus: string) => {
@@ -578,15 +671,6 @@ export function TaskDetailsSheet({
     }
   };
 
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isRunning) {
-      interval = setInterval(() => setElapsedTime(prevTime => prevTime + 1), 1000);
-    }
-    return () => { if (interval) clearInterval(interval); };
-  }, [isRunning]);
-  
   const handleMentionSelect = (user: User) => {
     const currentComment = newComment;
     const atIndex = currentComment.lastIndexOf('@');
@@ -797,26 +881,6 @@ export function TaskDetailsSheet({
     return brands?.find(b => b.id === brandId);
   }, [brands, brandId, isSharedView, session, taskState.brandId]);
   
-  const handleStartSession = async () => {
-    if (isSharedView || !firestore || !currentUser) return;
-    const taskRef = doc(firestore, "tasks", taskState.id);
-    const activitiesToAdd: Activity[] = [];
-    const updates: Partial<Task> = { currentSessionStartTime: new Date().toISOString() };
-
-    if (taskState.status === 'To Do') {
-        updates.status = 'Doing';
-        activitiesToAdd.push(createActivity(currentUser, 'changed status from "To Do" to "Doing"'));
-    }
-    activitiesToAdd.push(createActivity(currentUser, 'started a work session'));
-    updates.activities = [...(taskState.activities || []), ...activitiesToAdd];
-    updates.lastActivity = activitiesToAdd[activitiesToAdd.length - 1];
-    if (!taskState.actualStartDate) updates.actualStartDate = new Date().toISOString();
-    
-    await updateDoc(taskRef, updates);
-    setIsRunning(true);
-    toast({ title: 'Session Started' });
-  }
-  
   const canSubmit = useMemo(() => {
     if (!taskState) return false;
     const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
@@ -973,9 +1037,21 @@ export function TaskDetailsSheet({
                                         Total Logged: <span className="font-medium text-foreground">{formatHours(timeTracked)}</span>
                                     </p>
                                 </div>
-                                { isRunning ? ( <Button variant="destructive" onClick={handlePauseSession}><PauseCircle className="mr-2"/> Stop Session</Button> ) : ( <Button onClick={handleStartSession}><PlayCircle className="mr-2"/> Start Session</Button> )}
+                                {isRunning ? (
+                                    <div className="p-3 rounded-md bg-background border border-primary/20 flex items-center gap-4">
+                                        <div className="flex items-center gap-2">
+                                          <span className="relative flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                                          </span>
+                                          <span className="text-sm font-medium text-primary">Session Running</span>
+                                        </div>
+                                        <span className="font-mono text-lg text-primary">{formatStopwatch(elapsedTime)}</span>
+                                    </div>
+                                ) : (
+                                    <Button onClick={() => handleStartSession('manual')}><PlayCircle className="mr-2"/> Start Session</Button>
+                                )}
                             </div>
-                            {isRunning && ( <div className="p-3 rounded-md bg-background border border-primary/20"><div className="flex items-center justify-between"><span className="text-sm font-medium text-primary">Current Session</span><span className="font-mono text-lg text-primary">{formatStopwatch(elapsedTime)}</span></div></div> )}
                         </div>
                       )}
                       
@@ -1217,7 +1293,35 @@ export function TaskDetailsSheet({
                   <div className='space-y-4 p-4 rounded-lg border'>
                     <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
                     <Separator/>
-                    <FormField control={form.control} name="timeEstimate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel><div className="col-span-2">{!canEditContent ? ( <div className="text-sm font-medium">{timeEstimateValue} hours</div> ) : ( <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" /> )}</div></FormItem> )}/>
+                    <FormField
+                      control={form.control}
+                      name="timeEstimate"
+                      render={({ field }) => (
+                          <FormItem className="grid grid-cols-3 items-center gap-2">
+                              <FormLabel className="text-muted-foreground text-sm">Est. Pengerjaan (hari)</FormLabel>
+                              <div className="col-span-2">
+                                  {!canEditContent ? (
+                                      <div className="text-sm font-medium">{timeEstimateValue ? (timeEstimateValue / 8) : 0} hari ({timeEstimateValue || 0} jam)</div>
+                                  ) : (
+                                      <div className='flex items-center gap-2'>
+                                          <Input 
+                                              type="number" 
+                                              step="0.1"
+                                              value={field.value !== undefined ? field.value / 8 : ''} 
+                                              onChange={(e) => {
+                                                  const days = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                  const hours = days !== undefined ? days * 8 : undefined;
+                                                  field.onChange(hours);
+                                              }} 
+                                              placeholder="e.g. 1.5" 
+                                          />
+                                          <span className="text-sm text-muted-foreground whitespace-nowrap">({field.value || 0} jam)</span>
+                                      </div>
+                                  )}
+                              </div>
+                          </FormItem>
+                      )}
+                    />
                     <div className="space-y-2"><div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Total Logged</span><span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span></div><div className="col-span-3"><Progress value={timeTrackingProgress} /></div></div>
                   </div>
                 </div>
@@ -1346,8 +1450,26 @@ export function TaskDetailsSheet({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+
+        <AlertDialog open={endOfDayState.isOpen} onOpenChange={(open) => !open && setEndOfDayState({ isOpen: false })}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Jam Kerja Telah Usai</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Waktu kerja normal untuk hari ini telah berakhir. Apa yang ingin Anda lakukan untuk tugas ini?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogAction onClick={() => { handlePauseSession('auto-pause'); setEndOfDayState({ isOpen: false }); }}>
+                        Jeda & Lanjutkan Besok
+                    </AlertDialogAction>
+                    <AlertDialogCancel onClick={() => setEndOfDayState({ isOpen: false })}>
+                        Lanjutkan Lembur
+                    </AlertDialogCancel>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+
     </>
   );
 }
-
-    

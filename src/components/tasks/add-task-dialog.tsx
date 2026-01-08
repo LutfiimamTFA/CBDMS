@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -33,7 +32,7 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
-import { formatHours, priorityInfo } from '@/lib/utils';
+import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, ListOrdered, Table as TableIcon, Upload } from 'lucide-react';
@@ -65,6 +64,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { RichTextEditor } from '../ui/rich-text-editor';
+import { formatHours } from '@/lib/utils';
 
 
 const taskSchema = z.object({
@@ -988,10 +988,32 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>{t('addtask.form.quickselect.clear')}</Button></div></div>
                       </div>
 
-                      <div className='space-y-4 p-4 rounded-lg border'>
+                     <div className='space-y-4 p-4 rounded-lg border'>
                           <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
                           <Separator/>
-                          <FormField control={form.control} name="timeEstimate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel><div className="col-span-2"><Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" /></div></FormItem> )}/>
+                            <FormField
+                                control={form.control}
+                                name="timeEstimate"
+                                render={({ field }) => (
+                                    <FormItem className="grid grid-cols-3 items-center gap-2">
+                                        <FormLabel className="text-muted-foreground text-sm">Est. Pengerjaan (hari)</FormLabel>
+                                        <div className="col-span-2 flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={field.value !== undefined ? field.value / 8 : ''} 
+                                                onChange={(e) => {
+                                                    const days = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                    const hours = days !== undefined ? days * 8 : undefined;
+                                                    field.onChange(hours);
+                                                }}
+                                                placeholder="e.g., 1.5"
+                                            />
+                                            <span className="text-sm text-muted-foreground whitespace-nowrap">({field.value || 0} jam)</span>
+                                        </div>
+                                    </FormItem>
+                                )}
+                            />
                           <div className="space-y-2"><div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Total Logged</span><span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span></div><div className="col-span-3"><Progress value={timeTrackingProgress} /></div></div>
                       </div>
 
