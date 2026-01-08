@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useMemo } from 'react';
@@ -42,7 +41,7 @@ export function SharedScheduleView({ session, tasks, isLoading }: SharedSchedule
     }, [tasks]);
 
     const handleEventClick = (clickInfo: any) => {
-        if (session?.permissions?.canViewDetails) {
+        if (session.accessLevel) {
             router.push(`/share/${linkId}/tasks/${clickInfo.event.id}`);
         }
     }
@@ -75,7 +74,7 @@ export function SharedScheduleView({ session, tasks, isLoading }: SharedSchedule
                 eventDisplay="block"
                 dayHeaderClassNames="bg-muted"
                 viewClassNames="bg-card"
-                eventClassNames={session?.permissions?.canViewDetails ? "cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium" : "border-none px-2 py-0.5 text-xs rounded-md font-medium"}
+                eventClassNames={session.accessLevel ? "cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium" : "border-none px-2 py-0.5 text-xs rounded-md font-medium"}
             />
           </div>
         )}
