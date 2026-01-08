@@ -123,6 +123,8 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
   
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
+  const [pendingDeleteTask, setPendingDeleteTask] = React.useState<Task | null>(null);
+
 
   const canChangePriority = React.useMemo(() => {
       if (sharedPermissions) return false;
@@ -178,6 +180,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       if (!firestore) return;
       const taskRef = doc(firestore, 'tasks', taskId);
       deleteDocumentNonBlocking(taskRef);
+      toast({ title: "Task Deleted", description: "The task is being removed from the system."});
   };
   
   const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
@@ -434,13 +437,16 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         const task = row.original;
         
         const canDelete = React.useMemo(() => {
-            if (!profile || !permissions) return false;
+            if (isShareView || !profile || !permissions) return false;
             if (profile.role === 'Super Admin') return true;
             if (profile.role === 'Manager') {
                 return permissions.Manager.canDeleteTasks && (profile.brandIds || []).includes(task.brandId);
             }
+            if (profile.role === 'Employee' || profile.role === 'PIC') {
+              return task.createdBy?.id === profile.id;
+            }
             return false;
-        }, [profile, permissions, task]);
+        }, [profile, permissions, task, isShareView]);
 
         if (isShareView) return null;
 
@@ -465,7 +471,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
               {canDelete && (
                 <DropdownMenuItem
                     className='text-destructive focus:text-destructive focus:bg-destructive/10'
-                    onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id)}}
+                    onClick={(e) => { e.stopPropagation(); setPendingDeleteTask(task)}}
                 >
                     <Trash2 className='mr-2 h-4 w-4' />
                     Delete Task
@@ -707,6 +713,36 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
           </ScrollArea>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={!!pendingDeleteTask} onOpenChange={() => setPendingDeleteTask(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus tugas ini?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anda akan menghapus tugas: <strong className="text-foreground">{pendingDeleteTask?.title}</strong>
+              <br/><br/>
+              {(pendingDeleteTask?.status && ['Doing','Preview','Revisi'].includes(pendingDeleteTask?.status)) && (
+                <span className="text-destructive font-semibold">PERINGATAN: Tugas ini sedang berjalan. </span>
+              )}
+              Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (pendingDeleteTask) {
+                  handleDeleteTask(pendingDeleteTask.id);
+                  setPendingDeleteTask(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Ya, Hapus Tugas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
