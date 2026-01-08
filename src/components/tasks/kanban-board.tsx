@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -269,79 +268,78 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   };
   
   const handleConfirmRejection = async () => {
-      if (!revisionState.task || revisionState.items.length === 0 || !firestore || !profile) {
-          toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
-          return;
-      }
-      setIsSaving(true);
-      
-      const task = revisionState.task;
-      const taskRef = doc(firestore, 'tasks', task.id);
-      const newStatus = 'Revisi';
-      
-      const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({
-          id: crypto.randomUUID(),
-          text: item.text,
-          completed: false,
-      }));
-  
-      const newRevisionCycle: RevisionCycle = {
-          cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
-          requestedAt: serverTimestamp() as any,
-          requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
-          items: newRevisionItems,
-      };
-      
-      const taskUpdateData: Partial<Task> = {
-          status: newStatus,
-          revisionItems: newRevisionItems,
-          revisionHistory: [...(task.revisionHistory || []), newRevisionCycle],
-          lastActivity: createActivity(profile, `requested revisions and moved task to "${newStatus}"`),
-          updatedAt: serverTimestamp() as any,
-          actualCompletionDate: deleteField() as any,
-      };
-  
-      // Local state update first
-      setTasks(currentTasks => 
-          currentTasks.map(t => t.id === task.id ? { ...t, ...taskUpdateData } as Task : t)
-      );
-      
-      try {
-          // --- Critical Operation: Update the task document ---
-          await updateDoc(taskRef, taskUpdateData);
-          toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
-  
-          // --- Non-Critical Operation: Send notifications ---
-          const notificationBatch = writeBatch(firestore);
-          const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...". See task for revision checklist.`;
-          task.assigneeIds.forEach(assigneeId => {
-              if (assigneeId !== profile.id) {
-                  const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
-                  notificationBatch.set(notifRef, {
-                      userId: assigneeId,
-                      title: 'Revisions Required',
-                      message: notificationMessage,
-                      taskId: task.id,
-                      isRead: false,
-                      createdAt: serverTimestamp(),
-                      createdBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
-                  });
-              }
-          });
-          await notificationBatch.commit().catch(notifError => {
-              console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, errorCode: (notifError as any).code, message: (notifError as any).message });
-              toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
-          });
-  
-      } catch (error: any) {
-          console.error('[requestRevisions] Critical task update failed:', { taskId: task.id, errorCode: error.code, message: error.message });
-          // Revert local state if the critical update fails
-          setTasks(initialTasks); 
-          toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
-      } finally {
-          setIsSaving(false);
-          setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
-      }
+    if (!revisionState.task || revisionState.items.length === 0 || !firestore || !profile) {
+        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
+        return;
+    }
+    setIsSaving(true);
+
+    const task = revisionState.task;
+    const taskRef = doc(firestore, 'tasks', task.id);
+    const newStatus = 'Revisi';
+
+    const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({
+        id: crypto.randomUUID(),
+        text: item.text,
+        completed: false,
+    }));
+
+    const newRevisionCycle: RevisionCycle = {
+        cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
+        requestedAt: serverTimestamp() as any,
+        requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
+        items: newRevisionItems,
+    };
+    
+    const taskUpdateData: any = {
+        status: newStatus,
+        revisionItems: newRevisionItems,
+        revisionHistory: [...(task.revisionHistory || []), newRevisionCycle],
+        lastActivity: createActivity(profile, `requested revisions and moved task to "${newStatus}"`),
+        updatedAt: serverTimestamp() as any,
+        actualCompletionDate: deleteField(),
+    };
+    taskUpdateData['activities'] = [...(task.activities || []), taskUpdateData.lastActivity];
+
+
+    // Local state update first
+    setTasks(currentTasks => 
+        currentTasks.map(t => t.id === task.id ? { ...t, ...taskUpdateData, updatedAt: new Date() } as Task : t)
+    );
+    
+    try {
+        await updateDoc(taskRef, taskUpdateData);
+        toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
+
+        const notificationBatch = writeBatch(firestore);
+        const notificationMessage = `${profile.name} requested revisions on "${task.title.substring(0, 30)}...". See task for revision checklist.`;
+        task.assigneeIds.forEach(assigneeId => {
+            if (assigneeId !== profile.id) {
+                const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+                notificationBatch.set(notifRef, {
+                    userId: assigneeId,
+                    title: 'Revisions Required',
+                    message: notificationMessage,
+                    taskId: task.id,
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    createdBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
+                });
+            }
+        });
+        await notificationBatch.commit().catch(notifError => {
+            console.error('[requestRevisions] Notification failed but task was updated:', { taskId: task.id, errorCode: (notifError as any).code, message: (notifError as any).message });
+            toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
+        });
+
+    } catch (error: any) {
+        console.error('[requestRevisions] Critical task update failed:', { taskId: task.id, errorCode: error.code, message: error.message });
+        setTasks(initialTasks); 
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
+    } finally {
+        setIsSaving(false);
+        setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
+    }
   };
   
   const handleAddRevisionItem = () => {

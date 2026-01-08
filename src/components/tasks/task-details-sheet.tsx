@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -113,18 +112,14 @@ const getCurrentSubmissionCycle = (task: Task | null): number => {
     if (!task) return 1;
     const historyLength = task.revisionHistory?.length ?? 0;
 
-    // Legacy case: Task is in revision, has items, but no history yet.
-    // This is the first revision, so the upcoming submission is for cycle 2.
-    if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0 && historyLength === 0) {
-        return 2;
-    }
-
-    // Standard case: cycle number is based on history length.
     if (historyLength > 0) {
         return historyLength + 1;
     }
+    
+    if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
+        return 2;
+    }
 
-    // Default case: Initial submission.
     return 1;
 };
 
@@ -905,23 +900,21 @@ export function TaskDetailsSheet({
   }, [brands, brandId, isSharedView, session, taskState.brandId]);
   
   const canSubmit = useMemo(() => {
-      if (!taskState) return false;
-      if (isSharedView) return false;
-      const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
-      
-      const isInRevision = taskState.status === 'Revisi' || (taskState.revisionItems && taskState.revisionItems.length > 0);
-      const allRevisionsCompleted = !isInRevision || (taskState.revisionItems || []).every(item => item.completed);
-      
-      const currentCycle = getCurrentSubmissionCycle(taskState);
-      const hasDeliverablesForCurrentCycle = (taskState.deliverables || []).some(
-          d => (d.forRevisionCycle ?? 1) === currentCycle
-      );
-      
-      // If in revision, must have new deliverables. Otherwise, it's optional.
-      const deliverablesMet = isInRevision ? hasDeliverablesForCurrentCycle : true;
-      
-      return allSubtasksCompleted && allRevisionsCompleted && deliverablesMet;
-  }, [taskState, isSharedView]);
+    if (!taskState) return false;
+    if (isSharedView) return false;
+    
+    const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
+    
+    const isInRevision = taskState.status === 'Revisi' || (taskState.revisionItems && taskState.revisionItems.length > 0);
+    const allRevisionsCompleted = !isInRevision || (taskState.revisionItems || []).every(item => item.completed);
+    
+    const currentCycle = getCurrentSubmissionCycle(taskState);
+    const hasDeliverablesForCurrentCycle = (taskState.deliverables || []).some(
+        d => (d.forRevisionCycle ?? 1) === currentCycle
+    );
+    
+    return allSubtasksCompleted && allRevisionsCompleted && hasDeliverablesForCurrentCycle;
+}, [taskState, isSharedView]);
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
