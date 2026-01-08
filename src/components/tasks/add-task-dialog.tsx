@@ -986,6 +986,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           </div>
                           <div className="space-y-2"><Label className="text-xs text-muted-foreground">{t('addtask.form.quickselect')}</Label><div className="flex flex-wrap gap-2">{quickDateOptions.map(option => (<Button key={option.label} type="button" variant="outline" size="sm" onClick={() => setDateValue('dueDate', option.getValue())}>{option.label}</Button>))} <Button type="button" variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => form.setValue('dueDate', undefined)}>{t('addtask.form.quickselect.clear')}</Button></div></div>
                       </div>
+
+                      <div className='space-y-4 p-4 rounded-lg border'>
+                          <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                          <Separator/>
+                          <FormField control={form.control} name="timeEstimate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel><div className="col-span-2"><Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" /></div></FormItem> )}/>
+                          <div className="space-y-2"><div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Total Logged</span><span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span></div><div className="col-span-3"><Progress value={timeTrackingProgress} /></div></div>
+                      </div>
+
                     </div>
                   </div>
 
@@ -1222,5 +1230,3 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
-
-    
