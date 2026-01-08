@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -122,13 +122,13 @@ const getCurrentSubmissionCycle = (task: Task | null): number => {
     if (!task) return 1;
     const historyLength = task.revisionHistory?.length ?? 0;
 
+    // Standard case: if there's history, the next submission is for the next cycle.
     if (historyLength > 0) {
-        // If there's history, the next cycle is always history length + 1
         return historyLength + 1;
     }
     
-    // Legacy case: If it's in revision with items but no history, it's the first revision.
-    // The submission for this will be cycle 2.
+    // Legacy/Edge case: The task is in revision, has a checklist, but no history yet.
+    // This implies it's the *first* revision cycle. The upcoming submission will be for cycle 2.
     if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
         return 2;
     }
@@ -229,6 +229,7 @@ export function TaskDetailsSheet({
   const [endOfDayState, setEndOfDayState] = useState<EndOfDayState>({ isOpen: false });
   const [blockingAlert, setBlockingAlert] = useState<{ isOpen: boolean, title: string, reasons: string[], suggestion?: string }>({ isOpen: false, title: '', reasons: [], suggestion: '' });
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
 
 
   const [taskState, setTaskState] = useState(initialTask);
@@ -409,11 +410,12 @@ export function TaskDetailsSheet({
     if (isSharedView) return false;
     if (!currentUser || arePermsLoading) return false;
     if (currentUser.role === 'Super Admin') return true;
-    if (currentUser.role === 'Manager') {
-      return permissions?.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(taskState.brandId);
+    if (currentUser.role === 'Manager' && permissions) {
+        return permissions.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(taskState.brandId);
     }
+    // Employee/PIC can only delete tasks they created themselves
     if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
-      return taskState.createdBy?.id === currentUser.id;
+        return taskState.createdBy?.id === currentUser.id;
     }
     return false;
   }, [currentUser, permissions, arePermsLoading, taskState, isSharedView]);
@@ -976,7 +978,6 @@ export function TaskDetailsSheet({
  const canSubmit = useMemo(() => {
     if (!taskState || isSharedView) return false;
 
-    const currentCycle = getCurrentSubmissionCycle(taskState);
     const reasons = getBlockingReasonsForStatusChange('Preview', taskState);
     
     return !reasons.blocked;
@@ -1362,7 +1363,16 @@ export function TaskDetailsSheet({
                           </div>
                       )}
                   
-                  {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( <div className="space-y-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button></div> )}
+                  {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
+                    <div className="flex w-full gap-2">
+                      <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
+                        <XCircle className="mr-2 h-4 w-4"/> Request Revisions
+                      </Button>
+                      <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
+                        <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                      </Button>
+                    </div> 
+                  )}
 
                   {(isAssignee || isCreator) && taskState.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
                   <div className='space-y-4 p-4 rounded-lg border'>
@@ -1626,6 +1636,50 @@ export function TaskDetailsSheet({
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+         <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Create Revision Checklist</DialogTitle>
+                    <DialogDescription>
+                    Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                    <div className="py-4 space-y-4">
+                        <div className="space-y-2">
+                            {revisionState.items.map((item, index) => (
+                                <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                    <span className="flex-1 text-sm">{item.text}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Input 
+                                value={revisionState.currentItemText}
+                                onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                                placeholder="e.g., Fix the logo placement"
+                                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
+                            />
+                            <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                                <Plus className="mr-2 h-4 w-4"/> Add
+                            </Button>
+                        </div>
+                    </div>
+                </ScrollArea>
+                <DialogFooter className="p-6 pt-4 border-t">
+                    <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
+                    <Button variant="destructive" onClick={() => {
+                        // This logic needs to be implemented based on the main kanban board's handler
+                        console.log("Confirming rejection with items:", revisionState.items);
+                        // handleConfirmRejection();
+                    }} disabled={isSaving || revisionState.items.length === 0}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Request Revisions
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </>
   );
 }
