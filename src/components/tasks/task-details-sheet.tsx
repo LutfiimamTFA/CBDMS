@@ -1066,7 +1066,11 @@ export function TaskDetailsSheet({
 
   const handleAddRevisionItem = () => {
     if (revisionState.currentItemText.trim()) {
-      setRevisionState(prev => ({ ...prev, items: [...prev.items, { text: prev.currentItemText }] }));
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
     }
   };
 
@@ -1080,14 +1084,13 @@ export function TaskDetailsSheet({
     const taskRef = doc(firestore, 'tasks', task.id);
     const newStatus = 'Revisi';
     
-    // Create new revision items with unique IDs
     const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({ id: crypto.randomUUID(), text: item.text, completed: false }));
     
     const newRevisionCycle: RevisionCycle = {
         cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
-        requestedAt: serverTimestamp() as any,
+        requestedAt: new Date().toISOString() as any, // Use client-side timestamp
         requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        items: newRevisionItems, // Use the new items with IDs
+        items: newRevisionItems,
     };
     
     const taskUpdateData: any = {
@@ -1104,7 +1107,6 @@ export function TaskDetailsSheet({
         await updateDoc(taskRef, taskUpdateData);
         toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
         
-        // --- Non-critical Notification Batch ---
         const notificationBatch = writeBatch(firestore);
         const notificationMessage = `${currentUser.name} requested revisions on "${task.title.substring(0, 30)}...".`;
         
@@ -1128,7 +1130,7 @@ export function TaskDetailsSheet({
             toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
         });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('[requestRevisions] Critical task update failed:', error);
         setTaskState(task); // Revert UI
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
@@ -1390,7 +1392,7 @@ export function TaskDetailsSheet({
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
                             {(taskState.revisionHistory && taskState.revisionHistory.length > 0) ? (
                                 <Accordion type="single" collapsible>
-                                    {taskState.revisionHistory.slice().sort((a,b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                    {taskState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => (
                                         <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
                                             <AccordionTrigger>
                                                 <div className="flex flex-col items-start text-left">
@@ -1750,3 +1752,4 @@ export function TaskDetailsSheet({
     </>
   );
 }
+
