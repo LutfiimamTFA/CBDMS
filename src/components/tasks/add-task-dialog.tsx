@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -64,6 +63,7 @@ import { getInitials } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { RichTextEditor } from '../ui/rich-text-editor';
 
 
 const taskSchema = z.object({
@@ -333,34 +333,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       tags: [],
     },
   });
-
-  const descriptionValue = useWatch({ control: form.control, name: "description" });
-
-  const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'numbered-list' | 'table') => {
-    const currentDescription = form.getValues('description') || '';
-    let modifier = '';
-    
-    switch (type) {
-      case 'bold':
-        modifier = '****';
-        break;
-      case 'italic':
-        modifier = '**';
-        break;
-      case 'list':
-        modifier = '\n- ';
-        break;
-      case 'numbered-list':
-        modifier = '\n1. ';
-        break;
-      case 'table':
-        setIsTablePopoverOpen(true);
-        return;
-    }
-    
-    form.setValue('description', currentDescription + modifier, { shouldDirty: true });
-  };
-  
 
   useEffect(() => {
     if (open && currentUserProfile && user) {
@@ -640,57 +612,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setDeliverables(prev => prev.filter(att => att.id !== id));
   };
   
-  const generateTableMarkdown = (rows: number, cols: number) => {
-    let table = '';
-    table += `| ${Array.from({ length: cols }, (_, i) => `Col ${i + 1}`).join(' | ')} |\n`;
-    table += `| ${Array.from({ length: cols }).map(() => '---').join(' | ')} |\n`;
-    for (let i = 0; i < rows; i++) {
-      table += `| ${Array.from({ length: cols }).map(() => ' ').join(' | ')} |\n`;
-    }
-    return table;
-  };
-  
-  const handleGenerateTable = () => {
-    const tableMarkdown = generateTableMarkdown(tableRows, tableCols);
-    const currentDescription = form.getValues('description') || '';
-    form.setValue('description', `${currentDescription}\n\n${tableMarkdown}\n`);
-    setIsTablePopoverOpen(false);
-  };
-
-
-  const renderCustomFieldInput = (field: CustomField) => {
-    switch (field.type) {
-      case 'Number':
-        return <Input type="number" placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
-      case 'Date':
-        return <Input type="date" placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
-      case 'Dropdown':
-        const options = field.options?.split(',').map(o => o.trim()).filter(Boolean) || [];
-        return (
-          <div className="flex-1 grid grid-cols-2 gap-2">
-            <Input 
-              placeholder="Options (comma-separated)" 
-              value={field.options} 
-              onChange={(e) => handleCustomFieldChange(field.id, 'options', e.target.value)}
-            />
-            <Select onValueChange={(val) => handleCustomFieldChange(field.id, 'value', val)} value={field.value}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select value" />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((option, index) => (
-                  <SelectItem key={index} value={option}>{option}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        );
-      case 'Text':
-      default:
-        return <Input placeholder="Value" value={field.value} onChange={(e) => handleCustomFieldChange(field.id, 'value', e.target.value)} className="flex-1" />;
-    }
-  };
-
   const handleAddSubtask = () => {
     if (newSubtaskTitle.trim()) {
       const newSubtask: Subtask = {
@@ -929,45 +850,22 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
                       <div className="space-y-2">
                         <Label>Description</Label>
-                        <div className="rounded-md border">
-                          <div className="p-2 border-b flex items-center gap-1">
-                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('numbered-list')}><ListOrdered /></Button>
-                            <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button type="button" variant="ghost" size="icon"><TableIcon /></Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-60 p-4 space-y-4">
-                                    <h4 className="font-medium text-sm">Insert Table</h4>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Input type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" />
-                                        <Input type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" />
-                                    </div>
-                                    <Button onClick={handleGenerateTable} className="w-full">Generate</Button>
-                                </PopoverContent>
-                            </Popover>
-                          </div>
-                        <FormField control={form.control} name="description" render={({ field }) => (
-                            <FormItem>
-                                <FormControl>
-                                <Textarea
-                                    placeholder={t('addtask.form.description.placeholder')}
-                                    {...field}
-                                    rows={8}
-                                    className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-t-none"
-                                />
-                                </FormControl>
-                                <FormMessage />
-                            </FormItem>
-                          )}/>
-                          <div className="prose dark:prose-invert prose-sm max-w-none p-4 min-h-[10rem] bg-secondary/30 rounded-b-md">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {descriptionValue || "Description preview will appear here..."}
-                            </ReactMarkdown>
-                          </div>
-                        </div>
+                        <FormField
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormControl>
+                                        <RichTextEditor
+                                            value={field.value || ''}
+                                            onChange={field.onChange}
+                                            placeholder={t('addtask.form.description.placeholder')}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                       </div>
                     </div>
 

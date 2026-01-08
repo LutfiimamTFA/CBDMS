@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -64,6 +63,7 @@ import { Card, CardContent } from '../ui/card';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useSharedSession } from '@/context/shared-session-provider';
 import { tags as allTags } from '@/lib/data';
+import { RichTextEditor } from '../ui/rich-text-editor';
 
 
 const taskDetailsSchema = z.object({
@@ -193,9 +193,6 @@ export function TaskDetailsSheet({
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
 
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
-  const [tableRows, setTableRows] = useState(2);
-  const [tableCols, setTableCols] = useState(3);
-  const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
 
   const [taskState, setTaskState] = useState(initialTask);
   useEffect(() => { setTaskState(initialTask) }, [initialTask]);
@@ -204,7 +201,6 @@ export function TaskDetailsSheet({
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const deliverableFileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
-  const descriptionRef = useRef<HTMLTextAreaElement>(null);
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
   
@@ -905,34 +901,6 @@ export function TaskDetailsSheet({
     return isAssignee || isManagerOrAdmin;
   }, [isSharedView, accessLevel, isAssignee, isManagerOrAdmin]);
 
-  const generateTableMarkdown = (rows: number, cols: number) => {
-    let table = `| ${Array.from({ length: cols }, (_, i) => `Col ${i + 1}`).join(' | ')} |\n`;
-    table += `| ${Array.from({ length: cols }).map(() => '---').join(' | ')} |\n`;
-    for (let i = 0; i < rows; i++) table += `| ${Array.from({ length: cols }).map(() => ' ').join(' | ')} |\n`;
-    return table;
-  };
-  
- const applyMarkdown = (type: 'bold' | 'italic' | 'list' | 'numbered-list' | 'table') => {
-    const currentDescription = form.getValues('description') || '';
-    let modifier = '';
-    switch (type) {
-      case 'bold': modifier = '****'; break;
-      case 'italic': modifier = '**'; break;
-      case 'list': modifier = '\n- '; break;
-      case 'numbered-list': modifier = '\n1. '; break;
-      case 'table': setIsTablePopoverOpen(true); return;
-    }
-    form.setValue('description', currentDescription + modifier, { shouldDirty: true });
-  };
-
-  const handleGenerateTable = () => {
-    const tableMarkdown = generateTableMarkdown(tableRows, tableCols);
-    form.setValue('description', `${form.getValues('description') || ''}\n\n${tableMarkdown}\n`);
-    setIsTablePopoverOpen(false);
-  };
-  
-  const descriptionValue = form.watch('description');
-
   const groupedDeliverables = useMemo(() => {
     const groups: Record<number, Attachment[]> = {};
     (taskState.deliverables || []).forEach(d => {
@@ -1028,23 +996,31 @@ export function TaskDetailsSheet({
                       )}
 
                       <div className="space-y-2">
-                        <Accordion type="single" collapsible defaultValue="description">
-                          <AccordionItem value="description" className="border-none">
-                            <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">Edit Description</AccordionTrigger>
-                            <AccordionContent className="pt-2">
-                              <div className="rounded-md border">
-                                 <div className="p-2 border-b flex items-center gap-1">
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('bold')}><Bold /></Button>
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('italic')}><Italic/></Button>
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('list')}><ListIcon /></Button>
-                                     <Button type="button" variant="ghost" size="icon" onClick={() => applyMarkdown('numbered-list')}><ListOrdered /></Button>
-                                     <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}><PopoverTrigger asChild><Button type="button" variant="ghost" size="icon"><TableIcon /></Button></PopoverTrigger><PopoverContent className="w-60 p-4 space-y-4"><h4 className="font-medium text-sm">Insert Table</h4><div className="grid grid-cols-2 gap-2"><Input type="number" value={tableCols} onChange={(e) => setTableCols(Number(e.target.value))} placeholder="Cols" /><Input type="number" value={tableRows} onChange={(e) => setTableRows(Number(e.target.value))} placeholder="Rows" /></div><Button onClick={handleGenerateTable} className="w-full">Generate</Button></PopoverContent></Popover>
-                                 </div>
-                                  <FormField control={form.control} name="description" render={({ field }) => ( <FormItem><FormControl><Textarea ref={descriptionRef} placeholder="Add a more detailed description..." {...field} rows={8} className="border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-t-none" readOnly={!canEditContent} /></FormControl></FormItem> )}/>
-                                  <div className="prose dark:prose-invert prose-sm max-w-none p-4 min-h-[10rem] bg-secondary/30 rounded-b-md"><ReactMarkdown remarkPlugins={[remarkGfm]}>{typeof descriptionValue === 'string' ? descriptionValue : '' || "Description preview will appear here..."}</ReactMarkdown></div>
-                              </div>
-                            </AccordionContent>
-                          </AccordionItem>
+                         <Accordion type="single" collapsible defaultValue={!taskState.description ? "description" : undefined}>
+                            <AccordionItem value="description" className="border-none">
+                                <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
+                                    {taskState.description ? 'View/Edit Description' : 'Add Description'}
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-2">
+                                    <FormField
+                                        control={form.control}
+                                        name="description"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <RichTextEditor
+                                                        value={field.value || ''}
+                                                        onChange={field.onChange}
+                                                        placeholder="Add a more detailed description..."
+                                                        readOnly={!canEditContent}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </AccordionContent>
+                            </AccordionItem>
                         </Accordion>
                       </div>
 
