@@ -173,6 +173,12 @@ const formatDate = (date: any): string => {
     return format(dateObj, 'PP, p');
 };
   
+interface RevisionState {
+  isOpen: boolean;
+  task: Task | null;
+  items: Omit<RevisionItem, 'id' | 'completed'>[];
+  currentItemText: string;
+}
 
 export function TaskDetailsSheet({ 
   task: initialTask, 
@@ -1374,12 +1380,12 @@ export function TaskDetailsSheet({
                       )}
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
-                    <div className="flex w-full gap-2">
+                    <div className="flex flex-col w-full gap-2">
+                       <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
+                        <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                      </Button>
                       <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
                         <XCircle className="mr-2 h-4 w-4"/> Request Revisions
-                      </Button>
-                      <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
-                        <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                       </Button>
                     </div> 
                   )}
@@ -1609,12 +1615,12 @@ export function TaskDetailsSheet({
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
-                    <AlertDialogDescription>
+                     <AlertDialogDescription>
                          {blockingAlert.suggestion}
                     </AlertDialogDescription>
                     {blockingAlert.reasons.length > 0 && (
                         <div className="pt-2">
-                            <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
                                 {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
                             </ul>
                         </div>
@@ -1632,7 +1638,7 @@ export function TaskDetailsSheet({
                     <AlertDialogDescription>
                         Anda akan menghapus tugas: <strong className="text-foreground">{taskState.title}</strong>
                         <br/><br/>
-                        {['Doing', 'Preview', 'Revisi'].includes(taskState.status) && (
+                        {(['Doing', 'Preview', 'Revisi'].includes(taskState.status)) && (
                             <span className="text-destructive font-semibold">PERINGATAN: Tugas ini sedang berjalan. </span>
                         )}
                         Tindakan ini tidak dapat dibatalkan.
