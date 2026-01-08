@@ -112,15 +112,20 @@ interface EndOfDayState {
 const getCurrentSubmissionCycle = (task: Task | null): number => {
     if (!task) return 1;
     const historyLength = task.revisionHistory?.length ?? 0;
+
+    // Legacy case: Task is in revision, has items, but no history yet.
+    // This is the first revision, so the upcoming submission is for cycle 2.
+    if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0 && historyLength === 0) {
+        return 2;
+    }
+
+    // Standard case: cycle number is based on history length.
     if (historyLength > 0) {
         return historyLength + 1;
     }
-    // Legacy case: Task is in revision, but has no history yet.
-    // This means the upcoming submission is for the first revision cycle, which is cycle 2.
-    if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
-        return 2;
-    }
-    return 1; // Default to the first submission cycle
+
+    // Default case: Initial submission.
+    return 1;
 };
 
 
@@ -901,6 +906,7 @@ export function TaskDetailsSheet({
   
   const canSubmit = useMemo(() => {
       if (!taskState) return false;
+      if (isSharedView) return false;
       const allSubtasksCompleted = (taskState.subtasks || []).every(st => st.completed);
       
       const isInRevision = taskState.status === 'Revisi' || (taskState.revisionItems && taskState.revisionItems.length > 0);
@@ -915,7 +921,7 @@ export function TaskDetailsSheet({
       const deliverablesMet = isInRevision ? hasDeliverablesForCurrentCycle : true;
       
       return allSubtasksCompleted && allRevisionsCompleted && deliverablesMet;
-  }, [taskState]);
+  }, [taskState, isSharedView]);
   
   const handleFinalReviewAndComplete = async () => {
     await handleStatusChange('Done');
@@ -1282,7 +1288,7 @@ export function TaskDetailsSheet({
                                   {taskState.status === 'Preview' ? 'Waiting for Review' : 'Submit for Review'}
                               </Button>
                               {!canSubmit && taskState.status !== 'Preview' && (
-                                  <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk melanjutkan.</p>
+                                  <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
                               )}
                           </div>
                       )}
@@ -1335,7 +1341,7 @@ export function TaskDetailsSheet({
                       name="timeEstimate"
                       render={({ field }) => (
                           <FormItem className="grid grid-cols-3 items-center gap-2">
-                              <FormLabel className="text-muted-foreground text-sm">Est. Pengerjaan (hari)</FormLabel>
+                              <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
                               <div className="col-span-2">
                                   {!canEditContent ? (
                                       <div className="text-sm font-medium">{timeEstimateValue ? (timeEstimateValue / 8) : 0} hari ({timeEstimateValue || 0} jam)</div>
@@ -1444,7 +1450,7 @@ export function TaskDetailsSheet({
                         <Separator />
                         <div className="space-y-3">
                             <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
-                            <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                             <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                                 {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( 
                                     finalReviewState.task.subtasks.map(subtask => ( 
                                         <div key={subtask.id} className="flex items-center gap-3">

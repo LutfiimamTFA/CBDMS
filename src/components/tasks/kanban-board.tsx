@@ -497,7 +497,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
             <DialogHeader>
                 <DialogTitle>Final Review</DialogTitle>
                 <DialogDescription>
-                    You are about to mark this task as "Done". Please review the sub-tasks and attachments to ensure everything is complete.
+                    You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
                 </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-6">
