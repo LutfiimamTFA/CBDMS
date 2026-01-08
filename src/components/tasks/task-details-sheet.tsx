@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -65,6 +66,7 @@ import { useSharedSession } from '@/context/shared-session-provider';
 import { tags as allTags } from '@/lib/data';
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { usePermissions } from '@/context/permissions-provider';
 
 
 const taskDetailsSchema = z.object({
@@ -405,7 +407,7 @@ export function TaskDetailsSheet({
   
   const canDeleteTask = useMemo(() => {
     if (isSharedView) return false;
-    if (!currentUser || !arePermsLoading) return false;
+    if (!currentUser || arePermsLoading) return false;
     if (currentUser.role === 'Super Admin') return true;
     if (currentUser.role === 'Manager') {
       return permissions?.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(taskState.brandId);
@@ -587,11 +589,11 @@ export function TaskDetailsSheet({
     }
 
     if (targetStatus === 'Revisi') {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus diatur melalui alur 'Request Revisions' oleh Manajer."], suggestion: "Gunakan tombol 'Reject' atau 'Request Revisions' pada tampilan Manajer untuk membuat checklist revisi." };
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus diatur melalui alur 'Request Revisions' oleh Manajer."], suggestion: "Gunakan fitur Request Revisions/Reject untuk membuat checklist revisi." };
     }
 
     if (targetStatus === 'Done') {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Penyelesaian tugas wajib melalui alur persetujuan."], suggestion: "Ubah status ke 'Preview' terlebih dahulu, lalu Manajer atau Admin dapat menyetujuinya menjadi 'Done'." };
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Penyelesaian tugas wajib melalui flow Approve and Complete saat status Preview."], suggestion: "Ubah ke Preview (jika memenuhi syarat), lalu Manager klik Approve and Complete." };
     }
 
     return baseResult;
@@ -1486,7 +1488,9 @@ export function TaskDetailsSheet({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Link Google Drive File</DialogTitle>
-                    <DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription>
+                    <DialogDescription>
+                        Paste the shareable link to your Google Drive file below.
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-2">
                     <div className="space-y-2">
@@ -1509,7 +1513,9 @@ export function TaskDetailsSheet({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Final Review</DialogTitle>
-                    <DialogDescription>You are about to mark this task as "Done". Please review the items below to ensure everything is complete.</DialogDescription>
+                    <DialogDescription>
+                        You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
+                    </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[60vh] -mx-6 px-6">
                     <div className="py-4 space-y-6">
