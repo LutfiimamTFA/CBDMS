@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -81,13 +82,37 @@
     background-color: hsl(var(--primary));
   }
   .prose table {
-    @apply border-collapse my-4;
+    @apply w-full my-4 border-collapse;
+    table-layout: fixed;
   }
   .prose th,
   .prose td {
-    @apply border border-border px-4 py-2;
+    @apply border border-border px-4 py-2 relative align-top;
   }
   .prose thead th {
     @apply font-semibold;
   }
+
+  /* Styles for TipTap table resizing */
+  .ProseMirror {
+    table {
+      @apply w-full my-4 border-collapse;
+      table-layout: fixed;
+    }
+
+    td,
+    th {
+      @apply relative align-top;
+    }
+  
+    .column-resize-handle {
+      @apply absolute top-0 bottom-0 right-[-2px] w-1 cursor-col-resize;
+      background-color: hsl(var(--primary) / 0.5);
+    }
+
+    &.resize-cursor {
+      @apply cursor-col-resize;
+    }
+  }
 }
+

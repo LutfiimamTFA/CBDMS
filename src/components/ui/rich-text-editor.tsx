@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
+import { useEffect } from "react";
 
 const CustomTableCell = TableCell.extend({
   addAttributes() {
@@ -142,7 +144,20 @@ export function RichTextEditor({ value, onChange, placeholder, readOnly = false,
                 class: "prose dark:prose-invert prose-sm sm:prose-base max-w-none focus:outline-none p-4",
             },
         },
-    }, [value, readOnly]); // Re-initialize editor if value or readOnly status changes
+    });
+
+    useEffect(() => {
+        if (editor) {
+            editor.setEditable(!readOnly);
+        }
+    }, [readOnly, editor]);
+    
+    useEffect(() => {
+        if (editor && value !== editor.getHTML() && !editor.isFocused) {
+            editor.commands.setContent(value, false);
+        }
+    }, [value, editor]);
+
 
     return (
         <div className="rounded-md border" style={{ minHeight }}>
@@ -151,3 +166,4 @@ export function RichTextEditor({ value, onChange, placeholder, readOnly = false,
         </div>
     );
 }
+
