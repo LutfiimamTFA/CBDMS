@@ -6,11 +6,14 @@ import React, { useMemo, useState } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { Task, WorkflowStatus, Brand, User } from '@/lib/types';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, ChevronDown } from 'lucide-react';
 import { usePermissions } from '@/context/permissions-provider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddTaskDialog } from '@/components/tasks/add-task-dialog';
 import { Button } from '@/components/ui/button';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import { parseISO } from 'date-fns';
 
 export default function TasksPage() {
   const { t } = useI18n();
@@ -91,6 +94,44 @@ export default function TasksPage() {
         return allVisibleTasks;
     }
   }, [allVisibleTasks, activeTab, profile, teamUsers]);
+  
+  const { activeTasks, doneTasks } = useMemo(() => {
+    const active: Task[] = [];
+    const done: Task[] = [];
+
+    filteredTasks.forEach(task => {
+        if (task.status === 'Done') {
+            done.push(task);
+        } else {
+            active.push(task);
+        }
+    });
+
+    const priorityOrder = { 'Urgent': 4, 'High': 3, 'Medium': 2, 'Low': 1, 'Default': 0 };
+
+    active.sort((a, b) => {
+        const priorityA = priorityOrder[a.priority] || 0;
+        const priorityB = priorityOrder[b.priority] || 0;
+
+        if (priorityA !== priorityB) {
+            return priorityB - priorityA;
+        }
+
+        const dateA = a.dueDate ? parseISO(a.dueDate).getTime() : Infinity;
+        const dateB = b.dueDate ? parseISO(b.dueDate).getTime() : Infinity;
+        
+        if (dateA !== dateB) {
+            return dateA - dateB;
+        }
+        
+        // As a final tie-breaker, sort by creation date
+        const createdAtA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const createdAtB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return createdAtA - createdAtB;
+    });
+
+    return { activeTasks: active, doneTasks: done };
+}, [filteredTasks]);
 
 
   const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading || (profile?.role === 'Manager' && isTeamUsersLoading);
@@ -133,13 +174,33 @@ export default function TasksPage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <div className="mt-4">
+          <div className="space-y-4">
               <TasksDataTable 
-              tasks={filteredTasks || []}
+              tasks={activeTasks || []}
               statuses={statuses || []}
               brands={brands || []}
               users={users || []}
             />
+            {doneTasks.length > 0 && (
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="done-tasks">
+                  <AccordionTrigger className="text-base font-semibold text-muted-foreground hover:no-underline rounded-lg bg-secondary/50 px-4">
+                      <div className="flex items-center gap-2">
+                        <span>Completed Tasks</span>
+                        <Badge variant="outline">{doneTasks.length}</Badge>
+                      </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4">
+                      <TasksDataTable 
+                        tasks={doneTasks || []}
+                        statuses={statuses || []}
+                        brands={brands || []}
+                        users={users || []}
+                      />
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            )}
           </div>
         )}
       </main>
