@@ -76,10 +76,10 @@ const postSchema = z.object({
 type PostFormValues = z.infer<typeof postSchema>;
 
 interface CreatePostDialogProps {
-  children?: React.ReactNode;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  post?: SocialMediaPost;
+    children?: React.ReactNode;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+    post?: SocialMediaPost;
 }
 
 const formatDate = (date: any): string => {
@@ -413,7 +413,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         {!imagePreview ? (
                           <div className="text-center text-muted-foreground"><UploadCloud className="mx-auto h-8 w-8" /><p>Click to upload</p></div>
                         ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} objectFit="horizontal-cover" /></div>
+                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} objectFit="contain" /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
                       </div>
                       {imagePreview && isEditable &&
@@ -472,6 +472,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                   postType={postType}
                   mediaType={mediaType}
                   aspect={finalAspect}
+                  crop={crop}
+                  zoom={zoom}
               />
             </div>
           </ScrollArea>
