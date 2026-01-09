@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -339,7 +338,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                         {!imagePreview ? (
                           <div className="text-center text-muted-foreground"><UploadCloud className="mx-auto h-8 w-8" /><p>Click to upload</p></div>
                         ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} /></div>
+                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
                       </div>
                       {mediaType === 'image' && imagePreview && <Slider value={[zoom]} min={1} max={3} step={0.1} onValueChange={(val) => setZoom(val[0])} />}
@@ -372,10 +371,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             </div>
           </ScrollArea>
           <ScrollArea className="h-full">
-            <div className="p-6 bg-secondary/50 flex flex-col items-center justify-center h-full gap-4">
+            <div className="p-6 bg-zinc-100 dark:bg-zinc-900 flex flex-col items-center justify-center h-full gap-4">
               {isApproverView && (
                 <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                  {(post.revisionHistory?.length || 0) > 0 ? `Revision Cycle #${post.revisionHistory?.length}` : 'Initial Submission'}
+                  {(post.revisionHistory?.length || 0) > 0 ? `Revision Cycle #${post.revisionHistory.length}` : 'Initial Submission'}
                   {' • '}
                   Requested: {post.revisionHistory ? formatDate(post.revisionHistory[post.revisionHistory.length - 1].requestedAt) : '-'}
                 </div>
