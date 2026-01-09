@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -53,7 +52,7 @@ import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCi
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User as UserType, Brand, RevisionItem, RevisionCycle } from '@/lib/types';
-import { InstagramPostPreview, MediaFrame } from './instagram-post-preview';
+import { MediaFrame, InstagramPostPreview } from './instagram-post-preview';
 import { Label } from '../ui/label';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { Slider } from '../ui/slider';
@@ -96,6 +95,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const mode = post ? 'edit' : 'create';
 
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -142,6 +143,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
 
     if (brandIdsToQuery && brandIdsToQuery.length > 0) {
       q = query(q, where('__name__', 'in', brandIdsToQuery));
+    } else if (profile.companyId) {
+        // Fallback for super admin or when no specific brands are assigned.
+        q = query(q, where('companyId', '==', profile.companyId));
     }
     
     return q;
@@ -320,6 +324,31 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       setIsSaving(false);
     }
   };
+  
+  const handleDeletePost = async () => {
+    if (!firestore || !post) return;
+    setIsDeleting(true);
+
+    const postRef = doc(firestore, 'socialMediaPosts', post.id);
+    try {
+      await deleteDoc(postRef);
+      toast({
+        title: 'Post Deleted',
+        description: 'The social media post has been permanently removed.',
+      });
+      setDeleteConfirmOpen(false);
+      setOpen(false);
+    } catch (error: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Deletion Failed',
+            description: error.message || 'Could not delete the post.',
+        });
+    } finally {
+        setIsDeleting(false);
+    }
+  };
+
 
   const onFormSubmit = (status: SocialMediaPost['status']) => form.handleSubmit((data) => handleSubmit(data, status))();
   const isManager = profile?.role === 'Manager' || profile?.role === 'Super Admin';
@@ -330,6 +359,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const allRevisionsCompleted = useMemo(() => revisionItems.every(item => item.completed), [revisionItems]);
   const handleAddRejectionItem = () => { if (currentItemText.trim()) { setRejectionItems(prev => [...prev, { text: currentItemText }]); setCurrentItemText(''); } };
   
+  const canDelete = mode === 'edit' && post && (isManager || (isCreator && post.status === 'Draft'));
+
   const submissionLabel = useMemo(() => {
     if (mode !== 'edit' || !post) return null;
     if (!post.revisionHistory || post.revisionHistory.length === 0) {
@@ -341,146 +372,155 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
 
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {mode === 'create' && <DialogTrigger asChild>{children}</DialogTrigger>}
-      <DialogContent className="max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
-        <DialogHeader className="p-6 pb-4">
-          <DialogTitle>{mode === 'create' ? 'Create Social Media Post' : 'Review & Edit Post'}</DialogTitle>
-        </DialogHeader>
-        <div className="grid md:grid-cols-2 h-full overflow-hidden">
-          <ScrollArea className="md:border-r h-full">
-            <div className="p-6 space-y-6">
-              <div className='p-4 bg-zinc-900 rounded-lg'>
-                <MediaFrame
-                  mode="editor"
-                  mediaUrl={imagePreview}
-                  mediaType={mediaType}
-                  aspect={finalAspect}
-                  crop={crop}
-                  zoom={zoom}
-                  onCropChange={onCropChange}
-                  onZoomChange={onZoomChange}
-                  isEditable={isEditable}
-                />
-              </div>
-
-              {isCreatorEditView && revisionItems.length > 0 && (
-                <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
-                  <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5" /> Revisions Requested</h3>
-                  <div className="space-y-2">
-                    {revisionItems.map(item => (
-                      <div key={item.id} className="flex items-center gap-3">
-                        <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => setRevisionItems(revs => revs.map(r => r.id === item.id ? {...r, completed: !r.completed} : r))} />
-                        <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
-                      </div>
-                    ))}
-                  </div>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        {mode === 'create' && <DialogTrigger asChild>{children}</DialogTrigger>}
+        <DialogContent className="max-w-4xl grid-rows-[auto_minmax(0,1fr)_auto] p-0 max-h-[90vh]">
+          <DialogHeader className="p-6 pb-4">
+            <DialogTitle>{mode === 'create' ? 'Create Social Media Post' : 'Review & Edit Post'}</DialogTitle>
+          </DialogHeader>
+          <div className="grid md:grid-cols-2 h-full overflow-hidden">
+            <ScrollArea className="md:border-r h-full">
+              <div className="p-6 space-y-6">
+                <div className='p-4 bg-zinc-900 rounded-lg'>
+                  <MediaFrame
+                    mode="editor"
+                    mediaUrl={imagePreview}
+                    mediaType={mediaType}
+                    aspect={finalAspect}
+                    crop={crop}
+                    zoom={zoom}
+                    onCropChange={onCropChange}
+                    onZoomChange={onZoomChange}
+                    isEditable={isEditable}
+                  />
                 </div>
-              )}
-               {post?.revisionHistory && post.revisionHistory.length > 0 && (
-                <Accordion type="single" collapsible>
-                  <AccordionItem value="history">
-                    <AccordionTrigger>Revision History</AccordionTrigger>
-                    <AccordionContent>
-                      <div className="space-y-4">
-                        {post.revisionHistory.slice().sort((a,b) => b.cycleNumber - a.cycleNumber).map(cycle => (
-                          <div key={cycle.cycleNumber} className="text-xs">
-                            <p className="font-semibold">Revision {cycle.cycleNumber} - by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</p>
-                            <ul className="list-disc pl-5 text-muted-foreground">
-                              {cycle.items.map(item => <li key={item.id}>{item.text}</li>)}
-                            </ul>
-                          </div>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              )}
 
-              <Form {...form}>
-                <form id="create-post-form" className="space-y-6">
-                   <div className="flex items-center gap-2 pt-2">
-                        {mediaType === 'image' && imagePreview && isEditable && (
-                           <>
+                {isCreatorEditView && revisionItems.length > 0 && (
+                  <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                    <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5" /> Revisions Requested</h3>
+                    <div className="space-y-2">
+                      {revisionItems.map(item => (
+                        <div key={item.id} className="flex items-center gap-3">
+                          <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => setRevisionItems(revs => revs.map(r => r.id === item.id ? {...r, completed: !r.completed} : r))} />
+                          <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {post?.revisionHistory && post.revisionHistory.length > 0 && (
+                  <Accordion type="single" collapsible>
+                    <AccordionItem value="history">
+                      <AccordionTrigger>Revision History</AccordionTrigger>
+                      <AccordionContent>
+                        <div className="space-y-4">
+                          {post.revisionHistory.slice().sort((a,b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                            <div key={cycle.cycleNumber} className="text-xs">
+                              <p className="font-semibold">Revision {cycle.cycleNumber} - by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</p>
+                              <ul className="list-disc pl-5 text-muted-foreground">
+                                {cycle.items.map(item => <li key={item.id}>{item.text}</li>)}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
+                )}
+
+                <Form {...form}>
+                  <form id="create-post-form" className="space-y-6">
+                    <div className="flex items-center gap-2 pt-2">
+                          {mediaType === 'image' && imagePreview && isEditable && (
+                            <>
                                 <Label className="text-xs">Zoom</Label>
                                 <Slider value={[zoom]} min={1} max={3} step={0.1} onValueChange={(val) => setZoom(val[0])} />
-                           </>
-                        )}
-                        <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!isEditable}>
-                          <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} />
-                          <Replace className="mr-2 h-3 w-3" /> {imagePreview ? 'Change Media' : 'Upload Media'}
-                        </Button>
-                    </div>
+                            </>
+                          )}
+                          <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!isEditable}>
+                            <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} />
+                            <Replace className="mr-2 h-3 w-3" /> {imagePreview ? 'Change Media' : 'Upload Media'}
+                          </Button>
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="postType" render={({ field }) => (
-                        <FormItem><FormLabel>Post Type</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Post">Post</SelectItem><SelectItem value="Reels">Reels</SelectItem></SelectContent></Select></FormItem>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="postType" render={({ field }) => (
+                          <FormItem><FormLabel>Post Type</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Post">Post</SelectItem><SelectItem value="Reels">Reels</SelectItem></SelectContent></Select></FormItem>
+                      )} />
+                      {postType === 'Post' && <FormField control={form.control} name="aspect" render={({ field }) => (
+                          <FormItem><FormLabel>Aspect Ratio</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="1:1">1:1 (Square)</SelectItem><SelectItem value="4:5">4:5 (Portrait)</SelectItem><SelectItem value="1.91:1">1.91:1 (Landscape)</SelectItem></SelectContent></Select></FormItem>
+                      )} />}
+                    </div>
+                    <FormField control={form.control} name="caption" render={({ field }) => (
+                      <FormItem><FormLabel>Caption</FormLabel><FormControl><Textarea placeholder="Write caption..." {...field} rows={6} readOnly={!isEditable} /></FormControl><FormMessage /></FormItem>
                     )} />
-                    {postType === 'Post' && <FormField control={form.control} name="aspect" render={({ field }) => (
-                        <FormItem><FormLabel>Aspect Ratio</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="1:1">1:1 (Square)</SelectItem><SelectItem value="4:5">4:5 (Portrait)</SelectItem><SelectItem value="1.91:1">1.91:1 (Landscape)</SelectItem></SelectContent></Select></FormItem>
-                    )} />}
+                    <FormField control={form.control} name="brandId" render={({ field }) => (
+                          <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? <SelectItem value="loading" disabled>Loading...</SelectItem> : brands?.map(brand => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                      )} />
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="scheduledAtDate" render={({ field }) => (
+                          <FormItem><FormLabel>Schedule Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")} disabled={!isEditable}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} /></PopoverContent></Popover><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="scheduledAtTime" render={({ field }) => (
+                          <FormItem><FormLabel>Time</FormLabel><FormControl><Input type="time" {...field} readOnly={!isEditable} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                    </div>
+                  </form>
+                </Form>
+              </div>
+            </ScrollArea>
+            <ScrollArea className="h-full">
+              <div className="p-6 bg-zinc-100 dark:bg-zinc-900 flex flex-col items-center justify-center h-full gap-4">
+                {submissionLabel && (
+                  <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                    {submissionLabel}
                   </div>
-                  <FormField control={form.control} name="caption" render={({ field }) => (
-                    <FormItem><FormLabel>Caption</FormLabel><FormControl><Textarea placeholder="Write caption..." {...field} rows={6} readOnly={!isEditable} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                   <FormField control={form.control} name="brandId" render={({ field }) => (
-                        <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? <SelectItem value="loading" disabled>Loading...</SelectItem> : brands?.map(brand => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
-                    )} />
-                  <div className="grid grid-cols-2 gap-4">
-                     <FormField control={form.control} name="scheduledAtDate" render={({ field }) => (
-                        <FormItem><FormLabel>Schedule Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")} disabled={!isEditable}>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}<CalendarIcon className="ml-auto h-4 w-4 opacity-50" /></Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={field.value} onSelect={field.onChange} disabled={(date) => date < new Date(new Date().setHours(0,0,0,0))} /></PopoverContent></Popover><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="scheduledAtTime" render={({ field }) => (
-                        <FormItem><FormLabel>Time</FormLabel><FormControl><Input type="time" {...field} readOnly={!isEditable} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                  </div>
-                </form>
-              </Form>
-            </div>
-          </ScrollArea>
-          <ScrollArea className="h-full">
-            <div className="p-6 bg-zinc-100 dark:bg-zinc-900 flex flex-col items-center justify-center h-full gap-4">
-              {submissionLabel && (
-                <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                  {submissionLabel}
-                </div>
-              )}
-              <InstagramPostPreview 
-                  mode="instagram"
-                  profileName={post?.creator?.name || profile?.name}
-                  profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
-                  mediaUrl={imagePreview}
-                  caption={caption}
-                  postType={postType}
-                  mediaType={mediaType}
-                  aspect={finalAspect}
-                  crop={crop}
-                  zoom={zoom}
-              />
-            </div>
-          </ScrollArea>
-        </div>
-        <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
-          <div></div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            {isApproverView ? (
-              <>
-                <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRejectionDialogOpen(true)} disabled={isSaving}><XCircle className="mr-2 h-4 w-4" /> Reject</Button>
-                <Button variant="default" className='bg-green-600 hover:bg-green-700' onClick={() => handleUpdateStatus('Scheduled')} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4" /> Approve & Schedule</Button>
-              </>
-            ) : isEditable ? (
-              <>
-                <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>Save as Draft</Button>
-                <Button onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving || (isCreatorEditView && !allRevisionsCompleted)}>
-                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : ''}
-                  {isCreatorEditView ? 'Re-submit for Approval' : 'Submit for Approval'}
-                </Button>
-              </>
-            ) : null}
+                )}
+                <InstagramPostPreview
+                    mode="instagram"
+                    profileName={post?.creator?.name || profile?.name}
+                    profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
+                    mediaUrl={imagePreview}
+                    caption={caption}
+                    postType={postType}
+                    mediaType={mediaType}
+                    aspect={finalAspect}
+                    crop={crop}
+                    zoom={zoom}
+                />
+              </div>
+            </ScrollArea>
           </div>
-        </DialogFooter>
-      </DialogContent>
+          <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
+            <div>
+              {canDelete && (
+                <Button variant="destructive" onClick={() => setDeleteConfirmOpen(true)} disabled={isSaving || isDeleting}>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              {isApproverView ? (
+                <>
+                  <Button variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRejectionDialogOpen(true)} disabled={isSaving}><XCircle className="mr-2 h-4 w-4" /> Reject</Button>
+                  <Button variant="default" className='bg-green-600 hover:bg-green-700' onClick={() => handleUpdateStatus('Scheduled')} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4" /> Approve & Schedule</Button>
+                </>
+              ) : isEditable ? (
+                <>
+                  <Button variant="secondary" onClick={() => onFormSubmit('Draft')} disabled={isSaving}>Save as Draft</Button>
+                  <Button onClick={() => onFormSubmit('Needs Approval')} disabled={isSaving || (isCreatorEditView && !allRevisionsCompleted)}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    {isCreatorEditView ? 'Re-submit for Approval' : 'Submit for Approval'}
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -497,6 +537,23 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Dialog>
+       <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      This action cannot be undone. This will permanently delete the social media post.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeletePost} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Yes, delete post
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
