@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -190,16 +191,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const onCropComplete = useCallback(
     async (croppedArea: Area, croppedAreaPixels: Area) => {
       setCroppedAreaPixels(croppedAreaPixels);
-      if (imagePreview && mediaType === 'image') {
-        try {
-          const croppedImg = await getCroppedImg(imagePreview, croppedAreaPixels);
-          setCroppedImage(croppedImg);
-        } catch (e) {
-          console.error(e);
-        }
-      }
     },
-    [imagePreview, mediaType]
+    []
   );
 
   useEffect(() => {
@@ -246,6 +239,23 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       setValue('media', e.target.files);
     }
   };
+
+  const showCroppedImage = useCallback(async () => {
+    if (imagePreview && croppedAreaPixels) {
+      try {
+        const croppedImg = await getCroppedImg(imagePreview, croppedAreaPixels);
+        setCroppedImage(croppedImg);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [imagePreview, croppedAreaPixels]);
+
+  useEffect(() => {
+    if (mediaType === 'image') {
+      showCroppedImage();
+    }
+  }, [crop, zoom, mediaType, showCroppedImage]);
 
   const handleSubmit = async (data: PostFormValues, status: SocialMediaPost['status']) => {
     if (!firestore || !storage || !profile || !user) return;
