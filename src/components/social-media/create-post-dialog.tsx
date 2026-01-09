@@ -190,8 +190,16 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const onCropComplete = useCallback(
     async (croppedArea: Area, croppedAreaPixels: Area) => {
       setCroppedAreaPixels(croppedAreaPixels);
+      if (imagePreview) {
+        try {
+          const croppedImg = await getCroppedImg(imagePreview, croppedAreaPixels);
+          setCroppedImage(croppedImg);
+        } catch (e) {
+          // Error is handled by not setting the image
+        }
+      }
     },
-    []
+    [imagePreview]
   );
 
   useEffect(() => {
@@ -238,23 +246,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       setValue('media', e.target.files);
     }
   };
-
-  const showCroppedImage = useCallback(async () => {
-    if (imagePreview && croppedAreaPixels) {
-      try {
-        const croppedImg = await getCroppedImg(imagePreview, croppedAreaPixels);
-        setCroppedImage(croppedImg);
-      } catch (e) {
-        // Error is handled by not setting the image
-      }
-    }
-  }, [imagePreview, croppedAreaPixels]);
-
-  useEffect(() => {
-    if (mediaType === 'image') {
-      showCroppedImage();
-    }
-  }, [croppedAreaPixels, showCroppedImage, mediaType]);
 
   const handleSubmit = async (data: PostFormValues, status: SocialMediaPost['status']) => {
     if (!firestore || !storage || !profile || !user) return;
