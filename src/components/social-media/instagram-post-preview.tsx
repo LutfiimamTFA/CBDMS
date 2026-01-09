@@ -17,7 +17,7 @@ interface InstagramPostPreviewProps {
     caption?: string;
     postType?: 'Post' | 'Reels';
     aspect?: '1:1' | '4:5' | '1.91:1' | '9:16';
-    crop?: { x: number, y: number };
+    crop?: { x: number; y: number };
     zoom?: number;
 }
 

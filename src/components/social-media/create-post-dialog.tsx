@@ -245,7 +245,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         const croppedImg = await getCroppedImg(imagePreview, croppedAreaPixels);
         setCroppedImage(croppedImg);
       } catch (e) {
-        // Error is handled by not setting the image, no need to log
+        // Error is handled by not setting the image
       }
     }
   }, [imagePreview, croppedAreaPixels]);
@@ -254,7 +254,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     if (mediaType === 'image') {
       showCroppedImage();
     }
-  }, [crop, zoom, mediaType, showCroppedImage]);
+  }, [croppedAreaPixels, showCroppedImage, mediaType]);
 
   const handleSubmit = async (data: PostFormValues, status: SocialMediaPost['status']) => {
     if (!firestore || !storage || !profile || !user) return;
@@ -405,16 +405,16 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     <FormItem>
                       <FormLabel>Media</FormLabel>
                         <div 
-                            className={cn("w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center relative", isEditable && "cursor-pointer hover:bg-muted/50")}
+                            className={cn("w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center relative")}
                         >
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
                         {!imagePreview ? (
-                          <div className="text-center text-muted-foreground" onClick={() => isEditable && fileInputRef.current?.click()}>
+                          <div className={cn("text-center text-muted-foreground", isEditable && "cursor-pointer hover:bg-muted/50 w-full h-full flex flex-col items-center justify-center")} onClick={() => isEditable && fileInputRef.current?.click()}>
                             <UploadCloud className="mx-auto h-8 w-8" />
                             <p>Click to upload</p>
                           </div>
                         ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} objectFit="contain" cropperProps={{crossOrigin: 'anonymous'}} /></div>
+                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} objectFit="contain" cropperProps={{crossOrigin: 'anonymous'}} /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
                       </div>
                       {imagePreview && isEditable &&
@@ -473,6 +473,8 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                   postType={postType}
                   mediaType={mediaType}
                   aspect={finalAspect}
+                  crop={crop}
+                  zoom={zoom}
               />
             </div>
           </ScrollArea>
