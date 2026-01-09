@@ -129,7 +129,6 @@ async function getCroppedImg(
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
       if (!blob) {
-        console.error('Canvas is empty');
         resolve(null);
         return;
       }
@@ -246,7 +245,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         const croppedImg = await getCroppedImg(imagePreview, croppedAreaPixels);
         setCroppedImage(croppedImg);
       } catch (e) {
-        console.error(e);
+        // Error is handled by not setting the image, no need to log
       }
     }
   }, [imagePreview, croppedAreaPixels]);
@@ -415,7 +414,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             <p>Click to upload</p>
                           </div>
                         ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} objectFit="contain" /></div>
+                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} objectFit="contain" cropperProps={{crossOrigin: 'anonymous'}} /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
                       </div>
                       {imagePreview && isEditable &&
