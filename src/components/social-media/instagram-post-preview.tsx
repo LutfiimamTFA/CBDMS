@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -16,6 +17,7 @@ const aspectRatios: Record<string, string> = {
 };
 
 interface MediaFrameProps {
+  mode: 'editor' | 'instagram';
   mediaUrl: string | null;
   mediaType: 'image' | 'video' | null;
   aspect: '1:1' | '4:5' | '1.91:1' | '9:16';
@@ -26,7 +28,8 @@ interface MediaFrameProps {
   onZoomChange?: (zoom: number) => void;
 }
 
-function MediaFrame({ 
+export function MediaFrame({ 
+  mode,
   mediaUrl, 
   mediaType, 
   aspect, 
@@ -41,9 +44,15 @@ function MediaFrame({
     console.warn("InstagramPostPreview DEV-ONLY warning: 'mediaType' is set but 'mediaUrl' is missing. The preview will be blank.");
   }
   
+  const frameStyles = cn(
+    "relative w-full overflow-hidden",
+    mode === 'editor' ? 'bg-zinc-900 rounded-lg' : 'bg-black',
+    aspectRatios[aspect]
+  );
+
   if (!mediaUrl) {
     return (
-      <div className={cn("w-full flex flex-col items-center justify-center bg-zinc-800 text-zinc-600 rounded-lg", aspectRatios[aspect])}>
+      <div className={cn("flex flex-col items-center justify-center text-zinc-600", frameStyles)}>
           <Camera className="h-16 w-16" />
           <p className="mt-2 text-sm">No media selected</p>
       </div>
@@ -52,7 +61,7 @@ function MediaFrame({
 
   if (mediaType === 'video') {
     return (
-      <div className={cn("relative w-full overflow-hidden rounded-lg", aspectRatios[aspect])}>
+      <div className={frameStyles}>
         <video key={mediaUrl} src={mediaUrl} controls muted playsInline className="w-full h-full object-contain" />
       </div>
     );
@@ -61,7 +70,7 @@ function MediaFrame({
   // Image type
   if (isEditable && onCropChange && onZoomChange) {
      return (
-        <div className={cn("relative w-full rounded-lg", aspectRatios[aspect])}>
+        <div className={frameStyles}>
             <Cropper
                 image={mediaUrl}
                 crop={crop}
@@ -70,21 +79,23 @@ function MediaFrame({
                 onCropChange={onCropChange}
                 onZoomChange={onZoomChange}
                 objectFit="contain"
+                cropperProps={{crossOrigin: 'anonymous'}}
             />
         </div>
      )
   }
 
   const imageStyle: React.CSSProperties = {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
     transform: `translate(${crop.x}px, ${crop.y}px) scale(${zoom})`,
-    transformOrigin: 'top left',
+    transformOrigin: 'center center',
   };
 
   return (
-    <div className={cn("relative w-full overflow-hidden rounded-lg", aspectRatios[aspect])}>
-      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-          <img src={mediaUrl} alt="Post preview" style={{...imageStyle, position: 'absolute', width: '100%', height: '100%', objectFit: 'cover' }} />
-      </div>
+    <div className={frameStyles}>
+      <img src={mediaUrl} alt="Post preview" style={imageStyle} />
     </div>
   );
 }
@@ -151,6 +162,7 @@ export function InstagramPostPreview({
   
   const mediaFrame = (
       <MediaFrame
+          mode={mode}
           mediaUrl={mediaUrl}
           mediaType={mediaType}
           aspect={finalAspect}
