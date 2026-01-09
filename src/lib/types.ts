@@ -248,7 +248,7 @@ export type SocialMediaPost = {
   platform: string;
   caption: string;
   mediaUrl?: string;
-  mediaType?: 'image' | 'video';
+  mediaType?: 'image' | 'video' | null;
   status: 'Draft' | 'Needs Approval' | 'Needs Revision' | 'Scheduled' | 'Publishing' | 'Posted' | 'Error';
   scheduledAt: string;
   postedAt?: string;
@@ -261,8 +261,12 @@ export type SocialMediaPost = {
     avatarUrl: string;
   };
   postType?: 'Post' | 'Reels';
-  objectPosition?: number;
-  crop?: { aspect: '1:1' | '4:5' | '1.91:1' | '9:16'; zoom: number; x: number; y: number };
+  crop?: {
+    aspect: '1:1' | '4:5' | '1.91:1' | '9:16';
+    zoom: number;
+    x: number;
+    y: number;
+  };
   revisionItems?: RevisionItem[];
   revisionHistory?: RevisionCycle[];
   updatedAt?: any;

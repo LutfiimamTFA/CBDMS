@@ -40,6 +40,13 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
   const statusStyling = statusConfig[post.status] || statusConfig['Draft'];
   
   const revisionCycleNumber = (post.revisionHistory?.length || 0) + 1;
+  const imageStyle: React.CSSProperties | undefined = post.crop
+    ? {
+        transform: `scale(${post.crop.zoom}) translate(${post.crop.x}px, ${post.crop.y}px)`,
+        transformOrigin: 'top left',
+      }
+    : { objectFit: 'cover' };
+
 
   return (
     <>
@@ -50,7 +57,13 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
           <CardContent className="p-0">
             <div className="relative aspect-square w-full">
                 {post.mediaUrl ? (
-                    <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" style={{ objectPosition: `center ${post.objectPosition || 50}%` }}/>
+                    post.mediaType === 'video' ? (
+                      <video src={post.mediaUrl} muted playsInline className="w-full h-full object-cover"/>
+                    ) : (
+                      <div className="w-full h-full overflow-hidden">
+                        <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" style={imageStyle} unoptimized/>
+                      </div>
+                    )
                 ) : (
                     <div className="flex flex-col items-center justify-center h-full bg-secondary text-muted-foreground p-2">
                         <FileText className="h-6 w-6 mb-1" />

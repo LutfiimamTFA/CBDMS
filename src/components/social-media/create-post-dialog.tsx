@@ -90,54 +90,6 @@ const formatDate = (date: any): string => {
   return format(dateObj, 'PP, p');
 };
 
-const createImage = (url: string): Promise<HTMLImageElement> =>
-  new Promise((resolve, reject) => {
-    const image = new window.Image();
-    image.addEventListener('load', () => resolve(image));
-    image.addEventListener('error', (error) => reject(error));
-    image.setAttribute('crossOrigin', 'anonymous'); 
-    image.src = url;
-  });
-
-async function getCroppedImg(
-  imageSrc: string,
-  pixelCrop: Area
-): Promise<string | null> {
-  const image = await createImage(imageSrc);
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-
-  if (!ctx) {
-    return null;
-  }
-
-  canvas.width = pixelCrop.width;
-  canvas.height = pixelCrop.height;
-
-  ctx.drawImage(
-    image,
-    pixelCrop.x,
-    pixelCrop.y,
-    pixelCrop.width,
-    pixelCrop.height,
-    0,
-    0,
-    pixelCrop.width,
-    pixelCrop.height
-  );
-
-  return new Promise((resolve) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        resolve(null);
-        return;
-      }
-      resolve(URL.createObjectURL(blob));
-    }, 'image/jpeg');
-  });
-}
-
-
 export function CreatePostDialog({ children, open: controlledOpen, onOpenChange: setControlledOpen, post }: CreatePostDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;
@@ -145,8 +97,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const mode = post ? 'edit' : 'create';
 
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -160,8 +110,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [zoom, setZoom] = useState(1);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
-  const [croppedImage, setCroppedImage] = useState<string | null>(null);
-
+  
   const firestore = useFirestore();
   const storage = useStorage();
   const { profile, user } = useUserProfile();
@@ -187,20 +136,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const aspect = watch('aspect');
   const finalAspect = postType === 'Reels' ? '9:16' : aspect;
 
-  const onCropComplete = useCallback(
-    async (croppedArea: Area, croppedAreaPixels: Area) => {
-      setCroppedAreaPixels(croppedAreaPixels);
-      if (imagePreview) {
-        try {
-          const croppedImg = await getCroppedImg(imagePreview, croppedAreaPixels);
-          setCroppedImage(croppedImg);
-        } catch (e) {
-          // Error is handled by not setting the image
-        }
-      }
-    },
-    [imagePreview]
-  );
+  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  }, []);
 
   useEffect(() => {
     if (post) {
@@ -405,7 +343,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             <p>Click to upload</p>
                           </div>
                         ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} objectFit="contain" cropperProps={{crossOrigin: 'anonymous'}} /></div>
+                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} objectFit="contain" cropperProps={{ crossOrigin: 'anonymous' }} /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
                       </div>
                       {imagePreview && isEditable &&
@@ -451,15 +389,15 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
             <div className="p-6 bg-zinc-100 dark:bg-zinc-900 flex flex-col items-center justify-center h-full gap-4">
               {isApproverView && (
                 <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                  {(post.revisionHistory?.length || 0) > 0 ? `Revision Cycle #${post.revisionHistory.length}` : 'Initial Submission'}
-                  {' • '}
-                  Requested: {post.revisionHistory ? formatDate(post.revisionHistory[post.revisionHistory.length - 1].requestedAt) : '-'}
+                  {(!post.revisionHistory || post.revisionHistory.length === 0) 
+                    ? "INITIAL SUBMISSION • REQUESTED: -" 
+                    : `REVISION CYCLE #${post.revisionHistory.length} • REQUESTED: ${formatDate(post.revisionHistory[post.revisionHistory.length - 1].requestedAt)}`}
                 </div>
               )}
               <InstagramPostPreview 
                   profileName={post?.creator?.name || profile?.name}
                   profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
-                  mediaUrl={mediaType === 'image' ? croppedImage : imagePreview}
+                  mediaUrl={imagePreview}
                   caption={caption}
                   postType={postType}
                   mediaType={mediaType}

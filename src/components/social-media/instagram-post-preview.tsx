@@ -8,7 +8,6 @@ import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, Camera,
 import { cn } from '@/lib/utils';
 import { Button } from '../ui/button';
 
-
 interface InstagramPostPreviewProps {
     profileName?: string;
     profileImageUrl?: string;
@@ -29,8 +28,8 @@ export function InstagramPostPreview({
     caption,
     postType = 'Post',
     aspect = '4:5',
-    crop,
-    zoom = 1
+    crop = { x: 0, y: 0 },
+    zoom = 1,
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -57,14 +56,19 @@ export function InstagramPostPreview({
 
   const finalAspect = postType === 'Reels' ? '9:16' : (aspect || '4:5');
   
+  const imageStyle: React.CSSProperties = {
+    objectFit: 'cover',
+    transform: `scale(${zoom}) translate(${crop.x}px, ${crop.y}px)`,
+    transformOrigin: 'top left',
+  };
+
   if (postType === 'Reels') {
     return (
       <div className={cn("w-full max-w-[280px] bg-black border border-zinc-700 rounded-2xl overflow-hidden shadow-xl text-white relative", aspectRatios[finalAspect])}>
-         {/* Media */}
         <div className="absolute inset-0">
           {mediaUrl ? (
             mediaType === 'image' ? (
-                <Image src={mediaUrl} layout="fill" alt="Post preview" className="object-cover" />
+                <Image src={mediaUrl} layout="fill" alt="Post preview" style={imageStyle} unoptimized />
             ) : (
                 <video src={mediaUrl} loop autoPlay muted playsInline className="w-full h-full object-cover" />
             )
@@ -125,7 +129,6 @@ export function InstagramPostPreview({
   // --- STANDARD POST PREVIEW ---
   return (
     <div className="w-full max-w-[320px] bg-white dark:bg-black border border-zinc-300 dark:border-zinc-700 rounded-none overflow-hidden shadow-xl">
-      {/* Header */}
       <div className="flex items-center p-3">
         <Avatar className="h-8 w-8">
           <AvatarImage src={profileImageUrl} />
@@ -135,14 +138,10 @@ export function InstagramPostPreview({
         <MoreHorizontal className="ml-auto h-5 w-5 text-zinc-900 dark:text-zinc-100" />
       </div>
 
-      {/* Media */}
-      <div className={cn(
-          "relative w-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden",
-          aspectRatios[finalAspect]
-      )}>
+      <div className={cn("relative w-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden", aspectRatios[finalAspect])}>
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" alt="Post preview" className="object-cover" />
+            <Image src={mediaUrl} layout="fill" alt="Post preview" style={imageStyle} unoptimized />
           ) : (
             <video src={mediaUrl} controls muted className="w-full h-full object-cover" />
           )
@@ -153,7 +152,6 @@ export function InstagramPostPreview({
         )}
       </div>
 
-      {/* Actions */}
       <div className="flex items-center p-3 space-x-4">
         <Heart className="h-6 w-6 text-zinc-900 dark:text-zinc-100" />
         <MessageCircle className="h-6 w-6 text-zinc-900 dark:text-zinc-100" />
@@ -161,12 +159,10 @@ export function InstagramPostPreview({
         <Bookmark className="ml-auto h-6 w-6 text-zinc-900 dark:text-zinc-100" />
       </div>
 
-      {/* Likes */}
       <div className="px-3">
         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">1,234 likes</p>
       </div>
 
-      {/* Caption */}
       <div className="p-3 text-sm text-zinc-900 dark:text-zinc-100">
         <p>
           <span className="font-semibold">{profileName}</span>{' '}
@@ -175,8 +171,7 @@ export function InstagramPostPreview({
         <p className="text-zinc-500 dark:text-zinc-400 mt-2 text-xs">View all 56 comments</p>
       </div>
 
-       {/* Timestamp */}
-      <div className="px-3 pb-3">
+       <div className="px-3 pb-3">
           <p className="text-zinc-500 dark:text-zinc-400 text-[10px] uppercase">1 HOUR AGO</p>
       </div>
     </div>
