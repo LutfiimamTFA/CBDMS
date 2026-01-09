@@ -51,7 +51,7 @@ export function InstagramPostPreview({
     return formattedText;
   };
   
-  const aspectRatios = {
+  const aspectRatios: Record<string, string> = {
     '1:1': 'aspect-square',
     '4:5': 'aspect-[4/5]',
     '1.91:1': 'aspect-[1.91/1]',
@@ -60,9 +60,10 @@ export function InstagramPostPreview({
 
   const finalAspect = postType === 'Reels' ? '9:16' : (aspect || '4:5');
   
-  const mediaStyle: React.CSSProperties = crop 
-    ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%', objectFit: 'cover' }
-    : { objectFit: 'cover', objectPosition: `center ${objectPosition}%` };
+  const mediaStyle: React.CSSProperties = {
+    objectFit: 'cover',
+    ...(crop ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%' } : { objectPosition: `center ${objectPosition}%` })
+  };
 
   return (
     <div className="w-full max-w-[320px] bg-white dark:bg-black border border-zinc-300 dark:border-zinc-700 rounded-lg overflow-hidden shadow-xl">

@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
-import { useCollection, useFirestore, useUserProfile } from '@/firebase';
+import { useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import type { SocialMediaPost } from '@/lib/types';
 import { SocialPostCard } from '@/components/social-media/social-post-card';
@@ -82,7 +82,7 @@ export default function SocialMediaCalendarPage() {
     const lastDayOfMonth = endOfMonth(currentDate);
 
     const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
-    let calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0});
+    let calendarEnd = endOfWeek(lastDayOfMonth, { weekStartsOn: 0 });
 
     const totalDaysInView = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
     
