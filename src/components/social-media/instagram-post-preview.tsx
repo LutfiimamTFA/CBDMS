@@ -16,8 +16,6 @@ interface InstagramPostPreviewProps {
     caption?: string;
     postType?: 'Post' | 'Reels';
     aspect?: '1:1' | '4:5' | '1.91:1' | '9:16';
-    crop?: { x: number; y: number; };
-    zoom?: number;
 }
 
 export function InstagramPostPreview({ 
@@ -28,8 +26,6 @@ export function InstagramPostPreview({
     caption,
     postType = 'Post',
     aspect = '4:5',
-    crop,
-    zoom = 1,
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -56,11 +52,6 @@ export function InstagramPostPreview({
 
   const finalAspect = postType === 'Reels' ? '9:16' : (aspect || '4:5');
   
-  const mediaStyle: React.CSSProperties = {
-    objectFit: 'cover',
-    ...(crop ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%' } : { objectPosition: `center 50%` })
-  };
-
   if (postType === 'Reels') {
     return (
       <div className={cn("w-full max-w-[280px] bg-black border border-zinc-700 rounded-2xl overflow-hidden shadow-xl text-white relative", aspectRatios[finalAspect])}>
@@ -68,7 +59,7 @@ export function InstagramPostPreview({
         <div className="absolute inset-0">
           {mediaUrl ? (
             mediaType === 'image' ? (
-                <Image src={mediaUrl} layout="fill" alt="Post preview" style={mediaStyle} />
+                <Image src={mediaUrl} layout="fill" alt="Post preview" className="object-cover" />
             ) : (
                 <video src={mediaUrl} loop autoPlay muted playsInline className="w-full h-full object-cover" />
             )
@@ -146,7 +137,7 @@ export function InstagramPostPreview({
       )}>
         {mediaUrl ? (
           mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" alt="Post preview" style={mediaStyle} />
+            <Image src={mediaUrl} layout="fill" alt="Post preview" className="object-cover" />
           ) : (
             <video src={mediaUrl} controls muted className="w-full h-full object-cover" />
           )
