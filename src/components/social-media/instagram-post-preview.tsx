@@ -4,10 +4,9 @@
 import React from 'react';
 import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, PlayCircle, Clapperboard, Video, Music2, Volume2 } from 'lucide-react';
-import type { SocialMediaPost } from '@/lib/types';
+import { Heart, MessageCircle, Send, Bookmark, MoreHorizontal, FileText, Camera, Music2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Cropper from 'react-easy-crop';
+import { Button } from '../ui/button';
 
 
 interface InstagramPostPreviewProps {
@@ -31,9 +30,9 @@ export function InstagramPostPreview({
     caption,
     postType = 'Post',
     aspect = '4:5',
-    crop = { x: 0, y: 0 },
+    crop,
     zoom = 1,
-    objectPosition, // Fallback for old data
+    objectPosition,
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -62,7 +61,7 @@ export function InstagramPostPreview({
   
   const mediaStyle: React.CSSProperties = {
     objectFit: 'cover',
-    ...(post?.crop ? { transform: `translate3d(${-post.crop.x}px, ${-post.crop.y}px, 0) scale(${post.crop.zoom})`, width: '100%', height: '100%' } : { objectPosition: `center ${objectPosition}%` })
+    ...(crop ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%' } : { objectPosition: `center ${objectPosition}%` })
   };
 
   if (postType === 'Reels') {
@@ -78,7 +77,7 @@ export function InstagramPostPreview({
             )
           ) : (
             <div className="flex items-center justify-center h-full bg-zinc-800">
-                <Clapperboard className="h-16 w-16 text-zinc-600" />
+                <Camera className="h-16 w-16 text-zinc-600" />
             </div>
           )}
         </div>
@@ -152,12 +151,7 @@ export function InstagramPostPreview({
           mediaType === 'image' ? (
             <Image src={mediaUrl} layout="fill" alt="Post preview" style={mediaStyle} />
           ) : (
-            <div className="relative h-full w-full">
-              <video src={mediaUrl} muted loop autoPlay playsInline className="w-full h-full object-cover" />
-              <div className="absolute top-2 right-2 bg-black/40 text-white rounded-full p-1">
-                <Volume2 className="h-3 w-3" />
-              </div>
-            </div>
+            <video src={mediaUrl} controls muted className="w-full h-full object-cover" />
           )
         ) : (
             <div className="flex items-center justify-center h-full">
@@ -195,3 +189,5 @@ export function InstagramPostPreview({
     </div>
   );
 }
+
+    
