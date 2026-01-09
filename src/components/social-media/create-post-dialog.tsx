@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -49,7 +48,7 @@ import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDoc
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus, RefreshCcw, Replace } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus, RefreshCcw, Replace, Edit } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User as UserType, Brand, RevisionItem, RevisionCycle } from '@/lib/types';
@@ -406,12 +405,14 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                     <FormItem>
                       <FormLabel>Media</FormLabel>
                         <div 
-                            className={cn("w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center relative", !imagePreview && isEditable && "cursor-pointer hover:bg-muted/50")}
-                            onClick={() => !imagePreview && isEditable && fileInputRef.current?.click()}
+                            className={cn("w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center relative", isEditable && "cursor-pointer hover:bg-muted/50")}
                         >
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
                         {!imagePreview ? (
-                          <div className="text-center text-muted-foreground"><UploadCloud className="mx-auto h-8 w-8" /><p>Click to upload</p></div>
+                          <div className="text-center text-muted-foreground" onClick={() => isEditable && fileInputRef.current?.click()}>
+                            <UploadCloud className="mx-auto h-8 w-8" />
+                            <p>Click to upload</p>
+                          </div>
                         ) : mediaType === 'image' ? (
                           <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} objectFit="contain" /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
@@ -472,8 +473,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                   postType={postType}
                   mediaType={mediaType}
                   aspect={finalAspect}
-                  crop={crop}
-                  zoom={zoom}
               />
             </div>
           </ScrollArea>
