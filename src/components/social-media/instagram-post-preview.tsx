@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -32,6 +31,10 @@ export function InstagramPostPreview({
     zoom = 1,
 }: InstagramPostPreviewProps) {
   
+  if (process.env.NODE_ENV === 'development' && mediaType && !mediaUrl) {
+    console.warn("InstagramPostPreview DEV-ONLY warning: 'mediaType' is set but 'mediaUrl' is missing. The preview will be blank.");
+  }
+  
   const formatCaption = (text = '') => {
     const hashtags = text.match(/#\w+/g) || [];
     const mentions = text.match(/@\w+/g) || [];
@@ -58,25 +61,33 @@ export function InstagramPostPreview({
   
   const imageStyle: React.CSSProperties = {
     objectFit: 'cover',
-    transform: `scale(${zoom}) translate(${crop.x}px, ${crop.y}px)`,
-    transformOrigin: 'top left',
+    width: '100%',
+    height: '100%',
+    transform: `translate(${crop.x}px, ${crop.y}px) scale(${zoom})`,
+    transformOrigin: 'center center',
   };
+
+  const renderMedia = () => {
+    if (!mediaUrl) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full bg-zinc-800 text-zinc-600">
+            <Camera className="h-16 w-16" />
+            <p className="mt-2 text-sm">No media selected</p>
+        </div>
+      );
+    }
+    if (mediaType === 'video') {
+      return <video key={mediaUrl} src={mediaUrl} controls muted playsInline className="w-full h-full object-cover" />;
+    }
+    return <img src={mediaUrl} alt="Post preview" style={imageStyle} />;
+  };
+  
 
   if (postType === 'Reels') {
     return (
       <div className={cn("w-full max-w-[280px] bg-black border border-zinc-700 rounded-2xl overflow-hidden shadow-xl text-white relative", aspectRatios[finalAspect])}>
         <div className="absolute inset-0">
-          {mediaUrl ? (
-            mediaType === 'image' ? (
-                <Image src={mediaUrl} layout="fill" alt="Post preview" style={imageStyle} unoptimized />
-            ) : (
-                <video src={mediaUrl} loop autoPlay muted playsInline className="w-full h-full object-cover" />
-            )
-          ) : (
-            <div className="flex items-center justify-center h-full bg-zinc-800">
-                <Camera className="h-16 w-16 text-zinc-600" />
-            </div>
-          )}
+          {renderMedia()}
         </div>
         
         {/* Header Overlay */}
@@ -139,17 +150,7 @@ export function InstagramPostPreview({
       </div>
 
       <div className={cn("relative w-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden", aspectRatios[finalAspect])}>
-        {mediaUrl ? (
-          mediaType === 'image' ? (
-            <Image src={mediaUrl} layout="fill" alt="Post preview" style={imageStyle} unoptimized />
-          ) : (
-            <video src={mediaUrl} controls muted className="w-full h-full object-cover" />
-          )
-        ) : (
-            <div className="flex items-center justify-center h-full">
-                <FileText className="h-16 w-16 text-zinc-400 dark:text-zinc-600" />
-            </div>
-        )}
+        {renderMedia()}
       </div>
 
       <div className="flex items-center p-3 space-x-4">

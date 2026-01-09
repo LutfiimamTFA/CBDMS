@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -109,7 +108,6 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
-  const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   
   const firestore = useFirestore();
   const storage = useStorage();
@@ -135,9 +133,13 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const postType = watch('postType');
   const aspect = watch('aspect');
   const finalAspect = postType === 'Reels' ? '9:16' : aspect;
+  
+  const onCropChange = useCallback((newCrop: {x: number, y: number}) => {
+    setCrop(newCrop);
+  }, []);
 
-  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
-    setCroppedAreaPixels(croppedAreaPixels);
+  const onZoomChange = useCallback((newZoom: number) => {
+    setZoom(newZoom);
   }, []);
 
   useEffect(() => {
@@ -156,10 +158,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       setImagePreview(post.mediaUrl || null);
       setMediaType(post.mediaType || null);
       setRevisionItems(post.revisionItems || []);
-      if (post.crop) {
-        setCrop({ x: post.crop.x, y: post.crop.y });
-        setZoom(post.crop.zoom);
-      }
+      setCrop(post.crop ? { x: post.crop.x, y: post.crop.y } : { x: 0, y: 0 });
+      setZoom(post.crop?.zoom || 1);
+
     } else {
       form.reset({
         platform: 'Instagram', caption: '', brandId: '',
@@ -204,7 +205,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       const postData: Partial<SocialMediaPost> & { updatedAt?: any } = {
         platform: data.platform, caption: data.caption, mediaUrl, mediaType, scheduledAt: scheduledAt.toISOString(),
         companyId: profile.companyId, status, brandId: data.brandId, postType: data.postType, createdBy: data.assignedTo || user.uid,
-        crop: mediaType === 'image' && croppedAreaPixels ? { aspect: finalAspect, zoom, x: croppedAreaPixels.x, y: croppedAreaPixels.y } : undefined,
+        crop: mediaType === 'image' ? { aspect: finalAspect, zoom, x: crop.x, y: crop.y } : undefined,
       };
 
       const batch = writeBatch(firestore);
@@ -284,6 +285,16 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const isEditable = mode === 'create' || isCreatorEditView;
   const allRevisionsCompleted = useMemo(() => revisionItems.every(item => item.completed), [revisionItems]);
   const handleAddRejectionItem = () => { if (currentItemText.trim()) { setRejectionItems(prev => [...prev, { text: currentItemText }]); setCurrentItemText(''); } };
+  
+  const submissionLabel = useMemo(() => {
+    if (mode !== 'edit' || !post) return null;
+    if (!post.revisionHistory || post.revisionHistory.length === 0) {
+      return "INITIAL SUBMISSION • REQUESTED: -";
+    }
+    const lastRevision = post.revisionHistory[post.revisionHistory.length - 1];
+    return `REVISION CYCLE #${lastRevision.cycleNumber} • REQUESTED: ${formatDate(lastRevision.requestedAt)}`;
+  }, [post, mode]);
+
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -343,7 +354,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                             <p>Click to upload</p>
                           </div>
                         ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} objectFit="contain" cropperProps={{ crossOrigin: 'anonymous' }} /></div>
+                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={onCropChange} onZoomChange={onZoomChange} cropperProps={{ crossOrigin: 'anonymous' }} /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
                       </div>
                       {imagePreview && isEditable &&
@@ -361,10 +372,10 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                   )} />
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={form.control} name="postType" render={({ field }) => (
-                        <FormItem><FormLabel>Post Type</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Post">Post</SelectItem><SelectItem value="Reels">Reels</SelectItem></SelectContent></Select></FormItem>
+                        <FormItem><FormLabel>Post Type</FormLabel><Select onValueChange={(value) => { field.onChange(value); setCrop({x:0, y:0}); setZoom(1); }} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Post">Post</SelectItem><SelectItem value="Reels">Reels</SelectItem></SelectContent></Select></FormItem>
                     )} />
                     {postType === 'Post' && <FormField control={form.control} name="aspect" render={({ field }) => (
-                        <FormItem><FormLabel>Aspect Ratio</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="1:1">1:1 (Square)</SelectItem><SelectItem value="4:5">4:5 (Portrait)</SelectItem><SelectItem value="1.91:1">1.91:1 (Landscape)</SelectItem></SelectContent></Select></FormItem>
+                        <FormItem><FormLabel>Aspect Ratio</FormLabel><Select onValueChange={(value) => { field.onChange(value); setCrop({x:0, y:0}); setZoom(1); }} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="1:1">1:1 (Square)</SelectItem><SelectItem value="4:5">4:5 (Portrait)</SelectItem><SelectItem value="1.91:1">1.91:1 (Landscape)</SelectItem></SelectContent></Select></FormItem>
                     )} />}
                   </div>
                   <FormField control={form.control} name="caption" render={({ field }) => (
@@ -387,11 +398,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           </ScrollArea>
           <ScrollArea className="h-full">
             <div className="p-6 bg-zinc-100 dark:bg-zinc-900 flex flex-col items-center justify-center h-full gap-4">
-              {isApproverView && (
+              {submissionLabel && (
                 <div className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                  {(!post.revisionHistory || post.revisionHistory.length === 0) 
-                    ? "INITIAL SUBMISSION • REQUESTED: -" 
-                    : `REVISION CYCLE #${post.revisionHistory.length} • REQUESTED: ${formatDate(post.revisionHistory[post.revisionHistory.length - 1].requestedAt)}`}
+                  {submissionLabel}
                 </div>
               )}
               <InstagramPostPreview 

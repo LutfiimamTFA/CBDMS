@@ -1,4 +1,3 @@
-
 'use client';
 import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
@@ -42,8 +41,11 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
   const revisionCycleNumber = (post.revisionHistory?.length || 0) + 1;
   const imageStyle: React.CSSProperties | undefined = post.crop
     ? {
-        transform: `scale(${post.crop.zoom}) translate(${post.crop.x}px, ${post.crop.y}px)`,
-        transformOrigin: 'top left',
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover',
+        transform: `translate(${post.crop.x}px, ${post.crop.y}px) scale(${post.crop.zoom})`,
+        transformOrigin: 'center center',
       }
     : { objectFit: 'cover' };
 
@@ -61,7 +63,7 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
                       <video src={post.mediaUrl} muted playsInline className="w-full h-full object-cover"/>
                     ) : (
                       <div className="w-full h-full overflow-hidden">
-                        <Image src={post.mediaUrl} alt={post.caption.substring(0, 30)} fill className="object-cover group-hover:scale-105 transition-transform duration-300" style={imageStyle} unoptimized/>
+                        <img src={post.mediaUrl} alt={post.caption.substring(0, 30)} style={imageStyle} className="group-hover:scale-105 transition-transform duration-300" />
                       </div>
                     )
                 ) : (
