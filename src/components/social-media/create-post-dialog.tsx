@@ -44,11 +44,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useStorage, useCollection, useDoc } from '@/firebase';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc, query, where, orderBy, deleteField } from 'firebase/firestore';
+import { addDoc, collection, serverTimestamp, doc, updateDoc, writeBatch, getDocs, deleteDoc, query, where, orderBy, deleteField, Timestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus, RefreshCcw } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCircle, CheckCircle, Trash2, AlertCircle, Building2, User, MoveVertical, Clapperboard, Layers, Plus, RefreshCcw, Replace } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User as UserType, Brand, RevisionItem, RevisionCycle } from '@/lib/types';
@@ -83,6 +83,7 @@ interface CreatePostDialogProps {
 
 const formatDate = (date: any): string => {
   if (!date) return 'N/A';
+  // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
   const dateObj = date.toDate ? date.toDate() : new Date(date);
   if (isNaN(dateObj.getTime())) return 'Invalid date';
   return format(dateObj, 'PP, p');
@@ -259,7 +260,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         updateData.revisionItems = reasonItems.map(item => ({ id: crypto.randomUUID(), text: item.text, completed: false }));
         const newCycle: RevisionCycle = {
             cycleNumber: (post.revisionHistory?.length || 0) + 1,
-            requestedAt: new Date().toISOString(),
+            requestedAt: new Date().toISOString() as any,
             requestedBy: { id: profile.id, name: profile.name, avatarUrl: profile.avatarUrl || '' },
             items: updateData.revisionItems,
         };
@@ -333,15 +334,28 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                   <FormField control={form.control} name="media" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Media</FormLabel>
-                      <div className="w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-muted/50" onClick={() => isEditable && fileInputRef.current?.click()}>
+                        <div 
+                            className={cn("w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center relative", !imagePreview && isEditable && "cursor-pointer hover:bg-muted/50")}
+                            onClick={() => !imagePreview && isEditable && fileInputRef.current?.click()}
+                        >
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
                         {!imagePreview ? (
                           <div className="text-center text-muted-foreground"><UploadCloud className="mx-auto h-8 w-8" /><p>Click to upload</p></div>
                         ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} /></div>
+                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete} showGrid={true} objectFit="cover" /></div>
                         ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
                       </div>
-                      {mediaType === 'image' && imagePreview && <Slider value={[zoom]} min={1} max={3} step={0.1} onValueChange={(val) => setZoom(val[0])} />}
+                      {imagePreview && isEditable &&
+                        <div className="flex items-center gap-2 pt-2">
+                            {mediaType === 'image' && (
+                                <>
+                                    <Label className="text-xs">Zoom</Label>
+                                    <Slider value={[zoom]} min={1} max={3} step={0.1} onValueChange={(val) => setZoom(val[0])} />
+                                </>
+                            )}
+                            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}><Replace className="mr-2 h-3 w-3" /> Change</Button>
+                        </div>
+                      }
                     </FormItem>
                   )} />
                   <div className="grid grid-cols-2 gap-4">
