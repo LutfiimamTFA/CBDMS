@@ -107,7 +107,7 @@ export default function TasksPage() {
         }
     });
 
-    const priorityOrder = { 'Urgent': 4, 'High': 3, 'Medium': 2, 'Low': 1, 'Default': 0 };
+    const priorityOrder: Record<string, number> = { 'Urgent': 4, 'High': 3, 'Medium': 2, 'Low': 1, 'Default': 0 };
 
     active.sort((a, b) => {
         const priorityA = priorityOrder[a.priority] || 0;
@@ -128,6 +128,12 @@ export default function TasksPage() {
         const createdAtA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
         const createdAtB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
         return createdAtA - createdAtB;
+    });
+
+    done.sort((a,b) => {
+        const dateA = a.actualCompletionDate ? parseISO(a.actualCompletionDate).getTime() : 0;
+        const dateB = b.actualCompletionDate ? parseISO(b.actualCompletionDate).getTime() : 0;
+        return dateB - dateA;
     });
 
     return { activeTasks: active, doneTasks: done };
