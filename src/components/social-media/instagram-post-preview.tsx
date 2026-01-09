@@ -18,7 +18,6 @@ interface InstagramPostPreviewProps {
     aspect?: '1:1' | '4:5' | '1.91:1' | '9:16';
     crop?: { x: number; y: number; };
     zoom?: number;
-    objectPosition?: number;
 }
 
 export function InstagramPostPreview({ 
@@ -31,7 +30,6 @@ export function InstagramPostPreview({
     aspect = '4:5',
     crop,
     zoom = 1,
-    objectPosition,
 }: InstagramPostPreviewProps) {
   
   const formatCaption = (text = '') => {
@@ -60,7 +58,7 @@ export function InstagramPostPreview({
   
   const mediaStyle: React.CSSProperties = {
     objectFit: 'cover',
-    ...(crop ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%' } : { objectPosition: `center ${objectPosition}%` })
+    ...(crop ? { transform: `translate3d(${-crop.x}px, ${-crop.y}px, 0) scale(${zoom})`, width: '100%', height: '100%' } : { objectPosition: `center 50%` })
   };
 
   if (postType === 'Reels') {
