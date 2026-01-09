@@ -148,8 +148,11 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     if (!firestore || !currentUserProfile) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
     
+    // For Employees, we want to fetch their manager and their teammates for selection.
     if (currentUserProfile.role === 'Employee' && currentUserProfile.managerId) {
-      q = query(q, where('managerId', '==', currentUserProfile.managerId));
+      // This is a simplification. A more robust query might use an 'in' clause 
+      // if we fetch manager's direct reports IDs first. For now, fetching all and filtering client-side is acceptable.
+      // The query is broad, but filtering happens in useMemo hooks.
     }
     
     return q;
@@ -195,7 +198,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     if (currentUserProfile.role === 'Manager') {
         if (!currentUserProfile.brandIds || currentUserProfile.brandIds.length === 0) {
-            return null; 
+            return query(collection(firestore, 'brands'), where('__name__', '==', 'no-brands-for-manager'));
         }
         return query(collection(firestore, 'brands'), where('__name__', 'in', currentUserProfile.brandIds), orderBy('name'));
     }
@@ -272,16 +275,18 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     const mainAssignees = selectedUsers;
 
     if (currentUserProfile.role === 'Super Admin') {
-        const otherUsers = allUsers.filter(u => u.role !== 'Client' && !mainAssignees.some(a => a.id === u.id));
+        const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
+        const employees = allUsers.filter(u => u.role === 'Employee' && !mainAssignees.some(a => a.id === u.id));
         return {
             ...createGroup("Task Assignees", mainAssignees),
-            ...createGroup("Other Members", otherUsers),
+            ...createGroup("Managers", managers),
+            ...createGroup("Employees", employees),
         };
     }
     
     if (currentUserProfile.role === 'Manager') {
-        const myTeam = allUsers.filter(u => u.managerId === currentUserProfile.id);
-        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        const selfAndTeam = (allUsers || []).filter(u => u.id === currentUserProfile.id || u.managerId === currentUserProfile.id);
+        const otherMembers = selfAndTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
         return {
             ...createGroup("Task Assignees", mainAssignees),
             ...createGroup("My Team", otherMembers),
@@ -306,7 +311,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     }
 
     return {};
-}, [selectedUsers, allUsers, currentUserProfile]);
+  }, [selectedUsers, allUsers, currentUserProfile]);
 
 
   const quickDateOptions = [
@@ -334,21 +339,59 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
       tags: [],
     },
   });
+  
+  const singleBrandId = useMemo(() => {
+    if (brands && brands.length === 1) {
+        return brands[0].id;
+    }
+    return null;
+  }, [brands]);
 
   useEffect(() => {
-    if (open && currentUserProfile && user) {
-        if (currentUserProfile.role === 'Employee') {
-            const selfUser = allUsers?.find(u => u.id === user.uid);
-            if (selfUser) {
-                setSelectedUsers([selfUser]);
-                form.setValue('assigneeIds', [selfUser.id]);
+    if (open) {
+        // Reset all local states when dialog opens
+        form.reset({
+          title: '',
+          brandId: singleBrandId || '',
+          description: '',
+          priority: 'Medium',
+          assigneeIds: [],
+          recurring: 'never',
+          startDate: '',
+          dueDate: undefined,
+          timeEstimate: undefined,
+          tags: [],
+        });
+
+        setSelectedUsers([]);
+        setSelectedTags([]);
+        setTimeLogs([]);
+        setTimeTracked(0);
+        setLogNote('');
+        setCustomFields([]);
+        setAttachments([]);
+        setDeliverables([]);
+        setSubtasks([]);
+        setDependencies([]);
+        setBlocking([]);
+        setComments([]);
+        setSuggestionReason(null);
+        
+        if (currentUserProfile && user) {
+             if (currentUserProfile.role === 'Employee') {
+                const selfUser = allUsers?.find(u => u.id === user.uid);
+                if (selfUser) {
+                    setSelectedUsers([selfUser]);
+                    form.setValue('assigneeIds', [selfUser.id]);
+                }
             }
-        } else {
-             setSelectedUsers([]);
-            form.setValue('assigneeIds', []);
         }
+        if (singleBrandId) {
+            form.setValue('brandId', singleBrandId);
+        }
+
     }
-}, [open, currentUserProfile, user, form, allUsers]);
+  }, [open, currentUserProfile, user, form, allUsers, singleBrandId]);
 
 
   const onSubmit = async (data: TaskFormValues) => {
@@ -445,20 +488,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         });
 
         setOpen(false);
-        form.reset();
-        setSelectedUsers([]);
-        setSelectedTags([]);
-        setTimeLogs([]);
-        setTimeTracked(0);
-        setLogNote('');
-        setCustomFields([]);
-        setAttachments([]);
-        setDeliverables([]);
-        setSubtasks([]);
-        setDependencies([]);
-        setBlocking([]);
-        setComments([]);
-        setSuggestionReason(null);
 
     } catch (error) {
         console.error("Failed to create task and notifications:", error);
@@ -817,37 +846,47 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         )}
                       />
                       
-                      <FormField
-                        control={form.control}
-                        name="brandId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Brand</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select a brand for this task" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                {areBrandsLoading ? (
-                                  <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                                ) : (
-                                  brands?.map((brand) => (
-                                    <SelectItem key={brand.id} value={brand.id}>
-                                      <div className="flex items-center gap-2">
-                                        <Building2 className="h-4 w-4" />
-                                        {brand.name}
-                                      </div>
-                                    </SelectItem>
-                                  ))
-                                )}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                      {singleBrandId ? (
+                         <div className="space-y-2">
+                            <Label>Brand</Label>
+                            <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-secondary text-secondary-foreground">
+                                <Building2 className="h-4 w-4" />
+                                <span>{brands?.find(b => b.id === singleBrandId)?.name}</span>
+                            </div>
+                        </div>
+                      ) : (
+                        <FormField
+                            control={form.control}
+                            name="brandId"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Brand</FormLabel>
+                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                    <SelectTrigger>
+                                    <SelectValue placeholder="Select a brand for this task" />
+                                    </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                    {areBrandsLoading ? (
+                                    <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
+                                    ) : (
+                                    brands?.map((brand) => (
+                                        <SelectItem key={brand.id} value={brand.id}>
+                                        <div className="flex items-center gap-2">
+                                            <Building2 className="h-4 w-4" />
+                                            {brand.name}
+                                        </div>
+                                        </SelectItem>
+                                    ))
+                                    )}
+                                </SelectContent>
+                                </Select>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                      )}
 
                       <div className="space-y-2">
                         <Label>Description</Label>
