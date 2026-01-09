@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import {
@@ -52,7 +53,7 @@ import { Loader2, Calendar as CalendarIcon, UploadCloud, Image as ImageIcon, XCi
 import Image from 'next/image';
 import { ScrollArea } from '../ui/scroll-area';
 import type { SocialMediaPost, Notification, Comment, User as UserType, Brand, RevisionItem, RevisionCycle } from '@/lib/types';
-import { InstagramPostPreview } from './instagram-post-preview';
+import { InstagramPostPreview, MediaFrame } from './instagram-post-preview';
 import { Label } from '../ui/label';
 import { ToggleGroup, ToggleGroupItem } from '../ui/toggle-group';
 import { Slider } from '../ui/slider';
@@ -213,8 +214,11 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       const postData: Partial<SocialMediaPost> & { updatedAt?: any } = {
         platform: data.platform, caption: data.caption, mediaUrl, mediaType, scheduledAt: scheduledAt.toISOString(),
         companyId: profile.companyId, status, brandId: data.brandId, postType: data.postType, createdBy: data.assignedTo || user.uid,
-        crop: mediaType === 'image' ? { aspect: finalAspect, zoom, x: crop.x, y: crop.y } : undefined,
       };
+
+      if (mediaType === 'image') {
+        postData.crop = { aspect: finalAspect, zoom, x: crop.x, y: crop.y };
+      }
 
       const batch = writeBatch(firestore);
       if (mode === 'create') {
@@ -315,7 +319,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           <ScrollArea className="md:border-r h-full">
             <div className="p-6 space-y-6">
               <div className='p-4 bg-zinc-900 rounded-lg'>
-                <InstagramPostPreview 
+                <MediaFrame
                   mode="editor"
                   mediaUrl={imagePreview}
                   mediaType={mediaType}
