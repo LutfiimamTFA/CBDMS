@@ -83,7 +83,6 @@ interface CreatePostDialogProps {
 
 const formatDate = (date: any): string => {
   if (!date) return 'N/A';
-  // Check if it's a Firestore Timestamp and convert, otherwise assume it's an ISO string
   const dateObj = date.toDate ? date.toDate() : new Date(date);
   if (isNaN(dateObj.getTime())) return 'Invalid date';
   return format(dateObj, 'PP, p');
@@ -141,7 +140,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
   const onZoomChange = useCallback((newZoom: number) => {
     setZoom(newZoom);
   }, []);
-
+  
   useEffect(() => {
     if (post) {
       const scheduledDate = parseISO(post.scheduledAt);
@@ -175,6 +174,12 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
     }
   }, [post, form, open, user]);
 
+  useEffect(() => {
+    // Reset crop and zoom when aspect ratio or post type changes
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+  }, [aspect, postType]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -183,6 +188,9 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
       reader.readAsDataURL(file);
       setMediaType(file.type.startsWith('video') ? 'video' : 'image');
       setValue('media', e.target.files);
+       // Reset crop state for new image
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
     }
   };
 
@@ -306,6 +314,20 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
         <div className="grid md:grid-cols-2 h-full overflow-hidden">
           <ScrollArea className="md:border-r h-full">
             <div className="p-6 space-y-6">
+              <div className='p-4 bg-zinc-900 rounded-lg'>
+                <InstagramPostPreview 
+                  mode="editor"
+                  mediaUrl={imagePreview}
+                  mediaType={mediaType}
+                  aspect={finalAspect}
+                  crop={crop}
+                  zoom={zoom}
+                  onCropChange={onCropChange}
+                  onZoomChange={onZoomChange}
+                  isEditable={isEditable}
+                />
+              </div>
+
               {isCreatorEditView && revisionItems.length > 0 && (
                 <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
                   <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5" /> Revisions Requested</h3>
@@ -341,41 +363,25 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
 
               <Form {...form}>
                 <form id="create-post-form" className="space-y-6">
-                  <FormField control={form.control} name="media" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Media</FormLabel>
-                        <div 
-                            className={cn("w-full h-48 border-2 border-dashed rounded-lg flex flex-col items-center justify-center relative")}
-                        >
-                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={!isEditable} />
-                        {!imagePreview ? (
-                          <div className={cn("text-center text-muted-foreground", isEditable && "cursor-pointer hover:bg-muted/50 w-full h-full flex flex-col items-center justify-center")} onClick={() => isEditable && fileInputRef.current?.click()}>
-                            <UploadCloud className="mx-auto h-8 w-8" />
-                            <p>Click to upload</p>
-                          </div>
-                        ) : mediaType === 'image' ? (
-                          <div className="relative w-full h-full"><Cropper image={imagePreview} crop={crop} zoom={zoom} aspect={finalAspect === '1:1' ? 1 : finalAspect === '4:5' ? 4/5 : finalAspect === '9:16' ? 9/16 : 1.91/1} onCropChange={onCropChange} onZoomChange={onZoomChange} cropperProps={{ crossOrigin: 'anonymous' }} /></div>
-                        ) : (<video src={imagePreview} controls muted className="max-h-full w-auto" />)}
-                      </div>
-                      {imagePreview && isEditable &&
-                        <div className="flex items-center gap-2 pt-2">
-                            {mediaType === 'image' && (
-                                <>
-                                    <Label className="text-xs">Zoom</Label>
-                                    <Slider value={[zoom]} min={1} max={3} step={0.1} onValueChange={(val) => setZoom(val[0])} />
-                                </>
-                            )}
-                            <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}><Replace className="mr-2 h-3 w-3" /> Change</Button>
-                        </div>
-                      }
-                    </FormItem>
-                  )} />
+                   <div className="flex items-center gap-2 pt-2">
+                        {mediaType === 'image' && imagePreview && isEditable && (
+                           <>
+                                <Label className="text-xs">Zoom</Label>
+                                <Slider value={[zoom]} min={1} max={3} step={0.1} onValueChange={(val) => setZoom(val[0])} />
+                           </>
+                        )}
+                        <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={!isEditable}>
+                          <input type="file" ref={fileInputRef} className="hidden" accept="image/*,video/*" onChange={handleFileChange} />
+                          <Replace className="mr-2 h-3 w-3" /> {imagePreview ? 'Change Media' : 'Upload Media'}
+                        </Button>
+                    </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <FormField control={form.control} name="postType" render={({ field }) => (
-                        <FormItem><FormLabel>Post Type</FormLabel><Select onValueChange={(value) => { field.onChange(value); setCrop({x:0, y:0}); setZoom(1); }} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Post">Post</SelectItem><SelectItem value="Reels">Reels</SelectItem></SelectContent></Select></FormItem>
+                        <FormItem><FormLabel>Post Type</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Post">Post</SelectItem><SelectItem value="Reels">Reels</SelectItem></SelectContent></Select></FormItem>
                     )} />
                     {postType === 'Post' && <FormField control={form.control} name="aspect" render={({ field }) => (
-                        <FormItem><FormLabel>Aspect Ratio</FormLabel><Select onValueChange={(value) => { field.onChange(value); setCrop({x:0, y:0}); setZoom(1); }} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="1:1">1:1 (Square)</SelectItem><SelectItem value="4:5">4:5 (Portrait)</SelectItem><SelectItem value="1.91:1">1.91:1 (Landscape)</SelectItem></SelectContent></Select></FormItem>
+                        <FormItem><FormLabel>Aspect Ratio</FormLabel><Select onValueChange={field.onChange} value={field.value} disabled={!isEditable}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="1:1">1:1 (Square)</SelectItem><SelectItem value="4:5">4:5 (Portrait)</SelectItem><SelectItem value="1.91:1">1.91:1 (Landscape)</SelectItem></SelectContent></Select></FormItem>
                     )} />}
                   </div>
                   <FormField control={form.control} name="caption" render={({ field }) => (
@@ -404,6 +410,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
                 </div>
               )}
               <InstagramPostPreview 
+                  mode="instagram"
                   profileName={post?.creator?.name || profile?.name}
                   profileImageUrl={post?.creator?.avatarUrl || profile?.avatarUrl}
                   mediaUrl={imagePreview}
@@ -418,7 +425,7 @@ export function CreatePostDialog({ children, open: controlledOpen, onOpenChange:
           </ScrollArea>
         </div>
         <DialogFooter className="p-6 pt-4 border-t flex flex-wrap justify-between gap-2">
-          <div>{/* Placeholder for delete button if needed */}</div>
+          <div></div>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
             {isApproverView ? (
