@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -611,12 +610,13 @@ export function TaskDetailsSheet({
         }
     }
 
-    if (targetStatus === 'Revisi' && !(currentTask.revisionItems && currentTask.status === 'Revisi')) {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Status 'Revisi' harus dibuat lewat alur Request Revisions (dengan checklist revisi)."], suggestion: "Gunakan fitur Request Revisions/Reject untuk membuat checklist revisi." };
+    if (isManagerOrAdmin && targetStatus === 'Done' && currentTask.status !== 'Preview') {
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Penyelesaian tugas wajib melalui flow Approve and Complete saat status Preview."], suggestion: "Ubah ke Preview (jika memenuhi syarat), lalu klik Approve and Complete." };
     }
-
-    if (targetStatus === 'Done') {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Penyelesaian tugas wajib melalui flow Approve and Complete saat status Preview."], suggestion: "Ubah ke Preview (jika memenuhi syarat), lalu Manager klik Approve and Complete." };
+    
+    // Employee cannot move to done at all
+    if (isEmployeeOrPIC && targetStatus === 'Done') {
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Hanya Manager yang bisa menyelesaikan tugas."], suggestion: "Ubah status ke 'Preview' agar bisa direview oleh Manager." };
     }
 
     return baseResult;
@@ -627,19 +627,20 @@ export function TaskDetailsSheet({
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
 
-    const block = getBlockingReasonsForStatusChange(newStatus, taskState);
-    if (block.blocked) {
-        setBlockingAlert({ isOpen: true, ...block });
-        form.setValue('status', oldStatus); 
-        return;
+    if (!isSharedView) {
+      const block = getBlockingReasonsForStatusChange(newStatus, taskState);
+      if (block.blocked) {
+          setBlockingAlert({ isOpen: true, ...block });
+          return;
+      }
     }
+    
+    form.setValue('status', newStatus);
 
     if (isRunning && !isSharedView) {
         await handlePauseSession();
     }
     
-    form.setValue('status', newStatus);
-
     if (isSharedView) {
         try {
             const response = await fetch('/api/share/update-task', {
@@ -1037,9 +1038,9 @@ export function TaskDetailsSheet({
   };
   
   const handleFinalReviewAndComplete = async () => {
-    await handleStatusChange('Done');
-    setFinalReviewState({ isOpen: false, task: null });
-  }
+    if (!isManagerOrAdmin || !taskState) return;
+    setFinalReviewState({ isOpen: true, task: taskState });
+  };
   
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
@@ -1750,6 +1751,63 @@ export function TaskDetailsSheet({
                     <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Request Revisions
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Final Review & Complete Task</DialogTitle>
+                    <DialogDescription>
+                        Anda akan menyelesaikan tugas: <strong className="text-foreground">{finalReviewState.task?.title}</strong>. Mohon periksa item di bawah ini sebelum melanjutkan.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                  <div className="py-4 space-y-6 px-6">
+                    <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
+                                 finalReviewState.task.subtasks.map(subtask => ( 
+                                    <div key={subtask.id} className="flex items-center gap-3">
+                                        <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                        <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                    </div> 
+                                )) 
+                            ) : ( 
+                                <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
+                            )}
+                        </div>
+                    </div>
+                     <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {finalReviewState.task?.deliverables && finalReviewState.task.deliverables.length > 0 ? (
+                                 finalReviewState.task.deliverables.map(att => ( 
+                                    <div key={att.id} className="flex items-center gap-2 text-sm">
+                                        <span>-</span>
+                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
+                                    </div>
+                                )) 
+                            ) : ( 
+                                <p className="text-sm text-muted-foreground">No deliverables for this item.</p> 
+                            )}
+                        </div>
+                    </div>
+                  </div>
+                </ScrollArea>
+                <DialogFooter className="p-6 pt-0">
+                    <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
+                    <Button variant="default" onClick={async () => {
+                      if(finalReviewState.task) {
+                        await handleStatusChange('Done');
+                      }
+                      setFinalReviewState({isOpen: false, task: null});
+                    }}>
+                        <Check className="mr-2 h-4 w-4" />
+                        Confirm & Complete
                     </Button>
                 </DialogFooter>
             </DialogContent>
