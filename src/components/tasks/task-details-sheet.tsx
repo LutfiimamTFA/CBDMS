@@ -1062,7 +1062,6 @@ export function TaskDetailsSheet({
   
   const handleRecallSubmission = async () => {
     if (!currentUser) return;
-    // When recalling, it's logical to move it back to 'Doing' state
     await handleStatusChange('Doing');
     toast({ title: "Submission Recalled", description: "You can continue working on the task." });
   };
@@ -1494,7 +1493,7 @@ export function TaskDetailsSheet({
                       </Tabs>
                   </div>
                   <div className="md:col-span-1 p-6 space-y-6">
-                      {(isAssignee && !isManagerOrAdmin && !isSharedView) && (
+                      {(isAssignee && !isManagerOrAdmin && !isSharedView && taskState.status !== 'Done') && (
                         <div className="space-y-2">
                            {taskState.status === 'Preview' ? (
                                 <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
@@ -1511,7 +1510,7 @@ export function TaskDetailsSheet({
                                     Submit for Review
                                 </Button>
                            )}
-                           {!canSubmit && taskState.status !== 'Preview' && (
+                           {!canSubmit && taskState.status !== 'Preview' && taskState.status !== 'Done' && (
                                 <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
                            )}
                         </div>
@@ -1519,7 +1518,7 @@ export function TaskDetailsSheet({
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
                      <div className="flex flex-col w-full gap-2">
-                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleFinalReviewAndComplete} disabled={isSaving}>
+                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
                             <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                         </Button>
                          <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
@@ -1620,7 +1619,10 @@ export function TaskDetailsSheet({
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => { aiValidation.onConfirm(); setAiValidation(prev => ({ ...prev, isOpen: false })); }}>Yes, set as Urgent</AlertDialogAction>
+                <AlertDialogAction onClick={() => {
+                  aiValidation.onConfirm();
+                  setAiValidation(prev => ({ ...prev, isOpen: false }));
+                }}>Yes, set as Urgent</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
