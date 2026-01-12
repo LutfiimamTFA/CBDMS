@@ -36,7 +36,7 @@ import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, ListOrdered, Table as TableIcon, Upload } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, ListOrdered, Table as TableIcon, Upload, Workflow } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -133,8 +133,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = React.useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = React.useState<UserType | null>(null);
-  const [dependencies, setDependencies] = React.useState<string[]>([]);
-  const [blocking, setBlocking] = React.useState<string[]>([]);
+  const [waitingOnTaskIds, setWaitingOnTaskIds] = React.useState<string[]>([]);
+  const [blockingTaskIds, setBlockingTaskIds] = React.useState<string[]>([]);
+  const [linkedTaskIds, setLinkedTaskIds] = React.useState<string[]>([]);
   const [comments, setComments] = React.useState<Comment[]>([]);
   const [newComment, setNewComment] = React.useState('');
   const [mentionSuggestions, setMentionSuggestions] = React.useState<UserType[]>([]);
@@ -224,6 +225,19 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     return allTasks.filter(task => employeeBrandIds.has(task.brandId));
 
   }, [allTasks, currentUserProfile]);
+
+  const groupedDependencyOptions = useMemo(() => {
+      const grouped: Record<string, Task[]> = {};
+      dependencyOptions.forEach(task => {
+          const brandName = brands?.find(b => b.id === task.brandId)?.name || 'Unbranded';
+          if (!grouped[brandName]) {
+              grouped[brandName] = [];
+          }
+          grouped[brandName].push(task);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  }, [dependencyOptions, brands]);
+
 
   const userWorkload = useMemo(() => {
     const workloadMap = new Map<string, number>();
@@ -373,8 +387,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         setAttachments([]);
         setDeliverables([]);
         setSubtasks([]);
-        setDependencies([]);
-        setBlocking([]);
+        setWaitingOnTaskIds([]);
+        setBlockingTaskIds([]);
+        setLinkedTaskIds([]);
         setComments([]);
         setSuggestionReason(null);
         
@@ -422,8 +437,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         timeLogs,
         timeTracked,
         subtasks,
-        dependencies,
-        blocking,
+        waitingOnTaskIds,
+        blockingTaskIds,
+        linkedTaskIds,
         comments,
         attachments,
         deliverables,
@@ -723,14 +739,16 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     setIsMentioning(false);
   };
 
-  const handleAddDependency = (taskId: string) => {
-    if (!dependencies.includes(taskId)) {
-      setDependencies(prev => [...prev, taskId]);
-    }
+  const handleAddDependency = (taskId: string, type: 'waitingOn' | 'blocking' | 'linked') => {
+    if (type === 'waitingOn' && !waitingOnTaskIds.includes(taskId)) setWaitingOnTaskIds(prev => [...prev, taskId]);
+    if (type === 'blocking' && !blockingTaskIds.includes(taskId)) setBlockingTaskIds(prev => [...prev, taskId]);
+    if (type === 'linked' && !linkedTaskIds.includes(taskId)) setLinkedTaskIds(prev => [...prev, taskId]);
   };
   
-  const handleRemoveDependency = (taskId: string) => {
-    setDependencies(prev => prev.filter(id => id !== taskId));
+  const handleRemoveDependency = (taskId: string, type: 'waitingOn' | 'blocking' | 'linked') => {
+    if (type === 'waitingOn') setWaitingOnTaskIds(prev => prev.filter(id => id !== taskId));
+    if (type === 'blocking') setBlockingTaskIds(prev => prev.filter(id => id !== taskId));
+    if (type === 'linked') setLinkedTaskIds(prev => prev.filter(id => id !== taskId));
   };
 
 
@@ -808,6 +826,22 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const modifiersClassNames = {
     due: 'has-due-date',
   };
+
+  const renderDependencyList = (ids: string[], type: 'waitingOn' | 'blocking' | 'linked') => (
+      <div className="flex flex-wrap gap-2">
+          {ids.map(id => {
+              const task = allTasks?.find(t => t.id === id);
+              return task ? (
+                  <Badge key={id} variant="secondary">
+                      {task.title}
+                      <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                          <X className="h-3 w-3" />
+                      </button>
+                  </Badge>
+              ) : null;
+          })}
+      </div>
+  );
   
 
   return (
@@ -1170,54 +1204,56 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </TabsContent>
                     <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
                       <div className="space-y-2">
-                          {deliverables.map((att) => (
+                          <h4 className="font-medium text-sm">Initial Submission</h4>
+                          {deliverables.length > 0 ? deliverables.map((att) => (
                               <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
                                   <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                  {getFileIcon(att.name)}
-                                  <span className="truncate" title={att.name}>{att.name}</span>
+                                      {getFileIcon(att.name)}
+                                      <span className="truncate" title={att.name}>{att.name}</span>
                                   </a>
                                   <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveDeliverable(att.id)}>
-                                  <X className="h-4 w-4" />
+                                      <X className="h-4 w-4" />
                                   </Button>
                               </div>
-                          ))}
-                          {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>}
+                          )) : (
+                            <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>
+                          )}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-                          <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
-                          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                          <input type="file" ref={commentFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                          <Button type="button" variant="outline" onClick={() => commentFileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
                           <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
                       </div>
                     </TabsContent>
-                    <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                      <Command>
-                        <CommandInput placeholder="Search tasks to add as dependency..." />
-                        <CommandList>
-                          <CommandEmpty>No tasks found.</CommandEmpty>
-                          <CommandGroup>
-                            {(dependencyOptions || []).filter(task => !dependencies.includes(task.id)).map(task => (
-                              <CommandItem key={task.id} onSelect={() => handleAddDependency(task.id)}>
-                                {task.title}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                      <div className="space-y-2">
-                        <Label>Depends on:</Label>
-                        <div className="flex flex-wrap gap-2">
-                          {dependencies.map(depId => {
-                            const task = allTasks?.find(t => t.id === depId);
-                            return task ? (
-                              <Badge key={depId} variant="secondary">
-                                {task.title}
-                                <button onClick={() => handleRemoveDependency(depId)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </Badge>
-                            ) : null;
-                          })}
-                        </div>
+                    <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                      <div className="space-y-3">
+                          <h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4>
+                          <p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>
+                          {renderDependencyList(waitingOnTaskIds, 'waitingOn')}
+                           <Popover>
+                              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                              <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'waitingOn')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                          </Popover>
+                      </div>
+                      <Separator/>
+                      <div className="space-y-3">
+                          <h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4>
+                          <p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>
+                          {renderDependencyList(blockingTaskIds, 'blocking')}
+                          <Popover>
+                              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                              <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'blocking')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                          </Popover>
+                      </div>
+                      <Separator/>
+                      <div className="space-y-3">
+                          <h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Tasks</h4>
+                          <p className="text-xs text-muted-foreground">Tugas-tugas yang berhubungan tapi tidak saling memblokir.</p>
+                          {renderDependencyList(linkedTaskIds, 'linked')}
+                          <Popover>
+                              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                              <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'linked')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                          </Popover>
                       </div>
                     </TabsContent>
                     <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
