@@ -294,13 +294,23 @@
     },
     "SocialMediaPost": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "SocialMediaPost", "type": "object",
+      "title": "SocialMediaPost",
+      "type": "object",
+      "description": "Represents a social media post, which is a specialized type of task.",
       "properties": {
-        "id": { "type": "string" }, "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"] },
-        "caption": { "type": "string" }, "mediaUrl": { "type": "string", "format": "uri" },
-        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"] },
-        "scheduledAt": { "type": "string", "format": "date-time" }, "postedAt": { "type": "string", "format": "date-time" },
-        "createdBy": { "type": "string" }, "companyId": { "type": "string" }, "objectPosition": { "type": "number" },
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "title": { "type": "string", "description": "Internal title for the post." },
+        "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"] },
+        "postType": { "type": "string", "enum": ["Upload", "Branding"], "description": "Category of the social media work."},
+        "caption": { "type": "string", "description": "The text content of the post." },
+        "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video for the post." },
+        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "Workflow status of the post." },
+        "assigneeIds": { "type": "array", "items": { "type": "string" } },
+        "scheduledAt": { "type": "string", "format": "date-time", "description": "The date and time the post is scheduled to be published." },
+        "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was published." },
+        "createdBy": { "type": "string" },
+        "companyId": { "type": "string" },
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
         "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
       },
@@ -374,5 +384,3 @@
     ]
   }
 }
-
-    
