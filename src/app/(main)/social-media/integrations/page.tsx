@@ -194,41 +194,37 @@ export default function SocialMediaIntegrationsPage() {
         };
     }, [instagramConnection]);
     
-    const handleConnectOrRenew = async () => {
-        if (!auth?.currentUser) {
-            toast({ variant: 'destructive', title: 'Not Authenticated', description: 'Please log in to connect.'});
-            return;
+const handleConnectOrRenew = async () => {
+    if (!auth?.currentUser) {
+        toast({ variant: 'destructive', title: 'Not Authenticated', description: 'Please log in to connect.'});
+        return;
+    }
+    setIsRedirecting(true);
+    try {
+        const token = await auth.currentUser.getIdToken();
+        
+        const response = await fetch('/api/instagram/oauth/start', {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.message || 'Could not initiate the authentication flow.');
         }
-        setIsRedirecting(true);
-        try {
-            const token = await auth.currentUser.getIdToken();
-            
-            // Fetch the redirect URL from our API
-            const response = await fetch('/api/instagram/oauth/start', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                if(data.error === 'not_authenticated') {
-                    router.push('/login?next=/social-media/integrations');
-                    return;
-                }
-                throw new Error(data.message || 'Failed to start OAuth flow.');
-            }
-
-            if (data.redirectUrl) {
-                window.location.href = data.redirectUrl;
-            } else {
-                throw new Error('No redirect URL received from server.');
-            }
-
-        } catch (error: any) {
-            toast({ variant: 'destructive', title: 'Connection Error', description: error.message });
-            setIsRedirecting(false);
+        if (data.authUrl) {
+            window.location.href = data.authUrl;
+        } else {
+            throw new Error('Could not retrieve authentication URL.');
         }
-    };
+
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Connection Error', description: error.message });
+        setIsRedirecting(false);
+    }
+};
     
     const handleDisconnect = async () => {
         if (!firestore || !instagramConnection) return;
@@ -387,7 +383,7 @@ export default function SocialMediaIntegrationsPage() {
     }
 
     return (
-        <div className="flex h-svh flex-col bg-background">
+        <div className="flex min-h-svh flex-col bg-background">
             <main className="flex-1 overflow-auto p-4 md:p-6">
                 <div className="mb-6">
                     <h2 className="text-2xl font-bold tracking-tight">Platform Integrations</h2>

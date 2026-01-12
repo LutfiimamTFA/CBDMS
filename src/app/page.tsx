@@ -41,7 +41,7 @@ export default function RootPage() {
   // before the redirection happens.
   if (isLoading || user) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
+      <div className="flex min-h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
@@ -49,7 +49,7 @@ export default function RootPage() {
 
   // Render the landing page only if the user is confirmed to be not logged in.
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background">
+    <div className="flex min-h-screen w-full items-center justify-center bg-background">
       <div className="text-center space-y-8">
         <div className="flex justify-center">
             <div className="flex items-center gap-2">
