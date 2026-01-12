@@ -558,7 +558,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
           </div>
           <DataTableViewOptions table={table} />
         </div>
-        <div className="rounded-md border">
+        <div className="rounded-md border overflow-x-auto">
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (

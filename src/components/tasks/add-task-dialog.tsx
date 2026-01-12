@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -444,7 +445,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
             message: `${currentUserProfile.name} assigned you a new task: "${data.title}"`,
             taskId: newTaskRef.id,
             isRead: false,
-            createdAt: new Date().toISOString(),
+            createdAt: serverTimestamp(),
             createdBy: {
                 id: currentUserProfile.id,
                 name: currentUserProfile.name,
@@ -468,7 +469,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     message: `${comment.user.name} mentioned you in a comment on task: "${data.title}"`,
                     taskId: newTaskRef.id,
                     isRead: false,
-                    createdAt: new Date().toISOString(),
+                    createdAt: serverTimestamp(),
                     createdBy: {
                         id: comment.user.id,
                         name: comment.user.name,

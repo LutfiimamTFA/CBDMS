@@ -26,6 +26,7 @@ import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useRouter } from 'next/navigation';
 import { Badge } from '../ui/badge';
+import { useRealtimeNotificationToast } from '@/hooks/use-realtime-notification-toast';
 
 type GroupedNotifications = {
   today: Notification[];
@@ -39,6 +40,9 @@ export function NotificationBell() {
   const firestore = useFirestore();
   const { user } = useUserProfile();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Mount the real-time toast notification hook
+  useRealtimeNotificationToast();
 
   const notificationsQuery = useMemo(
     () =>
