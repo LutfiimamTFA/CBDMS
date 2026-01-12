@@ -1,4 +1,3 @@
-
 'use client';
 import {
   Sheet,
@@ -32,7 +31,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, formatLateness } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks, RotateCcw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -370,7 +369,14 @@ export function TaskDetailsSheet({
   }, [isSharedView, taskState.createdBy.id, session?.creatorId]);
 
 
-  const canEditContent = isSharedView ? false : (!!currentUser && (currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator));
+  const canEditContent = useMemo(() => {
+    if (isSharedView) return false;
+    if (!currentUser) return false;
+    // An employee cannot edit a task once it's in review
+    if (isEmployeeOrPIC && taskState.status === 'Preview') return false;
+    // Otherwise, standard edit permissions apply
+    return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
+  }, [isSharedView, currentUser, isEmployeeOrPIC, taskState.status, isManagerOfBrand, isCreator]);
       
   const canChangePriority = useMemo(() => {
       if (isSharedView) {
@@ -444,6 +450,16 @@ export function TaskDetailsSheet({
     }
     return false;
   }, [currentUser, permissions, arePermsLoading, taskState, isSharedView]);
+
+  const canUploadDeliverables = useMemo(() => {
+    if (isSharedView) {
+        if (accessLevel === 'view') return false;
+    }
+    if (!currentUser) return false;
+    // An employee cannot upload a deliverable if it is already waiting for review
+    if (isEmployeeOrPIC && taskState.status === 'Preview') return false;
+    return isAssignee || isManagerOrAdmin;
+  }, [isSharedView, accessLevel, isAssignee, isManagerOrAdmin, isEmployeeOrPIC, taskState.status, currentUser]);
 
 
   const handlePauseSession = useCallback(async (actionSource: 'auto-pause' | 'manual' = 'manual') => {
@@ -611,7 +627,6 @@ export function TaskDetailsSheet({
         }
     }
     
-    // Employee cannot move to done at all
     if (isEmployeeOrPIC && targetStatus === 'Done') {
         return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Hanya Manager yang bisa menyelesaikan tugas."], suggestion: "Ubah status ke 'Preview' agar bisa direview oleh Manager." };
     }
@@ -1036,12 +1051,20 @@ export function TaskDetailsSheet({
   
   const handleFinalReviewAndComplete = async () => {
     if (!isManagerOrAdmin || !taskState) return;
-    setFinalReviewState({ isOpen: true, task: taskState });
+    await handleStatusChange('Done');
+    setFinalReviewState({ isOpen: false, task: null });
   };
   
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
     await handleStatusChange('Preview');
+  };
+  
+  const handleRecallSubmission = async () => {
+    if (!currentUser) return;
+    // When recalling, it's logical to move it back to 'Doing' state
+    await handleStatusChange('Doing');
+    toast({ title: "Submission Recalled", description: "You can continue working on the task." });
   };
   
   const completionStatus = useMemo(() => {
@@ -1065,7 +1088,7 @@ export function TaskDetailsSheet({
   };
 
   const handleReopenTask = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !isManagerOrAdmin) return;
     await handleStatusChange('Revisi');
   }
 
@@ -1104,11 +1127,6 @@ export function TaskDetailsSheet({
 
   const canShareTask = !isSharedView && currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC' || currentUser.role === 'Client');
   
-  const canUploadDeliverables = useMemo(() => {
-    if (isSharedView) return accessLevel !== 'view';
-    return isAssignee || isManagerOrAdmin;
-  }, [isSharedView, accessLevel, isAssignee, isManagerOrAdmin]);
-
   const groupedDeliverables = useMemo(() => {
     const groups: Record<number, Attachment[]> = {};
     (taskState.deliverables || []).forEach(d => {
@@ -1143,7 +1161,7 @@ export function TaskDetailsSheet({
     
     const newRevisionCycle: RevisionCycle = {
         cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
-        requestedAt: new Date().toISOString() as any, // Use client-side timestamp
+        requestedAt: new Date().toISOString() as any,
         requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
         items: newRevisionItems,
     };
@@ -1477,19 +1495,26 @@ export function TaskDetailsSheet({
                   </div>
                   <div className="md:col-span-1 p-6 space-y-6">
                       {(isAssignee && !isManagerOrAdmin && !isSharedView) && (
-                          <div className="space-y-2">
-                              <Button
-                                  className="w-full"
-                                  onClick={handleSubmitForReview}
-                                  disabled={!canSubmit || isSaving || taskState.status === 'Preview'}
-                              >
-                                  {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
-                                  {taskState.status === 'Preview' ? 'Waiting for Review' : 'Submit for Review'}
-                              </Button>
-                              {!canSubmit && taskState.status !== 'Preview' && (
-                                  <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
-                              )}
-                          </div>
+                        <div className="space-y-2">
+                           {taskState.status === 'Preview' ? (
+                                <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                    <RotateCcw className="mr-2 h-4 w-4" />
+                                    Recall Submission
+                                </Button>
+                           ) : (
+                                <Button
+                                    className="w-full"
+                                    onClick={handleSubmitForReview}
+                                    disabled={!canSubmit || isSaving || taskState.status === 'Preview'}
+                                >
+                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                    Submit for Review
+                                </Button>
+                           )}
+                           {!canSubmit && taskState.status !== 'Preview' && (
+                                <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
+                           )}
+                        </div>
                       )}
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
@@ -1503,7 +1528,8 @@ export function TaskDetailsSheet({
                     </div>
                   )}
 
-                  {(isAssignee || isCreator) && taskState.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
+                  {isManagerOrAdmin && taskState.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
+
                   <div className='space-y-4 p-4 rounded-lg border'>
                     <h3 className='font-semibold text-sm'>Task Details</h3>
                     <Separator/>
@@ -1797,12 +1823,7 @@ export function TaskDetailsSheet({
                 </ScrollArea>
                 <DialogFooter className="p-6 pt-0">
                     <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
-                    <Button variant="default" onClick={async () => {
-                      if(finalReviewState.task) {
-                        await handleStatusChange('Done');
-                      }
-                      setFinalReviewState({isOpen: false, task: null});
-                    }}>
+                    <Button variant="default" onClick={handleFinalReviewAndComplete}>
                         <Check className="mr-2 h-4 w-4" />
                         Confirm & Complete
                     </Button>
