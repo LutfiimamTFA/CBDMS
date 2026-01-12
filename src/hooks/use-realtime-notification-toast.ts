@@ -1,31 +1,30 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query, orderBy, limit, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, limit, Timestamp } from 'firebase/firestore';
 import type { Notification } from '@/lib/types';
 import { useToast } from './use-toast';
-import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 
+// The hook now only contains logic and does not render any JSX.
 export function useRealtimeNotificationToast() {
   const { user } = useUserProfile();
   const firestore = useFirestore();
   const { toast } = useToast();
   const router = useRouter();
 
-  // Use a ref to store the timestamp of the last shown notification
-  // This persists across re-renders without causing them.
+  // Use a ref to track the timestamp of the last notification shown in a toast.
   const lastShownNotificationTimestamp = useRef<Timestamp | null>(null);
 
-  // Query for the latest notification
+  // Memoize the query to prevent re-creating it on every render.
   const notificationsQuery = useMemo(() => {
     if (!user || !firestore) return null;
     return query(
       collection(firestore, `users/${user.uid}/notifications`),
       orderBy('createdAt', 'desc'),
-      limit(1)
+      limit(5) // Fetch a few to handle potential batch writes
     );
   }, [user, firestore]);
 
@@ -34,37 +33,40 @@ export function useRealtimeNotificationToast() {
   useEffect(() => {
     if (notifications && notifications.length > 0) {
       const latestNotification = notifications[0];
-      
-      // Ensure we have a valid timestamp to compare
+
+      // Ensure the notification has a valid timestamp.
       if (!latestNotification.createdAt?.toDate) {
         return;
       }
-      
+
       const newNotificationTimestamp = latestNotification.createdAt as Timestamp;
 
-      // Check if this notification is new
-      const isNew = !lastShownNotificationTimestamp.current || newNotificationTimestamp.toMillis() > lastShownNotificationTimestamp.current.toMillis();
-      
-      // Also check if it's not the user's own action
+      // Determine if the notification is new and should be shown.
+      const isNew =
+        !lastShownNotificationTimestamp.current ||
+        newNotificationTimestamp.toMillis() > lastShownNotificationTimestamp.current.toMillis();
+
       const isFromAnotherUser = latestNotification.createdBy.id !== user?.uid;
 
+      // Show toast only if it's a new notification from someone else.
       if (isNew && isFromAnotherUser) {
-        // Show the toast
         toast({
           title: latestNotification.title,
           description: latestNotification.message,
           action: latestNotification.taskId ? (
-            <Button variant="outline" size="sm" onClick={() => router.push(`/tasks/${latestNotification.taskId}`)}>
+            <button
+              onClick={() => router.push(`/tasks/${latestNotification.taskId}`)}
+              className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+            >
               Open
-            </Button>
+            </button>
           ) : undefined,
         });
 
-        // Update the ref to the timestamp of this notification
+        // Update the ref to prevent showing the same toast again.
         lastShownNotificationTimestamp.current = newNotificationTimestamp;
       } else if (!lastShownNotificationTimestamp.current) {
-        // On initial load, set the timestamp of the latest notification
-        // so we don't show it as "new" on the first render.
+        // On initial load, set the timestamp of the latest notification.
         lastShownNotificationTimestamp.current = newNotificationTimestamp;
       }
     }
