@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -30,9 +30,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from '@/components/ui/form';
-import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
@@ -70,31 +68,144 @@ import { formatHours } from '@/lib/utils';
 
 const postSchema = z.object({
   caption: z.string().min(1, 'Caption is required'),
-  brandId: z.string().optional(),
+  brandId: z.string().min(1, 'Brand is required'),
   description: z.string().optional(),
   postType: z.enum(['Upload', 'Branding']),
   platform: z.string().min(1, 'Platform is required'),
   assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required'),
+  timeEstimate: z.coerce.number().min(0, 'Must be a positive number').optional(),
+  startDate: z.string().optional(),
   scheduledAt: z.date().optional(),
+  tags: z.array(z.string()).optional(),
 });
+
 
 type PostFormValues = z.infer<typeof postSchema>;
 
+type ShareSetting = 'public' | 'private';
+
+type CustomFieldType = 'Text' | 'Number' | 'Date' | 'Dropdown';
+type CustomField = {
+  id: number;
+  name: string;
+  type: CustomFieldType;
+  value: string;
+  options?: string; // For dropdown options
+};
+
+
 export function CreatePostDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
+  const [selectedUsers, setSelectedUsers] = React.useState<UserType[]>([]);
+  const [selectedTags, setSelectedTags] = React.useState<TagType[]>([]);
+  const [isSuggesting, setIsSuggesting] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [suggestionReason, setSuggestionReason] = React.useState<string | null>(null);
+  const { t, language } = useI18n();
   const { toast } = useToast();
-  const { t } = useI18n();
 
+  const [timeLogs, setTimeLogs] = React.useState<TimeLog[]>([]);
+  const [timeTracked, setTimeTracked] = React.useState(0);
+  const [logNote, setLogNote] = React.useState('');
+  const [logDate, setLogDate] = React.useState(format(new Date(), 'yyyy-MM-dd'));
+  const [startTime, setStartTime] = React.useState(format(new Date(), 'HH:mm'));
+  const [endTime, setEndTime] = React.useState(format(new Date(), 'HH:mm'));
+  
+  const [customFields, setCustomFields] = React.useState<CustomField[]>([]);
+  const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  const [deliverables, setDeliverables] = React.useState<Attachment[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const commentFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
+  const [tableRows, setTableRows] = useState(2);
+  const [tableCols, setTableCols] = useState(3);
+
+
+  const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
+  const [gdriveLink, setGdriveLink] = useState('');
+  const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+
+
+  const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = React.useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = React.useState<UserType | null>(null);
+  const [waitingOnTaskIds, setWaitingOnTaskIds] = React.useState<string[]>([]);
+  const [blockingTaskIds, setBlockingTaskIds] = React.useState<string[]>([]);
+  const [linkedTaskIds, setLinkedTaskIds] = React.useState<string[]>([]);
+  const [comments, setComments] = React.useState<Comment[]>([]);
+  const [newComment, setNewComment] = React.useState('');
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<UserType[]>([]);
+  const [isMentioning, setIsMentioning] = React.useState(false);
+  
   const firestore = useFirestore();
+  const storage = useStorage();
+
   const { user, profile: currentUserProfile } = useUserProfile();
 
-  const usersQuery = React.useMemo(() => (firestore && currentUserProfile ? query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId)) : null), [firestore, currentUserProfile]);
-  const { data: allUsers, isLoading: areUsersLoading } = useCollection<UserType>(usersQuery);
+  const usersQuery = React.useMemo(() => {
+    if (!firestore || !currentUserProfile) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
+    
+    if (currentUserProfile.role === 'Employee' && currentUserProfile.managerId) {
+      // This is a simplification. A more robust query might use an 'in' clause 
+      // if we fetch manager's direct reports IDs first. For now, fetching all and filtering client-side is acceptable.
+    }
+    
+    return q;
+  }, [firestore, currentUserProfile]);
 
-  const brandsQuery = React.useMemo(() => (firestore && currentUserProfile ? query(collection(firestore, 'brands'), orderBy('name')) : null), [firestore, currentUserProfile]);
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+  const { data: allUsers, isLoading: areUsersLoading } = useCollection<UserType>(usersQuery);
   
-  const userOptions = useMemo(() => (allUsers || []).map(user => ({ value: user.id, label: user.name })), [allUsers]);
+  const userOptions = useMemo(() => {
+    if (!allUsers || !currentUserProfile) return [];
+
+    if (currentUserProfile.role === 'Super Admin') {
+        return allUsers
+            .filter(u => u.role === 'Manager' || u.role === 'Employee')
+            .map(user => ({ value: user.id, label: user.name }));
+    }
+
+    if (currentUserProfile.role === 'Manager') {
+      const team = allUsers.filter(u => u.managerId === currentUserProfile.id);
+      const self = allUsers.find(u => u.id === currentUserProfile.id);
+      const options = self ? [self, ...team] : team;
+      return options.map(user => ({ value: user.id, label: user.name }));
+    }
+    
+    if (currentUserProfile.role === 'Employee') {
+        const myTeam = (allUsers || []).filter(u => u.managerId === currentUserProfile.managerId);
+        return myTeam.map(user => ({ value: user.id, label: user.name }));
+    }
+
+    return [];
+
+  }, [allUsers, currentUserProfile]);
+
+  
+  const socialMediaPostsCollectionRef = React.useMemo(() => {
+    if (!firestore) return null;
+    return collection(firestore, 'socialMediaPosts');
+  }, [firestore]);
+
+  const { data: allSocialMediaPosts } = useCollection<SocialMediaPost>(socialMediaPostsCollectionRef);
+  
+  const brandsQuery = React.useMemo(() => {
+    if (!firestore || !currentUserProfile) return null;
+    
+    if (currentUserProfile.role === 'Manager') {
+        if (!currentUserProfile.brandIds || currentUserProfile.brandIds.length === 0) {
+            return query(collection(firestore, 'brands'), where('__name__', '==', 'no-brands-for-manager'));
+        }
+        return query(collection(firestore, 'brands'), where('__name__', 'in', currentUserProfile.brandIds), orderBy('name'));
+    }
+    
+    return query(collection(firestore, 'brands'), orderBy('name'));
+
+  }, [firestore, currentUserProfile]);
+
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
@@ -102,93 +213,103 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
       caption: '',
       brandId: '',
       description: '',
-      postType: 'Upload',
       platform: 'Instagram',
+      postType: 'Upload',
       assigneeIds: [],
+      startDate: '',
       scheduledAt: undefined,
+      timeEstimate: undefined,
+      tags: [],
     },
   });
   
   useEffect(() => {
     if (open) {
-      form.reset({
-        caption: '',
-        brandId: '',
-        description: '',
-        postType: 'Upload',
-        platform: 'Instagram',
-        assigneeIds: [],
-        scheduledAt: undefined,
-      });
-      if (currentUserProfile?.role === 'Employee' && user) {
-        form.setValue('assigneeIds', [user.uid]);
-      }
+        form.reset({
+          caption: '',
+          brandId: '',
+          description: '',
+          platform: 'Instagram',
+          postType: 'Upload',
+          assigneeIds: [],
+          startDate: '',
+          scheduledAt: undefined,
+          timeEstimate: undefined,
+          tags: [],
+        });
+
+        if (currentUserProfile && user) {
+             if (currentUserProfile.role === 'Employee') {
+                const selfUser = allUsers?.find(u => u.id === user.uid);
+                if (selfUser) {
+                    setSelectedUsers([selfUser]);
+                    form.setValue('assigneeIds', [selfUser.id]);
+                }
+            }
+        }
     }
-  }, [open, currentUserProfile, user, form]);
+  }, [open, currentUserProfile, user, form, allUsers]);
+
 
   const onSubmit = async (data: PostFormValues) => {
-    if (!firestore || !currentUserProfile) return;
-
+    if (!socialMediaPostsCollectionRef || !currentUserProfile || !firestore) return;
+    
     const batch = writeBatch(firestore);
+
     const newPostRef = doc(collection(firestore, 'socialMediaPosts'));
-
-    const newPostData: Omit<SocialMediaPost, 'id'|'status'> = {
-      caption: data.caption,
-      brandId: data.brandId,
-      description: data.description,
-      postType: data.postType,
-      platform: data.platform,
-      assignees: allUsers?.filter(u => data.assigneeIds.includes(u.id)) || [],
-      assigneeIds: data.assigneeIds,
-      scheduledAt: data.scheduledAt ? data.scheduledAt.toISOString() : new Date().toISOString(),
-      companyId: currentUserProfile.companyId,
-      createdBy: {
-        id: currentUserProfile.id,
-        name: currentUserProfile.name,
-        avatarUrl: currentUserProfile.avatarUrl || '',
-      },
-      createdAt: serverTimestamp(),
+    
+    const newPostData = {
+        ...data,
+        status: 'Draft',
+        createdAt: new Date().toISOString(),
+        assignees: selectedUsers,
+        tags: selectedTags,
+        companyId: currentUserProfile.companyId,
+        createdBy: currentUserProfile.id,
     };
+    batch.set(newPostRef, newPostData);
 
-    batch.set(newPostRef, { ...newPostData, status: 'Draft' });
-
-    data.assigneeIds.forEach(assigneeId => {
-      if (assigneeId === currentUserProfile.id) return;
-      const notificationRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
-      const notification: Omit<Notification, 'id'> = {
-        userId: assigneeId,
-        title: 'New Social Media Post Assigned',
-        message: `${currentUserProfile.name} assigned you a new post: "${data.caption}"`,
-        taskId: newPostRef.id,
-        isRead: false,
-        createdAt: serverTimestamp(),
-        createdBy: {
-          id: currentUserProfile.id,
-          name: currentUserProfile.name,
-          avatarUrl: currentUserProfile.avatarUrl || '',
-        }
-      };
-      batch.set(notificationRef, notification);
+    selectedUsers.forEach(assignee => {
+        if (assignee.id === currentUserProfile.id) return; 
+        const notificationRef = doc(collection(firestore, `users/${assignee.id}/notifications`));
+        const notification: Omit<Notification, 'id'> = {
+            userId: assignee.id,
+            title: 'New Social Media Post Assigned',
+            message: `${currentUserProfile.name} assigned you a new post: "${data.caption}"`,
+            taskId: newPostRef.id, // Using taskId to link back
+            isRead: false,
+            createdAt: serverTimestamp(),
+            createdBy: {
+                id: currentUserProfile.id,
+                name: currentUserProfile.name,
+                avatarUrl: currentUserProfile.avatarUrl || '',
+            }
+        };
+        batch.set(notificationRef, notification);
     });
-
+    
     try {
-      await batch.commit();
-      toast({
-        title: 'Post Created',
-        description: `${data.caption} has been added as a draft.`
-      });
-      setOpen(false);
+        await batch.commit();
+        toast({
+            title: 'Social Media Post Created',
+            description: `${data.caption} has been added as a draft.`
+        });
+        setOpen(false);
+
     } catch (error) {
-      console.error("Failed to create post:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Creation Failed',
-        description: 'Could not create the post. Please try again.'
-      });
+        console.error("Failed to create post:", error);
+        toast({
+            variant: 'destructive',
+            title: 'Creation Failed',
+            description: 'Could not create the post. Please try again.'
+        });
     }
   };
 
+  const timeEstimateValue = form.watch('timeEstimate') ?? 0;
+  
   return (
+    <>
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
       <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-full">
@@ -208,21 +329,22 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                   className="space-y-6"
                 >
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Column */}
                     <div className="space-y-6 lg:col-span-2">
-                      <FormField
+                       <FormField
                         control={form.control}
                         name="caption"
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Caption</FormLabel>
                             <FormControl>
-                              <Input placeholder="e.g. Announcing our new summer collection!" {...field} />
+                              <Input placeholder="e.g., Announcing our new summer collection!" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
                         )}
                       />
-                      <FormField
+                       <FormField
                         control={form.control}
                         name="description"
                         render={({ field }) => (
@@ -241,6 +363,7 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                       />
                     </div>
 
+                    {/* Right Column */}
                     <div className="space-y-6 lg:col-span-1">
                       <FormField
                           control={form.control}
@@ -281,7 +404,10 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                                 ) : (
                                   brands?.map((brand) => (
                                     <SelectItem key={brand.id} value={brand.id}>
-                                      {brand.name}
+                                      <div className="flex items-center gap-2">
+                                          <Building2 className="h-4 w-4" />
+                                          {brand.name}
+                                      </div>
                                     </SelectItem>
                                   ))
                                 )}
@@ -302,8 +428,13 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                             ) : (
                               <MultiSelect
                                 options={userOptions}
-                                onValueChange={field.onChange}
-                                defaultValue={field.value}
+                                onValueChange={(value) => {
+                                  form.setValue('assigneeIds', value);
+                                  setSelectedUsers(
+                                    allUsers?.filter((u) => value.includes(u.id)) || []
+                                  );
+                                }}
+                                defaultValue={field.value || []}
                                 placeholder="Select team members..."
                               />
                             )}
@@ -311,44 +442,79 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name="scheduledAt"
-                        render={({ field }) => (
-                          <FormItem className="flex flex-col">
-                            <FormLabel>Schedule Date</FormLabel>
-                            <Popover>
-                              <PopoverTrigger asChild>
-                                <FormControl>
-                                  <Button
-                                    variant={"outline"}
-                                    className={cn(
-                                      "w-full pl-3 text-left font-normal",
-                                      !field.value && "text-muted-foreground"
-                                    )}
-                                  >
-                                    {field.value ? (
-                                      format(field.value, "PPP")
-                                    ) : (
-                                      <span>Pick a date</span>
-                                    )}
-                                    <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                                  </Button>
-                                </FormControl>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-auto p-0" align="start">
-                                <CalendarComponent
-                                  mode="single"
-                                  selected={field.value}
-                                  onSelect={field.onChange}
-                                  initialFocus
+                       <div className="space-y-4 rounded-lg border p-4">
+                          <h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />Dates</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <FormField control={form.control} name="startDate" render={({ field }) => (<FormItem><FormLabel>Start Date</FormLabel><FormControl><Input type="date" {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>)}/>
+                              <FormField
+                                  control={form.control}
+                                  name="scheduledAt"
+                                  render={({ field }) => (
+                                    <FormItem className="flex flex-col">
+                                      <FormLabel>Schedule Date</FormLabel>
+                                      <Popover>
+                                        <PopoverTrigger asChild>
+                                          <FormControl>
+                                            <Button
+                                              variant={"outline"}
+                                              className={cn(
+                                                "w-full pl-3 text-left font-normal",
+                                                !field.value && "text-muted-foreground"
+                                              )}
+                                            >
+                                              {field.value ? (
+                                                format(field.value, "PPP")
+                                              ) : (
+                                                <span>Pick a date</span>
+                                              )}
+                                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                                            </Button>
+                                          </FormControl>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                          <CalendarComponent
+                                            mode="single"
+                                            selected={field.value}
+                                            onSelect={field.onChange}
+                                            disabled={(date) => date < new Date("1900-01-01")}
+                                            initialFocus
+                                          />
+                                        </PopoverContent>
+                                      </Popover>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
                                 />
-                              </PopoverContent>
-                            </Popover>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                          </div>
+                      </div>
+
+                       <div className='space-y-4 p-4 rounded-lg border'>
+                          <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                          <Separator/>
+                            <FormField
+                                control={form.control}
+                                name="timeEstimate"
+                                render={({ field }) => (
+                                    <FormItem className="grid grid-cols-3 items-center gap-2">
+                                        <FormLabel className="text-muted-foreground text-sm">Est. Pengerjaan (hari)</FormLabel>
+                                        <div className="col-span-2 flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={field.value !== undefined ? field.value / 8 : ''} 
+                                                onChange={(e) => {
+                                                    const days = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                    const hours = days !== undefined ? days * 8 : undefined;
+                                                    field.onChange(hours);
+                                                }}
+                                                placeholder="e.g., 1.5"
+                                            />
+                                            <span className="text-sm text-muted-foreground whitespace-nowrap">({field.value || 0} jam)</span>
+                                        </div>
+                                    </FormItem>
+                                )}
+                            />
+                      </div>
                     </div>
                   </div>
                 </form>
@@ -363,5 +529,6 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         </SheetFooter>
       </SheetContent>
     </Sheet>
+    </>
   );
 }
