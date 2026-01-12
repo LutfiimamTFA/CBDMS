@@ -873,9 +873,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   onSubmit={form.handleSubmit(onSubmit)}
                   className="space-y-6"
                 >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* Left Column */}
-                    <div className="space-y-6">
+                    <div className="space-y-6 lg:col-span-2">
                       <FormField
                         control={form.control}
                         name="title"
@@ -954,7 +954,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                     </div>
 
                     {/* Right Column */}
-                    <div className="space-y-6">
+                    <div className="space-y-6 lg:col-span-1">
                       <FormField
                         control={form.control}
                         name="priority"
