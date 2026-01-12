@@ -251,12 +251,6 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
         });
         return;
       }
-
-      // Open final review dialog for Manager/Admin moving task to 'Done'
-      if (isManagerOrAdmin && newStatus === 'Done') {
-          setFinalReviewState({ isOpen: true, task });
-          return;
-      }
       
       // Open revision dialog for Manager/Admin moving task from Preview/Done to Revisi
       if (isManagerOrAdmin && newStatus === 'Revisi' && (task.status === 'Preview' || task.status === 'Done')) {
