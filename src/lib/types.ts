@@ -220,7 +220,9 @@ export type Task = {
   timeEstimate?: number; 
   timeTracked?: number;
   timeLogs?: TimeLog[];
-  dependencies?: string[];
+  waitingOnTaskIds?: string[];
+  blockingTaskIds?: string[];
+  linkedTaskIds?: string[];
   subtasks?: Subtask[];
   revisionItems?: RevisionItem[];
   revisionHistory?: RevisionCycle[];
@@ -331,3 +333,5 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+    
