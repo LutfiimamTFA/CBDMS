@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -339,8 +339,20 @@ export function TaskDetailsSheet({
     
     return relevantTasks;
   }, [allTasks, currentUser, taskState, isSharedView]);
-
   
+  const groupedDependencyOptions = useMemo(() => {
+      const grouped: Record<string, Task[]> = {};
+      dependencyOptions.forEach(task => {
+          const brandName = brands?.find(b => b.id === task.brandId)?.name || 'Unbranded';
+          if (!grouped[brandName]) {
+              grouped[brandName] = [];
+          }
+          grouped[brandName].push(task);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  }, [dependencyOptions, brands]);
+
+
   const isCreator = currentUser?.id === taskState.createdBy.id;
   const isManagerOfBrand = currentUser?.role === 'Manager' && taskState.brandId && currentUser.brandIds?.includes(taskState.brandId);
   const isAssignee = !!currentUser && taskState.assigneeIds.includes(currentUser.id);
@@ -938,6 +950,20 @@ export function TaskDetailsSheet({
       const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
       await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: taskState[fieldToUpdate]?.filter(att => att.id !== id) });
   };
+  
+  const handleAddDependency = async (taskId: string, type: 'waitingOnTaskIds' | 'blockingTaskIds' | 'linkedTaskIds') => {
+    if (isSharedView || !firestore) return;
+    const currentDeps = taskState[type] || [];
+    if (!currentDeps.includes(taskId)) {
+        await updateDoc(doc(firestore, 'tasks', taskState.id), { [type]: [...currentDeps, taskId] });
+    }
+  };
+  
+  const handleRemoveDependency = async (taskId: string, type: 'waitingOnTaskIds' | 'blockingTaskIds' | 'linkedTaskIds') => {
+    if (isSharedView || !firestore) return;
+    const currentDeps = taskState[type] || [];
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { [type]: currentDeps.filter(id => id !== taskId) });
+  };
 
 
   const subtaskProgress = useMemo(() => {
@@ -1152,6 +1178,24 @@ export function TaskDetailsSheet({
         setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
     }
   };
+  
+  const renderDependencyList = (ids: string[], type: 'waitingOnTaskIds' | 'blockingTaskIds' | 'linkedTaskIds') => (
+      <div className="flex flex-wrap gap-2">
+          {(ids || []).map(id => {
+              const task = allTasks?.find(t => t.id === id);
+              return task ? (
+                  <Badge key={id} variant="secondary">
+                      {task.title}
+                      {canEditContent && (
+                        <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                            <X className="h-3 w-3" />
+                        </button>
+                      )}
+                  </Badge>
+              ) : null;
+          })}
+      </div>
+  );
 
 
   return (
@@ -1353,54 +1397,42 @@ export function TaskDetailsSheet({
                               </div>
                               {canManageSubtasks && ( <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="text-muted-foreground">{newSubtaskAssignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div> )}
                         </TabsContent>
-                        <TabsContent value="dependencies" className="mt-4 space-y-4 rounded-lg border p-4">
-                            <Command>
-                                <CommandInput placeholder="Search tasks to add as dependency..." disabled={!canEditContent || areAllTasksLoading} />
-                                <CommandList>
-                                <CommandEmpty>No tasks found.</CommandEmpty>
-                                <CommandGroup>
-                                    {(dependencyOptions || []).filter(task => !(taskState.dependencies || []).includes(task.id)).map(task => (
-                                    <CommandItem key={task.id} onSelect={() => { if (!canEditContent || !firestore) return; const newDeps = [...(taskState.dependencies || []), task.id]; updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }}>{task.title}</CommandItem>
-                                    ))}
-                                </CommandGroup>
-                                </CommandList>
-                            </Command>
-                            <div className="space-y-2">
-                                <Label>Depends on:</Label>
-                                {areAllTasksLoading ? <Loader2 className="animate-spin" /> : (
-                                <div className="flex flex-wrap gap-2">
-                                  {(taskState.dependencies || []).map(depId => {
-                                      const task = allTasks?.find(t => t.id === depId);
-                                      if (!task) return null;
-                                      const statusIcon = task.status === 'Done' ? <CheckCircle className="h-4 w-4 text-green-500" /> : task.status === 'Doing' ? <CircleDashed className="h-4 w-4 text-blue-500" /> : <Circle className="h-4 w-4 text-muted-foreground" />;
-                                      return (
-                                          <TooltipProvider key={depId}>
-                                              <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                      <Link href={`/tasks/${depId}`}>
-                                                          <Badge variant="secondary" className="hover:bg-accent transition-colors cursor-pointer">
-                                                              {statusIcon}
-                                                              <span className="ml-2 truncate">{task.title}</span>
-                                                              {canEditContent && (
-                                                                  <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!firestore) return; const newDeps = taskState.dependencies?.filter(id => id !== depId); updateDoc(doc(firestore, 'tasks', taskState.id), { dependencies: newDeps }); }} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                                                                      <X className="h-3 w-3" />
-                                                                  </button>
-                                                              )}
-                                                          </Badge>
-                                                      </Link>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>
-                                                      <p>Status: {task.status}</p>
-                                                      <p>Assignee: {task.assignees?.map(a => a.name).join(', ') || 'N/A'}</p>
-                                                      <p>Due: {task.dueDate ? format(parseISO(task.dueDate), 'PP') : 'N/A'}</p>
-                                                  </TooltipContent>
-                                              </Tooltip>
-                                          </TooltipProvider>
-                                      );
-                                  })}
-                                </div>
-                                )}
-                            </div>
+                        <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                          <div className="space-y-3">
+                              <h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4>
+                              <p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>
+                              {renderDependencyList(taskState.waitingOnTaskIds, 'waitingOnTaskIds')}
+                              {canEditContent && (
+                                <Popover>
+                                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                                    <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'waitingOnTaskIds')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                                </Popover>
+                              )}
+                          </div>
+                          <Separator/>
+                          <div className="space-y-3">
+                              <h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4>
+                              <p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>
+                              {renderDependencyList(taskState.blockingTaskIds, 'blockingTaskIds')}
+                              {canEditContent && (
+                                <Popover>
+                                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                                    <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'blockingTaskIds')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                                </Popover>
+                              )}
+                          </div>
+                          <Separator/>
+                          <div className="space-y-3">
+                              <h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Tasks</h4>
+                              <p className="text-xs text-muted-foreground">Tugas-tugas yang berhubungan tapi tidak saling memblokir.</p>
+                              {renderDependencyList(taskState.linkedTaskIds, 'linkedTaskIds')}
+                              {canEditContent && (
+                                <Popover>
+                                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                                    <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'linkedTaskIds')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                                </Popover>
+                              )}
+                          </div>
                         </TabsContent>
                         <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
                             {(taskState.revisionHistory && taskState.revisionHistory.length > 0) ? (
@@ -1765,4 +1797,3 @@ export function TaskDetailsSheet({
     </>
   );
 }
-
