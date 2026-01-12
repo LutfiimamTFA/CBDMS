@@ -213,18 +213,27 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const dependencyOptions = useMemo(() => {
     if (!allTasks || !currentUserProfile) return [];
+
+    // Super Admin sees all tasks
     if (currentUserProfile.role === 'Super Admin') {
       return allTasks;
     }
+
+    // Manager sees tasks only from their managed brands
     if (currentUserProfile.role === 'Manager') {
-      return allTasks.filter(task => currentUserProfile.brandIds?.includes(task.brandId));
+      return allTasks.filter(task => (currentUserProfile.brandIds || []).includes(task.brandId));
     }
-    // For Employee/PIC, scope is smaller, maybe only tasks within the same brand they can see.
-    // This part assumes employees can see tasks from their brand.
-    const employeeBrandIds = new Set(allTasks.filter(t => t.assigneeIds.includes(currentUserProfile.id)).map(t => t.brandId));
-    return allTasks.filter(task => employeeBrandIds.has(task.brandId));
+
+    // Employee/PIC sees tasks from brands they are involved in
+    const userBrandIds = new Set(
+        allTasks
+            .filter(t => t.assigneeIds.includes(currentUserProfile.id))
+            .map(t => t.brandId)
+    );
+    return allTasks.filter(task => userBrandIds.has(task.brandId));
 
   }, [allTasks, currentUserProfile]);
+
 
   const groupedDependencyOptions = useMemo(() => {
       const grouped: Record<string, Task[]> = {};
