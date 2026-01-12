@@ -1,4 +1,3 @@
-
 {
   "entities": {
     "User": {
@@ -133,7 +132,9 @@
         "currentSessionStartTime": { "type": "string", "format": "date-time" },
         "priority": { "type": "string" },
         "timeEstimate": { "type": "number" },
-        "taskDependencyIds": { "type": "array", "items": { "type": "string" } },
+        "waitingOnTaskIds": { "type": "array", "items": { "type": "string" }, "description": "Tasks that must be completed before this task can start." },
+        "blockingTaskIds": { "type": "array", "items": { "type": "string" }, "description": "Tasks that are blocked by this task." },
+        "linkedTaskIds": { "type": "array", "items": { "type": "string" }, "description": "Tasks that are related but not dependent." },
         "lastActivity": { "$ref": "#/backend/entities/Activity" },
         "companyId": { "type": "string" },
         "revisionItems": {
