@@ -90,6 +90,7 @@ export type Brand = {
   id: string;
   name: string;
   createdAt: any;
+  companyId: string;
 };
 
 export type Activity = {
@@ -206,6 +207,7 @@ export type Task = {
   id: string;
   title: string;
   brandId: string;
+  category: 'General' | 'Social Media' | 'Branding';
   description?: string;
   status: Status;
   priority: Priority;

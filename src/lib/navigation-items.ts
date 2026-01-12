@@ -51,7 +51,7 @@ export const defaultNavItems: NavigationItem[] = [
   {
     id: 'nav_social_media',
     label: 'nav.social_media',
-    path: '', // This is now a folder
+    path: '/social-media', // This is now a folder
     icon: 'Share2',
     order: 6,
     roles: ['Super Admin', 'Manager', 'Employee'],
