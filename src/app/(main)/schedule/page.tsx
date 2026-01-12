@@ -1,110 +1,189 @@
 
 'use client';
 
-import React, { useMemo } from 'react';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import interactionPlugin from '@fullcalendar/interaction';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { Task } from '@/lib/types';
-import { collection, query, where } from 'firebase/firestore';
-import { Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { getBrandColor } from '@/lib/utils';
-import { parseISO } from 'date-fns';
+import type { Task, Brand, WorkflowStatus, User } from '@/lib/types';
+import { collection, query, orderBy, where } from 'firebase/firestore';
+import {
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+  add,
+  sub,
+  isSameDay,
+  parseISO,
+  isWithinInterval,
+} from 'date-fns';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+  Loader2,
+  X,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { TaskCard } from '@/components/tasks/task-card';
 
 export default function SchedulePage() {
   const firestore = useFirestore();
-  const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
-  const router = useRouter();
+  const { profile: currentUser, companyId } = useUserProfile();
+  const [currentDate, setCurrentDate] = useState(new Date());
 
   const tasksQuery = useMemo(() => {
-    if (!firestore || !companyId || !profile) return null;
-    
-    if (profile.role === 'Manager' && (!profile.brandIds || profile.brandIds.length === 0)) {
-        return query(collection(firestore, 'tasks'), where('__name__', '==', 'dummy-id-to-get-empty-result'));
-    }
-
+    if (!firestore || !companyId) return null;
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-
-    if (profile.role === 'Manager') {
-      q = query(q, where('brandId', 'in', profile.brandIds));
-    } else if (profile.role === 'Employee') {
-      q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    if (currentUser?.role === 'Manager') {
+      if (!currentUser.brandIds || currentUser.brandIds.length === 0) {
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'dummy-id-to-get-empty-result'));
+      }
+      q = query(q, where('brandId', 'in', currentUser.brandIds));
+    } else if (currentUser?.role === 'Employee' || currentUser?.role === 'PIC') {
+      q = query(q, where('assigneeIds', 'array-contains', currentUser.id));
     }
-    
     return q;
+  }, [firestore, companyId, currentUser]);
 
-  }, [firestore, companyId, profile]);
-  
   const { data: allTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
-  const isLoading = isTasksLoading || isProfileLoading;
+  const isLoading = isTasksLoading;
 
-  const calendarEvents = useMemo(() => {
-    if (!allTasks) return [];
-    return allTasks
-      .filter((task) => !!task.dueDate)
-      .map((task) => {
-        const brandColor = getBrandColor(task.brandId);
-        const eventDate = parseISO(task.dueDate!);
-        return {
-          id: task.id,
-          title: task.title,
-          start: eventDate,
-          end: eventDate,
-          allDay: true,
-          extendedProps: {
-            ...task,
-          },
-          backgroundColor: brandColor,
-          borderColor: brandColor,
-        };
-      });
-  }, [allTasks]);
+  // --- Calendar Grid Logic ---
+  const calendarGrid = useMemo(() => {
+    const firstDayOfMonth = startOfMonth(currentDate);
+    const calendarStart = startOfWeek(firstDayOfMonth, { weekStartsOn: 0 });
+    const calendarEnd = endOfWeek(endOfMonth(firstDayOfMonth), { weekStartsOn: 0 });
+    const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
+    return { start: calendarStart, end: calendarEnd, days };
+  }, [currentDate]);
 
-  const handleEventClick = (clickInfo: any) => {
-    const taskId = clickInfo.event.id;
-    router.push(`/tasks/${taskId}`);
+  const tasksByDueDate = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    if (!allTasks) return map;
+    
+    allTasks.forEach(task => {
+      if (task.dueDate) {
+        const dueDate = parseISO(task.dueDate);
+        if (isWithinInterval(dueDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+          const key = format(dueDate, 'yyyy-MM-dd');
+          if (!map.has(key)) {
+            map.set(key, []);
+          }
+          map.get(key)?.push(task);
+        }
+      }
+    });
+    return map;
+  }, [allTasks, calendarGrid]);
+  
+  const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
+  const months = Array.from({ length: 12 }, (_, i) => ({
+    value: i,
+    label: format(new Date(0, i), 'MMMM'),
+  }));
+
+  const handleMonthChange = (month: string) => {
+    setCurrentDate(new Date(currentDate.getFullYear(), parseInt(month, 10)));
   };
+
+  const handleYearChange = (year: string) => {
+    setCurrentDate(new Date(parseInt(year, 10), currentDate.getMonth()));
+  };
+  
+  const next = () => setCurrentDate(add(currentDate, { months: 1 }));
+  const prev = () => setCurrentDate(sub(currentDate, { months: 1 }));
 
   return (
     <div className="flex h-svh flex-col bg-background">
       <main className="flex flex-1 flex-col p-4 md:p-6 overflow-hidden">
+        {/* Calendar Header */}
         <div className="flex items-center justify-between mb-4 flex-wrap gap-4">
-            <div>
-                <h2 className="text-2xl font-bold tracking-tight">Project Schedule</h2>
-                <p className="text-muted-foreground">High-level overview of all project timelines. Click any event to view details.</p>
+          <div className="flex items-center gap-2 flex-wrap">
+              <>
+                <Select value={String(currentDate.getFullYear())} onValueChange={handleYearChange}>
+                  <SelectTrigger className="w-28 font-bold text-lg"><SelectValue/></SelectTrigger>
+                  <SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+                </Select>
+                <Select value={String(currentDate.getMonth())} onValueChange={handleMonthChange}>
+                  <SelectTrigger className="w-36 font-bold text-lg"><SelectValue/></SelectTrigger>
+                  <SelectContent>{months.map(m => <SelectItem key={m.value} value={String(m.value)}>{m.label}</SelectItem>)}</SelectContent>
+                </Select>
+              </>
+
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={prev}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-9" onClick={() => setCurrentDate(new Date())}>
+                Today
+              </Button>
+              <Button variant="outline" size="icon" className="h-9 w-9" onClick={next}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
+          </div>
         </div>
-        {isLoading ? (
-          <div className="flex flex-1 items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin" />
+
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-7 border-t border-l border-border bg-secondary/30">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground border-r border-b">
+                    <span className="hidden md:inline">{day}</span>
+                    <span className="md:hidden">{day.charAt(0)}</span>
+                </div>
+            ))}
+        </div>
+        <div className="flex-1 min-h-0">
+          {isLoading ? (
+             <div className="flex items-center justify-center h-full">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : (
+          <ScrollArea className="h-full">
+          <div className="grid grid-cols-7 border-l border-border h-full">
+              {calendarGrid.days.map((day) => {
+                  const dayKey = format(day, 'yyyy-MM-dd');
+                  const dayTasks = tasksByDueDate.get(dayKey) || [];
+
+                  return (
+                      <div 
+                          key={day.toString()} 
+                          className={cn(
+                              "relative min-h-[12rem] p-2 border-r border-b flex flex-col", 
+                              !isSameMonth(day, currentDate) && "bg-muted/30"
+                          )}
+                      >
+                          <span className={cn(
+                              "font-semibold text-sm", 
+                              isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground",
+                               !isSameMonth(day, currentDate) && "text-muted-foreground/50",
+                               )}>
+                              {format(day, 'd')}
+                          </span>
+                          <div className="mt-2 flex-1 space-y-1 overflow-auto">
+                            {dayTasks.map(task => (
+                              <TaskCard key={task.id} task={task} />
+                            ))}
+                          </div>
+                      </div>
+                  )
+              })}
           </div>
-        ) : (
-          <div className="flex-1 min-h-0">
-            <FullCalendar
-                plugins={[dayGridPlugin, interactionPlugin]}
-                initialView="dayGridMonth"
-                headerToolbar={{
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,dayGridWeek,dayGridDay'
-                }}
-                events={calendarEvents}
-                eventClick={handleEventClick}
-                height="100%"
-                eventTimeFormat={{
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    meridiem: 'short'
-                }}
-                eventDisplay="block"
-                dayHeaderClassNames="bg-muted"
-                viewClassNames="bg-card"
-                eventClassNames="cursor-pointer border-none px-2 py-0.5 text-xs rounded-md font-medium"
-            />
-          </div>
-        )}
+          </ScrollArea>
+          )}
+        </div>
       </main>
     </div>
   );
