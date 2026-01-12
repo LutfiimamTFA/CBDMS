@@ -26,7 +26,7 @@ import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useRouter } from 'next/navigation';
 import { Badge } from '../ui/badge';
-import { useRealtimeNotificationToast } from '@/hooks/use-realtime-notification-toast';
+import { useRealtimeNotificationToast } from '@/hooks/use-realtime-notification-toast.tsx';
 
 type GroupedNotifications = {
   today: Notification[];
