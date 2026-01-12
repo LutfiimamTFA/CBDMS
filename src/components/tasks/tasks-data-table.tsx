@@ -30,8 +30,8 @@ import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activit
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { format, parseISO, isAfter, endOfDay } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2 } from 'lucide-react';
+import { format, parseISO, isAfter, endOfDay, isPast, isToday, differenceInDays } from 'date-fns';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2, ArrowUpDown } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
 import { DataTableViewOptions } from './data-table-view-options';
@@ -57,6 +57,8 @@ import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ShareTaskDialog } from '../share/share-task-dialog';
+import { cn } from '@/lib/utils';
+
 
 type AIValidationState = {
   isOpen: boolean;
@@ -107,14 +109,13 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
 
   const [sorting, setSorting] = React.useState<SortingState>([
     {
-      id: 'priority',
-      desc: true,
+      id: 'dueDate',
+      desc: false,
     },
   ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
-    lastActivity: false, // Keep this hidden by default as it's less critical for a table view
-    // Other columns will now be visible by default
+    lastActivity: false, 
   });
   const [rowSelection, setRowSelection] = React.useState({})
   const { toast } = useToast();
@@ -246,7 +247,17 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
   const columns: ColumnDef<Task>[] = [
     {
       accessorKey: 'title',
-      header: 'Title',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Title
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       cell: ({ row }) => {
         const task = row.original;
         const hasDescription = typeof task.description === 'string' && task.description.trim() !== '';
@@ -293,6 +304,40 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       }
     },
     {
+      accessorKey: 'dueDate',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Due Date
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
+      cell: ({ row }) => {
+        const dueDate = row.getValue('dueDate') as string | undefined;
+        if (!dueDate) return <span className='text-muted-foreground'>-</span>;
+        
+        const date = parseISO(dueDate);
+        const now = new Date();
+        
+        const isOverdue = isPast(date) && !isToday(date);
+        const isDueSoon = !isOverdue && differenceInDays(date, now) <= 3;
+        
+        return (
+          <div className={cn(
+              "font-medium",
+              isOverdue && "text-destructive",
+              isDueSoon && "text-yellow-600 dark:text-yellow-400"
+          )}>
+              {format(date, 'MMM d, yyyy')}
+          </div>
+        );
+      }
+    },
+    {
       accessorKey: 'brandId',
       header: 'Brand',
       cell: ({ row }) => {
@@ -306,7 +351,17 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
     },
      {
       accessorKey: 'priority',
-      header: 'Priority',
+      header: ({ column }) => {
+        return (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Priority
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        )
+      },
       sortingFn: prioritySortingFn,
       cell: ({ row }) => {
         const task = row.original;
@@ -502,8 +557,8 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
             pageSize: 10,
         },
         sorting: [{
-            id: 'priority',
-            desc: true
+            id: 'dueDate',
+            desc: false
         }]
     },
     state: { sorting, columnFilters, columnVisibility, rowSelection },
