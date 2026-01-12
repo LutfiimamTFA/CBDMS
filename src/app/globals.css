@@ -81,13 +81,19 @@
     border-radius: 50%;
     background-color: hsl(var(--primary));
   }
+
+  /* Custom Prose styles for denser layout */
+  .prose p {
+    @apply my-2; /* Reduce vertical margin for paragraphs */
+  }
+
   .prose table {
-    @apply w-full my-4 border-collapse;
+    @apply w-full my-2 border-collapse; /* Reduce vertical margin for tables */
     table-layout: fixed;
   }
   .prose th,
   .prose td {
-    @apply border border-border px-4 py-2 relative align-top;
+    @apply border border-border px-2 py-1 relative align-top; /* Reduce padding in table cells */
   }
   .prose thead th {
     @apply font-semibold;
@@ -96,15 +102,19 @@
   /* Styles for TipTap table resizing */
   .ProseMirror {
     table {
-      @apply w-full my-4 border-collapse;
+      @apply w-full my-2 border-collapse;
       table-layout: fixed;
     }
 
     td,
     th {
-      @apply relative align-top;
+      @apply relative align-top px-2 py-1; /* Ensure padding is consistent with prose */
       overflow-wrap: anywhere;
       word-break: break-word;
+    }
+    
+    p {
+        @apply my-2;
     }
   
     .column-resize-handle {
