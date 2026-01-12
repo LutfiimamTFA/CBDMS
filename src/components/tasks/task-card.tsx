@@ -1,9 +1,10 @@
+
 'use client';
 import { useMemo } from 'react';
 import type { Task, User } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
+import { priorityInfo, cn, getBrandColor, formatLateness } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History } from 'lucide-react';
 import { format, parseISO, isAfter, formatDistanceToNow, endOfDay } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -27,8 +28,12 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   
   const completionStatus = useMemo(() => {
     if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
-    const isLate = isAfter(parseISO(task.actualCompletionDate), endOfDay(parseISO(task.dueDate)));
-    return isLate ? 'Late' : 'On Time';
+    const completionDate = parseISO(task.actualCompletionDate);
+    const dueDate = endOfDay(parseISO(task.dueDate));
+    if (isAfter(completionDate, dueDate)) {
+        return { status: 'Late', duration: formatLateness(dueDate, completionDate) };
+    }
+    return { status: 'On Time', duration: null };
   }, [task.status, task.actualCompletionDate, task.dueDate]);
 
   const brandColor = getBrandColor(task.brandId);
@@ -145,27 +150,28 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
             </div>
             <div className="flex items-center gap-3">
                 {completionStatus && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                {completionStatus === 'On Time' ? (
+                    completionStatus.status === 'On Time' ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger>
                                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                ) : (
-                                    <AlertCircle className="h-4 w-4 text-destructive" />
-                                )}
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Completed {completionStatus}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Completed On Time</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        <Badge variant="destructive" className="font-normal gap-1.5">
+                            <AlertCircle className="h-3 w-3" />
+                            {completionStatus.duration} late
+                        </Badge>
+                    )
                 )}
                 {task.subtasks && task.subtasks.length > 0 && (
                     <span className="flex items-center gap-1">
                         <ListTodo className="h-3.5 w-3.5" /> {task.subtasks.filter(st => st.completed).length}/{task.subtasks.length}
                     </span>
                 )}
-                {task.dueDate && (
+                {task.dueDate && !completionStatus && (
                     <Badge variant="outline" className="flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         {format(parseISO(task.dueDate), 'MMM d')}

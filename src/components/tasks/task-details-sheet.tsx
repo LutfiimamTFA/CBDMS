@@ -30,7 +30,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { priorityInfo } from '@/lib/utils';
+import { priorityInfo, formatLateness } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -1034,8 +1034,12 @@ export function TaskDetailsSheet({
   
   const completionStatus = useMemo(() => {
     if (taskState.status !== 'Done' || !taskState.actualCompletionDate || !taskState.dueDate) return null;
-    const isLate = isAfter(parseISO(taskState.actualCompletionDate), endOfDay(parseISO(taskState.dueDate)));
-    return isLate ? 'Late' : 'On Time';
+    const completionDate = parseISO(taskState.actualCompletionDate);
+    const dueDate = endOfDay(parseISO(taskState.dueDate));
+    if (isAfter(completionDate, dueDate)) {
+        return { status: 'Late', duration: formatLateness(dueDate, completionDate) };
+    }
+    return { status: 'On Time', duration: null };
   }, [taskState.status, taskState.actualCompletionDate, taskState.dueDate]);
   
   const getUniqueActivities = (activities: Activity[]): Activity[] => {
@@ -1500,7 +1504,7 @@ export function TaskDetailsSheet({
                       </FormItem>
                     <FormField control={form.control} name="priority" render={({ field }) => { const priority = priorityInfo[field.value]; return ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2">{ !canChangePriority ? ( <div className="flex items-center gap-2 text-sm font-medium"><priority.icon className={`h-4 w-4 ${priority.color}`} />{priority.label}</div> ) : ( <><Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent></Select>{aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}</> )}</div></FormItem> ) }}/>
                       <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2">{!canEditDueDate ? ( <div className="text-sm font-medium">{field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}</div> ) : ( <Input type="date" {...field} value={field.value || ''} /> )}</div></FormItem> )}/>
-                      {taskState.actualCompletionDate && ( <div className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Completed</FormLabel><div className="col-span-2 flex items-center gap-2"><span className="text-sm font-medium">{format(parseISO(taskState.actualCompletionDate), 'MMM d, yyyy')}</span>{completionStatus && ( <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>{completionStatus}</Badge> )}</div></div> )}
+                      {completionStatus && ( <div className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Completed</FormLabel><div className="col-span-2 flex items-center gap-2"><span className="text-sm font-medium">{format(parseISO(taskState.actualCompletionDate!), 'MMM d, yyyy')}</span>{completionStatus.status === 'On Time' ? (<Badge variant="secondary" className='bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'>On Time</Badge>) : (<Badge variant="destructive">{completionStatus.duration} late</Badge>)}</div></div> )}
                   </div>
 
                   <div className='space-y-4 p-4 rounded-lg border'>

@@ -11,7 +11,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import type { Priority, PriorityInfo, Status, StatusInfo } from '@/lib/types';
-import type { Duration } from 'date-fns';
+import { Duration, formatDistanceStrict } from 'date-fns';
 
 
 export function cn(...inputs: ClassValue[]) {
@@ -83,6 +83,28 @@ export function formatDuration(duration: Duration) {
   return parts.slice(0, 2).join(' '); // Show at most 2 units (e.g., "1d 4h" instead of "1d 4h 30m")
 }
 
+export const getBrandColor = (brandId: string) => {
+  if (!brandId) return '#6b7280'; // gray-500
+  let hash = 0;
+  for (let i = 0; i < brandId.length; i++) {
+    hash = brandId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash % brandColors.length);
+  return brandColors[index];
+};
+
+export function formatLateness(dueDate: Date, completionDate: Date): string {
+  return formatDistanceStrict(completionDate, dueDate)
+    .replace(' days', 'd')
+    .replace(' day', 'd')
+    .replace(' hours', 'h')
+    .replace(' hour', 'h')
+    .replace(' minutes', 'm')
+    .replace(' minute', 'm')
+    .replace(' seconds', 's')
+    .replace(' second', 's');
+}
+
 const brandColors = [
   '#06b6d4', // cyan-500
   '#8b5cf6', // purple-500
@@ -94,12 +116,3 @@ const brandColors = [
   '#f43f5e'  // rose-500
 ];
 
-export const getBrandColor = (brandId: string) => {
-  if (!brandId) return '#6b7280'; // gray-500
-  let hash = 0;
-  for (let i = 0; i < brandId.length; i++) {
-    hash = brandId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash % brandColors.length);
-  return brandColors[index];
-};
