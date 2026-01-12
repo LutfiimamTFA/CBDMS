@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -43,14 +44,9 @@ const nextConfig = {
   },
 };
 
-// Only apply PWA logic in production
-if (isProd) {
-  const withPWA = require('@ducanh2912/next-pwa').default({
-    dest: 'public',
-    disable: false, // Explicitly enable in production
-  });
-  module.exports = withPWA(nextConfig);
-} else {
-  // Export the plain config for development
-  module.exports = nextConfig;
-}
+const withPWA = require('@ducanh2912/next-pwa').default({
+  dest: 'public',
+  disable: !isProd, // Explicitly disable PWA in development
+});
+
+module.exports = withPWA(nextConfig);
