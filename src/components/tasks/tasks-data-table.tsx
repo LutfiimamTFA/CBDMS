@@ -321,17 +321,8 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         if (!dueDate) return <span className='text-muted-foreground'>-</span>;
         
         const date = parseISO(dueDate);
-        const now = new Date();
-        
-        const isOverdue = isPast(date) && !isToday(date);
-        const isDueSoon = !isOverdue && differenceInDays(date, now) <= 3;
-        
         return (
-          <div className={cn(
-              "font-medium",
-              isOverdue && "text-destructive",
-              isDueSoon && "text-yellow-600 dark:text-yellow-400"
-          )}>
+          <div className="font-medium">
               {format(date, 'MMM d, yyyy')}
           </div>
         );
