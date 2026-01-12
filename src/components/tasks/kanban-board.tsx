@@ -360,7 +360,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
     <>
     {/* Desktop View */}
     <div className="hidden md:flex h-full w-full">
-        <ScrollArea className="h-full w-full">
+      <ScrollArea className="w-full">
         <div className="flex h-full gap-4 pb-4">
             {statuses?.map((status) => (
             <KanbanColumn
@@ -469,7 +469,7 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
                 <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
                 <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Confirm Revisions
+                    Request Revisions
                 </Button>
             </DialogFooter>
         </DialogContent>
