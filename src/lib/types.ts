@@ -261,7 +261,21 @@ export type SocialMediaPost = {
   description?: string;
   assignees: User[];
   assigneeIds: string[];
+  tags?: Tag[];
+  subtasks?: Subtask[];
+  attachments?: Attachment[];
+  deliverables?: Attachment[];
+  waitingOnTaskIds?: string[];
+  blockingTaskIds?: string[];
+  linkedTaskIds?: string[];
+  timeEstimate?: number;
+  timeTracked?: number;
+  timeLogs?: TimeLog[];
+  comments?: Comment[];
+  activities?: Activity[];
+  lastActivity?: Activity | null;
   createdAt?: any;
+  updatedAt?: any;
 };
 
 

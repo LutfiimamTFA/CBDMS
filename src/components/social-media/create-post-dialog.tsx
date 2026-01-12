@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -20,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -30,7 +29,9 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from '@/components/ui/form';
+import { tags as allTags } from '@/lib/data';
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
@@ -184,12 +185,12 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
   }, [allUsers, currentUserProfile]);
 
   
-  const socialMediaPostsCollectionRef = React.useMemo(() => {
+  const tasksCollectionRef = React.useMemo(() => {
     if (!firestore) return null;
-    return collection(firestore, 'socialMediaPosts');
+    return collection(firestore, 'tasks');
   }, [firestore]);
 
-  const { data: allSocialMediaPosts } = useCollection<SocialMediaPost>(socialMediaPostsCollectionRef);
+  const { data: allTasks } = useCollection<Task>(tasksCollectionRef);
   
   const brandsQuery = React.useMemo(() => {
     if (!firestore || !currentUserProfile) return null;
@@ -207,6 +208,124 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
 
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
+  const dependencyOptions = useMemo(() => {
+    if (!allTasks || !currentUserProfile) return [];
+
+    // Super Admin sees all tasks
+    if (currentUserProfile.role === 'Super Admin') {
+      return allTasks;
+    }
+
+    // Manager sees tasks only from their managed brands
+    if (currentUserProfile.role === 'Manager') {
+      return allTasks.filter(task => (currentUserProfile.brandIds || []).includes(task.brandId));
+    }
+
+    // Employee/PIC sees tasks from brands they are involved in
+    const userBrandIds = new Set(
+        allTasks
+            .filter(t => t.assigneeIds.includes(currentUserProfile.id))
+            .map(t => t.brandId)
+    );
+    return allTasks.filter(task => userBrandIds.has(task.brandId));
+
+  }, [allTasks, currentUserProfile]);
+
+
+  const groupedDependencyOptions = useMemo(() => {
+      const grouped: Record<string, Task[]> = {};
+      dependencyOptions.forEach(task => {
+          const brandName = brands?.find(b => b.id === task.brandId)?.name || 'Unbranded';
+          if (!grouped[brandName]) {
+              grouped[brandName] = [];
+          }
+          grouped[brandName].push(task);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  }, [dependencyOptions, brands]);
+
+
+  const groupedUsers = useMemo(() => {
+    if (!allUsers || !currentUserProfile) return { managers: [], employees: [], clients: [] };
+    
+    if (currentUserProfile.role === 'Super Admin') {
+      const managers = (allUsers || []).filter(u => u.role === 'Manager');
+      const employees = (allUsers || []).filter(u => u.role === 'Employee');
+      const clients = (allUsers || []).filter(u => u.role === 'Client');
+      return { managers, employees, clients };
+    }
+    
+    if (currentUserProfile.role === 'Manager') {
+        const self = (allUsers || []).find(u => u.id === currentUserProfile.id);
+        const myEmployees = (allUsers || []).filter(u => u.managerId === currentUserProfile.id && u.id !== currentUserProfile.id);
+        return { managers: self ? [self] : [], employees: myEmployees, clients: [] };
+    }
+    
+    if (currentUserProfile.role === 'Employee') {
+      const myTeam = (allUsers || []).filter(u => u.managerId === currentUserProfile.managerId);
+      return { managers: [], employees: myTeam, clients: [] };
+    }
+
+    return { managers: [], employees: [], clients: [] };
+  }, [allUsers, currentUserProfile]);
+
+  const subtaskAssigneeOptions = useMemo(() => {
+    if (!allUsers || !currentUserProfile) return {};
+
+    const createGroup = (title: string, users: UserType[]) => users.length > 0 ? { [title]: users } : {};
+
+    const mainAssignees = selectedUsers;
+
+    if (currentUserProfile.role === 'Super Admin') {
+        const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
+        const employees = allUsers.filter(u => u.role === 'Employee' && !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("Managers", managers),
+            ...createGroup("Employees", employees),
+        };
+    }
+    
+    if (currentUserProfile.role === 'Manager') {
+        const selfAndTeam = (allUsers || []).filter(u => u.id === currentUserProfile.id || u.managerId === currentUserProfile.id);
+        const otherMembers = selfAndTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherMembers),
+        };
+    }
+    
+    if (currentUserProfile.role === 'Employee') {
+        const manager = allUsers.find(u => u.id === currentUserProfile.managerId);
+        const myTeam = allUsers.filter(u => u.managerId === currentUserProfile.managerId);
+        
+        const teamWithManager = [...myTeam];
+        if (manager && !teamWithManager.some(u => u.id === manager.id)) {
+            teamWithManager.push(manager);
+        }
+
+        const otherTeamMembers = teamWithManager.filter(u => !mainAssignees.some(a => a.id === u.id));
+
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherTeamMembers),
+        };
+    }
+
+    return {};
+  }, [selectedUsers, allUsers, currentUserProfile]);
+
+
+  const quickDateOptions = [
+      { label: t('addtask.form.quickselect.today'), getValue: () => new Date() },
+      { label: t('addtask.form.quickselect.tomorrow'), getValue: () => addDays(new Date(), 1) },
+      { label: t('addtask.form.quickselect.thisweekend'), getValue: () => nextSaturday(new Date()) },
+      { label: t('addtask.form.quickselect.nextweek'), getValue: () => addDays(startOfWeek(new Date(), { weekStartsOn: 1 }), 7) },
+      { label: t('addtask.form.quickselect.nextweekend'), getValue: () => addDays(nextSaturday(new Date()), 7) },
+      { label: t('addtask.form.quickselect.2weeks'), getValue: () => addDays(new Date(), 14) },
+      { label: t('addtask.form.quickselect.4weeks'), getValue: () => addDays(new Date(), 28) },
+  ];
+
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
     defaultValues: {
@@ -223,11 +342,19 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
     },
   });
   
+  const singleBrandId = useMemo(() => {
+    if (brands && brands.length === 1) {
+        return brands[0].id;
+    }
+    return null;
+  }, [brands]);
+
   useEffect(() => {
     if (open) {
+        // Reset all local states when dialog opens
         form.reset({
           caption: '',
-          brandId: '',
+          brandId: singleBrandId || '',
           description: '',
           platform: 'Instagram',
           postType: 'Upload',
@@ -238,6 +365,21 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
           tags: [],
         });
 
+        setSelectedUsers([]);
+        setSelectedTags([]);
+        setTimeLogs([]);
+        setTimeTracked(0);
+        setLogNote('');
+        setCustomFields([]);
+        setAttachments([]);
+        setDeliverables([]);
+        setSubtasks([]);
+        setWaitingOnTaskIds([]);
+        setBlockingTaskIds([]);
+        setLinkedTaskIds([]);
+        setComments([]);
+        setSuggestionReason(null);
+        
         if (currentUserProfile && user) {
              if (currentUserProfile.role === 'Employee') {
                 const selfUser = allUsers?.find(u => u.id === user.uid);
@@ -247,25 +389,53 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                 }
             }
         }
+        if (singleBrandId) {
+            form.setValue('brandId', singleBrandId);
+        }
+
     }
-  }, [open, currentUserProfile, user, form, allUsers]);
+  }, [open, currentUserProfile, user, form, allUsers, singleBrandId]);
 
 
   const onSubmit = async (data: PostFormValues) => {
-    if (!socialMediaPostsCollectionRef || !currentUserProfile || !firestore) return;
+    if (!firestore || !currentUserProfile) return;
     
     const batch = writeBatch(firestore);
 
     const newPostRef = doc(collection(firestore, 'socialMediaPosts'));
-    
+    const cleanedData = Object.entries(data).reduce((acc, [key, value]) => {
+      if (value !== undefined) {
+        if (key === 'scheduledAt' && value instanceof Date) {
+          (acc as any)[key] = value.toISOString();
+        } else {
+          (acc as any)[key] = value;
+        }
+      }
+      return acc;
+    }, {} as Partial<PostFormValues>);
+
     const newPostData = {
-        ...data,
-        status: 'Draft',
+        ...cleanedData,
+        // Defaulting to draft, you might want a "submit for review" button
+        status: 'Draft', 
         createdAt: new Date().toISOString(),
         assignees: selectedUsers,
         tags: selectedTags,
+        timeLogs,
+        timeTracked,
+        subtasks,
+        waitingOnTaskIds,
+        blockingTaskIds,
+        linkedTaskIds,
+        comments,
+        attachments,
+        deliverables,
         companyId: currentUserProfile.companyId,
-        createdBy: currentUserProfile.id,
+        createdBy: {
+          id: currentUserProfile.id,
+          name: currentUserProfile.name,
+          avatarUrl: currentUserProfile.avatarUrl || '',
+        },
     };
     batch.set(newPostRef, newPostData);
 
@@ -288,6 +458,32 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         batch.set(notificationRef, notification);
     });
     
+    comments.forEach(comment => {
+        const mentionedUsernames = comment.text.match(/@(\w+)/g)?.map(m => m.substring(1));
+        if (mentionedUsernames) {
+            const mentionedUsers = (allUsers || []).filter(u => mentionedUsernames.includes(u.name.split(' ')[0]));
+            mentionedUsers.forEach(mentionedUser => {
+                if (mentionedUser.id === currentUserProfile.id) return;
+                
+                const notifRef = doc(collection(firestore, `users/${mentionedUser.id}/notifications`));
+                const notification: Omit<Notification, 'id'> = {
+                    userId: mentionedUser.id,
+                    title: 'You were mentioned',
+                    message: `${comment.user.name} mentioned you in a comment on task: "${data.caption}"`,
+                    taskId: newPostRef.id,
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    createdBy: {
+                        id: comment.user.id,
+                        name: comment.user.name,
+                        avatarUrl: comment.user.avatarUrl,
+                    }
+                };
+                batch.set(notifRef, notification);
+            });
+        }
+    });
+
     try {
         await batch.commit();
         toast({
@@ -305,9 +501,189 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         });
     }
   };
-
-  const timeEstimateValue = form.watch('timeEstimate') ?? 0;
   
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
+    if (!event.target.files || !storage) return;
+    
+    setIsUploading(true);
+    const files = Array.from(event.target.files);
+    
+    try {
+        const uploadPromises = files.map(async (file) => {
+            const storageRef = ref(storage, `attachments/${Date.now()}-${file.name}`);
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+            return {
+                id: `local-${Date.now()}-${file.name}`,
+                name: file.name,
+                type: 'local' as const,
+                url: url,
+            };
+        });
+        
+        const newFiles = await Promise.all(uploadPromises);
+        if (fileType === 'attachment') {
+            setAttachments(prev => [...prev, ...newFiles]);
+        } else {
+            setDeliverables(prev => [...prev, ...newFiles]);
+        }
+        
+        toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
+
+    } catch (error) {
+        console.error("File upload failed:", error);
+        toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload files. Please try again.' });
+    } finally {
+        setIsUploading(false);
+        if(fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleConfirmGdriveLink = () => {
+    if (gdriveLink && gdriveName) {
+      const newFile: Attachment = {
+        id: `gdrive-${Date.now()}`,
+        name: gdriveName,
+        type: 'gdrive',
+        url: gdriveLink,
+      };
+       if (gdriveFileType === 'attachment') {
+        setAttachments(prev => [...prev, newFile]);
+      } else {
+        setDeliverables(prev => [...prev, newFile]);
+      }
+      setIsGdriveDialogOpen(false);
+      setGdriveLink('');
+      setGdriveName('');
+    } else {
+        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
+    }
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+  
+  const handleRemoveDeliverable = (id: string) => {
+    setDeliverables(prev => prev.filter(att => att.id !== id));
+  };
+  
+  const handleAddSubtask = () => {
+    if (newSubtaskTitle.trim()) {
+      const newSubtask: Subtask = {
+        id: `sub-${Date.now()}`,
+        title: newSubtaskTitle,
+        completed: false,
+        ...(newSubtaskAssignee && { assignee: { id: newSubtaskAssignee.id, name: newSubtaskAssignee.name, avatarUrl: newSubtaskAssignee.avatarUrl || '' } }),
+      };
+      setSubtasks([...subtasks, newSubtask]);
+      setNewSubtaskTitle('');
+      setNewSubtaskAssignee(null);
+    }
+  };
+
+  const handleToggleSubtask = (subtaskId: string) => {
+    setSubtasks(
+      subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st)
+    );
+  };
+  
+  const handleRemoveSubtask = (subtaskId: string) => {
+    setSubtasks(subtasks.filter(st => st.id !== subtaskId));
+  }
+  
+  const handleAssignSubtask = (subtaskId: string, user: UserType | null) => {
+    const newSubtasks = subtasks.map(st => {
+      if (st.id === subtaskId) {
+        return { 
+          ...st, 
+          assignee: user ? { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' } : undefined 
+        };
+      }
+      return st;
+    });
+    setSubtasks(newSubtasks);
+  };
+
+  const handlePostComment = () => {
+    if (!newComment.trim() || !currentUserProfile || !user) return;
+    const comment: Comment = {
+      id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      user: {
+        id: user.uid,
+        name: currentUserProfile.name || 'Unknown User',
+        email: currentUserProfile.email || '',
+        avatarUrl: currentUserProfile.avatarUrl || '',
+        role: currentUserProfile.role,
+        companyId: currentUserProfile.companyId,
+        createdAt: currentUserProfile.createdAt,
+      },
+      text: newComment,
+      timestamp: new Date().toISOString(),
+      replies: [],
+    };
+    setComments([...comments, comment]);
+    setNewComment('');
+    setIsMentioning(false);
+  };
+
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+
+    const mentionMatch = text.match(/@(\w*)$/);
+    if (mentionMatch) {
+      setIsMentioning(true);
+      setMentionSuggestions((allUsers || []).filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+    } else {
+      setIsMentioning(false);
+    }
+  };
+
+  const handleMentionSelect = (user: UserType) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
+  };
+
+  const handleAddDependency = (taskId: string, type: 'waitingOn' | 'blocking' | 'linked') => {
+    if (type === 'waitingOn' && !waitingOnTaskIds.includes(taskId)) setWaitingOnTaskIds(prev => [...prev, taskId]);
+    if (type === 'blocking' && !blockingTaskIds.includes(taskId)) setBlockingTaskIds(prev => [...prev, taskId]);
+    if (type === 'linked' && !linkedTaskIds.includes(taskId)) setLinkedTaskIds(prev => [...prev, taskId]);
+  };
+  
+  const handleRemoveDependency = (taskId: string, type: 'waitingOn' | 'blocking' | 'linked') => {
+    if (type === 'waitingOn') setWaitingOnTaskIds(prev => prev.filter(id => id !== taskId));
+    if (type === 'blocking') setBlockingTaskIds(prev => prev.filter(id => id !== taskId));
+    if (type === 'linked') setLinkedTaskIds(prev => prev.filter(id => id !== taskId));
+  };
+
+
+  const subtaskProgress = useMemo(() => {
+    if (subtasks.length === 0) return 0;
+    const completedCount = subtasks.filter(st => st.completed).length;
+    return (completedCount / subtasks.length) * 100;
+  }, [subtasks]);
+
+  const renderDependencyList = (ids: string[], type: 'waitingOn' | 'blocking' | 'linked') => (
+      <div className="flex flex-wrap gap-2">
+          {ids.map(id => {
+              const task = allTasks?.find(t => t.id === id);
+              return task ? (
+                  <Badge key={id} variant="secondary">
+                      {task.title}
+                      <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                          <X className="h-3 w-3" />
+                      </button>
+                  </Badge>
+              ) : null;
+          })}
+      </div>
+  );
+  
+
   return (
     <>
     <Sheet open={open} onOpenChange={setOpen}>
@@ -517,6 +893,202 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
                   </div>
+                  <Tabs defaultValue="subtasks" className="w-full">
+                    <TabsList className="grid w-full grid-cols-5">
+                      <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                      <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
+                      <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                      <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                      <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                          {subtasks.map((subtask) => (
+                              <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
+                                  <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} />
+                                  <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                  
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                                        {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-60 p-1">
+                                        <ScrollArea className="max-h-60">
+                                            <div className="space-y-1">
+                                                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
+                                                {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                                  users.length > 0 && (
+                                                    <React.Fragment key={group}>
+                                                        <Separator />
+                                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                        {users.map(user => (
+                                                          <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
+                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                            <span className="truncate">{user.name}</span>
+                                                          </Button>
+                                                        ))}
+                                                    </React.Fragment>
+                                                  )
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </PopoverContent>
+                                  </Popover>
+                                  
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>
+                              </div>
+                          ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                {newSubtaskAssignee ? (
+                                  <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
+                                ) : (
+                                  <UserPlus className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-60 p-1">
+                              <ScrollArea className="max-h-60">
+                                  <div className="space-y-1">
+                                      <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                       {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                          users.length > 0 && (
+                                              <React.Fragment key={group}>
+                                                  <Separator />
+                                                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                  {users.map(user => (
+                                                      <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                          <span className="truncate">{user.name}</span>
+                                                      </Button>
+                                                  ))}
+                                              </React.Fragment>
+                                          )
+                                      ))}
+                                  </div>
+                              </ScrollArea>
+                            </PopoverContent>
+                          </Popover>
+                          <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <div className="space-y-2">
+                          {attachments.map((att) => (
+                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                  {getFileIcon(att.name)}
+                                  <span className="truncate" title={att.name}>{att.name}</span>
+                                  </a>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
+                                      <X className="h-4 w-4" />
+                                  </Button>
+                              </div>
+                          ))}
+                          {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                          <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                      <div className="space-y-2">
+                          <h4 className="font-medium text-sm">Initial Submission</h4>
+                          {deliverables.length > 0 ? deliverables.map((att) => (
+                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                      {getFileIcon(att.name)}
+                                      <span className="truncate" title={att.name}>{att.name}</span>
+                                  </a>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveDeliverable(att.id)}>
+                                      <X className="h-4 w-4" />
+                                  </Button>
+                              </div>
+                          )) : (
+                            <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>
+                          )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
+                          <input type="file" ref={commentFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                          <Button type="button" variant="outline" onClick={() => commentFileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                      <div className="space-y-3">
+                          <h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4>
+                          <p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>
+                          {renderDependencyList(waitingOnTaskIds, 'waitingOn')}
+                           <Popover>
+                              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                              <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'waitingOn')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                          </Popover>
+                      </div>
+                      <Separator/>
+                      <div className="space-y-3">
+                          <h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4>
+                          <p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>
+                          {renderDependencyList(blockingTaskIds, 'blocking')}
+                          <Popover>
+                              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                              <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'blocking')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                          </Popover>
+                      </div>
+                      <Separator/>
+                      <div className="space-y-3">
+                          <h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Tasks</h4>
+                          <p className="text-xs text-muted-foreground">Tugas-tugas yang berhubungan tapi tidak saling memblokir.</p>
+                          {renderDependencyList(linkedTaskIds, 'linked')}
+                          <Popover>
+                              <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                              <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'linked')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                          </Popover>
+                      </div>
+                    </TabsContent>
+                    <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                        <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
+                          {comments.map((comment) => (
+                            <div key={comment.id} className="flex items-start gap-3">
+                                <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar>
+                                <div>
+                                  <p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p>
+                                  <p className="text-sm">{comment.text}</p>
+                                </div>
+                            </div>
+                          ))}
+                          {comments.length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                        </div>
+                        <div className="flex items-start gap-2 pt-4 border-t">
+                            <Avatar className="h-9 w-9"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{getInitials(currentUserProfile?.name)}</AvatarFallback></Avatar>
+                            <div className="flex-1 relative">
+                              <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                              {isMentioning && (
+                                  <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
+                                  <CardContent className="p-1">
+                                      {mentionSuggestions.map(user => (
+                                      <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}>
+                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                          {user.name}
+                                      </Button>
+                                      ))}
+                                  </CardContent>
+                                  </Card>
+                              )}
+                            </div>
+                            <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                        </div>
+                    </TabsContent>
+                  </Tabs>
                 </form>
               </Form>
             </div>
@@ -529,6 +1101,30 @@ export function CreatePostDialog({ children }: { children: React.ReactNode }) {
         </SheetFooter>
       </SheetContent>
     </Sheet>
+     <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Link Google Drive File</DialogTitle>
+                <DialogDescription>
+                    Paste the shareable link to your Google Drive file below.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                    <Label htmlFor="gdrive-name">File Name</Label>
+                    <Input id="gdrive-name" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" />
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="gdrive-link">File Link</Label>
+                    <Input id="gdrive-link" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleConfirmGdriveLink}>Add Link</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }
