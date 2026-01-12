@@ -974,19 +974,33 @@ export function TaskDetailsSheet({
   const onSubmit = async (data: TaskDetailsFormValues) => {
     if (isSharedView || !firestore || !currentUser) return;
     setIsSaving(true);
-    const updates: Partial<Task> = { title: data.title, description: data.description, dueDate: data.dueDate, brandId: data.brandId, assigneeIds: currentAssignees.map(a => a.id), assignees: currentAssignees, tags: currentTags, timeEstimate: data.timeEstimate };
-    
-    const taskDocRef = doc(firestore!, 'tasks', taskState.id);
+    const updates: Partial<Task> = {
+      title: data.title,
+      description: data.description,
+      dueDate: data.dueDate,
+      brandId: data.brandId,
+      assigneeIds: currentAssignees.map((a) => a.id),
+      assignees: currentAssignees,
+      tags: currentTags,
+      timeEstimate: data.timeEstimate,
+    };
+
+    const taskDocRef = doc(firestore, 'tasks', taskState.id);
     const actionDescription = 'updated task details';
     const newActivity: Activity = createActivity(currentUser, actionDescription);
-    
+
     try {
-        await updateDoc(taskDocRef, { ...updates, lastActivity: newActivity, activities: [...(taskState.activities || []), newActivity], updatedAt: serverTimestamp() });
-        toast({ title: 'Task Updated' });
+      await updateDoc(taskDocRef, {
+        ...updates,
+        lastActivity: newActivity,
+        activities: [...(taskState.activities || []), newActivity],
+        updatedAt: serverTimestamp(),
+      });
+      toast({ title: 'Task Updated' });
     } catch (error) {
-        toast({ variant: 'destructive', title: 'Update Failed' });
+      toast({ variant: 'destructive', title: 'Update Failed' });
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
     }
   };
   
@@ -1482,7 +1496,7 @@ export function TaskDetailsSheet({
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
                      <div className="flex flex-col w-full gap-2">
-                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
+                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleFinalReviewAndComplete} disabled={isSaving}>
                             <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                         </Button>
                          <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
@@ -1636,64 +1650,6 @@ export function TaskDetailsSheet({
             </DialogContent>
         </Dialog>
         
-        <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Final Review</DialogTitle>
-                    <DialogDescription>
-                        You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
-                    </DialogDescription>
-                </DialogHeader>
-                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                    <div className="py-4 space-y-6">
-                        <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
-                        <Separator />
-                        <div className="space-y-3">
-                            <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
-                             <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                                {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? ( 
-                                    finalReviewState.task.subtasks.map(subtask => ( 
-                                        <div key={subtask.id} className="flex items-center gap-3">
-                                            <Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled />
-                                            <label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                        </div> 
-                                    )) 
-                                ) : ( 
-                                    <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
-                                )}
-                            </div>
-                        </div>
-                        <div className="space-y-3">
-                            <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
-                            <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                                {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( 
-                                    <div key={cycleNum} className="space-y-2">
-                                        <h5 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h5>
-                                        {deliverables.map(att => ( 
-                                            <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                                    {getFileIcon(att.name)}
-                                                    <span className="truncate" title={att.name}>{att.name}</span>
-                                                </a>
-                                            </div> 
-                                        ))}
-                                    </div> 
-                                ))}
-                                {(taskState.deliverables || []).length === 0 && <p className="text-sm text-muted-foreground">No deliverables were submitted for this task.</p>}
-                            </div>
-                        </div>
-                    </div>
-                </ScrollArea>
-                <DialogFooter>
-                    <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
-                    <Button variant="default" onClick={handleFinalReviewAndComplete}>
-                        <Check className="mr-2 h-4 w-4" />
-                        Confirm & Complete
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-
         <AlertDialog open={endOfDayState.isOpen} onOpenChange={(open) => !open && setEndOfDayState({ isOpen: false })}>
             <AlertDialogContent>
                 <AlertDialogHeader>
