@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -609,10 +610,6 @@ export function TaskDetailsSheet({
             return { blocked: true, title: "Belum Siap untuk Direview", reasons, suggestion: "Mohon lengkapi item di atas sebelum mengirimkan tugas untuk review." };
         }
     }
-
-    if (isManagerOrAdmin && targetStatus === 'Done' && currentTask.status !== 'Preview') {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Penyelesaian tugas wajib melalui flow Approve and Complete saat status Preview."], suggestion: "Ubah ke Preview (jika memenuhi syarat), lalu klik Approve and Complete." };
-    }
     
     // Employee cannot move to done at all
     if (isEmployeeOrPIC && targetStatus === 'Done') {
@@ -1069,7 +1066,7 @@ export function TaskDetailsSheet({
 
   const handleReopenTask = async () => {
     if (!currentUser) return;
-    await handleStatusChange('Doing');
+    await handleStatusChange('Revisi');
   }
 
  const subtaskAssigneeOptions = useMemo(() => {
