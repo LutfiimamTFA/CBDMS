@@ -44,9 +44,4 @@ const nextConfig = {
   },
 };
 
-const withPWA = require('@ducanh2912/next-pwa').default({
-  dest: 'public',
-  disable: !isProd, // Explicitly disable PWA in development
-});
-
-module.exports = withPWA(nextConfig);
+module.exports = nextConfig;
