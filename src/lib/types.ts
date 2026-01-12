@@ -251,29 +251,17 @@ export type SocialMediaPost = {
   platform: string;
   caption: string;
   mediaUrl?: string;
-  mediaType?: 'image' | 'video' | null;
-  status: 'Draft' | 'Needs Approval' | 'Needs Revision' | 'Scheduled' | 'Publishing' | 'Posted' | 'Error';
+  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
   scheduledAt: string;
   postedAt?: string;
   createdBy: string;
   companyId: string;
-  comments?: Comment[];
   brandId?: string;
-  creator?: {
-    name: string;
-    avatarUrl: string;
-  };
-  postType?: 'Post' | 'Reels';
-  crop?: {
-    aspect: '1:1' | '4:5' | '1.91:1' | '9:16';
-    zoom: number;
-    x: number;
-    y: number;
-  };
-  revisionItems?: RevisionItem[];
-  revisionHistory?: RevisionCycle[];
-  updatedAt?: any;
-  errorDetails?: string;
+  postType: 'Upload' | 'Branding';
+  description?: string;
+  assignees: User[];
+  assigneeIds: string[];
+  createdAt?: any;
 };
 
 

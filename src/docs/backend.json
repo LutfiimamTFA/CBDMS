@@ -294,15 +294,23 @@
     },
     "SocialMediaPost": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "SocialMediaPost", "type": "object",
+      "title": "SocialMediaPost",
+      "type": "object",
+      "description": "Represents a social media post, which is a specialized type of task.",
       "properties": {
-        "id": { "type": "string" }, "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"] },
-        "caption": { "type": "string" }, "mediaUrl": { "type": "string", "format": "uri" },
-        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"] },
-        "scheduledAt": { "type": "string", "format": "date-time" }, "postedAt": { "type": "string", "format": "date-time" },
-        "createdBy": { "type": "string" }, "companyId": { "type": "string" }, "objectPosition": { "type": "number" },
-        "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
-        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "caption": { "type": "string" },
+        "description": { "type": "string" },
+        "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"] },
+        "postType": { "type": "string", "enum": ["Upload", "Branding"], "description": "Category of the social media work."},
+        "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video for the post." },
+        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "Workflow status of the post." },
+        "assigneeIds": { "type": "array", "items": { "type": "string" } },
+        "scheduledAt": { "type": "string", "format": "date-time", "description": "The date and time the post is scheduled to be published." },
+        "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was published." },
+        "createdBy": { "type": "string" },
+        "companyId": { "type": "string" }
       },
       "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
     },
@@ -329,29 +337,6 @@
         "createdBy": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "companyId", "creatorRole", "allowedNavItems", "navItems", "accessLevel", "snapshot", "createdBy", "createdAt"]
-    },
-    "SharedTask": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "SharedTask", "type": "object",
-      "properties": {
-        "id": { "type": "string" }, "taskId": { "type": "string" }, "companyId": { "type": "string" },
-        "creatorUserId": { "type": "string" }, "creatorName": { "type": "string" }, "creatorRole": { "type": "string" },
-        "allowedActions": { "type": "array", "items": { "type": "string", "enum": ["view", "comment", "upload", "changeStatus"] } },
-        "allowedStatuses": { "type": "array", "items": { "type": "string" } },
-        "password": { "type": "string" },
-        "expiresAt": { "type": "string", "format": "date-time" },
-        "snapshot": {
-            "type": "object",
-            "properties": {
-                "task": { "$ref": "#/backend/entities/Task" },
-                "brand": { "$ref": "#/backend/entities/Brand" },
-                "statuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } }
-            },
-            "required": ["task", "statuses"]
-        },
-        "createdAt": { "type": "string", "format": "date-time" }
-      },
-      "required": ["id", "taskId", "companyId", "creatorUserId", "creatorName", "creatorRole", "allowedActions", "allowedStatuses", "snapshot", "createdAt"]
     },
     "SocialMediaConnection": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -391,7 +376,6 @@
       { "path": "/statuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
       { "path": "/socialMediaPosts/{postId}", "definition": { "entityName": "SocialMediaPost", "schema": { "$ref": "#/backend/entities/SocialMediaPost" } } },
       { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },
-      { "path": "/sharedTasks/{shareId}", "definition": { "entityName": "SharedTask", "schema": { "$ref": "#/backend/entities/SharedTask" } } },
       { "path": "/socialMediaConnections/{connectionId}", "definition": { "entityName": "SocialMediaConnection", "schema": { "$ref": "#/backend/entities/SocialMediaConnection" } } },
       { "path": "/api/instagram/publish", "definition": { "description": "An API endpoint to publish a post to Instagram." } },
       { "path": "/api/run-scheduler", "definition": { "description": "An API endpoint that runs scheduled jobs like posting social media content." } }
