@@ -30,8 +30,8 @@ import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activit
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { format, parseISO, isAfter, endOfDay, isPast, isToday, differenceInDays } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2, ArrowUpDown } from 'lucide-react';
+import { format, parseISO, isAfter, endOfDay } from 'date-fns';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2, ArrowUpDown, ChevronsUpDown, ArrowUpAZ, ArrowDownZA } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
 import { DataTableViewOptions } from './data-table-view-options';
@@ -249,13 +249,18 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       accessorKey: 'title',
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Title
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost">
+                        Title
+                        <ChevronsUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => column.toggleSorting(false)}><ArrowUpAZ className="mr-2"/>Sort A-Z</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => column.toggleSorting(true)}><ArrowDownZA className="mr-2"/>Sort Z-A</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         )
       },
       cell: ({ row }) => {
@@ -307,13 +312,18 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       accessorKey: 'dueDate',
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Due Date
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost">
+                        Due Date
+                        <ChevronsUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => column.toggleSorting(false)}>Due Soon</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => column.toggleSorting(true)}>Due Later</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         )
       },
       cell: ({ row }) => {
@@ -344,13 +354,18 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       accessorKey: 'priority',
       header: ({ column }) => {
         return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          >
-            Priority
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost">
+                        Priority
+                        <ChevronsUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                    <DropdownMenuItem onClick={() => column.toggleSorting(true)}>Highest First</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => column.toggleSorting(false)}>Lowest First</DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
         )
       },
       sortingFn: prioritySortingFn,
