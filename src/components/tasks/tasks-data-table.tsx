@@ -251,7 +251,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         return (
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost">
+                    <Button variant="ghost" className="w-full justify-start p-0 hover:bg-transparent">
                         Title
                         <ChevronsUpDown className="ml-2 h-4 w-4" />
                     </Button>
@@ -314,7 +314,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         return (
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost">
+                    <Button variant="ghost" className="w-full justify-start p-0 hover:bg-transparent">
                         Due Date
                         <ChevronsUpDown className="ml-2 h-4 w-4" />
                     </Button>
@@ -356,7 +356,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         return (
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost">
+                     <Button variant="ghost" className="w-full justify-start p-0 hover:bg-transparent">
                         Priority
                         <ChevronsUpDown className="ml-2 h-4 w-4" />
                     </Button>
