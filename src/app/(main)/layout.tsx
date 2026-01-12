@@ -229,7 +229,7 @@ function MainAppLayout({
   
   if (isLoading || !isReady) {
     return (
-      <div className="flex min-h-svh w-full items-center justify-center bg-background">
+      <div className="flex w-full items-center justify-center bg-background min-h-[100dvh] md:min-h-screen">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
