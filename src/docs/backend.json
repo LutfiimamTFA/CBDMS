@@ -404,8 +404,6 @@
       { "path": "/webArticles/{articleId}", "definition": { "entityName": "WebArticle", "schema": { "$ref": "#/backend/entities/WebArticle" } } },
       { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },
       { "path": "/socialMediaConnections/{connectionId}", "definition": { "entityName": "SocialMediaConnection", "schema": { "$ref": "#/backend/entities/SocialMediaConnection" } } },
-      { "path": "/socialMediaStatuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
-      { "path": "/webStatuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
       { "path": "/api/instagram/publish", "definition": { "description": "An API endpoint to publish a post to Instagram." } },
       { "path": "/api/run-scheduler", "definition": { "description": "An API endpoint that runs scheduled jobs like posting social media content." } }
     ]

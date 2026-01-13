@@ -82,7 +82,7 @@ service cloud.firestore {
     }
 
     match /brands/{brandId} {
-        allow read: if isSignedIn();
+        allow get: if isSignedIn();
         allow list: if isSignedIn();
         allow write: if isSuperAdmin() || isRole('Manager');
     }
@@ -192,4 +192,3 @@ service cloud.firestore {
     }
   }
 }
-
