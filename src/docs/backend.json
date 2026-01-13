@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -400,6 +401,8 @@
       { "path": "/navigationItems/{navItemId}", "definition": { "entityName": "NavigationItem", "schema": { "$ref": "#/backend/entities/NavigationItem" } } },
       { "path": "/users/{userId}/notifications/{notificationId}", "definition": { "entityName": "Notification", "schema": { "$ref": "#/backend/entities/Notification" } } },
       { "path": "/statuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
+      { "path": "/socialMediaStatuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
+      { "path": "/webStatuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
       { "path": "/socialMediaPosts/{postId}", "definition": { "entityName": "SocialMediaPost", "schema": { "$ref": "#/backend/entities/SocialMediaPost" } } },
       { "path": "/webArticles/{articleId}", "definition": { "entityName": "WebArticle", "schema": { "$ref": "#/backend/entities/WebArticle" } } },
       { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },

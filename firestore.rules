@@ -88,7 +88,17 @@ service cloud.firestore {
     }
 
     match /statuses/{statusId} {
-        allow get: if isSignedIn();
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin();
+    }
+    
+    match /socialMediaStatuses/{statusId} {
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin();
+    }
+    
+    match /webStatuses/{statusId} {
+        allow read: if isSignedIn();
         allow write: if isSuperAdmin();
     }
 
@@ -182,5 +192,3 @@ service cloud.firestore {
     }
   }
 }
-
-    
