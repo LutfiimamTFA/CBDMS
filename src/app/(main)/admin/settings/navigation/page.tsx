@@ -24,7 +24,7 @@ import {
   deleteDoc,
   Timestamp,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle, MoreHorizontal } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription as AlertDescriptionUI, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 const Icon = ({
   name,
@@ -318,31 +319,36 @@ export default function NavigationSettingsPage() {
             </TableCell>
           ))}
           <TableCell className="text-right">
-              <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => setEditItem(item)}><Pencil className="h-4 w-4"/></Button></TooltipTrigger>
-                    <TooltipContent><p>Edit Details</p></TooltipContent>
-                </Tooltip>
-                 <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={() => setDeleteItem(item)} disabled={isItemCritical(item)}>
-                            <Trash2 className={cn("h-4 w-4", !isItemCritical(item) && "text-destructive")}/>
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent><p>Delete Item</p></TooltipContent>
-                </Tooltip>
+             <TooltipProvider>
                  <Tooltip>
                     <TooltipTrigger asChild>
                         <Checkbox 
                             checked={item.isEnabled} 
                             onCheckedChange={(checked) => handleToggleEnable(item.id, !!checked)}
-                            className={cn("h-5 w-5 ml-2", isItemCritical(item) && "cursor-not-allowed opacity-50")}
+                            className={cn("h-5 w-5 mr-2", isItemCritical(item) && "cursor-not-allowed opacity-50")}
                             disabled={isItemCritical(item)}
                         />
                     </TooltipTrigger>
                     <TooltipContent><p>{item.isEnabled ? 'Enabled' : 'Disabled'}</p></TooltipContent>
                  </Tooltip>
               </TooltipProvider>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                    <DropdownMenuItem onSelect={() => setEditItem(item)}>
+                        <Pencil className="mr-2 h-4 w-4"/>
+                        Edit
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setDeleteItem(item)} disabled={isItemCritical(item)} className="text-destructive focus:text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4"/>
+                        Delete
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
           </TableCell>
         </TableRow>
         {item.path === '' &&
@@ -487,6 +493,14 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="path" className="text-right">Path</Label>
                         <Input id="path" value={path} onChange={(e) => setPath(e.target.value)} className="col-span-3" disabled={item.path === ''}/>
+                        {item.path === '' && (
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild><HelpCircle className="h-4 w-4 text-muted-foreground"/></TooltipTrigger>
+                                    <TooltipContent><p>The path for a folder cannot be changed.</p></TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        )}
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="icon" className="text-right">Icon</Label>
