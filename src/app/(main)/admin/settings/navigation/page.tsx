@@ -543,3 +543,4 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
         </Dialog>
     );
 }
+
