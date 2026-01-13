@@ -24,7 +24,7 @@ import {
   deleteDoc,
   Timestamp,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle, Blocks } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { Button } from '@/components/ui/button';
@@ -57,10 +57,8 @@ const Icon = ({
 const availableRoles = ['Super Admin', 'Manager', 'PIC', 'Employee', 'Client'] as const;
 type Role = (typeof availableRoles)[number];
 
-const criticalPaths = ['/admin/settings/navigation', '/admin/settings', '/admin/dashboard', '/admin/users'];
-
 // This function now only checks if the item is critical, the "locking" logic is handled in the component.
-const isItemCritical = (item: NavigationItem) => criticalPaths.includes(item.path);
+const isItemCritical = (item: NavigationItem) => item.path === '/admin/settings/navigation';
 
 export default function NavigationSettingsPage() {
   const { toast } = useToast();
@@ -77,9 +75,7 @@ export default function NavigationSettingsPage() {
   const [confirmDialog, setConfirmDialog] = useState({ title: '', description: '', onConfirm: () => {} });
 
   const [editItem, setEditItem] = useState<NavigationItem | null>(null);
-  
-  const dragItem = React.useRef<string | null>(null);
-  const dragOverItem = React.useRef<string | null>(null);
+  const [deleteItem, setDeleteItem] = useState<NavigationItem | null>(null);
 
   const navItemsCollectionRef = useMemo(
     () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]
@@ -99,57 +95,12 @@ export default function NavigationSettingsPage() {
     return JSON.stringify(initialNavItems) !== JSON.stringify(navItems);
   }, [initialNavItems, navItems]);
 
-  const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
-    const item = navItems.find(i => i.id === id);
-    if (!item) return;
-    dragItem.current = id;
-  };
-
-  const handleDragEnter = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
-    dragOverItem.current = id;
-  };
-
-  const handleDragEnd = () => {
-    if (dragItem.current && dragOverItem.current && dragItem.current !== dragOverItem.current) {
-        const itemsCopy = [...navItems];
-        const draggedItem = itemsCopy.find(item => item.id === dragItem.current);
-        const dragOverItemDetails = itemsCopy.find(item => item.id === dragOverItem.current);
-        
-        if (!draggedItem || !dragOverItemDetails) {
-          dragItem.current = null;
-          dragOverItem.current = null;
-          return;
-        }
-
-        const draggedItemIndex = itemsCopy.findIndex(item => item.id === dragItem.current);
-        const dragOverItemIndex = itemsCopy.findIndex(item => item.id === dragOverItem.current);
-
-        const [reorderedItem] = itemsCopy.splice(draggedItemIndex, 1);
-        itemsCopy.splice(dragOverItemIndex, 0, reorderedItem);
-        
-        const reorderedItems = itemsCopy.map((item, index) => ({ ...item, order: index }));
-        setNavItems(reorderedItems);
-    }
-    dragItem.current = null;
-    dragOverItem.current = null;
-  };
-  
-  const handleDropOnFolder = (folderId: string) => {
-    if (dragItem.current && folderId !== dragItem.current) {
-      setNavItems(prevItems =>
-        prevItems.map(item =>
-          item.id === dragItem.current ? { ...item, parentId: folderId } : item
-        )
-      );
-    }
-  };
-
   const handleRoleChange = (itemId: string, role: Role, isChecked: boolean) => {
     setNavItems(currentItems => {
         return currentItems.map(item => {
             if (item.id === itemId) {
                 if (isItemCritical(item) && role === 'Super Admin' && !isChecked) {
-                    toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from critical settings.'});
+                    toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from this critical page.'});
                     return item;
                 }
                 let updatedRoles: Role[] = item.roles as Role[];
@@ -181,7 +132,6 @@ export default function NavigationSettingsPage() {
             createdBy: profile?.id || 'unknown',
         });
 
-        // Fetch current items for backup
         const currentItemsSnap = await getDocs(collection(firestore, 'navigationItems'));
         currentItemsSnap.forEach(itemDoc => {
             const itemBackupRef = doc(firestore, `navigationItemBackups/${backupTimestamp}/items`, itemDoc.id);
@@ -211,12 +161,9 @@ export default function NavigationSettingsPage() {
         
         navItems.forEach(item => {
             const docRef = doc(firestore, 'navigationItems', item.id);
-            
-            // Failsafe for roles on critical items
             if (isItemCritical(item) && !item.roles.includes('Super Admin')) {
               item.roles.push('Super Admin');
             }
-            
             batch.update(docRef, { ...item });
         });
         
@@ -261,12 +208,35 @@ export default function NavigationSettingsPage() {
     setNavItems(prev => prev.map(item => item.id === editItem?.id ? updatedItem : item));
     setEditItem(null);
   };
+
+  const handleDeleteItem = async () => {
+    if (!firestore || !deleteItem) return;
+    if (isItemCritical(deleteItem)) {
+      toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot delete this critical system page.'});
+      setDeleteItem(null);
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+        const docRef = doc(firestore, 'navigationItems', deleteItem.id);
+        await deleteDoc(docRef);
+        setNavItems(prev => prev.filter(item => item.id !== deleteItem.id));
+        setInitialNavItems(prev => prev.filter(item => item.id !== deleteItem.id));
+        toast({ title: 'Item Deleted', description: `"${deleteItem.label}" has been removed.`});
+    } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Failed to delete item', description: e.message });
+    } finally {
+        setIsSaving(false);
+        setDeleteItem(null);
+    }
+  };
   
   const handleToggleEnable = (itemId: string, isEnabled: boolean) => {
     setNavItems(prev => prev.map(item => {
         if (item.id === itemId) {
             if (isItemCritical(item) && !isEnabled) {
-                toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot disable a critical system item.'});
+                toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot disable this critical system page.'});
                 return item;
             }
             return { ...item, isEnabled }
@@ -323,20 +293,12 @@ export default function NavigationSettingsPage() {
     return items.map((item) => (
       <React.Fragment key={item.id}>
         <TableRow
-          onDragOver={(e) => e.preventDefault()}
-          onDragStart={(e) => handleDragStart(e, item.id)}
-          onDragEnter={(e) => handleDragEnter(e, item.id)}
-          onDragEnd={handleDragEnd}
-          onDrop={() => item.path === '' && handleDropOnFolder(item.id)}
-          draggable={true}
           className={cn(
             !item.isEnabled && 'opacity-50',
-            dragItem.current === item.id && 'opacity-30',
           )}
         >
           <TableCell className={cn(isSubItem && "pl-12")}>
             <div className="flex items-center gap-3">
-              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab"/>
               <Icon name={item.icon} className="h-5 w-5" />
               <div className="flex flex-col">
                 <span className="font-medium">{item.label}</span>
@@ -356,13 +318,31 @@ export default function NavigationSettingsPage() {
             </TableCell>
           ))}
           <TableCell className="text-right">
-              <Button variant="ghost" size="icon" onClick={() => setEditItem(item)}><Pencil className="h-4 w-4"/></Button>
-              <Checkbox 
-                checked={item.isEnabled} 
-                onCheckedChange={(checked) => handleToggleEnable(item.id, !!checked)}
-                className={cn("h-5 w-5 ml-2", isItemCritical(item) && "cursor-not-allowed opacity-50")}
-                disabled={isItemCritical(item)}
-              />
+              <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => setEditItem(item)}><Pencil className="h-4 w-4"/></Button></TooltipTrigger>
+                    <TooltipContent><p>Edit Details</p></TooltipContent>
+                </Tooltip>
+                 <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" onClick={() => setDeleteItem(item)} disabled={isItemCritical(item)}>
+                            <Trash2 className={cn("h-4 w-4", !isItemCritical(item) && "text-destructive")}/>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Delete Item</p></TooltipContent>
+                </Tooltip>
+                 <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Checkbox 
+                            checked={item.isEnabled} 
+                            onCheckedChange={(checked) => handleToggleEnable(item.id, !!checked)}
+                            className={cn("h-5 w-5 ml-2", isItemCritical(item) && "cursor-not-allowed opacity-50")}
+                            disabled={isItemCritical(item)}
+                        />
+                    </TooltipTrigger>
+                    <TooltipContent><p>{item.isEnabled ? 'Enabled' : 'Disabled'}</p></TooltipContent>
+                 </Tooltip>
+              </TooltipProvider>
           </TableCell>
         </TableRow>
         {item.path === '' &&
@@ -372,7 +352,7 @@ export default function NavigationSettingsPage() {
           )}
       </React.Fragment>
     ));
-  }, [navItems, handleDragEnd]);
+  }, [navItems]);
 
 
   return (
@@ -382,7 +362,7 @@ export default function NavigationSettingsPage() {
           <div>
             <h2 className="text-2xl font-bold">Sidebar Navigation Editor</h2>
             <p className="text-muted-foreground">
-              Drag & drop to reorder, configure roles, and manage menu visibility.
+              Configure roles and manage menu visibility. Changes are saved automatically.
             </p>
           </div>
           <div className="flex gap-2">
@@ -398,11 +378,11 @@ export default function NavigationSettingsPage() {
             </Button>
           </div>
         </div>
-         <Alert variant="default" className="mb-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-            <Blocks className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <AlertTitle className="text-blue-800 dark:text-blue-300">Full Control Enabled</AlertTitle>
-            <AlertDescriptionUI className="text-blue-700 dark:text-blue-400">
-                You now have full control to reorder and nest all items. Be careful when modifying critical system items like Admin and Settings.
+         <Alert variant="default" className="mb-4 bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800">
+            <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+            <AlertTitle className="text-yellow-800 dark:text-yellow-300">Advanced Mode</AlertTitle>
+            <AlertDescriptionUI className="text-yellow-700 dark:text-yellow-400">
+                You are in advanced navigation settings. Changes here directly affect all users. Be careful when modifying critical system items.
             </AlertDescriptionUI>
         </Alert>
 
@@ -416,7 +396,7 @@ export default function NavigationSettingsPage() {
                     {role}
                   </TableHead>
                 ))}
-                <TableHead className="text-right w-[120px]">Actions</TableHead>
+                <TableHead className="text-right w-[150px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -459,6 +439,27 @@ export default function NavigationSettingsPage() {
             onSave={handleUpdateItem}
         />
       )}
+      
+      {deleteItem && (
+        <AlertDialog open={!!deleteItem} onOpenChange={(open) => !open && setDeleteItem(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will permanently delete the menu item <strong className='text-foreground'>"{deleteItem.label}"</strong>. 
+                        This action cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteItem} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Yes, delete item
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }
@@ -485,7 +486,7 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="path" className="text-right">Path</Label>
-                        <Input id="path" value={path} onChange={(e) => setPath(e.target.value)} className="col-span-3" />
+                        <Input id="path" value={path} onChange={(e) => setPath(e.target.value)} className="col-span-3" disabled={item.path === ''}/>
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="icon" className="text-right">Icon</Label>
@@ -500,4 +501,3 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
         </Dialog>
     );
 }
-
