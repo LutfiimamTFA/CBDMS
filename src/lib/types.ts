@@ -203,36 +203,20 @@ export type RevisionCycle = {
     items: RevisionItem[];
 }
 
-export type Task = {
+// Base type for all work items
+export type WorkItem = {
   id: string;
   title: string;
   brandId: string;
-  category: 'General' | 'Social Media' | 'Branding';
   description?: string;
   status: Status;
   priority: Priority;
   assignees: User[];
   assigneeIds: string[];
-  startDate?: string;
   dueDate?: string;
-  actualStartDate?: string;
-  actualCompletionDate?: string;
-  currentSessionStartTime?: string; 
-  isUnderRevision?: boolean; 
   timeEstimate?: number; 
   timeTracked?: number;
-  timeLogs?: TimeLog[];
-  waitingOnTaskIds?: string[];
-  blockingTaskIds?: string[];
-  linkedTaskIds?: string[];
   subtasks?: Subtask[];
-  revisionItems?: RevisionItem[];
-  revisionHistory?: RevisionCycle[];
-  attachments?: Attachment[];
-  deliverables?: Attachment[]; 
-  recurring?: string;
-  isMandatory?: boolean;
-  tags?: Tag[];
   comments?: Comment[];
   activities?: Activity[];
   lastActivity?: Activity | null;
@@ -244,38 +228,40 @@ export type Task = {
   };
   companyId: string;
   updatedAt?: any;
-};
+  [key: string]: any; // Allow other properties
+}
 
-export type SocialMediaPost = {
-  id: string;
-  platform: string;
-  caption: string;
-  mediaUrl?: string;
-  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
-  scheduledAt: string;
-  postedAt?: string;
-  createdBy: string;
-  companyId: string;
-  brandId?: string;
-  postType: 'Upload' | 'Branding';
-  description?: string;
-  assignees: User[];
-  assigneeIds: string[];
-  tags?: Tag[];
-  subtasks?: Subtask[];
-  attachments?: Attachment[];
-  deliverables?: Attachment[];
+export type Task = WorkItem & {
+  category: 'General' | 'Social Media' | 'Branding';
+  startDate?: string;
+  actualStartDate?: string;
+  actualCompletionDate?: string;
+  currentSessionStartTime?: string; 
+  isUnderRevision?: boolean; 
+  timeLogs?: TimeLog[];
   waitingOnTaskIds?: string[];
   blockingTaskIds?: string[];
   linkedTaskIds?: string[];
-  timeEstimate?: number;
-  timeTracked?: number;
-  timeLogs?: TimeLog[];
-  comments?: Comment[];
-  activities?: Activity[];
-  lastActivity?: Activity | null;
-  createdAt?: any;
-  updatedAt?: any;
+  revisionItems?: RevisionItem[];
+  revisionHistory?: RevisionCycle[];
+  attachments?: Attachment[];
+  deliverables?: Attachment[]; 
+  recurring?: string;
+  isMandatory?: boolean;
+  tags?: Tag[];
+};
+
+export type SocialMediaPost = WorkItem & {
+  platform: string;
+  caption: string;
+  mediaUrl?: string;
+  scheduledAt: string;
+  postedAt?: string;
+  postType: 'Upload' | 'Branding';
+  mediaType?: 'image' | 'video';
+  crop?: { x: number; y: number; zoom: number };
+  objectPosition?: number;
+  creator: { name: string, avatarUrl?: string };
 };
 
 

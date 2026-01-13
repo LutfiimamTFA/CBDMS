@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -116,25 +115,10 @@ function MainAppLayout({
   const finalNavItems = useMemo(() => {
     if (!profile || !navItemsFromDB) return [];
     
-    const translatedItems = navItemsFromDB.map(item => ({...item, label: t(item.label as any) || item.label}));
-    const itemMap = new Map(translatedItems.map(item => [item.id, item]));
+    return navItemsFromDB
+      .filter(item => item.roles.includes(profile.role))
+      .map(item => ({...item, label: t(item.label as any) || item.label}));
 
-    const childMap = new Map<string, NavigationItem[]>();
-    translatedItems.forEach(item => {
-      let parentId: string | null = null;
-      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
-      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
-       else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
-      if (parentId && item.id !== parentId) {
-        if (!childMap.has(parentId)) childMap.set(parentId, []);
-        childMap.get(parentId)!.push(item);
-      }
-    });
-     if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
-
-    return Array.from(itemMap.values()).filter(item => item.roles.includes(profile.role));
   }, [profile, navItemsFromDB, t]);
 
   const { childMap } = useMemo(() => {
@@ -142,16 +126,11 @@ function MainAppLayout({
     const childMap = new Map<string, NavigationItem[]>();
 
     finalNavItems.forEach(item => {
-      let parentId: string | null = null;
-      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
-      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
-      else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
-
-      if (parentId && item.id !== parentId) {
-        if (!childMap.has(parentId)) {
-          childMap.set(parentId, []);
+      if (item.parentId) {
+        if (!childMap.has(item.parentId)) {
+          childMap.set(item.parentId, []);
         }
-        childMap.get(parentId)!.push(item);
+        childMap.get(item.parentId)!.push(item);
       }
     });
 
@@ -162,28 +141,23 @@ function MainAppLayout({
     const sections: Record<string, boolean> = {};
     if (pathname.startsWith('/admin/settings')) sections.nav_settings = true;
     else if (pathname.startsWith('/admin')) sections.nav_admin = true;
-    else if (pathname.startsWith('/social-media')) sections.nav_social_media = true;
+    else if (pathname.startsWith('/social-media')) sections.nav_social_media_group = true;
+    else if (pathname.startsWith('/web')) sections.nav_web_group = true;
+    else if (pathname.startsWith('/tasks')) sections.nav_tasks_group = true;
     return sections;
   });
 
   const renderNavItems = useCallback(
     (items: NavigationItem[], parentId: string | null = null) => {
       return items
-        .filter((item) => {
-           let itemParentId: string | null = null;
-           if (item.path.startsWith('/admin/settings') && item.id !== 'nav_settings') itemParentId = 'nav_settings';
-           else if (item.path.startsWith('/admin') && item.id !== 'nav_admin') itemParentId = 'nav_admin';
-           else if (item.path.startsWith('/social-media') && item.id !== 'nav_social_media') itemParentId = 'nav_social_media';
-
-           return (parentId === null && itemParentId === null) || itemParentId === parentId;
-        })
+        .filter((item) => item.parentId === parentId)
         .sort((a, b) => a.order - b.order)
         .map((item) => {
           const children = childMap.get(item.id) || [];
           const path = item.path;
-          const isActive = pathname === path || (path.length > 1 && pathname.startsWith(path));
+          const isActive = path ? (pathname === path || (path.length > 1 && pathname.startsWith(path))) : false;
           
-          const hasVisibleChildren = children.some(child => finalNavItems.some(i => i.id === child.id));
+          const hasVisibleChildren = children.length > 0;
 
           if (hasVisibleChildren) {
             return (
@@ -198,7 +172,7 @@ function MainAppLayout({
             );
           }
 
-          if (!item.path) return null; // Don't render folders without visible children
+          if (!item.path) return null; // Don't render folders without path and without visible children
 
           return (
             <SidebarMenuItem key={item.id}>
