@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
@@ -32,13 +33,15 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'storage.googleapis.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      }
     ],
   },
   experimental: {
-    // This block is kept for other potential experimental features
-    // but allowedDevOrigins is moved out as it's a top-level option
+    allowedDevOrigins: ["*.cloudworkstations.dev"],
   },
-  allowedDevOrigins: ["*.cloudworkstations.dev"],
 };
 
 module.exports = nextConfig;
