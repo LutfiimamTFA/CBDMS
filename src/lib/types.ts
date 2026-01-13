@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -215,6 +216,7 @@ export type WorkItem = {
   assignees?: User[];
   assigneeIds: string[];
   dueDate?: string;
+  actualCompletionDate?: string;
   timeEstimate?: number; 
   timeTracked?: number;
   subtasks?: Subtask[];
@@ -238,7 +240,6 @@ export type Task = WorkItem & {
   category?: 'General' | 'Social Media' | 'Branding';
   startDate?: string;
   actualStartDate?: string;
-  actualCompletionDate?: string;
   currentSessionStartTime?: string; 
   isUnderRevision?: boolean; 
   timeLogs?: TimeLog[];

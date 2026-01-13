@@ -6,13 +6,21 @@ import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
-import { Filter, Loader2, X } from 'lucide-react';
+import { Filter, Loader2, X, HelpCircle, Archive } from 'lucide-react';
 import { useI18n } from '@/context/i18n-provider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
@@ -43,7 +51,7 @@ export default function DashboardPage() {
     }
     
     // Employees only see tasks assigned to them.
-    if (profile.role === 'Employee') {
+    if (profile.role === 'Employee' || profile.role === 'PIC') {
       return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
 

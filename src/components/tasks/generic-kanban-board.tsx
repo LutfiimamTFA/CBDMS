@@ -6,11 +6,11 @@ import type { WorkItem, WorkflowStatus, User, RevisionItem, RevisionCycle, Notif
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, writeBatch, where, deleteField, serverTimestamp } from 'firebase/firestore';
-import { Loader2, Plus, XCircle, HelpCircle, Archive } from 'lucide-react';
+import { Loader2, Plus, XCircle, HelpCircle, Archive, History, Link as LinkIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from './kanban-column';
 import { useRouter } from 'next/navigation';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TaskCard } from './task-card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
@@ -18,6 +18,8 @@ import { Input } from '../ui/input';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import Link from 'next/link';
+import { isAfter, subDays } from 'date-fns';
+
 
 const createActivity = (user: User, action: string) => {
   return {
@@ -58,20 +60,54 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
   
   const itemsQuery = useMemo(() => {
     if (!firestore || !profile) return null;
-    let q = query(collection(firestore, itemType));
+    let q = query(collection(firestore, itemType), where('companyId', '==', profile.companyId));
 
     if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
         q = query(q, where('brandId', 'in', profile.brandIds));
     } else if (profile.role === 'Employee' || profile.role === 'PIC') {
         q = query(q, where('assigneeIds', 'array-contains', profile.id));
     } else if (profile.role !== 'Super Admin') {
+        // Fallback for roles that shouldn't see anything if not configured.
         q = query(q, where('__name__', '==', 'no-items-for-this-role'));
     }
     
     return q;
   }, [firestore, profile, itemType]);
   
-  const { data: items, isLoading: areItemsLoading } = useCollection<WorkItem>(itemsQuery);
+  const { data: allItems, isLoading: areItemsLoading } = useCollection<WorkItem>(itemsQuery);
+
+  const { visibleItems, hiddenOldItemsCount } = useMemo(() => {
+    if (!allItems) return { visibleItems: [], hiddenOldItemsCount: 0 };
+    
+    const sevenDaysAgo = subDays(new Date(), 7);
+    const visibleItems: WorkItem[] = [];
+    let hiddenOldItemsCount = 0;
+
+    for (const item of allItems) {
+        const status = item.statusInternal || item.status;
+        if (status === 'Done') {
+            if (item.actualCompletionDate && isAfter(new Date(item.actualCompletionDate), sevenDaysAgo)) {
+                visibleItems.push(item);
+            } else {
+                hiddenOldItemsCount++;
+            }
+        } else {
+            visibleItems.push(item);
+        }
+    }
+    return { visibleItems, hiddenOldItemsCount };
+  }, [allItems]);
+
+  const listPagePath = useMemo(() => {
+    switch (itemType) {
+        case 'socialMediaPosts': return '/social-media/posts';
+        case 'webArticles': return '/web/articles';
+        case 'tasks':
+        default:
+            return '/tasks';
+    }
+  }, [itemType]);
+
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, itemId: string) => {
     e.dataTransfer.setData('itemId', itemId);
@@ -86,11 +122,11 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
     const itemId = e.dataTransfer.getData('itemId');
     if (!itemId || !firestore || !profile) return;
     
-    const item = items?.find(i => i.id === itemId);
+    const item = allItems?.find(i => i.id === itemId);
     if (!item || (item.statusInternal || item.status) === newStatus) return;
 
     if (profile.role === 'Manager' || profile.role === 'Super Admin') {
-        if (newStatus === 'Revisi' && (item.statusInternal === 'Preview' || item.statusInternal === 'Done')) {
+        if (newStatus === 'Revisi' && ((item.statusInternal || item.status) === 'Preview' || (item.statusInternal || item.status) === 'Done')) {
             setRevisionState({ isOpen: true, item, items: [], currentItemText: '' });
             return;
         }
@@ -174,6 +210,16 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
   return (
     <>
       <main className="flex-1 overflow-hidden p-4 md:p-6 h-full flex flex-col">
+        {hiddenOldItemsCount > 0 && (
+            <Alert className="mb-4 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800">
+                <Archive className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <AlertTitle className="text-blue-800 dark:text-blue-300">Papan Dirapikan</AlertTitle>
+                <AlertDescription>
+                    {hiddenOldItemsCount} tugas yang sudah selesai lebih dari 7 hari telah diarsipkan dari tampilan ini.
+                    <Link href={listPagePath} className="ml-2 font-semibold underline">Lihat Semua</Link>
+                </AlertDescription>
+            </Alert>
+        )}
         <Accordion type="single" collapsible className="w-full mb-4">
           <AccordionItem value="item-1" className="border-b-0">
             <AccordionTrigger className="p-3 bg-secondary/50 rounded-md hover:no-underline">
@@ -212,7 +258,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
                     <KanbanColumn
                       key={status.id}
                       status={status}
-                      tasks={(items || []).filter((item) => (item.statusInternal || item.status) === status.name)}
+                      tasks={(visibleItems || []).filter((item) => (item.statusInternal || item.status) === status.name)}
                       onDrop={handleDrop}
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
@@ -238,7 +284,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
                   <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
                     <ScrollArea className="h-full">
                       <div className="flex flex-col gap-3 p-1">
-                        {(items || []).filter((task) => (task.statusInternal || task.status) === status.name).map(task => (
+                        {(visibleItems || []).filter((task) => (task.statusInternal || task.status) === status.name).map(task => (
                           <TaskCard key={task.id} task={task} />
                         ))}
                       </div>
