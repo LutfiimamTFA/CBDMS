@@ -35,8 +35,10 @@ const nextConfig = {
     ],
   },
   experimental: {
-    allowedDevOrigins: ["*.cloudworkstations.dev"],
+    // This block is kept for other potential experimental features
+    // but allowedDevOrigins is moved out as it's a top-level option
   },
+  allowedDevOrigins: ["*.cloudworkstations.dev"],
 };
 
 module.exports = nextConfig;
