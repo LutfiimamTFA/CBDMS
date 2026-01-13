@@ -45,6 +45,8 @@ import { cn } from '@/lib/utils';
 import { Alert, AlertDescription as AlertDescriptionUI, AlertTitle } from '@/components/ui/alert';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 const Icon = ({
   name,
@@ -502,6 +504,7 @@ export default function NavigationSettingsPage() {
             item={editItem}
             onClose={() => setEditItem(null)}
             onSave={handleUpdateItem}
+            allItems={navItems}
         />
       )}
       
@@ -529,13 +532,18 @@ export default function NavigationSettingsPage() {
   );
 }
 
-function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClose: () => void, onSave: (item: NavigationItem) => void }) {
+function EditItemDialog({ item, onClose, onSave, allItems }: { item: NavigationItem, onClose: () => void, onSave: (item: NavigationItem) => void, allItems: NavigationItem[] }) {
     const [label, setLabel] = useState(item.label);
     const [path, setPath] = useState(item.path);
     const [icon, setIcon] = useState(item.icon);
+    const [parentId, setParentId] = useState<string | null>(item.parentId);
+    
+    const potentialParents = useMemo(() => {
+        return allItems.filter(i => i.path === '' && i.id !== item.id);
+    }, [allItems, item.id]);
 
     const handleSave = () => {
-        onSave({ ...item, label, path, icon });
+        onSave({ ...item, label, path, icon, parentId });
     };
     
     return (
@@ -553,20 +561,28 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
                         <Label htmlFor="path" className="text-right">Path</Label>
                         <Input id="path" value={path} onChange={(e) => setPath(e.target.value)} className="col-span-3" disabled={item.path === ''}/>
                         {item.path === '' && (
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div className="col-start-2 col-span-3 mt-1">
-                                            <p className="text-xs text-muted-foreground flex items-center gap-1"><HelpCircle className="h-3 w-3"/> The path for a folder cannot be changed.</p>
-                                        </div>
-                                    </TooltipTrigger>
-                                </Tooltip>
-                            </TooltipProvider>
+                             <div className="col-start-2 col-span-3 mt-1">
+                                <p className="text-xs text-muted-foreground flex items-center gap-1"><HelpCircle className="h-3 w-3"/> The path for a folder cannot be changed.</p>
+                            </div>
                         )}
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="icon" className="text-right">Icon</Label>
                         <Input id="icon" value={icon} onChange={(e) => setIcon(e.target.value)} className="col-span-3" />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="parent" className="text-right">Parent</Label>
+                         <Select value={parentId || 'root'} onValueChange={(value) => setParentId(value === 'root' ? null : value)}>
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Select a parent..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="root">— Root Level —</SelectItem>
+                                {potentialParents.map(p => (
+                                    <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
                 <DialogFooter>
@@ -577,3 +593,5 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
         </Dialog>
     );
 }
+
+    
