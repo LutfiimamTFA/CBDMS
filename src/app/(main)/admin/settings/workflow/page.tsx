@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
@@ -11,11 +12,12 @@ import {
   addDoc,
   deleteDoc,
   updateDoc,
-  getDocs
+  getDocs,
+  where,
 } from 'firebase/firestore';
 import type { WorkflowStatus } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, Trash2, Edit, Save, GripVertical, Eye } from 'lucide-react';
+import { Loader2, Plus, Trash2, Edit, Save, GripVertical, Eye, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -39,13 +41,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const defaultStatuses: Omit<WorkflowStatus, 'id' | 'companyId'>[] = [
-    { name: 'To Do', order: 0, color: '#808080' },
-    { name: 'Doing', order: 1, color: '#3b82f6' },
-    { name: 'Preview', order: 2, color: '#a855f7' },
-    { name: 'Revisi', order: 3, color: '#f97316' }, // Added Revisi status
-    { name: 'Done', order: 4, color: '#22c55e' },
+    { name: 'To Do', order: 0, color: '#808080', workstream: 'tasks' },
+    { name: 'Doing', order: 1, color: '#3b82f6', workstream: 'tasks' },
+    { name: 'Preview', order: 2, color: '#a855f7', workstream: 'tasks' },
+    { name: 'Revisi', order: 3, color: '#f97316', workstream: 'tasks' },
+    { name: 'Done', order: 4, color: '#22c55e', workstream: 'tasks' },
 ];
 
 export default function WorkflowSettingsPage() {
@@ -53,8 +56,9 @@ export default function WorkflowSettingsPage() {
   const { profile } = useUserProfile();
   const { toast } = useToast();
 
+  const [activeTab, setActiveTab] = useState<'tasks' | 'social' | 'web'>('tasks');
   const [statuses, setStatuses] = useState<WorkflowStatus[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isMigrating, setIsMigrating] = useState(false);
 
   const [isNewStatusDialogOpen, setNewStatusDialogOpen] = useState(false);
   const [newStatusName, setNewStatusName] = useState('');
@@ -63,54 +67,34 @@ export default function WorkflowSettingsPage() {
   const [editStatus, setEditStatus] = useState<WorkflowStatus | null>(null);
   const [deleteStatus, setDeleteStatus] = useState<WorkflowStatus | null>(null);
 
-  // Drag and drop state
   const draggedItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
 
-
-  const statusesCollectionRef = useMemo(
-    () =>
+  const statusesQuery = useMemo(() =>
       firestore && profile
         ? query(
             collection(firestore, 'statuses'),
+            where('workstream', '==', activeTab),
             orderBy('order')
           )
         : null,
-    [firestore, profile]
+    [firestore, profile, activeTab]
   );
   
-  const { data: dbStatuses, isLoading: isDbStatusesLoading } = useCollection<WorkflowStatus>(statusesCollectionRef);
+  const { data: dbStatuses, isLoading: isDbStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
+  const { data: allStatuses, isLoading: areAllStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => firestore ? collection(firestore, 'statuses') : null, [firestore]));
+
+  const hasLegacyStatuses = useMemo(() => {
+    return allStatuses?.some(s => !s.workstream);
+  }, [allStatuses]);
+
 
   useEffect(() => {
     if (dbStatuses) {
         setStatuses(dbStatuses);
-        setIsLoading(false);
     }
   }, [dbStatuses]);
 
-  useEffect(() => {
-    if (!statusesCollectionRef || isDbStatusesLoading || !firestore || !profile) return;
-    
-    const seedInitialStatuses = async () => {
-        const snapshot = await getDocs(statusesCollectionRef);
-        if (snapshot.empty) {
-            const batch = writeBatch(firestore);
-            defaultStatuses.forEach(status => {
-                const docRef = doc(collection(firestore, 'statuses'));
-                batch.set(docRef, { ...status, companyId: profile.companyId });
-            });
-            await batch.commit();
-            toast({
-                title: 'Workflow Initialized',
-                description: 'Default statuses have been created.'
-            })
-        }
-        if (!isDbStatusesLoading) setIsLoading(false);
-    }
-
-    seedInitialStatuses();
-  }, [statusesCollectionRef, isDbStatusesLoading, firestore, profile, toast]);
-  
   const handleDragEnd = async () => {
     if (draggedItem.current === null || dragOverItem.current === null || !firestore) return;
     
@@ -118,12 +102,11 @@ export default function WorkflowSettingsPage() {
     const dragged = statusesClone.splice(draggedItem.current, 1)[0];
     statusesClone.splice(dragOverItem.current, 0, dragged);
     
-    setStatuses(statusesClone); // Optimistic UI update
+    setStatuses(statusesClone);
 
     draggedItem.current = null;
     dragOverItem.current = null;
     
-    // Auto-save the new order
     const batch = writeBatch(firestore);
     statusesClone.forEach((status, index) => {
         const docRef = doc(firestore, 'statuses', status.id);
@@ -132,10 +115,9 @@ export default function WorkflowSettingsPage() {
     
     try {
         await batch.commit();
-        toast({ title: 'Order Saved', description: 'Your workflow order has been automatically updated.' });
+        toast({ title: 'Order Saved', description: 'Your workflow order has been updated.' });
     } catch (error) {
-        console.error('Failed to save order:', error);
-        setStatuses(statuses); // Revert on failure
+        setStatuses(statuses);
         toast({ variant: 'destructive', title: 'Error', description: 'Could not save the new order.' });
     }
   };
@@ -148,15 +130,31 @@ export default function WorkflowSettingsPage() {
         order: statuses.length,
         color: newStatusColor,
         companyId: profile.companyId,
+        workstream: activeTab,
       });
       toast({ title: 'Status Created', description: `Status "${newStatusName}" has been added.` });
       setNewStatusName('');
       setNewStatusColor('#6b21a8');
       setNewStatusDialogOpen(false);
     } catch (error) {
-      console.error(error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not create status.' });
     }
+  };
+
+  const handleSeedDefaults = async () => {
+      if (!firestore || !profile) return;
+      const batch = writeBatch(firestore);
+      const seedData = defaultStatuses.map(s => ({ ...s, workstream: activeTab, companyId: profile.companyId }));
+      seedData.forEach(status => {
+          const docRef = doc(collection(firestore, 'statuses'));
+          batch.set(docRef, status);
+      });
+      try {
+        await batch.commit();
+        toast({ title: 'Success', description: `Default statuses for ${activeTab} have been created.` });
+      } catch (error) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not seed default statuses.' });
+      }
   };
   
   const handleUpdateStatus = async () => {
@@ -167,7 +165,6 @@ export default function WorkflowSettingsPage() {
       toast({ title: 'Status Updated', description: 'Status has been changed.' });
       setEditStatus(null);
     } catch (error) {
-      console.error(error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not update status.' });
     }
   };
@@ -189,13 +186,84 @@ export default function WorkflowSettingsPage() {
       toast({ title: 'Status Deleted', description: `Status "${deleteStatus.name}" has been removed.` });
       setDeleteStatus(null);
     } catch (error) {
-      console.error(error);
       toast({ variant: 'destructive', title: 'Error', description: 'Could not delete status.' });
     }
   }
+  
+  const handleMigration = async () => {
+    if (!firestore || !allStatuses) return;
+    setIsMigrating(true);
+    const legacyStatuses = allStatuses.filter(s => !s.workstream);
+    if (legacyStatuses.length === 0) {
+        toast({ title: 'No action needed', description: 'All statuses are already up to date.' });
+        setIsMigrating(false);
+        return;
+    }
+    
+    const batch = writeBatch(firestore);
+    legacyStatuses.forEach(status => {
+        const docRef = doc(firestore, 'statuses', status.id);
+        batch.update(docRef, { workstream: 'tasks' });
+    });
+    
+    try {
+        await batch.commit();
+        toast({ title: 'Migration Successful', description: `${legacyStatuses.length} statuses have been migrated to the 'tasks' workstream.` });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Migration Failed', description: 'An error occurred during migration.' });
+    } finally {
+        setIsMigrating(false);
+    }
+  }
 
-  if (isLoading) {
-      return <div className="flex h-full items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  const isLoading = isDbStatusesLoading || areAllStatusesLoading;
+  
+  const renderContent = () => {
+    if (isLoading) {
+       return <div className="flex h-full items-center justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+    }
+    
+    if (statuses.length === 0 && activeTab !== 'tasks') {
+        return (
+            <div className="text-center p-8 border rounded-lg">
+                <h3 className="font-semibold">No Statuses Found</h3>
+                <p className="text-sm text-muted-foreground mt-2">There are no workflow statuses for '{activeTab}'.</p>
+                <Button onClick={handleSeedDefaults} className="mt-4">Seed Default Statuses</Button>
+            </div>
+        )
+    }
+    
+    return (
+        <div className="rounded-lg border p-4">
+            <div className="space-y-2">
+                {statuses.map((status, index) => (
+                    <div
+                        key={status.id}
+                        className={cn("flex items-center justify-between rounded-md bg-secondary/50 p-2 transition-all cursor-grab active:cursor-grabbing", draggedItem.current === index && 'opacity-50')}
+                        draggable
+                        onDragStart={() => (draggedItem.current = index)}
+                        onDragEnter={() => (dragOverItem.current = index)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => e.preventDefault()}
+                    >
+                        <div className='flex items-center gap-3'>
+                            <GripVertical className='h-5 w-5 text-muted-foreground' />
+                            <span className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></span>
+                            <span className="font-medium">{status.name}</span>
+                        </div>
+                        <div className='flex items-center gap-2'>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditStatus(status)}>
+                                <Edit className="h-4 w-4"/>
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteStatus(status)}>
+                                <Trash2 className="h-4 w-4"/>
+                            </Button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    )
   }
 
   return (
@@ -206,7 +274,7 @@ export default function WorkflowSettingsPage() {
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight">Manage Workflow</h2>
                     <p className="text-muted-foreground">
-                        Customize the columns on your Kanban board. Drag and drop to reorder.
+                        Customize columns for each workstream (Tasks, Social Media, etc.).
                     </p>
                 </div>
                 <div className='flex gap-2'>
@@ -217,9 +285,7 @@ export default function WorkflowSettingsPage() {
                       <DialogContent>
                           <DialogHeader>
                               <DialogTitle>Create New Status</DialogTitle>
-                              <DialogDescription>
-                               This will add a new column to your team's Kanban board.
-                              </DialogDescription>
+                              <DialogDescription>This will add a new column to the '{activeTab}' Kanban board.</DialogDescription>
                           </DialogHeader>
                           <div className="space-y-4">
                              <div className='space-y-2'>
@@ -242,49 +308,36 @@ export default function WorkflowSettingsPage() {
                   </Dialog>
                 </div>
             </div>
-            
-            <div className="rounded-lg border p-4">
-                <div className="space-y-2">
-                    {statuses.map((status, index) => (
-                        <div
-                            key={status.id}
-                            className={cn(
-                                "flex items-center justify-between rounded-md bg-secondary/50 p-2 transition-all cursor-grab active:cursor-grabbing",
-                                draggedItem.current === index && 'opacity-50'
-                            )}
-                            draggable
-                            onDragStart={() => (draggedItem.current = index)}
-                            onDragEnter={() => (dragOverItem.current = index)}
-                            onDragEnd={handleDragEnd}
-                            onDragOver={(e) => e.preventDefault()}
-                        >
-                            <div className='flex items-center gap-3'>
-                                <GripVertical className='h-5 w-5 text-muted-foreground' />
-                                {status.name === 'Preview' ? (
-                                    <Eye className="h-4 w-4" style={{ color: status.color }}/>
-                                ) : (
-                                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: status.color }}></span>
-                                )}
-                                <span className="font-medium">{status.name}</span>
-                            </div>
-                            <div className='flex items-center gap-2'>
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setEditStatus(status)}>
-                                    <Edit className="h-4 w-4"/>
-                                </Button>
-                                {status.name !== 'To Do' && status.name !== 'Done' && (
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteStatus(status)}>
-                                        <Trash2 className="h-4 w-4"/>
-                                    </Button>
-                                )}
-                            </div>
+
+            {hasLegacyStatuses && (
+                <div className="p-4 border rounded-lg bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-900 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                            <h4 className="font-semibold text-amber-800 dark:text-amber-300">Data Migration Needed</h4>
+                            <p className="text-sm text-amber-700 dark:text-amber-400">Some existing statuses need to be updated for the new workstream feature.</p>
                         </div>
-                    ))}
+                    </div>
+                    <Button onClick={handleMigration} disabled={isMigrating}>
+                        {isMigrating && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                        Migrate Statuses
+                    </Button>
                 </div>
-            </div>
+            )}
+            
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="tasks">Tasks</TabsTrigger>
+                    <TabsTrigger value="social">Social Media</TabsTrigger>
+                    <TabsTrigger value="web">Web</TabsTrigger>
+                </TabsList>
+                <TabsContent value="tasks" className="mt-4">{renderContent()}</TabsContent>
+                <TabsContent value="social" className="mt-4">{renderContent()}</TabsContent>
+                <TabsContent value="web" className="mt-4">{renderContent()}</TabsContent>
+            </Tabs>
         </div>
       </main>
 
-       {/* Edit Dialog */}
       <Dialog open={!!editStatus} onOpenChange={(isOpen) => !isOpen && setEditStatus(null)}>
           <DialogContent>
               <DialogHeader>
@@ -307,7 +360,6 @@ export default function WorkflowSettingsPage() {
           </DialogContent>
       </Dialog>
       
-      {/* Delete Confirmation Dialog */}
        <AlertDialog open={!!deleteStatus} onOpenChange={(isOpen) => !isOpen && setDeleteStatus(null)}>
           <AlertDialogContent>
               <AlertDialogHeader>
