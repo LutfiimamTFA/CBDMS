@@ -24,7 +24,7 @@ import {
   deleteDoc,
   Timestamp,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle, Blocks } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { Button } from '@/components/ui/button';
@@ -59,7 +59,8 @@ type Role = (typeof availableRoles)[number];
 
 const criticalPaths = ['/admin/settings/navigation', '/admin/settings', '/admin/dashboard', '/admin/users'];
 
-const isItemLockedForEditing = (item: NavigationItem) => criticalPaths.includes(item.path);
+// This function now only checks if the item is critical, the "locking" logic is handled in the component.
+const isItemCritical = (item: NavigationItem) => criticalPaths.includes(item.path);
 
 export default function NavigationSettingsPage() {
   const { toast } = useToast();
@@ -147,8 +148,7 @@ export default function NavigationSettingsPage() {
     setNavItems(currentItems => {
         return currentItems.map(item => {
             if (item.id === itemId) {
-                const isLocked = isItemLockedForEditing(item);
-                if (isLocked && role === 'Super Admin' && !isChecked) {
+                if (isItemCritical(item) && role === 'Super Admin' && !isChecked) {
                     toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from critical settings.'});
                     return item;
                 }
@@ -208,25 +208,18 @@ export default function NavigationSettingsPage() {
     await backupAndRun(async () => {
         if (!firestore || !hasChanges) return;
         const batch = writeBatch(firestore);
-        const initialMap = new Map(initialNavItems.map(item => [item.id, item]));
-
+        
         navItems.forEach(item => {
-            let itemData: any = { ...item };
-            
-            const originalItem = initialMap.get(item.id);
-            if (isItemLockedForEditing(item) && originalItem) {
-                itemData.isEnabled = true;
-                itemData.parentId = originalItem.parentId;
-                itemData.order = originalItem.order;
-                if (!itemData.roles.includes('Super Admin')) {
-                    itemData.roles.push('Super Admin');
-                }
-            }
-
-            delete itemData.id;
             const docRef = doc(firestore, 'navigationItems', item.id);
-            batch.update(docRef, itemData);
+            
+            // Failsafe for roles on critical items
+            if (isItemCritical(item) && !item.roles.includes('Super Admin')) {
+              item.roles.push('Super Admin');
+            }
+            
+            batch.update(docRef, { ...item });
         });
+        
         await batch.commit();
 
         setInitialNavItems(JSON.parse(JSON.stringify(navItems)));
@@ -265,21 +258,14 @@ export default function NavigationSettingsPage() {
   };
   
   const handleUpdateItem = async (updatedItem: NavigationItem) => {
-    if(!editItem) return;
-
-    if (isItemLockedForEditing(editItem) && updatedItem.path !== editItem.path) {
-        updatedItem.path = editItem.path; // Revert path change if locked
-        toast({ variant: "destructive", title: "Cannot Edit Path", description: "The path for this system item is locked." });
-    }
-
-    setNavItems(prev => prev.map(item => item.id === editItem.id ? updatedItem : item));
+    setNavItems(prev => prev.map(item => item.id === editItem?.id ? updatedItem : item));
     setEditItem(null);
   };
   
   const handleToggleEnable = (itemId: string, isEnabled: boolean) => {
     setNavItems(prev => prev.map(item => {
         if (item.id === itemId) {
-            if (isItemLockedForEditing(item)) {
+            if (isItemCritical(item) && !isEnabled) {
                 toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot disable a critical system item.'});
                 return item;
             }
@@ -356,14 +342,6 @@ export default function NavigationSettingsPage() {
                 <span className="font-medium">{item.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{item.path || "(Folder)"}</span>
               </div>
-               {isItemLockedForEditing(item) && (
-                 <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger><Shield className="h-4 w-4 text-blue-500"/></TooltipTrigger>
-                    <TooltipContent><p>This is a critical system item. Its path cannot be changed.</p></TooltipContent>
-                  </Tooltip>
-                 </TooltipProvider>
-               )}
             </div>
           </TableCell>
           {availableRoles.map((role) => (
@@ -373,7 +351,7 @@ export default function NavigationSettingsPage() {
                 onCheckedChange={(checked) => {
                   handleRoleChange(item.id, role, !!checked);
                 }}
-                disabled={isItemLockedForEditing(item) && role === 'Super Admin'}
+                disabled={isItemCritical(item) && role === 'Super Admin'}
               />
             </TableCell>
           ))}
@@ -382,8 +360,8 @@ export default function NavigationSettingsPage() {
               <Checkbox 
                 checked={item.isEnabled} 
                 onCheckedChange={(checked) => handleToggleEnable(item.id, !!checked)}
-                className={cn("h-5 w-5 ml-2", isItemLockedForEditing(item) && "cursor-not-allowed opacity-50")}
-                disabled={isItemLockedForEditing(item)}
+                className={cn("h-5 w-5 ml-2", isItemCritical(item) && "cursor-not-allowed opacity-50")}
+                disabled={isItemCritical(item)}
               />
           </TableCell>
         </TableRow>
@@ -421,8 +399,8 @@ export default function NavigationSettingsPage() {
           </div>
         </div>
          <Alert variant="default" className="mb-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-            <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <AlertTitle className="text-blue-800 dark:text-blue-300">Editor Scope</AlertTitle>
+            <Blocks className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertTitle className="text-blue-800 dark:text-blue-300">Full Control Enabled</AlertTitle>
             <AlertDescriptionUI className="text-blue-700 dark:text-blue-400">
                 You now have full control to reorder and nest all items. Be careful when modifying critical system items like Admin and Settings.
             </AlertDescriptionUI>
@@ -494,22 +472,11 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
         onSave({ ...item, label, path, icon });
     };
     
-    const isLocked = isItemLockedForEditing(item);
-
     return (
         <Dialog open={true} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Edit Item: {item.label}</DialogTitle>
-                    {isLocked && (
-                        <Alert variant="destructive" className="mt-2">
-                           <AlertTriangle className="h-4 w-4"/>
-                           <AlertTitle>System Critical Item</AlertTitle>
-                           <AlertDescriptionUI>
-                            The path for this item is locked to prevent breaking the application. Other details can be changed.
-                           </AlertDescriptionUI>
-                        </Alert>
-                    )}
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
@@ -518,7 +485,7 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="path" className="text-right">Path</Label>
-                        <Input id="path" value={path} onChange={(e) => setPath(e.target.value)} className="col-span-3" disabled={isLocked} />
+                        <Input id="path" value={path} onChange={(e) => setPath(e.target.value)} className="col-span-3" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="icon" className="text-right">Icon</Label>
