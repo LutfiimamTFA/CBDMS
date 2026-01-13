@@ -1,3 +1,4 @@
+
 import type { NavigationItem } from './types';
 
 // This file now serves as a fallback or for initial seeding.
@@ -275,7 +276,7 @@ export const defaultNavItems: NavigationItem[] = [
     icon: 'Workflow',
     order: 25,
     roles: ['Super Admin'],
-    parentId: 'nav_settings',
+    parentId: null,
     isEnabled: true,
   },
   {
