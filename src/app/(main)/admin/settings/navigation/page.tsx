@@ -19,8 +19,7 @@ import {
   orderBy,
   writeBatch,
   getDocs,
-  addDoc,
-  updateDoc,
+  setDoc,
 } from 'firebase/firestore';
 import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
@@ -39,6 +38,7 @@ import {
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 const Icon = ({
   name,
@@ -52,9 +52,8 @@ const Icon = ({
 const availableRoles = ['Super Admin', 'Manager', 'PIC', 'Employee', 'Client'] as const;
 type Role = (typeof availableRoles)[number];
 
-const isItemLocked = (item: NavigationItem) => {
-    return ['nav_admin', 'nav_settings', 'nav_settings_navigation'].includes(item.id);
-}
+const criticalPaths = ['/admin/settings/navigation', '/admin/settings', '/admin/dashboard', '/admin/users'];
+const isItemLocked = (item: NavigationItem) => criticalPaths.includes(item.path);
 
 export default function NavigationSettingsPage() {
   const { toast } = useToast();
@@ -96,11 +95,11 @@ export default function NavigationSettingsPage() {
     return JSON.stringify(initialNavItems) !== JSON.stringify(navItems);
   }, [initialNavItems, navItems]);
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, id: string) => {
+  const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
     dragItem.current = id;
   };
 
-  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>, id: string) => {
+  const handleDragEnter = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
     dragOverItem.current = id;
   };
 
@@ -134,14 +133,14 @@ export default function NavigationSettingsPage() {
     setNavItems(currentItems => {
         return currentItems.map(item => {
             if (item.id === itemId) {
+                if (isItemLocked(item) && role === 'Super Admin' && !isChecked) {
+                    toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from critical settings.'});
+                    return item;
+                }
                 let updatedRoles: Role[] = item.roles as Role[];
                 if (isChecked) {
                     updatedRoles = [...updatedRoles, role];
                 } else {
-                    if (isItemLocked(item) && role === 'Super Admin') {
-                        toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from critical settings.'});
-                        return item;
-                    }
                     updatedRoles = updatedRoles.filter((r) => r !== role);
                 }
                 return { ...item, roles: [...new Set(updatedRoles)] as Role[] };
@@ -150,36 +149,64 @@ export default function NavigationSettingsPage() {
         });
     });
   };
-
-  const handleSaveChanges = async () => {
-    if (!firestore || !hasChanges) return;
+  
+  const backupAndRun = async (action: () => Promise<void>) => {
+    if (!firestore) return;
     setIsSaving(true);
     setConfirmOpen(false);
 
     try {
-        const batch = writeBatch(firestore);
-        navItems.forEach(item => {
-            const docRef = doc(firestore, 'navigationItems', item.id);
-            // Create a plain object without extra properties from the original type
-            const { id, ...itemData } = item;
-            batch.update(docRef, itemData);
+        const backupTimestamp = new Date().toISOString();
+        const backupRef = doc(firestore, 'navigationItemBackups', backupTimestamp);
+        const currentItems = await getDocs(query(collection(firestore, 'navigationItems')));
+        const backupData = currentItems.docs.map(doc => doc.data());
+        
+        await setDoc(backupRef, {
+            createdAt: new Date(),
+            items: backupData,
         });
-        await batch.commit();
 
-        setInitialNavItems(JSON.parse(JSON.stringify(navItems))); // Update initial state after save
-        toast({
-            title: 'Configuration Saved',
-            description: 'All sidebar changes have been saved.',
-        });
+        await action();
+        
     } catch (error: any) {
         toast({
             variant: 'destructive',
-            title: 'Save Failed',
-            description: error.message,
+            title: 'Operation Failed',
+            description: error.message || 'An unexpected error occurred.',
         });
     } finally {
         setIsSaving(false);
     }
+  };
+
+
+  const handleSaveChanges = async () => {
+    await backupAndRun(async () => {
+        if (!firestore || !hasChanges) return;
+        const batch = writeBatch(firestore);
+        navItems.forEach(item => {
+            const docRef = doc(firestore, 'navigationItems', item.id);
+            const { id, ...itemData } = item;
+            
+            // Failsafe enforcement on save
+            if (isItemLocked(item)) {
+                if (!itemData.roles.includes('Super Admin')) {
+                    itemData.roles.push('Super Admin');
+                }
+                itemData.isEnabled = true;
+                itemData.parentId = null;
+            }
+
+            batch.update(docRef, itemData);
+        });
+        await batch.commit();
+
+        setInitialNavItems(JSON.parse(JSON.stringify(navItems)));
+        toast({
+            title: 'Configuration Saved',
+            description: 'All sidebar changes have been saved.',
+        });
+    });
   };
   
   const handleAddItem = async (isFolder: boolean) => {
@@ -194,10 +221,12 @@ export default function NavigationSettingsPage() {
       parentId: null,
       isEnabled: true,
     };
-
+    
     try {
-        const docRef = await addDoc(collection(firestore, 'navigationItems'), newItemData);
-        const newItemWithId: NavigationItem = { ...newItemData, id: docRef.id };
+        const newItemRef = doc(collection(firestore, 'navigationItems'));
+        const newItemWithId: NavigationItem = { ...newItemData, id: newItemRef.id };
+        await setDoc(newItemRef, newItemWithId);
+        
         setNavItems(prev => [...prev, newItemWithId]);
         setInitialNavItems(prev => [...prev, newItemWithId]);
         setEditItem(newItemWithId);
@@ -207,8 +236,14 @@ export default function NavigationSettingsPage() {
     }
   };
   
-  const handleUpdateItem = (updatedItem: NavigationItem) => {
+  const handleUpdateItem = async (updatedItem: NavigationItem) => {
     if(!editItem) return;
+
+    if (isItemLocked(updatedItem)) {
+        updatedItem.path = editItem.path; // Revert path change if locked
+        toast({ variant: "destructive", title: "Cannot Edit Path", description: "The path for this system item is locked." });
+    }
+
     setNavItems(prev => prev.map(item => item.id === editItem.id ? updatedItem : item));
     setEditItem(null);
   };
@@ -227,41 +262,33 @@ export default function NavigationSettingsPage() {
   };
 
   const handleResetToDefault = async () => {
-    if (!firestore) return;
-    setIsSaving(true);
-    setConfirmOpen(false);
+    await backupAndRun(async () => {
+        if (!firestore) return;
+        const batch = writeBatch(firestore);
+        const existingItemsSnap = await getDocs(collection(firestore, 'navigationItems'));
+        existingItemsSnap.docs.forEach(doc => batch.delete(doc.ref));
+        
+        defaultNavItems.forEach(item => {
+            const docRef = doc(firestore, 'navigationItems', item.id);
+            batch.set(docRef, item);
+        });
 
-    try {
-      const batch = writeBatch(firestore);
-      const existingItemsSnap = await getDocs(collection(firestore, 'navigationItems'));
-      existingItemsSnap.docs.forEach(doc => batch.delete(doc.ref));
-      
-      defaultNavItems.forEach(item => {
-        const docRef = doc(firestore, 'navigationItems', item.id);
-        batch.set(docRef, item);
-      });
-
-      await batch.commit();
-      toast({ title: 'Sidebar Reset', description: 'Navigation has been reset to its default state.' });
-
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Reset Failed', description: e.message });
-    } finally {
-      setIsSaving(false);
-    }
+        await batch.commit();
+        toast({ title: 'Sidebar Reset', description: 'Navigation has been reset to its default state.' });
+    });
   };
   
   const openConfirmDialog = (type: 'save' | 'reset') => {
     if (type === 'save') {
         setConfirmDialog({
             title: 'Confirm Changes',
-            description: 'Are you sure you want to apply these navigation changes?',
+            description: 'This will save the new sidebar structure to Firestore. A backup will be created.',
             onConfirm: handleSaveChanges
         });
     } else {
         setConfirmDialog({
             title: 'Reset to Default?',
-            description: 'This will erase all your custom changes and restore the default sidebar structure. This action is irreversible.',
+            description: 'This will erase all custom changes and restore the default sidebar. A backup will be created first. This action is irreversible.',
             onConfirm: handleResetToDefault
         });
     }
@@ -286,9 +313,12 @@ export default function NavigationSettingsPage() {
           onDragEnd={handleDragEnd}
           onDrop={() => item.path === '' && handleDropOnFolder(item.id)}
           draggable
-          className={!item.isEnabled ? 'opacity-50' : ''}
+          className={cn(
+            !item.isEnabled && 'opacity-50',
+            dragItem.current === item.id && 'opacity-30'
+          )}
         >
-          <TableCell className={isSubItem ? "pl-12" : ""}>
+          <TableCell className={cn(isSubItem && "pl-12")}>
             <div className="flex items-center gap-3">
               <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab"/>
               <Icon name={item.icon} className="h-5 w-5" />
@@ -315,6 +345,7 @@ export default function NavigationSettingsPage() {
                 checked={item.isEnabled} 
                 onCheckedChange={(checked) => handleToggleEnable(item.id, !!checked)}
                 className={cn("h-5 w-5 ml-2", isItemLocked(item) && "cursor-not-allowed opacity-50")}
+                disabled={isItemLocked(item)}
               />
           </TableCell>
         </TableRow>
@@ -450,4 +481,3 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
         </Dialog>
     );
 }
-
