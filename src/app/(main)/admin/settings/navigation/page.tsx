@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
@@ -20,8 +21,10 @@ import {
   writeBatch,
   getDocs,
   setDoc,
+  deleteDoc,
+  Timestamp,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { Button } from '@/components/ui/button';
@@ -39,6 +42,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription as AlertDescriptionUI, AlertTitle } from '@/components/ui/alert';
 
 const Icon = ({
   name,
@@ -53,7 +57,16 @@ const availableRoles = ['Super Admin', 'Manager', 'PIC', 'Employee', 'Client'] a
 type Role = (typeof availableRoles)[number];
 
 const criticalPaths = ['/admin/settings/navigation', '/admin/settings', '/admin/dashboard', '/admin/users'];
+const workstreamGroupIds = ['nav_project_group', 'nav_social_media_group', 'nav_web_group'];
+
 const isItemLocked = (item: NavigationItem) => criticalPaths.includes(item.path);
+
+const isWorkstreamItem = (item: NavigationItem) => {
+    if (workstreamGroupIds.includes(item.id)) return true; // The group itself
+    if (item.parentId && workstreamGroupIds.includes(item.parentId)) return true; // Direct child
+    // Check for nested children if needed
+    return false;
+};
 
 export default function NavigationSettingsPage() {
   const { toast } = useToast();
@@ -74,11 +87,7 @@ export default function NavigationSettingsPage() {
   const dragOverItem = React.useRef<string | null>(null);
 
   const navItemsCollectionRef = useMemo(
-    () =>
-      firestore
-        ? query(collection(firestore, 'navigationItems'), orderBy('order'))
-        : null,
-    [firestore]
+    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]
   );
   const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
@@ -150,21 +159,30 @@ export default function NavigationSettingsPage() {
     });
   };
   
-  const backupAndRun = async (action: () => Promise<void>) => {
+  const backupAndRun = async (action: () => Promise<void>, actionName: 'save' | 'reset') => {
     if (!firestore) return;
     setIsSaving(true);
     setConfirmOpen(false);
 
     try {
         const backupTimestamp = new Date().toISOString();
-        const backupRef = doc(firestore, 'navigationItemBackups', backupTimestamp);
-        const currentItems = await getDocs(query(collection(firestore, 'navigationItems')));
-        const backupData = currentItems.docs.map(doc => doc.data());
+        const backupMetaRef = doc(firestore, 'navigationItemBackups', backupTimestamp);
+        const currentItemsSnap = await getDocs(query(collection(firestore, 'navigationItems')));
         
-        await setDoc(backupRef, {
-            createdAt: new Date(),
-            items: backupData,
+        const backupBatch = writeBatch(firestore);
+        
+        backupBatch.set(backupMetaRef, {
+            createdAt: Timestamp.now(),
+            action: actionName,
         });
+
+        currentItemsSnap.forEach(itemDoc => {
+            const itemBackupRef = doc(firestore, `navigationItemBackups/${backupTimestamp}/items`, itemDoc.id);
+            backupBatch.set(itemBackupRef, itemDoc.data());
+        });
+
+        await backupBatch.commit();
+        toast({ title: "Backup Created", description: `A backup has been saved to 'navigationItemBackups/${backupTimestamp}'`});
 
         await action();
         
@@ -190,9 +208,7 @@ export default function NavigationSettingsPage() {
             
             // Failsafe enforcement on save
             if (isItemLocked(item)) {
-                if (!itemData.roles.includes('Super Admin')) {
-                    itemData.roles.push('Super Admin');
-                }
+                if (!itemData.roles.includes('Super Admin')) itemData.roles.push('Super Admin');
                 itemData.isEnabled = true;
                 itemData.parentId = null;
             }
@@ -204,9 +220,9 @@ export default function NavigationSettingsPage() {
         setInitialNavItems(JSON.parse(JSON.stringify(navItems)));
         toast({
             title: 'Configuration Saved',
-            description: 'All sidebar changes have been saved.',
+            description: 'All sidebar changes have been saved to Firestore.',
         });
-    });
+    }, 'save');
   };
   
   const handleAddItem = async (isFolder: boolean) => {
@@ -275,14 +291,14 @@ export default function NavigationSettingsPage() {
 
         await batch.commit();
         toast({ title: 'Sidebar Reset', description: 'Navigation has been reset to its default state.' });
-    });
+    }, 'reset');
   };
   
   const openConfirmDialog = (type: 'save' | 'reset') => {
     if (type === 'save') {
         setConfirmDialog({
             title: 'Confirm Changes',
-            description: 'This will save the new sidebar structure to Firestore. A backup will be created.',
+            description: 'This will save the new sidebar structure to Firestore. A backup will be created first.',
             onConfirm: handleSaveChanges
         });
     } else {
@@ -312,20 +328,29 @@ export default function NavigationSettingsPage() {
           onDragEnter={(e) => handleDragEnter(e, item.id)}
           onDragEnd={handleDragEnd}
           onDrop={() => item.path === '' && handleDropOnFolder(item.id)}
-          draggable
+          draggable={isWorkstreamItem(item)}
           className={cn(
             !item.isEnabled && 'opacity-50',
-            dragItem.current === item.id && 'opacity-30'
+            dragItem.current === item.id && 'opacity-30',
+            !isWorkstreamItem(item) && 'bg-muted/30'
           )}
         >
           <TableCell className={cn(isSubItem && "pl-12")}>
             <div className="flex items-center gap-3">
-              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab"/>
+              <GripVertical className={cn("h-5 w-5 text-muted-foreground", isWorkstreamItem(item) ? 'cursor-grab' : 'cursor-not-allowed text-muted-foreground/30')}/>
               <Icon name={item.icon} className="h-5 w-5" />
               <div className="flex flex-col">
                 <span className="font-medium">{item.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{item.path || "(Folder)"}</span>
               </div>
+               {!isWorkstreamItem(item) && !isItemLocked(item) && (
+                 <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger><Shield className="h-4 w-4 text-blue-500"/></TooltipTrigger>
+                    <TooltipContent><p>This item's structure is locked to prevent breaking app navigation.</p></TooltipContent>
+                  </Tooltip>
+                 </TooltipProvider>
+               )}
             </div>
           </TableCell>
           {availableRoles.map((role) => (
@@ -356,7 +381,7 @@ export default function NavigationSettingsPage() {
           )}
       </React.Fragment>
     ));
-  }, [navItems, handleDragEnd]);
+  }, [navItems, handleDragEnd, isWorkstreamItem]);
 
 
   return (
@@ -366,7 +391,7 @@ export default function NavigationSettingsPage() {
           <div>
             <h2 className="text-2xl font-bold">Sidebar Navigation Editor</h2>
             <p className="text-muted-foreground">
-              Drag to reorder, nest items, and manage role visibility.
+              Drag & drop workstream items, configure roles, and manage menu visibility.
             </p>
           </div>
           <div className="flex gap-2">
@@ -382,6 +407,14 @@ export default function NavigationSettingsPage() {
             </Button>
           </div>
         </div>
+         <Alert variant="default" className="mb-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+            <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <AlertTitle className="text-blue-800 dark:text-blue-300">Editor Scope</AlertTitle>
+            <AlertDescriptionUI className="text-blue-700 dark:text-blue-400">
+                To maintain application stability, only items within the 'Project', 'Social Media', and 'Web' workstreams can be reordered or nested. Other items have their structure locked but their visibility can still be managed.
+            </AlertDescriptionUI>
+        </Alert>
+
         <div className="rounded-lg border">
           <Table>
             <TableHeader>
@@ -455,9 +488,15 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Edit Item: {item.label}</DialogTitle>
-                    <DialogDescription>
-                        {isLocked && "This is a system-critical item. Some fields are locked."}
-                    </DialogDescription>
+                    {isLocked && (
+                        <Alert variant="destructive" className="mt-2">
+                           <AlertTriangle className="h-4 w-4"/>
+                           <AlertTitle>System Critical Item</AlertTitle>
+                           <AlertDescriptionUI>
+                            The path for this item is locked to prevent breaking the application. Other details can be changed.
+                           </AlertDescriptionUI>
+                        </Alert>
+                    )}
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
