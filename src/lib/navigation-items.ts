@@ -14,8 +14,8 @@ export const defaultNavItems: NavigationItem[] = [
   },
   // --- GROUP 1: PROJECTS ---
   {
-    id: 'nav_tasks_group',
-    label: 'Projects', // Changed from 'Tasks'
+    id: 'nav_project_group',
+    label: 'Projects', 
     path: '',
     icon: 'ClipboardList',
     order: 1,
@@ -29,16 +29,16 @@ export const defaultNavItems: NavigationItem[] = [
     icon: 'KanbanSquare',
     order: 1.1,
     roles: ['Super Admin', 'Manager', 'Employee'],
-    parentId: 'nav_tasks_group',
+    parentId: 'nav_project_group',
   },
   {
     id: 'nav_list',
-    label: 'All Tasks', // Changed from 'List'
+    label: 'All Tasks', 
     path: '/tasks',
     icon: 'List',
     order: 1.2,
     roles: ['Super Admin', 'Manager', 'Employee'],
-    parentId: 'nav_tasks_group',
+    parentId: 'nav_project_group',
   },
   {
     id: 'nav_task_schedule',
@@ -47,7 +47,7 @@ export const defaultNavItems: NavigationItem[] = [
     icon: 'CalendarClock',
     order: 1.3,
     roles: ['Super Admin', 'Manager', 'Employee'],
-    parentId: 'nav_tasks_group',
+    parentId: 'nav_project_group',
   },
   // --- GROUP 2: SOCIAL MEDIA ---
   {
