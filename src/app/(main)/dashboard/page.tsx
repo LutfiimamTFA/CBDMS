@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -184,7 +185,7 @@ export default function DashboardPage() {
               )}
             </div>
             
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden pt-2">
                 <KanbanBoard tasks={filteredTasks || []} />
             </div>
           </div>
