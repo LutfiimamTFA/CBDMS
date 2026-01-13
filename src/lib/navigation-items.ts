@@ -23,15 +23,6 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: null,
   },
   {
-    id: 'nav_task_board',
-    label: 'nav.board',
-    path: '/dashboard',
-    icon: 'KanbanSquare',
-    order: 1.1,
-    roles: ['Super Admin', 'Manager', 'Employee'],
-    parentId: 'nav_project_group',
-  },
-  {
     id: 'nav_list',
     label: 'All Tasks', 
     path: '/tasks',

@@ -121,7 +121,7 @@ function MainAppLayout({
 
   }, [profile, navItemsFromDB, t]);
 
-  const { childMap } = useMemo(() => {
+  const { itemMap, childMap } = useMemo(() => {
     const itemMap = new Map(finalNavItems.map(item => [item.id, item]));
     const childMap = new Map<string, NavigationItem[]>();
 
@@ -143,7 +143,7 @@ function MainAppLayout({
     else if (pathname.startsWith('/admin')) sections.nav_admin = true;
     else if (pathname.startsWith('/social-media')) sections.nav_social_media_group = true;
     else if (pathname.startsWith('/web')) sections.nav_web_group = true;
-    else if (pathname.startsWith('/tasks')) sections.nav_tasks_group = true;
+    else if (pathname.startsWith('/tasks') || pathname === '/dashboard') sections.nav_project_group = true;
     return sections;
   });
 
@@ -216,7 +216,7 @@ function MainAppLayout({
           <Logo />
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>{renderNavItems(finalNavItems)}</SidebarMenu>
+          <SidebarMenu>{renderNavItems(finalNavItems, null)}</SidebarMenu>
         </SidebarContent>
          <SidebarFooter>
             <SidebarMenu>
