@@ -43,6 +43,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription as AlertDescriptionUI, AlertTitle } from '@/components/ui/alert';
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const Icon = ({
   name,
@@ -61,10 +62,14 @@ const workstreamGroupIds = ['nav_project_group', 'nav_social_media_group', 'nav_
 
 const isItemLocked = (item: NavigationItem) => criticalPaths.includes(item.path);
 
-const isWorkstreamItem = (item: NavigationItem) => {
-    if (workstreamGroupIds.includes(item.id)) return true; // The group itself
-    if (item.parentId && workstreamGroupIds.includes(item.parentId)) return true; // Direct child
-    // Check for nested children if needed
+const isWorkstreamItem = (item: NavigationItem, allItems: NavigationItem[]) => {
+    if (workstreamGroupIds.includes(item.id)) return true;
+    let currentParentId = item.parentId;
+    while(currentParentId) {
+        if (workstreamGroupIds.includes(currentParentId)) return true;
+        const parent = allItems.find(i => i.id === currentParentId);
+        currentParentId = parent ? parent.parentId : null;
+    }
     return false;
 };
 
@@ -105,6 +110,8 @@ export default function NavigationSettingsPage() {
   }, [initialNavItems, navItems]);
 
   const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
+    const item = navItems.find(i => i.id === id);
+    if (!item || !isWorkstreamItem(item, navItems)) return;
     dragItem.current = id;
   };
 
@@ -115,11 +122,20 @@ export default function NavigationSettingsPage() {
   const handleDragEnd = () => {
     if (dragItem.current && dragOverItem.current && dragItem.current !== dragOverItem.current) {
         const itemsCopy = [...navItems];
+        const draggedItem = itemsCopy.find(item => item.id === dragItem.current);
+        const dragOverItemDetails = itemsCopy.find(item => item.id === dragOverItem.current);
+        
+        if (!draggedItem || !dragOverItemDetails || !isWorkstreamItem(draggedItem, itemsCopy) || !isWorkstreamItem(dragOverItemDetails, itemsCopy)) {
+          dragItem.current = null;
+          dragOverItem.current = null;
+          return;
+        }
+
         const draggedItemIndex = itemsCopy.findIndex(item => item.id === dragItem.current);
         const dragOverItemIndex = itemsCopy.findIndex(item => item.id === dragOverItem.current);
 
-        const draggedItemContent = itemsCopy.splice(draggedItemIndex, 1)[0];
-        itemsCopy.splice(dragOverItemIndex, 0, draggedItemContent);
+        const [reorderedItem] = itemsCopy.splice(draggedItemIndex, 1);
+        itemsCopy.splice(dragOverItemIndex, 0, reorderedItem);
         
         const reorderedItems = itemsCopy.map((item, index) => ({ ...item, order: index }));
         setNavItems(reorderedItems);
@@ -167,7 +183,6 @@ export default function NavigationSettingsPage() {
     try {
         const backupTimestamp = new Date().toISOString();
         const backupMetaRef = doc(firestore, 'navigationItemBackups', backupTimestamp);
-        const currentItemsSnap = await getDocs(query(collection(firestore, 'navigationItems')));
         
         const backupBatch = writeBatch(firestore);
         
@@ -176,13 +191,13 @@ export default function NavigationSettingsPage() {
             action: actionName,
         });
 
-        currentItemsSnap.forEach(itemDoc => {
+        initialNavItems.forEach(itemDoc => {
             const itemBackupRef = doc(firestore, `navigationItemBackups/${backupTimestamp}/items`, itemDoc.id);
-            backupBatch.set(itemBackupRef, itemDoc.data());
+            backupBatch.set(itemBackupRef, itemDoc);
         });
 
         await backupBatch.commit();
-        toast({ title: "Backup Created", description: `A backup has been saved to 'navigationItemBackups/${backupTimestamp}'`});
+        toast({ title: "Backup Created", description: `A backup has been saved successfully.`});
 
         await action();
         
@@ -197,22 +212,30 @@ export default function NavigationSettingsPage() {
     }
   };
 
-
   const handleSaveChanges = async () => {
     await backupAndRun(async () => {
         if (!firestore || !hasChanges) return;
         const batch = writeBatch(firestore);
+        const initialMap = new Map(initialNavItems.map(item => [item.id, item]));
+
         navItems.forEach(item => {
-            const docRef = doc(firestore, 'navigationItems', item.id);
-            const { id, ...itemData } = item;
+            const initialItem = initialMap.get(item.id);
+            let itemData: any = { ...item };
             
-            // Failsafe enforcement on save
             if (isItemLocked(item)) {
-                if (!itemData.roles.includes('Super Admin')) itemData.roles.push('Super Admin');
                 itemData.isEnabled = true;
                 itemData.parentId = null;
+                if (!itemData.roles.includes('Super Admin')) itemData.roles.push('Super Admin');
+            } else if (!isWorkstreamItem(item, navItems)) {
+                // Not a critical system item, but also not a workstream item. Lock its structure.
+                if (initialItem) {
+                    itemData.order = initialItem.order;
+                    itemData.parentId = initialItem.parentId;
+                }
             }
 
+            delete itemData.id;
+            const docRef = doc(firestore, 'navigationItems', item.id);
             batch.update(docRef, itemData);
         });
         await batch.commit();
@@ -328,22 +351,22 @@ export default function NavigationSettingsPage() {
           onDragEnter={(e) => handleDragEnter(e, item.id)}
           onDragEnd={handleDragEnd}
           onDrop={() => item.path === '' && handleDropOnFolder(item.id)}
-          draggable={isWorkstreamItem(item)}
+          draggable={isWorkstreamItem(item, navItems)}
           className={cn(
             !item.isEnabled && 'opacity-50',
             dragItem.current === item.id && 'opacity-30',
-            !isWorkstreamItem(item) && 'bg-muted/30'
+            !isWorkstreamItem(item, navItems) && 'bg-muted/30'
           )}
         >
           <TableCell className={cn(isSubItem && "pl-12")}>
             <div className="flex items-center gap-3">
-              <GripVertical className={cn("h-5 w-5 text-muted-foreground", isWorkstreamItem(item) ? 'cursor-grab' : 'cursor-not-allowed text-muted-foreground/30')}/>
+              <GripVertical className={cn("h-5 w-5 text-muted-foreground", isWorkstreamItem(item, navItems) ? 'cursor-grab' : 'cursor-not-allowed text-muted-foreground/30')}/>
               <Icon name={item.icon} className="h-5 w-5" />
               <div className="flex flex-col">
                 <span className="font-medium">{item.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{item.path || "(Folder)"}</span>
               </div>
-               {!isWorkstreamItem(item) && !isItemLocked(item) && (
+               {!isWorkstreamItem(item, navItems) && !isItemLocked(item) && (
                  <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger><Shield className="h-4 w-4 text-blue-500"/></TooltipTrigger>
@@ -381,7 +404,7 @@ export default function NavigationSettingsPage() {
           )}
       </React.Fragment>
     ));
-  }, [navItems, handleDragEnd, isWorkstreamItem]);
+  }, [navItems, handleDragEnd]);
 
 
   return (
