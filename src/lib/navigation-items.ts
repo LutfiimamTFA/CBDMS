@@ -12,10 +12,10 @@ export const defaultNavItems: NavigationItem[] = [
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
   },
-  // --- GROUP 1: TASKS ---
+  // --- GROUP 1: PROJECTS ---
   {
     id: 'nav_tasks_group',
-    label: 'nav.tasks',
+    label: 'Projects', // Changed from 'Tasks'
     path: '',
     icon: 'ClipboardList',
     order: 1,
@@ -33,7 +33,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_list',
-    label: 'nav.list',
+    label: 'All Tasks', // Changed from 'List'
     path: '/tasks',
     icon: 'List',
     order: 1.2,
