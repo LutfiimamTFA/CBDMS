@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { NavigationItem } from '@/lib/types';
 import {
   collection,
@@ -58,24 +58,13 @@ const availableRoles = ['Super Admin', 'Manager', 'PIC', 'Employee', 'Client'] a
 type Role = (typeof availableRoles)[number];
 
 const criticalPaths = ['/admin/settings/navigation', '/admin/settings', '/admin/dashboard', '/admin/users'];
-const workstreamGroupIds = ['nav_project_group', 'nav_social_media_group', 'nav_web_group'];
 
-const isItemLocked = (item: NavigationItem) => criticalPaths.includes(item.path);
-
-const isWorkstreamItem = (item: NavigationItem, allItems: NavigationItem[]) => {
-    if (workstreamGroupIds.includes(item.id)) return true;
-    let currentParentId = item.parentId;
-    while(currentParentId) {
-        if (workstreamGroupIds.includes(currentParentId)) return true;
-        const parent = allItems.find(i => i.id === currentParentId);
-        currentParentId = parent ? parent.parentId : null;
-    }
-    return false;
-};
+const isItemLockedForEditing = (item: NavigationItem) => criticalPaths.includes(item.path);
 
 export default function NavigationSettingsPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const { profile } = useUserProfile();
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -111,7 +100,7 @@ export default function NavigationSettingsPage() {
 
   const handleDragStart = (e: React.DragEvent<HTMLTableRowElement>, id: string) => {
     const item = navItems.find(i => i.id === id);
-    if (!item || !isWorkstreamItem(item, navItems)) return;
+    if (!item) return;
     dragItem.current = id;
   };
 
@@ -125,7 +114,7 @@ export default function NavigationSettingsPage() {
         const draggedItem = itemsCopy.find(item => item.id === dragItem.current);
         const dragOverItemDetails = itemsCopy.find(item => item.id === dragOverItem.current);
         
-        if (!draggedItem || !dragOverItemDetails || !isWorkstreamItem(draggedItem, itemsCopy) || !isWorkstreamItem(dragOverItemDetails, itemsCopy)) {
+        if (!draggedItem || !dragOverItemDetails) {
           dragItem.current = null;
           dragOverItem.current = null;
           return;
@@ -158,7 +147,8 @@ export default function NavigationSettingsPage() {
     setNavItems(currentItems => {
         return currentItems.map(item => {
             if (item.id === itemId) {
-                if (isItemLocked(item) && role === 'Super Admin' && !isChecked) {
+                const isLocked = isItemLockedForEditing(item);
+                if (isLocked && role === 'Super Admin' && !isChecked) {
                     toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from critical settings.'});
                     return item;
                 }
@@ -183,21 +173,23 @@ export default function NavigationSettingsPage() {
     try {
         const backupTimestamp = new Date().toISOString();
         const backupMetaRef = doc(firestore, 'navigationItemBackups', backupTimestamp);
+        const batch = writeBatch(firestore);
         
-        const backupBatch = writeBatch(firestore);
-        
-        backupBatch.set(backupMetaRef, {
+        batch.set(backupMetaRef, {
             createdAt: Timestamp.now(),
             action: actionName,
+            createdBy: profile?.id || 'unknown',
         });
 
-        initialNavItems.forEach(itemDoc => {
+        // Fetch current items for backup
+        const currentItemsSnap = await getDocs(collection(firestore, 'navigationItems'));
+        currentItemsSnap.forEach(itemDoc => {
             const itemBackupRef = doc(firestore, `navigationItemBackups/${backupTimestamp}/items`, itemDoc.id);
-            backupBatch.set(itemBackupRef, itemDoc);
+            batch.set(itemBackupRef, itemDoc.data());
         });
 
-        await backupBatch.commit();
-        toast({ title: "Backup Created", description: `A backup has been saved successfully.`});
+        await batch.commit();
+        toast({ title: "Backup Created", description: `A backup has been saved to 'navigationItemBackups'.`});
 
         await action();
         
@@ -219,18 +211,18 @@ export default function NavigationSettingsPage() {
         const initialMap = new Map(initialNavItems.map(item => [item.id, item]));
 
         navItems.forEach(item => {
-            const initialItem = initialMap.get(item.id);
             let itemData: any = { ...item };
             
-            if (isItemLocked(item)) {
+            // Failsafe: Prevent locked items from being modified structurally.
+            if (isItemLockedForEditing(item)) {
                 itemData.isEnabled = true;
                 itemData.parentId = null;
-                if (!itemData.roles.includes('Super Admin')) itemData.roles.push('Super Admin');
-            } else if (!isWorkstreamItem(item, navItems)) {
-                // Not a critical system item, but also not a workstream item. Lock its structure.
-                if (initialItem) {
-                    itemData.order = initialItem.order;
-                    itemData.parentId = initialItem.parentId;
+                const originalItem = initialMap.get(item.id);
+                if (originalItem) {
+                    itemData.order = originalItem.order; // Revert order change
+                }
+                if (!itemData.roles.includes('Super Admin')) {
+                    itemData.roles.push('Super Admin');
                 }
             }
 
@@ -278,7 +270,7 @@ export default function NavigationSettingsPage() {
   const handleUpdateItem = async (updatedItem: NavigationItem) => {
     if(!editItem) return;
 
-    if (isItemLocked(updatedItem)) {
+    if (isItemLockedForEditing(editItem) && updatedItem.path !== editItem.path) {
         updatedItem.path = editItem.path; // Revert path change if locked
         toast({ variant: "destructive", title: "Cannot Edit Path", description: "The path for this system item is locked." });
     }
@@ -290,7 +282,7 @@ export default function NavigationSettingsPage() {
   const handleToggleEnable = (itemId: string, isEnabled: boolean) => {
     setNavItems(prev => prev.map(item => {
         if (item.id === itemId) {
-            if (isItemLocked(item)) {
+            if (isItemLockedForEditing(item)) {
                 toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot disable a critical system item.'});
                 return item;
             }
@@ -303,16 +295,20 @@ export default function NavigationSettingsPage() {
   const handleResetToDefault = async () => {
     await backupAndRun(async () => {
         if (!firestore) return;
-        const batch = writeBatch(firestore);
-        const existingItemsSnap = await getDocs(collection(firestore, 'navigationItems'));
-        existingItemsSnap.docs.forEach(doc => batch.delete(doc.ref));
         
+        const existingItemsSnap = await getDocs(collection(firestore, 'navigationItems'));
+        
+        const deleteBatch = writeBatch(firestore);
+        existingItemsSnap.docs.forEach(doc => deleteBatch.delete(doc.ref));
+        await deleteBatch.commit();
+        
+        const writeBatch = writeBatch(firestore);
         defaultNavItems.forEach(item => {
             const docRef = doc(firestore, 'navigationItems', item.id);
-            batch.set(docRef, item);
+            writeBatch.set(docRef, item);
         });
 
-        await batch.commit();
+        await writeBatch.commit();
         toast({ title: 'Sidebar Reset', description: 'Navigation has been reset to its default state.' });
     }, 'reset');
   };
@@ -334,12 +330,10 @@ export default function NavigationSettingsPage() {
     setConfirmOpen(true);
   };
 
-
-  const { rootItems, itemMap } = useMemo(() => {
+  const { rootItems } = useMemo(() => {
     const items = [...navItems].sort((a,b) => a.order - b.order);
-    const itemMap = new Map(items.map(item => [item.id, item]));
     const rootItems = items.filter(item => !item.parentId);
-    return { rootItems, itemMap };
+    return { rootItems };
   }, [navItems]);
   
   const renderGroup = useCallback((items: NavigationItem[], isSubItem = false) => {
@@ -351,26 +345,25 @@ export default function NavigationSettingsPage() {
           onDragEnter={(e) => handleDragEnter(e, item.id)}
           onDragEnd={handleDragEnd}
           onDrop={() => item.path === '' && handleDropOnFolder(item.id)}
-          draggable={isWorkstreamItem(item, navItems)}
+          draggable={true} // All items are draggable now
           className={cn(
             !item.isEnabled && 'opacity-50',
             dragItem.current === item.id && 'opacity-30',
-            !isWorkstreamItem(item, navItems) && 'bg-muted/30'
           )}
         >
           <TableCell className={cn(isSubItem && "pl-12")}>
             <div className="flex items-center gap-3">
-              <GripVertical className={cn("h-5 w-5 text-muted-foreground", isWorkstreamItem(item, navItems) ? 'cursor-grab' : 'cursor-not-allowed text-muted-foreground/30')}/>
+              <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab"/>
               <Icon name={item.icon} className="h-5 w-5" />
               <div className="flex flex-col">
                 <span className="font-medium">{item.label}</span>
                 <span className="text-xs text-muted-foreground font-mono">{item.path || "(Folder)"}</span>
               </div>
-               {!isWorkstreamItem(item, navItems) && !isItemLocked(item) && (
+               {isItemLockedForEditing(item) && (
                  <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger><Shield className="h-4 w-4 text-blue-500"/></TooltipTrigger>
-                    <TooltipContent><p>This item's structure is locked to prevent breaking app navigation.</p></TooltipContent>
+                    <TooltipContent><p>This is a critical system item. Its path cannot be changed.</p></TooltipContent>
                   </Tooltip>
                  </TooltipProvider>
                )}
@@ -383,7 +376,7 @@ export default function NavigationSettingsPage() {
                 onCheckedChange={(checked) => {
                   handleRoleChange(item.id, role, !!checked);
                 }}
-                disabled={isItemLocked(item) && role === 'Super Admin'}
+                disabled={isItemLockedForEditing(item) && role === 'Super Admin'}
               />
             </TableCell>
           ))}
@@ -392,8 +385,8 @@ export default function NavigationSettingsPage() {
               <Checkbox 
                 checked={item.isEnabled} 
                 onCheckedChange={(checked) => handleToggleEnable(item.id, !!checked)}
-                className={cn("h-5 w-5 ml-2", isItemLocked(item) && "cursor-not-allowed opacity-50")}
-                disabled={isItemLocked(item)}
+                className={cn("h-5 w-5 ml-2", isItemLockedForEditing(item) && "cursor-not-allowed opacity-50")}
+                disabled={isItemLockedForEditing(item)}
               />
           </TableCell>
         </TableRow>
@@ -414,7 +407,7 @@ export default function NavigationSettingsPage() {
           <div>
             <h2 className="text-2xl font-bold">Sidebar Navigation Editor</h2>
             <p className="text-muted-foreground">
-              Drag & drop workstream items, configure roles, and manage menu visibility.
+              Drag & drop to reorder, configure roles, and manage menu visibility.
             </p>
           </div>
           <div className="flex gap-2">
@@ -434,7 +427,7 @@ export default function NavigationSettingsPage() {
             <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
             <AlertTitle className="text-blue-800 dark:text-blue-300">Editor Scope</AlertTitle>
             <AlertDescriptionUI className="text-blue-700 dark:text-blue-400">
-                To maintain application stability, only items within the 'Project', 'Social Media', and 'Web' workstreams can be reordered or nested. Other items have their structure locked but their visibility can still be managed.
+                You now have full control to reorder and nest all items. Be careful when modifying critical system items like Admin and Settings.
             </AlertDescriptionUI>
         </Alert>
 
@@ -504,7 +497,7 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
         onSave({ ...item, label, path, icon });
     };
     
-    const isLocked = isItemLocked(item);
+    const isLocked = isItemLockedForEditing(item);
 
     return (
         <Dialog open={true} onOpenChange={onClose}>
