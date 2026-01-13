@@ -1,4 +1,5 @@
 
+
 /** @type {import('next').NextConfig} */
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -9,6 +10,9 @@ const nextConfig = {
   },
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  experimental: {
+    allowedDevOrigins: ["*.cloudworkstations.dev"],
   },
   images: {
     remotePatterns: [
