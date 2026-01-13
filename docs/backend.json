@@ -155,6 +155,28 @@
       },
       "required": ["id", "brandId", "title", "status", "assigneeIds", "priority", "companyId"]
     },
+    "WebArticle": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WebArticle",
+      "type": "object",
+      "description": "Represents a web article, which is a specialized type of task.",
+      "properties": {
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string", "description": "The main content of the article in HTML format." },
+        "description": { "type": "string" },
+        "statusInternal": { "type": "string" },
+        "assigneeIds": { "type": "array", "items": { "type": "string" } },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string" },
+        "companyId": { "type": "string" },
+        "lastActivity": { "$ref": "#/backend/entities/Activity" },
+        "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
+        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
+      },
+      "required": ["id", "brandId", "title", "statusInternal", "assigneeIds", "priority", "companyId"]
+    },
     "RevisionItem": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "title": "RevisionItem",
@@ -299,14 +321,16 @@
       "description": "Represents a social media post, which is a specialized type of task.",
       "properties": {
         "id": { "type": "string" },
-        "brandId": { "type": "string" },
         "title": { "type": "string", "description": "Internal title for the post." },
+        "brandId": { "type": "string" },
         "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"] },
         "postType": { "type": "string", "enum": ["Upload", "Branding"], "description": "Category of the social media work."},
         "caption": { "type": "string", "description": "The text content of the post." },
         "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video for the post." },
         "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "Workflow status of the post." },
+        "statusInternal": { "type": "string" },
         "assigneeIds": { "type": "array", "items": { "type": "string" } },
+        "priority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
         "scheduledAt": { "type": "string", "format": "date-time", "description": "The date and time the post is scheduled to be published." },
         "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was published." },
         "createdBy": { "type": "string" },
@@ -314,7 +338,7 @@
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
         "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
       },
-      "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
+      "required": ["id", "title", "platform", "caption", "status", "statusInternal", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
     },
     "SharedLink": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -377,6 +401,7 @@
       { "path": "/users/{userId}/notifications/{notificationId}", "definition": { "entityName": "Notification", "schema": { "$ref": "#/backend/entities/Notification" } } },
       { "path": "/statuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
       { "path": "/socialMediaPosts/{postId}", "definition": { "entityName": "SocialMediaPost", "schema": { "$ref": "#/backend/entities/SocialMediaPost" } } },
+      { "path": "/webArticles/{articleId}", "definition": { "entityName": "WebArticle", "schema": { "$ref": "#/backend/entities/WebArticle" } } },
       { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },
       { "path": "/socialMediaConnections/{connectionId}", "definition": { "entityName": "SocialMediaConnection", "schema": { "$ref": "#/backend/entities/SocialMediaConnection" } } },
       { "path": "/api/instagram/publish", "definition": { "description": "An API endpoint to publish a post to Instagram." } },
@@ -384,3 +409,5 @@
     ]
   }
 }
+
+    

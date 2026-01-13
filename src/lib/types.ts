@@ -263,6 +263,11 @@ export type SocialMediaPost = WorkItem & {
   crop?: { x: number; y: number; zoom: number };
   objectPosition?: number;
   creator: { name: string, avatarUrl?: string };
+  statusInternal: Status;
+};
+
+export type WebArticle = WorkItem & {
+    content: string;
 };
 
 
@@ -326,3 +331,4 @@ export type Notification = {
   };
 };
 
+    

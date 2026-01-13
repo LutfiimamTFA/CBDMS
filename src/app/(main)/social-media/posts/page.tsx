@@ -1,13 +1,14 @@
+
 'use client';
-import { SocialMediaDataTable } from '@/components/social-media/social-media-data-table';
+import { SocialMediaPostsDataTable } from '@/components/social-media/social-media-posts-data-table';
 import { useI18n } from '@/context/i18n-provider';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { SocialMediaPost, User, Brand, WorkflowStatus } from '@/lib/types';
-import { Loader2, Plus, ChevronDown } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { usePermissions } from '@/context/permissions-provider';
-import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
+import { AddSocialMediaPostDialog } from '@/components/social-media/add-post-dialog';
 import { Button } from '@/components/ui/button';
 
 export default function SocialMediaPostsPage() {
@@ -54,12 +55,12 @@ export default function SocialMediaPostsPage() {
           </div>
           <div className="flex items-center gap-2">
             {canCreate && (
-              <CreatePostDialog>
+              <AddSocialMediaPostDialog>
                 <Button size="sm">
                   <Plus className="mr-2 h-4 w-4" />
                   Create Post
                 </Button>
-              </CreatePostDialog>
+              </AddSocialMediaPostDialog>
             )}
           </div>
         </div>
@@ -68,13 +69,16 @@ export default function SocialMediaPostsPage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <SocialMediaDataTable 
+          <SocialMediaPostsDataTable 
             posts={posts || []}
             users={users || []}
             brands={brands || []}
+            statuses={statuses || []}
           />
         )}
       </main>
     </div>
   );
 }
+
+    

@@ -1,13 +1,13 @@
 'use client';
 
-import React from 'react';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 // This page now acts as a simple redirect to the new social media posts list view by default.
 export default function SocialMediaPage() {
   const router = useRouter();
   
-  React.useEffect(() => {
+  useEffect(() => {
     router.replace('/social-media/posts');
   }, [router]);
 
@@ -17,3 +17,5 @@ export default function SocialMediaPage() {
     </div>
   );
 }
+
+    
