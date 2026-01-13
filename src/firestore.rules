@@ -83,6 +83,7 @@ service cloud.firestore {
 
     match /brands/{brandId} {
         allow read: if isSignedIn();
+        allow list: if isSignedIn();
         allow write: if isSuperAdmin() || isRole('Manager');
     }
 
@@ -90,9 +91,20 @@ service cloud.firestore {
         allow read: if isSignedIn();
         allow write: if isSuperAdmin();
     }
+    
+    match /socialMediaStatuses/{statusId} {
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin();
+    }
+    
+    match /webStatuses/{statusId} {
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin();
+    }
 
     match /navigationItems/{navItemId} {
-        allow read: if isSignedIn();
+        allow get: if isSignedIn();
+        allow list: if isSignedIn(); // Allow listing for all authenticated users
         allow write: if isSuperAdmin();
     }
 
@@ -180,3 +192,4 @@ service cloud.firestore {
     }
   }
 }
+
