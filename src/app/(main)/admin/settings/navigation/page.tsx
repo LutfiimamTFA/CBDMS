@@ -24,7 +24,7 @@ import {
   deleteDoc,
   Timestamp,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle, MoreHorizontal, HelpCircle } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle, MoreHorizontal, HelpCircle, Undo2, Redo2 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { Button } from '@/components/ui/button';
@@ -70,7 +70,10 @@ export default function NavigationSettingsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  const [navItems, setNavItems] = useState<NavigationItem[]>([]);
+  const [history, setHistory] = useState<NavigationItem[][]>([[]]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(0);
+  const navItems = history[currentHistoryIndex] || [];
+  
   const [initialNavItems, setInitialNavItems] = useState<NavigationItem[]>([]);
 
   const [isConfirmOpen, setConfirmOpen] = useState(false);
@@ -87,38 +90,83 @@ export default function NavigationSettingsPage() {
   );
   const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
 
+  const updateHistory = (newNavItems: NavigationItem[]) => {
+    const newHistory = history.slice(0, currentHistoryIndex + 1);
+    setHistory([...newHistory, newNavItems]);
+    setCurrentHistoryIndex(newHistory.length);
+  };
+  
+  const handleUndo = useCallback(() => {
+    if (currentHistoryIndex > 0) {
+      setCurrentHistoryIndex(currentHistoryIndex - 1);
+    }
+  }, [currentHistoryIndex]);
+
+  const handleRedo = useCallback(() => {
+    if (currentHistoryIndex < history.length - 1) {
+      setCurrentHistoryIndex(currentHistoryIndex + 1);
+    }
+  }, [currentHistoryIndex, history.length]);
+
   useEffect(() => {
     if (navItemsFromDB) {
       const sorted = [...navItemsFromDB].sort((a,b) => a.order - b.order);
-      setNavItems(sorted);
+      setHistory([sorted]);
+      setCurrentHistoryIndex(0);
       setInitialNavItems(JSON.parse(JSON.stringify(sorted)));
       setIsLoading(false);
     }
   }, [navItemsFromDB]);
+  
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isUndo = (isMac ? event.metaKey : event.ctrlKey) && event.key === 'z';
+      const isRedo = (isMac ? event.metaKey && event.shiftKey : event.ctrlKey) && event.key === 'y';
+
+      if (isUndo) {
+        event.preventDefault();
+        handleUndo();
+      }
+      if (isRedo) {
+        event.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleUndo, handleRedo]);
+
 
   const hasChanges = useMemo(() => {
     return JSON.stringify(initialNavItems) !== JSON.stringify(navItems);
   }, [initialNavItems, navItems]);
+  
+  const canUndo = currentHistoryIndex > 0;
+  const canRedo = currentHistoryIndex < history.length - 1;
+
 
   const handleRoleChange = (itemId: string, role: Role, isChecked: boolean) => {
-    setNavItems(currentItems => {
-        return currentItems.map(item => {
-            if (item.id === itemId) {
-                if (isItemCritical(item) && role === 'Super Admin' && !isChecked) {
-                    toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from this critical page.'});
-                    return item;
-                }
-                let updatedRoles: Role[] = item.roles as Role[];
-                if (isChecked) {
-                    updatedRoles = [...updatedRoles, role];
-                } else {
-                    updatedRoles = updatedRoles.filter((r) => r !== role);
-                }
-                return { ...item, roles: [...new Set(updatedRoles)] as Role[] };
+    const newNavItems = navItems.map(item => {
+        if (item.id === itemId) {
+            if (isItemCritical(item) && role === 'Super Admin' && !isChecked) {
+                toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot remove Super Admin access from this critical page.'});
+                return item;
             }
-            return item;
-        });
+            let updatedRoles: Role[] = item.roles as Role[];
+            if (isChecked) {
+                updatedRoles = [...updatedRoles, role];
+            } else {
+                updatedRoles = updatedRoles.filter((r) => r !== role);
+            }
+            return { ...item, roles: [...new Set(updatedRoles)] as Role[] };
+        }
+        return item;
     });
+    updateHistory(newNavItems);
   };
   
   const handleDragEnd = () => {
@@ -128,21 +176,19 @@ export default function NavigationSettingsPage() {
       return;
     }
     
-    // Perform local reordering without saving to DB
-    setNavItems(prevItems => {
-        const itemsClone = [...prevItems];
-        const draggedItemData = itemsClone.find(item => item.id === draggedItem.current!);
-        if (!draggedItemData) return prevItems;
+    let itemsClone = [...navItems];
+    const draggedItemData = itemsClone.find(item => item.id === draggedItem.current!);
+    if (!draggedItemData) return;
 
-        const dragIndex = itemsClone.findIndex(item => item.id === draggedItem.current!);
-        itemsClone.splice(dragIndex, 1);
+    const dragIndex = itemsClone.findIndex(item => item.id === draggedItem.current!);
+    itemsClone.splice(dragIndex, 1);
 
-        const dropIndex = itemsClone.findIndex(item => item.id === dragOverItem.current!);
-        itemsClone.splice(dropIndex, 0, draggedItemData);
-        
-        const reorderedItems = itemsClone.map((item, index) => ({ ...item, order: index }));
-        return reorderedItems;
-    });
+    const dropIndex = itemsClone.findIndex(item => item.id === dragOverItem.current!);
+    itemsClone.splice(dropIndex, 0, draggedItemData);
+    
+    const reorderedItems = itemsClone.map((item, index) => ({ ...item, order: index }));
+    
+    updateHistory(reorderedItems);
     
     draggedItem.current = null;
     dragOverItem.current = null;
@@ -193,13 +239,15 @@ export default function NavigationSettingsPage() {
         
         const batch = writeBatch(firestore);
         
-        // Find deleted items by comparing initial and current states
         const currentIds = new Set(navItems.map(item => item.id));
-        const deletedItems = initialNavItems.filter(item => !currentIds.has(item.id));
-        
-        deletedItems.forEach(item => {
-            const docRef = doc(firestore, 'navigationItems', item.id);
-            batch.delete(docRef);
+        const initialIds = new Set(initialNavItems.map(item => item.id));
+
+        // Delete items that are in initial but not in current
+        initialNavItems.forEach(item => {
+            if (!currentIds.has(item.id)) {
+                const docRef = doc(firestore, 'navigationItems', item.id);
+                batch.delete(docRef);
+            }
         });
 
         navItems.forEach(item => {
@@ -207,13 +255,16 @@ export default function NavigationSettingsPage() {
             if (isItemCritical(item) && !item.roles.includes('Super Admin')) {
               item.roles.push('Super Admin');
             }
-            // Use set with merge:true to handle both new and updated items
             batch.set(docRef, item, { merge: true });
         });
         
         await batch.commit();
+        
+        const newInitialState = JSON.parse(JSON.stringify(navItems));
+        setInitialNavItems(newInitialState);
+        setHistory([newInitialState]);
+        setCurrentHistoryIndex(0);
 
-        setInitialNavItems(JSON.parse(JSON.stringify(navItems)));
         toast({
             title: 'Configuration Saved',
             description: 'All sidebar changes have been saved to Firestore.',
@@ -224,7 +275,7 @@ export default function NavigationSettingsPage() {
   const handleAddItem = async (isFolder: boolean) => {
     if (!firestore) return;
 
-    const newItemId = doc(collection(firestore, 'newId')).id; // Generate a client-side ID
+    const newItemId = doc(collection(firestore, 'newId')).id;
     const newItemData: NavigationItem = {
       id: newItemId,
       label: isFolder ? 'New Folder' : 'New Item',
@@ -236,14 +287,13 @@ export default function NavigationSettingsPage() {
       isEnabled: true,
     };
     
-    const updatedNavItems = [...navItems, newItemData];
-    setNavItems(updatedNavItems);
-    setEditItem(newItemData); // Immediately open edit dialog
+    updateHistory([...navItems, newItemData]);
+    setEditItem(newItemData);
     toast({ title: 'Item Added', description: 'New item created locally. Save changes to persist.'});
   };
   
   const handleUpdateItem = async (updatedItem: NavigationItem) => {
-    setNavItems(prev => prev.map(item => item.id === editItem?.id ? updatedItem : item));
+    updateHistory(navItems.map(item => item.id === editItem?.id ? updatedItem : item));
     setEditItem(null);
   };
 
@@ -255,14 +305,13 @@ export default function NavigationSettingsPage() {
       return;
     }
     
-    // Local deletion, will be persisted on "Save Changes"
-    setNavItems(prev => prev.filter(item => item.id !== deleteItem.id));
+    updateHistory(navItems.filter(item => item.id !== deleteItem.id));
     toast({ title: 'Item Marked for Deletion', description: `"${deleteItem.label}" will be removed upon saving.`});
     setDeleteItem(null);
   };
   
   const handleToggleEnable = (itemId: string, isEnabled: boolean) => {
-    setNavItems(prev => prev.map(item => {
+    const newItems = navItems.map(item => {
         if (item.id === itemId) {
             if (isItemCritical(item) && !isEnabled) {
                 toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot disable this critical system page.'});
@@ -271,7 +320,8 @@ export default function NavigationSettingsPage() {
             return { ...item, isEnabled }
         }
         return item;
-    }));
+    });
+    updateHistory(newItems);
   };
 
   const handleResetToDefault = async () => {
@@ -291,8 +341,12 @@ export default function NavigationSettingsPage() {
         });
 
         await writeBatch.commit();
-        setNavItems(defaultNavItems);
-        setInitialNavItems(JSON.parse(JSON.stringify(defaultNavItems)));
+
+        const sortedDefaults = defaultNavItems.sort((a, b) => a.order - b.order);
+        setHistory([sortedDefaults]);
+        setCurrentHistoryIndex(0);
+        setInitialNavItems(JSON.parse(JSON.stringify(sortedDefaults)));
+
         toast({ title: 'Sidebar Reset', description: 'Navigation has been reset to its default state.' });
     }, 'reset');
   };
@@ -396,7 +450,7 @@ export default function NavigationSettingsPage() {
           )}
       </React.Fragment>
     ));
-  }, [navItems, draggedItem, dragOverItem]);
+  }, [navItems, draggedItem, dragOverItem, handleDragEnd, handleRoleChange, handleToggleEnable]);
 
 
   return (
@@ -412,6 +466,22 @@ export default function NavigationSettingsPage() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handleAddItem(true)}><FolderPlus className="mr-2 h-4 w-4"/> Add Folder</Button>
             <Button variant="outline" onClick={() => handleAddItem(false)}><Plus className="mr-2 h-4 w-4"/> Add Item</Button>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={handleUndo} disabled={!canUndo}><Undo2 className="h-4 w-4"/></Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Undo (Ctrl+Z)</p></TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+             <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="outline" size="icon" onClick={handleRedo} disabled={!canRedo}><Redo2 className="h-4 w-4"/></Button>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Redo (Ctrl+Y)</p></TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
             <Button variant="destructive" onClick={() => openConfirmDialog('reset')} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
                 Reset to Default
@@ -491,8 +561,8 @@ export default function NavigationSettingsPage() {
                 <AlertDialogHeader>
                     <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                     <AlertDialogDescription>
-                        This will permanently delete the menu item <strong className='text-foreground'>"{deleteItem.label}"</strong>. 
-                        This action cannot be undone.
+                        This will permanently delete the menu item <strong className='text-foreground'>"{deleteItem.label}"</strong> and any sub-items within it. 
+                        This action will be saved upon clicking "Save Changes".
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
