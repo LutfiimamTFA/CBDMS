@@ -1,4 +1,3 @@
-
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -211,6 +210,7 @@ export type WorkItem = {
   brandId: string;
   description?: string;
   status: Status;
+  statusInternal: Status;
   priority: Priority;
   assignees?: User[];
   assigneeIds: string[];
@@ -229,6 +229,8 @@ export type WorkItem = {
   };
   companyId: string;
   updatedAt?: any;
+  revisionItems?: RevisionItem[];
+  revisionHistory?: RevisionCycle[];
   [key: string]: any; // Allow other properties
 }
 
@@ -243,8 +245,6 @@ export type Task = WorkItem & {
   waitingOnTaskIds?: string[];
   blockingTaskIds?: string[];
   linkedTaskIds?: string[];
-  revisionItems?: RevisionItem[];
-  revisionHistory?: RevisionCycle[];
   attachments?: Attachment[];
   deliverables?: Attachment[]; 
   recurring?: string;
@@ -263,7 +263,6 @@ export type SocialMediaPost = WorkItem & {
   crop?: { x: number; y: number; zoom: number };
   objectPosition?: number;
   creator: { name: string, avatarUrl?: string };
-  statusInternal: Status;
 };
 
 export type WebArticle = WorkItem & {
