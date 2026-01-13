@@ -301,7 +301,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_workflow_folder',
-    label: 'Workflows',
+    label: 'nav.workflow',
     path: '/admin/settings/workflow',
     icon: 'Workflow',
     order: 25,
