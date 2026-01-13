@@ -2,26 +2,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { SmartSuggestions } from '@/components/smart-suggestions/page';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Task, User } from '@/lib/types';
-import { Filter, Loader2, X, Archive, HelpCircle } from 'lucide-react';
+import { Filter, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/context/i18n-provider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import Link from 'next/link';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 
 export default function DashboardPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
@@ -124,34 +115,6 @@ export default function DashboardPage() {
                   {t('dashboard.role').replace('{role}', profile?.role || 'Guest')}
                 </p>
               </div>
-
-               <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="item-1" className="border-b-0">
-                  <AccordionTrigger className="p-3 bg-secondary/50 rounded-md hover:no-underline">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                      <HelpCircle className="h-4 w-4"/>
-                      Panduan Papan Kanban
-                      </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-2">
-                     <Alert>
-                        <Archive className="h-4 w-4" />
-                        <AlertTitle>Papan Kanban Terfilter Otomatis</AlertTitle>
-                        <AlertDescription>
-                           Untuk menjaga fokus, papan ini hanya menampilkan tugas yang relevan:
-                          <ul className="list-disc pl-5 mt-2 text-xs">
-                              <li><b>Baru Selesai:</b> Menampilkan tugas di kolom 'Done' yang selesai dalam <strong>7 hari terakhir</strong>.</li>
-                              <li><b>Akan Datang:</b> Menampilkan tugas di 'To Do' dengan tenggat waktu dalam <strong>30 hari ke depan</strong>.</li>
-                              <li><b>Aktif:</b> Semua tugas yang sedang berjalan akan selalu terlihat.</li>
-                          </ul>
-                           <p className="mt-2 text-xs">
-                            Untuk melihat <strong>semua tugas</strong> (termasuk arsip lama), silakan kunjungi halaman <Button variant="link" asChild className="p-0 h-auto text-xs"><Link href="/tasks">Daftar Tugas</Link></Button>.
-                          </p>
-                        </AlertDescription>
-                      </Alert>
-                  </AccordionContent>
-                  </AccordionItem>
-              </Accordion>
 
               {isManagerOrAdmin && (
                 <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">

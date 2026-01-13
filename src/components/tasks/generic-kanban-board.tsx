@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
@@ -5,7 +6,7 @@ import type { WorkItem, WorkflowStatus, User, RevisionItem, RevisionCycle, Notif
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, writeBatch, where, deleteField, serverTimestamp } from 'firebase/firestore';
-import { Loader2, Plus, XCircle } from 'lucide-react';
+import { Loader2, Plus, XCircle, HelpCircle, Archive } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from './kanban-column';
 import { useRouter } from 'next/navigation';
@@ -14,6 +15,9 @@ import { TaskCard } from './task-card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import Link from 'next/link';
 
 const createActivity = (user: User, action: string) => {
   return {
@@ -61,8 +65,6 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
     } else if (profile.role === 'Employee' || profile.role === 'PIC') {
         q = query(q, where('assigneeIds', 'array-contains', profile.id));
     } else if (profile.role !== 'Super Admin') {
-        // Fallback for other roles like Client to not see anything if not explicitly assigned
-        // Super Admin sees all by default (no companyId filter here, assuming it's done elsewhere or not needed)
         q = query(q, where('__name__', '==', 'no-items-for-this-role'));
     }
     
@@ -163,64 +165,91 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
   };
 
   const handleCardClick = (itemId: string) => {
-    // This needs to be dynamic based on itemType
     const basePath = itemType === 'tasks' ? '/tasks' : itemType === 'socialMediaPosts' ? '/social-media/posts' : '/web/articles';
     router.push(`${basePath}/${itemId}`);
   };
 
-  if (areStatusesLoading || areItemsLoading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  const isLoading = areStatusesLoading || areItemsLoading;
 
   return (
     <>
-      {/* Desktop View */}
-      <div className="hidden md:flex h-full w-full pt-4">
-        <ScrollArea className="w-full">
-          <div className="flex h-full gap-4 pb-4">
-            {statuses?.map((status) => (
-              <KanbanColumn
-                key={status.id}
-                status={status}
-                tasks={(items || []).filter((item) => (item.statusInternal || item.status) === status.name)}
-                onDrop={handleDrop}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onCardClick={handleCardClick}
-                canDrag={true}
-                draggingTaskId={draggingItemId}
-              />
-            ))}
+      <main className="flex-1 overflow-hidden p-4 md:p-6 h-full flex flex-col">
+        <Accordion type="single" collapsible className="w-full mb-4">
+          <AccordionItem value="item-1" className="border-b-0">
+            <AccordionTrigger className="p-3 bg-secondary/50 rounded-md hover:no-underline">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <HelpCircle className="h-4 w-4" />
+                Panduan Papan Kanban
+              </div>
+            </AccordionTrigger>
+            <AccordionContent className="pt-2">
+              <Alert>
+                <Archive className="h-4 w-4" />
+                <AlertTitle>Fungsi Papan Kanban</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc pl-5 mt-2 text-xs space-y-1">
+                    <li>Gunakan papan ini untuk memantau progres pekerjaan secara visual.</li>
+                    <li>Seret kartu dari satu kolom ke kolom lain untuk mengubah statusnya.</li>
+                    <li>Klik pada kartu untuk melihat detail lengkap, berkolaborasi di komentar, dan mengelola file.</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+        
+        {isLoading ? (
+          <div className="flex h-full items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
           </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-      </div>
-
-      {/* Mobile View */}
-      <div className="md:hidden flex flex-col h-full pt-4">
-        <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
-          <TabsList className="grid w-full grid-cols-3">
-            {statuses?.map((status) => (
-              <TabsTrigger key={status.id} value={status.name}>{status.name}</TabsTrigger>
-            ))}
-          </TabsList>
-          {statuses?.map((status) => (
-            <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
-              <ScrollArea className="h-full">
-                <div className="flex flex-col gap-3 p-1">
-                  {(items || []).filter((task) => (task.statusInternal || task.status) === status.name).map(task => (
-                    <TaskCard key={task.id} task={task} />
+        ) : (
+          <>
+            {/* Desktop View */}
+            <div className="hidden md:flex h-full w-full">
+              <ScrollArea className="w-full">
+                <div className="flex h-full gap-4 pb-4">
+                  {statuses?.map((status) => (
+                    <KanbanColumn
+                      key={status.id}
+                      status={status}
+                      tasks={(items || []).filter((item) => (item.statusInternal || item.status) === status.name)}
+                      onDrop={handleDrop}
+                      onDragStart={handleDragStart}
+                      onDragEnd={handleDragEnd}
+                      onCardClick={handleCardClick}
+                      canDrag={true}
+                      draggingTaskId={draggingItemId}
+                    />
                   ))}
                 </div>
+                <ScrollBar orientation="horizontal" />
               </ScrollArea>
-            </TabsContent>
-          ))}
-        </Tabs>
-      </div>
+            </div>
+
+            {/* Mobile View */}
+            <div className="md:hidden flex flex-col h-full">
+              <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
+                <TabsList className="grid w-full grid-cols-3">
+                  {statuses?.map((status) => (
+                    <TabsTrigger key={status.id} value={status.name}>{status.name}</TabsTrigger>
+                  ))}
+                </TabsList>
+                {statuses?.map((status) => (
+                  <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
+                    <ScrollArea className="h-full">
+                      <div className="flex flex-col gap-3 p-1">
+                        {(items || []).filter((task) => (task.statusInternal || task.status) === status.name).map(task => (
+                          <TaskCard key={task.id} task={task} />
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </div>
+          </>
+        )}
+      </main>
       
       <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>
         <DialogContent>
