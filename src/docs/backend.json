@@ -168,6 +168,7 @@
         "content": { "type": "string", "description": "The main content of the article in HTML format." },
         "description": { "type": "string" },
         "statusInternal": { "type": "string" },
+        "status": { "type": "string" },
         "assigneeIds": { "type": "array", "items": { "type": "string" } },
         "dueDate": { "type": "string", "format": "date-time" },
         "priority": { "type": "string" },
@@ -176,7 +177,7 @@
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
         "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
       },
-      "required": ["id", "brandId", "title", "statusInternal", "assigneeIds", "priority", "companyId"]
+      "required": ["id", "brandId", "title", "status", "assigneeIds", "priority", "companyId"]
     },
     "RevisionItem": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -328,7 +329,7 @@
         "postType": { "type": "string", "enum": ["Upload", "Branding"], "description": "Category of the social media work."},
         "caption": { "type": "string", "description": "The text content of the post." },
         "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video for the post." },
-        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "Workflow status of the post." },
+        "status": { "type": "string" },
         "statusInternal": { "type": "string" },
         "assigneeIds": { "type": "array", "items": { "type": "string" } },
         "priority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
@@ -339,7 +340,7 @@
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
         "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
       },
-      "required": ["id", "title", "platform", "caption", "status", "statusInternal", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
+      "required": ["id", "title", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
     },
     "SharedLink": {
       "$schema": "http://json-schema.org/draft-07/schema#",

@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem, Attachment, RevisionCycle } from '@/lib/types';
+import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem, RevisionCycle } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
@@ -472,48 +472,46 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
      <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Final Review</DialogTitle>
+                <DialogTitle>Final Review & Complete Task</DialogTitle>
                 <DialogDescription>
                     You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                <div className="py-4 space-y-6">
-                    <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
-                    <Separator />
-                    <div className="space-y-3">
-                        <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
-                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                            {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
-                                 finalReviewState.task.subtasks.map(subtask => ( 
-                                    <div key={subtask.id} className="flex items-center gap-3">
-                                        <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
-                                        <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                    </div> 
-                                )) 
-                            ) : ( 
-                                <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
-                            )}
-                        </div>
-                    </div>
-                     <div className="space-y-3">
-                        <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
-                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                            {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
-                                 finalReviewState.task.attachments.map(att => ( 
-                                    <div key={att.id} className="flex items-center gap-2 text-sm">
-                                        <span>-</span>
-                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
-                                    </div>
-                                )) 
-                            ) : ( 
-                                <p className="text-sm text-muted-foreground">No attachments for this item.</p> 
-                            )}
-                        </div>
+              <div className="py-4 space-y-6 px-6">
+                <div className="space-y-3">
+                    <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                        {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
+                             finalReviewState.task.subtasks.map(subtask => ( 
+                                <div key={subtask.id} className="flex items-center gap-3">
+                                    <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                </div> 
+                            )) 
+                        ) : ( 
+                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
+                        )}
                     </div>
                 </div>
+                 <div className="space-y-3">
+                    <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                        {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
+                             finalReviewState.task.attachments.map(att => ( 
+                                <div key={att.id} className="flex items-center gap-2 text-sm">
+                                    <span>-</span>
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
+                                </div>
+                            )) 
+                        ) : ( 
+                            <p className="text-sm text-muted-foreground">No attachments for this item.</p> 
+                        )}
+                    </div>
+                </div>
+              </div>
             </ScrollArea>
-            <DialogFooter>
+            <DialogFooter className="p-6 pt-0">
                 <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
                 <Button variant="default" onClick={handleConfirmFinalReview}>
                     <Check className="mr-2 h-4 w-4" />

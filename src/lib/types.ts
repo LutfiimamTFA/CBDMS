@@ -212,7 +212,7 @@ export type WorkItem = {
   description?: string;
   status: Status;
   priority: Priority;
-  assignees: User[];
+  assignees?: User[];
   assigneeIds: string[];
   dueDate?: string;
   timeEstimate?: number; 
@@ -233,7 +233,7 @@ export type WorkItem = {
 }
 
 export type Task = WorkItem & {
-  category: 'General' | 'Social Media' | 'Branding';
+  category?: 'General' | 'Social Media' | 'Branding';
   startDate?: string;
   actualStartDate?: string;
   actualCompletionDate?: string;
@@ -330,4 +330,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
