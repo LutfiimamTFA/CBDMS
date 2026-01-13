@@ -213,14 +213,11 @@ export default function NavigationSettingsPage() {
         navItems.forEach(item => {
             let itemData: any = { ...item };
             
-            // Failsafe: Prevent locked items from being modified structurally.
-            if (isItemLockedForEditing(item)) {
+            const originalItem = initialMap.get(item.id);
+            if (isItemLockedForEditing(item) && originalItem) {
                 itemData.isEnabled = true;
-                itemData.parentId = null;
-                const originalItem = initialMap.get(item.id);
-                if (originalItem) {
-                    itemData.order = originalItem.order; // Revert order change
-                }
+                itemData.parentId = originalItem.parentId;
+                itemData.order = originalItem.order;
                 if (!itemData.roles.includes('Super Admin')) {
                     itemData.roles.push('Super Admin');
                 }
@@ -345,7 +342,7 @@ export default function NavigationSettingsPage() {
           onDragEnter={(e) => handleDragEnter(e, item.id)}
           onDragEnd={handleDragEnd}
           onDrop={() => item.path === '' && handleDropOnFolder(item.id)}
-          draggable={true} // All items are draggable now
+          draggable={true}
           className={cn(
             !item.isEnabled && 'opacity-50',
             dragItem.current === item.id && 'opacity-30',
