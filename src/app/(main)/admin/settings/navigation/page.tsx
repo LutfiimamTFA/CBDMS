@@ -121,46 +121,31 @@ export default function NavigationSettingsPage() {
     });
   };
   
-  const handleDragEnd = async () => {
+  const handleDragEnd = () => {
     if (draggedItem.current === null || dragOverItem.current === null || draggedItem.current === dragOverItem.current) {
-        draggedItem.current = null;
-        dragOverItem.current = null;
-        return;
+      draggedItem.current = null;
+      dragOverItem.current = null;
+      return;
     }
-
-    const itemsClone = [...navItems];
-    const draggedItemData = itemsClone.find(item => item.id === draggedItem.current!);
-    if (!draggedItemData) return;
-
-    const dragIndex = itemsClone.findIndex(item => item.id === draggedItem.current!);
-    itemsClone.splice(dragIndex, 1);
-
-    const dropIndex = itemsClone.findIndex(item => item.id === dragOverItem.current!);
-    itemsClone.splice(dropIndex, 0, draggedItemData);
     
-    const reorderedItems = itemsClone.map((item, index) => ({ ...item, order: index }));
-    setNavItems(reorderedItems);
+    // Perform local reordering without saving to DB
+    setNavItems(prevItems => {
+        const itemsClone = [...prevItems];
+        const draggedItemData = itemsClone.find(item => item.id === draggedItem.current!);
+        if (!draggedItemData) return prevItems;
+
+        const dragIndex = itemsClone.findIndex(item => item.id === draggedItem.current!);
+        itemsClone.splice(dragIndex, 1);
+
+        const dropIndex = itemsClone.findIndex(item => item.id === dragOverItem.current!);
+        itemsClone.splice(dropIndex, 0, draggedItemData);
+        
+        const reorderedItems = itemsClone.map((item, index) => ({ ...item, order: index }));
+        return reorderedItems;
+    });
     
     draggedItem.current = null;
     dragOverItem.current = null;
-
-    if (!firestore) return;
-
-    const batch = writeBatch(firestore);
-    reorderedItems.forEach(item => {
-        const docRef = doc(firestore, 'navigationItems', item.id);
-        batch.update(docRef, { order: item.order });
-    });
-    
-    try {
-        await batch.commit();
-        setInitialNavItems(reorderedItems); // Update baseline after successful save
-        toast({ title: 'Order Saved', description: 'Sidebar order has been updated.' });
-    } catch (error) {
-        console.error('Failed to save order:', error);
-        setNavItems(initialNavItems); // Revert to original order on error
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not save the new order.' });
-    }
   };
 
 
@@ -205,16 +190,25 @@ export default function NavigationSettingsPage() {
   const handleSaveChanges = async () => {
     await backupAndRun(async () => {
         if (!firestore || !hasChanges) return;
+        
         const batch = writeBatch(firestore);
         
+        // Find deleted items by comparing initial and current states
+        const currentIds = new Set(navItems.map(item => item.id));
+        const deletedItems = initialNavItems.filter(item => !currentIds.has(item.id));
+        
+        deletedItems.forEach(item => {
+            const docRef = doc(firestore, 'navigationItems', item.id);
+            batch.delete(docRef);
+        });
+
         navItems.forEach(item => {
             const docRef = doc(firestore, 'navigationItems', item.id);
             if (isItemCritical(item) && !item.roles.includes('Super Admin')) {
               item.roles.push('Super Admin');
             }
-            // Create a plain object from the item to avoid issues with extra properties
-            const { id, ...dataToSave } = item;
-            batch.update(docRef, dataToSave);
+            // Use set with merge:true to handle both new and updated items
+            batch.set(docRef, item, { merge: true });
         });
         
         await batch.commit();
@@ -230,7 +224,9 @@ export default function NavigationSettingsPage() {
   const handleAddItem = async (isFolder: boolean) => {
     if (!firestore) return;
 
-    const newItemData: Omit<NavigationItem, 'id'> = {
+    const newItemId = doc(collection(firestore, 'newId')).id; // Generate a client-side ID
+    const newItemData: NavigationItem = {
+      id: newItemId,
       label: isFolder ? 'New Folder' : 'New Item',
       path: isFolder ? '' : '/new-path',
       icon: isFolder ? 'Folder' : 'File',
@@ -240,19 +236,10 @@ export default function NavigationSettingsPage() {
       isEnabled: true,
     };
     
-    try {
-        const newItemRef = doc(collection(firestore, 'navigationItems'));
-        const newItemWithId: NavigationItem = { ...newItemData, id: newItemRef.id };
-        await setDoc(newItemRef, newItemWithId);
-        
-        const updatedNavItems = [...navItems, newItemWithId];
-        setNavItems(updatedNavItems);
-        setInitialNavItems(JSON.parse(JSON.stringify(updatedNavItems)));
-        setEditItem(newItemWithId);
-        toast({ title: 'Item Added', description: 'New item created. Edit its details now.'});
-    } catch (e: any) {
-        toast({ variant: 'destructive', title: 'Failed to add item', description: e.message });
-    }
+    const updatedNavItems = [...navItems, newItemData];
+    setNavItems(updatedNavItems);
+    setEditItem(newItemData); // Immediately open edit dialog
+    toast({ title: 'Item Added', description: 'New item created locally. Save changes to persist.'});
   };
   
   const handleUpdateItem = async (updatedItem: NavigationItem) => {
@@ -261,27 +248,17 @@ export default function NavigationSettingsPage() {
   };
 
   const handleDeleteItem = async () => {
-    if (!firestore || !deleteItem) return;
+    if (!deleteItem) return;
     if (isItemCritical(deleteItem)) {
       toast({ variant: 'destructive', title: 'Action Denied', description: 'Cannot delete this critical system page.'});
       setDeleteItem(null);
       return;
     }
     
-    setIsSaving(true);
-    try {
-        const docRef = doc(firestore, 'navigationItems', deleteItem.id);
-        await deleteDoc(docRef);
-        const updatedItems = navItems.filter(item => item.id !== deleteItem.id);
-        setNavItems(updatedItems);
-        setInitialNavItems(JSON.parse(JSON.stringify(updatedItems)));
-        toast({ title: 'Item Deleted', description: `"${deleteItem.label}" has been removed.`});
-    } catch (e: any) {
-        toast({ variant: 'destructive', title: 'Failed to delete item', description: e.message });
-    } finally {
-        setIsSaving(false);
-        setDeleteItem(null);
-    }
+    // Local deletion, will be persisted on "Save Changes"
+    setNavItems(prev => prev.filter(item => item.id !== deleteItem.id));
+    toast({ title: 'Item Marked for Deletion', description: `"${deleteItem.label}" will be removed upon saving.`});
+    setDeleteItem(null);
   };
   
   const handleToggleEnable = (itemId: string, isEnabled: boolean) => {
@@ -324,7 +301,7 @@ export default function NavigationSettingsPage() {
     if (type === 'save') {
         setConfirmDialog({
             title: 'Confirm Changes',
-            description: 'This will save the new sidebar structure to Firestore. A backup will be created first.',
+            description: 'This will save all pending navigation changes (order, edits, deletions, additions) to the database. A backup will be created first.',
             onConfirm: handleSaveChanges
         });
     } else {
@@ -520,8 +497,7 @@ export default function NavigationSettingsPage() {
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteItem} className="bg-destructive hover:bg-destructive/90" disabled={isSaving}>
-                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                    <AlertDialogAction onClick={handleDeleteItem} className="bg-destructive hover:bg-destructive/90">
                         Yes, delete item
                     </AlertDialogAction>
                 </AlertDialogFooter>
@@ -594,4 +570,3 @@ function EditItemDialog({ item, onClose, onSave, allItems }: { item: NavigationI
     );
 }
 
-    
