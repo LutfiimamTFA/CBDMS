@@ -85,6 +85,7 @@ export type WorkflowStatus = {
   order: number;
   color: string; // e.g., '#3b82f6'
   companyId: string;
+  workstream?: 'tasks' | 'social' | 'web';
 };
 
 export type Brand = {
@@ -331,4 +332,3 @@ export type Notification = {
   };
 };
 
-    
