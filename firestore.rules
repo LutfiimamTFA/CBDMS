@@ -88,7 +88,7 @@ service cloud.firestore {
     }
 
     match /statuses/{statusId} {
-        allow get: if isSignedIn();
+        allow read: if isSignedIn();
         allow write: if isSuperAdmin();
     }
 
@@ -182,5 +182,4 @@ service cloud.firestore {
     }
   }
 }
-
     
