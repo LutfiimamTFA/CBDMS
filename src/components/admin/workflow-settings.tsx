@@ -203,12 +203,12 @@ export function WorkflowSettings({ collectionName, workstreamTitle }: WorkflowSe
   }
 
   return (
-    <>
+    <div className="flex h-svh flex-col bg-background p-4 md:p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
             <h2 className="text-2xl font-bold tracking-tight">Manage {workstreamTitle} Workflow</h2>
             <p className="text-muted-foreground">
-                Customize the columns on your {workstreamTitle.toLowerCase()} Kanban board. Drag and drop to reorder.
+                Customize the columns for the {workstreamTitle.toLowerCase()} Kanban board. Drag and drop to reorder.
             </p>
         </div>
         <div className='flex gap-2'>
@@ -221,7 +221,7 @@ export function WorkflowSettings({ collectionName, workstreamTitle }: WorkflowSe
                     <DialogHeader>
                         <DialogTitle>Create New {workstreamTitle} Status</DialogTitle>
                         <DialogDescription>
-                        This will add a new column to your team's Kanban board.
+                        This will add a new column to the Kanban board.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -324,6 +324,6 @@ export function WorkflowSettings({ collectionName, workstreamTitle }: WorkflowSe
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 }
