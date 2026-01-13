@@ -11,6 +11,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 0,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
+    isEnabled: true,
   },
   // --- GROUP 1: PROJECTS ---
   {
@@ -21,6 +22,17 @@ export const defaultNavItems: NavigationItem[] = [
     order: 1,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
+    isEnabled: true,
+  },
+   {
+    id: 'nav_dashboard',
+    label: 'nav.board',
+    path: '/dashboard',
+    icon: 'LayoutGrid',
+    order: 1.1,
+    roles: ['Super Admin', 'Manager', 'Employee'],
+    parentId: 'nav_project_group',
+    isEnabled: true,
   },
   {
     id: 'nav_list',
@@ -30,6 +42,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 1.2,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: 'nav_project_group',
+    isEnabled: true,
   },
   {
     id: 'nav_task_schedule',
@@ -39,6 +52,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 1.3,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: 'nav_project_group',
+    isEnabled: true,
   },
   // --- GROUP 2: SOCIAL MEDIA ---
   {
@@ -49,6 +63,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 2,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
+    isEnabled: true,
   },
   {
     id: 'nav_social_media_list',
@@ -58,6 +73,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 2.1,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: 'nav_social_media_group',
+    isEnabled: true,
   },
    {
     id: 'nav_social_media_schedule',
@@ -67,6 +83,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 2.2,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: 'nav_social_media_group',
+    isEnabled: true,
   },
    {
     id: 'nav_social_media_calendar',
@@ -76,6 +93,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 2.3,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: 'nav_social_media_group',
+    isEnabled: true,
   },
   {
     id: 'nav_social_media_analytics',
@@ -85,6 +103,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 2.4,
     roles: ['Super Admin', 'Manager'],
     parentId: 'nav_social_media_group',
+    isEnabled: true,
   },
   {
     id: 'nav_social_media_integrations',
@@ -94,6 +113,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 2.5,
     roles: ['Super Admin', 'Manager'],
     parentId: 'nav_social_media_group',
+    isEnabled: true,
   },
   // --- GROUP 3: WEB ---
   {
@@ -104,6 +124,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 3,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
+    isEnabled: true,
   },
   {
     id: 'nav_web_articles_list',
@@ -113,6 +134,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 3.1,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: 'nav_web_group',
+    isEnabled: true,
   },
   {
     id: 'nav_web_schedule',
@@ -122,6 +144,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 3.2,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: 'nav_web_group',
+    isEnabled: true,
   },
   // --- OTHER ---
   {
@@ -132,6 +155,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 4,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
+    isEnabled: true,
   },
   {
     id: 'nav_performance_analysis',
@@ -141,6 +165,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 7,
     roles: ['Super Admin', 'Manager', 'Employee'],
     parentId: null,
+    isEnabled: true,
   },
   {
     id: 'nav_guide',
@@ -150,6 +175,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 8,
     roles: ['Super Admin', 'Manager', 'Employee', 'Client'],
     parentId: null,
+    isEnabled: true,
   },
   // --- ADMIN & SETTINGS ---
   {
@@ -160,6 +186,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 10,
     roles: ['Super Admin', 'Manager'],
     parentId: null,
+    isEnabled: true,
   },
   {
     id: 'nav_admin_dashboard',
@@ -169,6 +196,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 11,
     roles: ['Super Admin', 'Manager'],
     parentId: 'nav_admin',
+    isEnabled: true,
   },
   {
     id: 'nav_admin_users',
@@ -178,6 +206,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 12,
     roles: ['Super Admin', 'Manager'],
     parentId: 'nav_admin',
+    isEnabled: true,
   },
   {
     id: 'nav_admin_data',
@@ -187,6 +216,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 13,
     roles: ['Super Admin'],
     parentId: 'nav_admin',
+    isEnabled: true,
   },
   {
     id: 'nav_settings',
@@ -196,6 +226,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 20,
     roles: ['Super Admin', 'Manager'],
     parentId: null,
+    isEnabled: true,
   },
   {
     id: 'nav_settings_company',
@@ -205,6 +236,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 21,
     roles: ['Super Admin'],
     parentId: 'nav_settings',
+    isEnabled: true,
   },
    {
     id: 'nav_settings_brands',
@@ -214,6 +246,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 22,
     roles: ['Super Admin'],
     parentId: 'nav_settings',
+    isEnabled: true,
   },
   {
     id: 'nav_settings_roles',
@@ -223,6 +256,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 23,
     roles: ['Super Admin'],
     parentId: 'nav_settings',
+    isEnabled: true,
   },
   {
     id: 'nav_settings_navigation',
@@ -232,6 +266,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 24,
     roles: ['Super Admin'],
     parentId: 'nav_settings',
+    isEnabled: true,
   },
    {
     id: 'nav_settings_workflow',
@@ -241,6 +276,7 @@ export const defaultNavItems: NavigationItem[] = [
     order: 25,
     roles: ['Super Admin'],
     parentId: 'nav_settings',
+    isEnabled: true,
   },
   {
     id: 'nav_settings_recurring',
@@ -250,5 +286,6 @@ export const defaultNavItems: NavigationItem[] = [
     order: 26,
     roles: ['Super Admin', 'Manager'],
     parentId: 'nav_settings',
+    isEnabled: true,
   },
 ];

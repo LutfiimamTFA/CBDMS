@@ -307,6 +307,7 @@ export type NavigationItem = {
   order: number;
   roles: ('Super Admin' | 'Manager' | 'PIC' | 'Employee' | 'Client')[];
   parentId: string | null;
+  isEnabled: boolean;
 }
 
 export type Notification = {
