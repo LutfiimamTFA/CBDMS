@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import {
   Table,
   TableBody,
@@ -24,7 +24,7 @@ import {
   deleteDoc,
   Timestamp,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle, MoreHorizontal } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save, RefreshCw, GripVertical, FolderPlus, Plus, Pencil, Trash2, Shield, AlertTriangle, MoreHorizontal, HelpCircle } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { defaultNavItems } from '@/lib/navigation-items';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,6 @@ const Icon = ({
 const availableRoles = ['Super Admin', 'Manager', 'PIC', 'Employee', 'Client'] as const;
 type Role = (typeof availableRoles)[number];
 
-// This function now only checks if the item is critical, the "locking" logic is handled in the component.
 const isItemCritical = (item: NavigationItem) => item.path === '/admin/settings/navigation';
 
 export default function NavigationSettingsPage() {
@@ -77,6 +76,9 @@ export default function NavigationSettingsPage() {
 
   const [editItem, setEditItem] = useState<NavigationItem | null>(null);
   const [deleteItem, setDeleteItem] = useState<NavigationItem | null>(null);
+
+  const draggedItem = useRef<string | null>(null);
+  const dragOverItem = useRef<string | null>(null);
 
   const navItemsCollectionRef = useMemo(
     () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null, [firestore]
@@ -117,6 +119,49 @@ export default function NavigationSettingsPage() {
     });
   };
   
+  const handleDragEnd = async () => {
+    if (draggedItem.current === null || dragOverItem.current === null || draggedItem.current === dragOverItem.current) {
+        draggedItem.current = null;
+        dragOverItem.current = null;
+        return;
+    }
+
+    const itemsClone = [...navItems];
+    const draggedItemData = itemsClone.find(item => item.id === draggedItem.current!);
+    if (!draggedItemData) return;
+
+    const dragIndex = itemsClone.findIndex(item => item.id === draggedItem.current!);
+    itemsClone.splice(dragIndex, 1);
+
+    const dropIndex = itemsClone.findIndex(item => item.id === dragOverItem.current!);
+    itemsClone.splice(dropIndex, 0, draggedItemData);
+    
+    const reorderedItems = itemsClone.map((item, index) => ({ ...item, order: index }));
+    setNavItems(reorderedItems);
+    
+    draggedItem.current = null;
+    dragOverItem.current = null;
+
+    if (!firestore) return;
+
+    const batch = writeBatch(firestore);
+    reorderedItems.forEach(item => {
+        const docRef = doc(firestore, 'navigationItems', item.id);
+        batch.update(docRef, { order: item.order });
+    });
+    
+    try {
+        await batch.commit();
+        setInitialNavItems(reorderedItems); // Update baseline after successful save
+        toast({ title: 'Order Saved', description: 'Sidebar order has been updated.' });
+    } catch (error) {
+        console.error('Failed to save order:', error);
+        setNavItems(initialNavItems); // Revert to original order on error
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not save the new order.' });
+    }
+  };
+
+
   const backupAndRun = async (action: () => Promise<void>, actionName: 'save' | 'reset') => {
     if (!firestore) return;
     setIsSaving(true);
@@ -165,7 +210,9 @@ export default function NavigationSettingsPage() {
             if (isItemCritical(item) && !item.roles.includes('Super Admin')) {
               item.roles.push('Super Admin');
             }
-            batch.update(docRef, { ...item });
+            // Create a plain object from the item to avoid issues with extra properties
+            const { id, ...dataToSave } = item;
+            batch.update(docRef, dataToSave);
         });
         
         await batch.commit();
@@ -196,8 +243,9 @@ export default function NavigationSettingsPage() {
         const newItemWithId: NavigationItem = { ...newItemData, id: newItemRef.id };
         await setDoc(newItemRef, newItemWithId);
         
-        setNavItems(prev => [...prev, newItemWithId]);
-        setInitialNavItems(prev => [...prev, newItemWithId]);
+        const updatedNavItems = [...navItems, newItemWithId];
+        setNavItems(updatedNavItems);
+        setInitialNavItems(JSON.parse(JSON.stringify(updatedNavItems)));
         setEditItem(newItemWithId);
         toast({ title: 'Item Added', description: 'New item created. Edit its details now.'});
     } catch (e: any) {
@@ -222,8 +270,9 @@ export default function NavigationSettingsPage() {
     try {
         const docRef = doc(firestore, 'navigationItems', deleteItem.id);
         await deleteDoc(docRef);
-        setNavItems(prev => prev.filter(item => item.id !== deleteItem.id));
-        setInitialNavItems(prev => prev.filter(item => item.id !== deleteItem.id));
+        const updatedItems = navItems.filter(item => item.id !== deleteItem.id);
+        setNavItems(updatedItems);
+        setInitialNavItems(JSON.parse(JSON.stringify(updatedItems)));
         toast({ title: 'Item Deleted', description: `"${deleteItem.label}" has been removed.`});
     } catch (e: any) {
         toast({ variant: 'destructive', title: 'Failed to delete item', description: e.message });
@@ -263,6 +312,8 @@ export default function NavigationSettingsPage() {
         });
 
         await writeBatch.commit();
+        setNavItems(defaultNavItems);
+        setInitialNavItems(JSON.parse(JSON.stringify(defaultNavItems)));
         toast({ title: 'Sidebar Reset', description: 'Navigation has been reset to its default state.' });
     }, 'reset');
   };
@@ -296,10 +347,18 @@ export default function NavigationSettingsPage() {
         <TableRow
           className={cn(
             !item.isEnabled && 'opacity-50',
+            "cursor-grab active:cursor-grabbing",
+             draggedItem.current === item.id && 'opacity-50'
           )}
+          draggable
+          onDragStart={() => (draggedItem.current = item.id)}
+          onDragEnter={() => (dragOverItem.current = item.id)}
+          onDragEnd={handleDragEnd}
+          onDragOver={(e) => e.preventDefault()}
         >
           <TableCell className={cn(isSubItem && "pl-12")}>
             <div className="flex items-center gap-3">
+              <GripVertical className="h-5 w-5 text-muted-foreground" />
               <Icon name={item.icon} className="h-5 w-5" />
               <div className="flex flex-col">
                 <span className="font-medium">{item.label}</span>
@@ -358,7 +417,7 @@ export default function NavigationSettingsPage() {
           )}
       </React.Fragment>
     ));
-  }, [navItems]);
+  }, [navItems, draggedItem, dragOverItem]);
 
 
   return (
@@ -368,7 +427,7 @@ export default function NavigationSettingsPage() {
           <div>
             <h2 className="text-2xl font-bold">Sidebar Navigation Editor</h2>
             <p className="text-muted-foreground">
-              Configure roles and manage menu visibility. Changes are saved automatically.
+              Configure roles, manage menu visibility and reorder items by dragging them.
             </p>
           </div>
           <div className="flex gap-2">
@@ -496,8 +555,11 @@ function EditItemDialog({ item, onClose, onSave }: { item: NavigationItem, onClo
                         {item.path === '' && (
                             <TooltipProvider>
                                 <Tooltip>
-                                    <TooltipTrigger asChild><HelpCircle className="h-4 w-4 text-muted-foreground"/></TooltipTrigger>
-                                    <TooltipContent><p>The path for a folder cannot be changed.</p></TooltipContent>
+                                    <TooltipTrigger asChild>
+                                        <div className="col-start-2 col-span-3 mt-1">
+                                            <p className="text-xs text-muted-foreground flex items-center gap-1"><HelpCircle className="h-3 w-3"/> The path for a folder cannot be changed.</p>
+                                        </div>
+                                    </TooltipTrigger>
                                 </Tooltip>
                             </TooltipProvider>
                         )}
