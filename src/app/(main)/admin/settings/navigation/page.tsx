@@ -1,3 +1,4 @@
+
 'use client';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -7,7 +8,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TableCaption,
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
@@ -21,7 +21,7 @@ import {
   writeBatch,
   getDocs,
 } from 'firebase/firestore';
-import { Loader2, Icon as LucideIcon, Save } from 'lucide-react';
+import { Loader2, Icon as LucideIcon, Save, RefreshCw } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { defaultNavItems } from '@/lib/navigation-items';
@@ -55,7 +55,9 @@ export default function NavigationSettingsPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isConfirmOpen, setConfirmOpen] = useState(false);
+  const [isSyncConfirmOpen, setSyncConfirmOpen] = useState(false);
   const [navItems, setNavItems] = useState<NavigationItem[]>([]);
   const [initialNavItems, setInitialNavItems] = useState<NavigationItem[]>([]);
 
@@ -72,50 +74,53 @@ export default function NavigationSettingsPage() {
     if (navItemsFromDB) {
       setNavItems(navItemsFromDB);
       setInitialNavItems(JSON.parse(JSON.stringify(navItemsFromDB))); // Deep copy for initial state
+      setIsLoading(false);
     }
   }, [navItemsFromDB]);
+  
+  const handleSyncStructure = async () => {
+    if (!firestore) return;
+    setIsSyncing(true);
+    setSyncConfirmOpen(false);
 
+    try {
+        const batch = writeBatch(firestore);
+        const defaultIds = new Set(defaultNavItems.map(item => item.id));
 
-  useEffect(() => {
-    if (isNavItemsLoading || !firestore) return;
+        // Step 1: Upsert all items from the local source of truth.
+        // This creates new items and updates existing ones with the correct parentId, order, etc.
+        defaultNavItems.forEach(item => {
+            const docRef = doc(firestore, 'navigationItems', item.id);
+            batch.set(docRef, item, { merge: true });
+        });
 
-    const syncDefaultsToFirestore = async () => {
-        setIsLoading(true);
-        try {
-            const existingItemsSnapshot = await getDocs(collection(firestore, 'navigationItems'));
-            const existingItemIds = new Set(existingItemsSnapshot.docs.map(doc => doc.id));
-            const missingItems = defaultNavItems.filter(
-                (defaultItem) => !existingItemIds.has(defaultItem.id)
-            );
-
-            if (missingItems.length > 0) {
-                const batch = writeBatch(firestore);
-                missingItems.forEach((item) => {
-                    const docRef = doc(firestore, 'navigationItems', item.id);
-                    batch.set(docRef, item);
-                });
-
-                await batch.commit();
-                toast({
-                    title: 'Navigation Synced',
-                    description: `${missingItems.length} new navigation item(s) have been added.`,
-                });
+        // Step 2: Fetch all items currently in Firestore.
+        const existingItemsSnapshot = await getDocs(collection(firestore, 'navigationItems'));
+        
+        // Step 3: Delete any items from Firestore that are NOT in our local source of truth.
+        // This cleans up old or duplicated items.
+        existingItemsSnapshot.docs.forEach(doc => {
+            if (!defaultIds.has(doc.id)) {
+                batch.delete(doc.ref);
             }
-        } catch (err) {
-            console.error("Failed to sync navigation items", err);
-            toast({
-                variant: 'destructive',
-                title: 'Sync Failed',
-                description: 'Could not add new navigation items automatically.',
-            });
-        } finally {
-           setIsLoading(false);
-        }
-    };
-    
-    syncDefaultsToFirestore();
+        });
 
-  }, [isNavItemsLoading, firestore, toast]);
+        await batch.commit();
+        toast({
+            title: 'Sidebar Structure Synced',
+            description: 'The sidebar navigation has been successfully restructured and cleaned up.',
+        });
+    } catch (err) {
+        console.error("Failed to sync navigation structure", err);
+        toast({
+            variant: 'destructive',
+            title: 'Sync Failed',
+            description: 'Could not restructure the sidebar. Please try again.',
+        });
+    } finally {
+        setIsSyncing(false);
+    }
+  };
   
   const hasChanges = useMemo(() => {
     return JSON.stringify(initialNavItems) !== JSON.stringify(navItems);
@@ -168,50 +173,54 @@ export default function NavigationSettingsPage() {
   };
 
   const groupedNavItems = useMemo(() => {
-    const mainItems = navItems.filter(item => !item.path.startsWith('/admin'));
-    const adminItems = navItems.filter(item => item.path.startsWith('/admin') && !item.path.startsWith('/admin/settings'));
-    const settingsItems = navItems.filter(item => item.path.startsWith('/admin/settings'));
-    return { mainItems, adminItems, settingsItems };
+    const itemMap = new Map(navItems.map(item => [item.id, item]));
+    const childMap = new Map<string, NavigationItem[]>();
+
+    navItems.forEach(item => {
+        if (item.parentId) {
+            if (!childMap.has(item.parentId)) {
+                childMap.set(item.parentId, []);
+            }
+            childMap.get(item.parentId)!.push(item);
+        }
+    });
+    
+    const rootItems = navItems.filter(item => !item.parentId);
+    
+    return { rootItems, childMap, itemMap };
   }, [navItems]);
 
-  const renderGroup = (title: string, items: NavigationItem[]) => (
-    <>
-      <TableRow className="bg-muted/50 hover:bg-muted/50">
-        <TableCell colSpan={1 + availableRoles.length} className="py-2 px-4 text-sm font-semibold text-muted-foreground">
-          {title}
-        </TableCell>
-      </TableRow>
-      {items.length > 0 ? items.sort((a,b) => a.order - b.order).map((item) => (
-        <TableRow key={item.id}>
-          <TableCell className="font-medium">
-            <div className="flex items-center gap-3">
-              <Icon name={item.icon} className="h-5 w-5" />
-              <div>
-                <span>{item.label}</span>
-                <Badge variant="outline" className="ml-2 font-mono text-xs">
-                  {item.path}
-                </Badge>
-              </div>
-            </div>
-          </TableCell>
-          {availableRoles.map((role) => (
-            <TableCell key={role} className="text-center">
-              <Checkbox
-                checked={item.roles.includes(role)}
-                onCheckedChange={(checked) => {
-                  handleRoleChange(item.id, role, !!checked);
-                }}
-                aria-label={`Allow ${role} to see ${item.label}`}
-              />
-            </TableCell>
-          ))}
-        </TableRow>
-      )) : (
-        <TableRow>
-            <TableCell colSpan={1 + availableRoles.length} className="text-center text-muted-foreground py-4">No items in this group.</TableCell>
-        </TableRow>
-      )}
-    </>
+  const renderGroup = (items: NavigationItem[], isSubItem = false) => (
+    items.sort((a,b) => a.order - b.order).map((item) => {
+      const children = groupedNavItems.childMap.get(item.id) || [];
+      return (
+        <React.Fragment key={item.id}>
+           <TableRow>
+              <TableCell className={cn("font-medium", isSubItem && "pl-12")}>
+                <div className="flex items-center gap-3">
+                  <Icon name={item.icon} className="h-5 w-5" />
+                  <div>
+                    <span>{item.label}</span>
+                    {item.path && <Badge variant="outline" className="ml-2 font-mono text-xs">{item.path}</Badge>}
+                  </div>
+                </div>
+              </TableCell>
+              {availableRoles.map((role) => (
+                <TableCell key={role} className="text-center">
+                  <Checkbox
+                    checked={item.roles.includes(role)}
+                    onCheckedChange={(checked) => {
+                      handleRoleChange(item.id, role, !!checked);
+                    }}
+                    aria-label={`Allow ${role} to see ${item.label}`}
+                  />
+                </TableCell>
+              ))}
+            </TableRow>
+            {children.length > 0 && renderGroup(children, true)}
+        </React.Fragment>
+      )
+    })
   );
 
   return (
@@ -224,10 +233,16 @@ export default function NavigationSettingsPage() {
               Control which user roles can see each sidebar menu item.
             </p>
           </div>
-           <Button onClick={() => setConfirmOpen(true)} disabled={!hasChanges || isSaving}>
-            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
-            Save Changes
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setSyncConfirmOpen(true)} disabled={isSyncing}>
+                {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RefreshCw className="mr-2 h-4 w-4"/>}
+                Sync Sidebar Structure
+            </Button>
+            <Button onClick={() => setConfirmOpen(true)} disabled={!hasChanges || isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4"/>}
+                Save Changes
+            </Button>
+          </div>
         </div>
         <div className="rounded-lg border">
           <Table>
@@ -252,11 +267,7 @@ export default function NavigationSettingsPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                <>
-                  {renderGroup("Main Menu", groupedNavItems.mainItems)}
-                  {renderGroup("Admin Section", groupedNavItems.adminItems)}
-                  {renderGroup("Settings Section", groupedNavItems.settingsItems)}
-                </>
+                renderGroup(groupedNavItems.rootItems)
               )}
             </TableBody>
           </Table>
@@ -275,6 +286,25 @@ export default function NavigationSettingsPage() {
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={handleSaveChanges}>
                   Yes, Save Changes
+                </AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      <AlertDialog open={isSyncConfirmOpen} onOpenChange={setSyncConfirmOpen}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Sync Sidebar Structure?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    This will restructure the navigation items in the database to match the latest code definition. It will create new groups, move items, and delete old/duplicate items.
+                    <br/><br/>
+                    This action is recommended to fix display issues but is irreversible.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSyncStructure}>
+                  Yes, Sync Structure
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
