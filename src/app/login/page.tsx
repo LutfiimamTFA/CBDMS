@@ -30,6 +30,7 @@ import {
   FormItem,
   FormMessage,
 } from '@/components/ui/form';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const signInSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -140,6 +141,15 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
+              <div className="flex items-center space-x-2">
+                <Checkbox id="remember-me" />
+                <label
+                  htmlFor="remember-me"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Remember me
+                </label>
+              </div>
               <Button
                 type="submit"
                 className="w-full"
