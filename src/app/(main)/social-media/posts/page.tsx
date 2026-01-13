@@ -1,6 +1,6 @@
 
 'use client';
-import { SocialMediaPostsDataTable } from '@/components/social-media/social-media-posts-data-table';
+import { SocialMediaDataTable } from '@/components/social-media/social-media-data-table';
 import { useI18n } from '@/context/i18n-provider';
 import React, { useMemo } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
@@ -8,13 +8,16 @@ import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { SocialMediaPost, User, Brand, WorkflowStatus } from '@/lib/types';
 import { Loader2, Plus } from 'lucide-react';
 import { usePermissions } from '@/context/permissions-provider';
-import { AddSocialMediaPostDialog } from '@/components/social-media/add-post-dialog';
+import { CreatePostDialog as AddSocialMediaPostDialog } from '@/components/social-media/create-post-dialog';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 export default function SocialMediaPostsPage() {
   const { t } = useI18n();
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
+  const { permissions, isLoading: arePermsLoading } = usePermissions();
 
   const postsQuery = React.useMemo(() => {
     if (!firestore || !companyId) return null;
@@ -69,11 +72,10 @@ export default function SocialMediaPostsPage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <SocialMediaPostsDataTable 
+          <SocialMediaDataTable 
             posts={posts || []}
             users={users || []}
             brands={brands || []}
-            statuses={statuses || []}
           />
         )}
       </main>

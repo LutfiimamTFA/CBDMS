@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -33,7 +34,7 @@ import { useFirestore, useUserProfile } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
-import { CreatePostDialog } from './create-post-dialog';
+import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
 import { cn } from '@/lib/utils';
 
 const statusConfig: Record<string, { icon: React.ElementType, label: string, color: string }> = {
