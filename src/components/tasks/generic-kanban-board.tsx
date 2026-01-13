@@ -6,7 +6,7 @@ import { TaskCard } from './task-card';
 import type { WorkItem, WorkflowStatus } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, query, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, doc, updateDoc, where } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from './kanban-column';
@@ -64,7 +64,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
     
     try {
       const taskRef = doc(firestore, itemType, taskId);
-      await updateDoc(taskRef, { status: newStatus });
+      await updateDoc(taskRef, { status: newStatus, statusInternal: newStatus });
       toast({ title: "Status Updated", description: `Item moved to "${newStatus}".` });
     } catch (error) {
       console.error("Failed to update status:", error);
@@ -95,7 +95,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
               <KanbanColumn
                 key={status.id}
                 status={status}
-                tasks={(items || []).filter((item) => item.status === status.name)}
+                tasks={(items || []).filter((item) => (item.statusInternal || item.status) === status.name)}
                 onDrop={handleDrop}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
@@ -121,7 +121,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
             <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
               <ScrollArea className="h-full">
                 <div className="flex flex-col gap-3 p-1">
-                  {(items || []).filter((task) => task.status === status.name).map(task => (
+                  {(items || []).filter((task) => (task.statusInternal || task.status) === status.name).map(task => (
                     <TaskCard key={task.id} task={task} />
                   ))}
                 </div>
