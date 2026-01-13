@@ -60,8 +60,10 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
         q = query(q, where('brandId', 'in', profile.brandIds));
     } else if (profile.role === 'Employee' || profile.role === 'PIC') {
         q = query(q, where('assigneeIds', 'array-contains', profile.id));
-    } else {
-        q = query(q, where('companyId', '==', profile.companyId));
+    } else if (profile.role !== 'Super Admin') {
+        // Fallback for other roles like Client to not see anything if not explicitly assigned
+        // Super Admin sees all by default (no companyId filter here, assuming it's done elsewhere or not needed)
+        q = query(q, where('__name__', '==', 'no-items-for-this-role'));
     }
     
     return q;
@@ -177,7 +179,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
   return (
     <>
       {/* Desktop View */}
-      <div className="hidden md:flex h-full w-full">
+      <div className="hidden md:flex h-full w-full pt-4">
         <ScrollArea className="w-full">
           <div className="flex h-full gap-4 pb-4">
             {statuses?.map((status) => (
@@ -199,7 +201,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
       </div>
 
       {/* Mobile View */}
-      <div className="md:hidden flex flex-col h-full">
+      <div className="md:hidden flex flex-col h-full pt-4">
         <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
           <TabsList className="grid w-full grid-cols-3">
             {statuses?.map((status) => (
