@@ -26,17 +26,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { WebArticle, User, Brand, WorkflowStatus } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
-import { MoreHorizontal, Trash2, CheckCircle, Clock, HelpCircle, RefreshCcw, AlertTriangle, Instagram } from 'lucide-react';
 import { DataTableViewOptions } from '../tasks/data-table-view-options';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
 import { useFirestore, useUserProfile } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
-import { AddWebArticleDialog } from '@/components/web/add-web-article-dialog';
-import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
 interface WebArticlesDataTableProps {
     articles: WebArticle[];
@@ -57,16 +54,6 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = React.useState({});
-  const { toast } = useToast();
-  
-  const [pendingDeleteArticle, setPendingDeleteArticle] = React.useState<WebArticle | null>(null);
-
-  const handleDeleteArticle = (articleId: string) => {
-      if (!firestore) return;
-      const articleRef = doc(firestore, 'webArticles', articleId);
-      deleteDocumentNonBlocking(articleRef);
-      toast({ title: "Article Deleted", description: "The article is being removed." });
-  };
   
   const columns: ColumnDef<WebArticle>[] = [
     {
@@ -74,13 +61,12 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
       header: 'Title',
       cell: ({ row }) => {
         const article = row.original;
+        const brand = brands.find(b => b.id === article.brandId);
         return (
           <div className="flex items-center gap-4">
             <div>
               <p className="font-medium line-clamp-2">{article.title}</p>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
-                {brands.find(b => b.id === article.brandId)?.name}
-              </div>
+              {brand && <Badge variant="outline" className="mt-1">{brand.name}</Badge>}
             </div>
           </div>
         );
@@ -134,8 +120,6 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
       id: "actions",
       cell: ({ row }) => {
         const article = row.original;
-        const canDelete = profile?.role === 'Super Admin' || profile?.role === 'Manager' || profile?.id === article.createdBy?.id;
-
         return (
             <Button variant="outline" size="sm" onClick={(e) => {
                 e.stopPropagation();
