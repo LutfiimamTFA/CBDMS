@@ -97,10 +97,24 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
 
   const brandsQuery = React.useMemo(() => {
     if (!firestore || !currentUserProfile) return null;
-    if (currentUserProfile.role === 'Manager' && currentUserProfile.brandIds?.length) {
+    
+    // Super Admins see all brands
+    if (currentUserProfile.role === 'Super Admin') {
+      return query(collection(firestore, 'brands'), where('companyId', '==', currentUserProfile.companyId), orderBy('name'));
+    }
+
+    // Managers see only their assigned brands
+    if (currentUserProfile.role === 'Manager') {
+        if (!currentUserProfile.brandIds || currentUserProfile.brandIds.length === 0) {
+            // No brands assigned, so they can't create posts. Return a query that finds nothing.
+            return query(collection(firestore, 'brands'), where('__name__', '==', 'no-brands-for-manager'));
+        }
         return query(collection(firestore, 'brands'), where('__name__', 'in', currentUserProfile.brandIds), orderBy('name'));
     }
-    return query(collection(firestore, 'brands'), where('companyId', '==', currentUserProfile.companyId), orderBy('name'));
+    
+    // Employees and other roles do not select brands, so we don't fetch the list.
+    return null;
+
   }, [firestore, currentUserProfile]);
 
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
@@ -234,9 +248,11 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                        <FormField control={form.control} name="postType" render={({ field }) => ( <FormItem><FormLabel>Post Type</FormLabel><FormControl><RadioGroup onValueChange={field.onChange} defaultValue={field.value} className="flex gap-4"><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Upload" id="r-upload" /><FormLabel htmlFor="r-upload">Upload</FormLabel></FormItem><FormItem className="flex items-center space-x-2"><RadioGroupItem value="Branding" id="r-branding" /><FormLabel htmlFor="r-branding">Branding</FormLabel></FormItem></RadioGroup></FormControl><FormMessage /></FormItem> )}/>
                     </div>
                     <div className="space-y-6 lg:col-span-1">
-                      {!singleBrandId ? (
-                        <FormField control={form.control} name="brandId" render={({ field }) => ( <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? <div className="p-2"><Loader2 className="h-4 w-4 animate-spin"/></div> : brands?.map((brand) => ( <SelectItem key={brand.id} value={brand.id}><div className="flex items-center gap-2"><Building2 className="h-4 w-4"/>{brand.name}</div></SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
-                      ) : ( <div className="space-y-2"><FormLabel>Brand</FormLabel><div className="p-2 bg-secondary rounded-md">{brands?.[0].name}</div></div> )}
+                      {currentUserProfile?.role !== 'Employee' && (
+                        !singleBrandId ? (
+                          <FormField control={form.control} name="brandId" render={({ field }) => ( <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? <div className="p-2"><Loader2 className="h-4 w-4 animate-spin"/></div> : brands?.map((brand) => ( <SelectItem key={brand.id} value={brand.id}><div className="flex items-center gap-2"><Building2 className="h-4 w-4"/>{brand.name}</div></SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
+                        ) : ( <div className="space-y-2"><FormLabel>Brand</FormLabel><div className="p-2 bg-secondary rounded-md">{brands?.[0].name}</div></div> )
+                      )}
                       <FormField control={form.control} name="priority" render={({ field }) => ( <FormItem><FormLabel>Priority</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex gap-2"><p.icon className={`h-4 w-4 ${p.color}`}/>{p.label}</div></SelectItem>))}</SelectContent></Select><Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting}><Wand2 className="h-4 w-4"/></Button></div>{suggestionReason && <FormDescription>{suggestionReason}</FormDescription>}<FormMessage/></FormItem> )}/>
                       <FormField control={form.control} name="assigneeIds" render={({ field }) => ( <FormItem><FormLabel>Assign To</FormLabel>{areUsersLoading ? <Loader2 className="h-5 w-5 animate-spin"/> : <MultiSelect options={userOptions} onValueChange={(v) => form.setValue('assigneeIds', v)} defaultValue={field.value || []} placeholder="Select members..."/>}<FormMessage /></FormItem> )}/>
                       <FormField control={form.control} name="scheduledAt" render={({ field }) => ( <FormItem className="flex flex-col"><FormLabel>Schedule Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, 'PPP') : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} initialFocus/></PopoverContent></Popover><FormMessage /></FormItem> )}/>
@@ -254,3 +270,5 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     </Sheet>
   );
 }
+
+    
