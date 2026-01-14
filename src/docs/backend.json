@@ -339,7 +339,11 @@
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
         "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } },
         "subtasks": { "type": "array", "items": { "$ref": "#/backend/entities/Subtask" } },
-        "attachments": { "type": "array", "items": { "$ref": "#/backend/entities/Attachment" } }
+        "attachments": { "type": "array", "items": { "$ref": "#/backend/entities/Attachment" } },
+        "deliverables": { "type": "array", "items": { "$ref": "#/backend/entities/Attachment" } },
+        "waitingOnTaskIds": { "type": "array", "items": { "type": "string" } },
+        "blockingTaskIds": { "type": "array", "items": { "type": "string" } },
+        "linkedTaskIds": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["id", "title", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
     },

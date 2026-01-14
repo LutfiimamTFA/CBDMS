@@ -254,7 +254,7 @@ export type Task = WorkItem & {
 };
 
 export type SocialMediaPost = WorkItem & {
-  platform: string;
+  platform: 'Instagram' | 'Facebook' | 'Twitter' | 'LinkedIn';
   caption: string;
   mediaUrl?: string;
   scheduledAt: string;
@@ -264,6 +264,12 @@ export type SocialMediaPost = WorkItem & {
   crop?: { x: number; y: number; zoom: number };
   objectPosition?: number;
   creator: { name: string, avatarUrl?: string };
+  // Inheriting dependency and attachment fields
+  waitingOnTaskIds?: string[];
+  blockingTaskIds?: string[];
+  linkedTaskIds?: string[];
+  attachments?: Attachment[];
+  deliverables?: Attachment[];
 };
 
 export type WebArticle = WorkItem & {
