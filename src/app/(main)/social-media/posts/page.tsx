@@ -8,7 +8,7 @@ import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { SocialMediaPost, User, Brand, WorkflowStatus } from '@/lib/types';
 import { Loader2, Plus } from 'lucide-react';
 import { usePermissions } from '@/context/permissions-provider';
-import { CreatePostDialog as AddSocialMediaPostDialog } from '@/components/social-media/create-post-dialog';
+import { AddSocialMediaPostDialog } from '@/components/social-media/add-post-dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 

@@ -1,3 +1,4 @@
+
 'use client';
 import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
@@ -6,7 +7,7 @@ import Image from 'next/image';
 import { Instagram, FileText, Clapperboard, RefreshCcw, AlertTriangle, HelpCircle, CheckCircle, Clock } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { CreatePostDialog } from './create-post-dialog';
+import { AddSocialMediaPostDialog as CreatePostDialog } from '@/components/social-media/add-post-dialog';
 import { useState } from 'react';
 
 interface SocialPostCardProps {
@@ -110,8 +111,11 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
         <CreatePostDialog 
             open={isDialogOpen} 
             onOpenChange={setIsDialogOpen}
-            post={post}
-        />
+        >
+          {/* This component opens the sheet, but the sheet itself needs the task prop */}
+          {/* This is a temporary solution until we can pass the task to the sheet from here */}
+          <div></div>
+        </CreatePostDialog>
       )}
     </>
   );
