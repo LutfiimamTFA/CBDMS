@@ -200,11 +200,14 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     if (currentUserProfile.role === 'Manager') {
         if (!currentUserProfile.brandIds || currentUserProfile.brandIds.length === 0) {
+            // For managers with no brands, return a query that finds nothing to avoid permission errors
             return query(collection(firestore, 'brands'), where('__name__', '==', 'no-brands-for-manager'));
         }
         return query(collection(firestore, 'brands'), where('__name__', 'in', currentUserProfile.brandIds), orderBy('name'));
     }
     
+    // Super Admins and Employees (who derive brand context from tasks, not direct assignment) see all brands.
+    // In a stricter model, Employees would only see brands of tasks they're on, but this is a common simplification.
     return query(collection(firestore, 'brands'), orderBy('name'));
 
   }, [firestore, currentUserProfile]);
