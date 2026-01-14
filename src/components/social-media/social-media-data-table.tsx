@@ -34,7 +34,7 @@ import { useFirestore, useUserProfile } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
-import { CreatePostDialog } from '@/components/social-media/create-post-dialog';
+import { AddSocialMediaPostDialog as CreatePostDialog } from '@/components/social-media/add-post-dialog';
 import { cn } from '@/lib/utils';
 
 const statusConfig: Record<string, { icon: React.ElementType, label: string, color: string }> = {
@@ -44,6 +44,7 @@ const statusConfig: Record<string, { icon: React.ElementType, label: string, col
     Scheduled: { icon: Clock, label: 'Scheduled', color: 'bg-blue-500 border-blue-500 text-white' },
     Posted: { icon: CheckCircle, label: 'Posted', color: 'bg-green-500 border-green-500 text-white' },
     Error: { icon: AlertTriangle, label: 'Error', color: 'bg-red-500 border-red-500 text-white' },
+    'To Do': { icon: HelpCircle, label: 'To Do', color: 'bg-gray-400 border-gray-400 text-white' },
 };
 
 interface SocialMediaDataTableProps {
@@ -66,7 +67,6 @@ export function SocialMediaDataTable({ posts, users, brands }: SocialMediaDataTa
   const { toast } = useToast();
   
   const [pendingDeletePost, setPendingDeletePost] = React.useState<SocialMediaPost | null>(null);
-  const [editingPost, setEditingPost] = React.useState<SocialMediaPost | null>(null);
 
   const handleDeletePost = (postId: string) => {
       if (!firestore) return;
@@ -77,8 +77,8 @@ export function SocialMediaDataTable({ posts, users, brands }: SocialMediaDataTa
   
   const columns: ColumnDef<SocialMediaPost>[] = [
     {
-      accessorKey: 'caption',
-      header: 'Caption',
+      accessorKey: 'title',
+      header: 'Title',
       cell: ({ row }) => {
         const post = row.original;
         const brand = brands.find(b => b.id === post.brandId);
@@ -88,7 +88,7 @@ export function SocialMediaDataTable({ posts, users, brands }: SocialMediaDataTa
               {post.mediaUrl && <img src={post.mediaUrl} alt="Post media" className="w-full h-full object-cover" />}
             </div>
             <div>
-              <p className="font-medium line-clamp-2">{post.caption}</p>
+              <p className="font-medium line-clamp-2">{post.title}</p>
               <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
                 {brand && <span>{brand.name}</span>}
                 <div className="flex items-center gap-1"><Instagram className="h-3 w-3" /><span>{post.platform}</span></div>
@@ -99,10 +99,10 @@ export function SocialMediaDataTable({ posts, users, brands }: SocialMediaDataTa
       }
     },
     {
-      accessorKey: 'status',
+      accessorKey: 'statusInternal',
       header: 'Status',
       cell: ({ row }) => {
-        const status = row.getValue('status') as string;
+        const status = row.getValue('statusInternal') as string;
         const config = statusConfig[status] || { icon: HelpCircle, label: status, color: 'bg-gray-400' };
         return (
           <Badge className={cn('gap-1.5', config.color)}>
@@ -124,25 +124,9 @@ export function SocialMediaDataTable({ posts, users, brands }: SocialMediaDataTa
       accessorKey: 'createdBy',
       header: 'Creator',
       cell: ({ row }) => {
-        const userId = row.getValue('createdBy') as string;
-        const user = users.find(u => u.id === userId);
-        return user ? user.name : 'Unknown';
+        const creator = row.original.createdBy;
+        return creator ? creator.name : 'Unknown';
       }
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const post = row.original;
-        const isCreator = profile?.id === post.createdBy;
-        const isManager = profile?.role === 'Manager' || profile?.role === 'Super Admin';
-        const canDelete = isManager || (isCreator && post.status === 'Draft');
-
-        return (
-          <CreatePostDialog post={post}>
-             <Button variant="outline" size="sm">View</Button>
-          </CreatePostDialog>
-        );
-      },
     },
   ];
 
@@ -165,9 +149,9 @@ export function SocialMediaDataTable({ posts, users, brands }: SocialMediaDataTa
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <Input
-            placeholder="Filter by caption..."
-            value={(table.getColumn('caption')?.getFilterValue() as string) ?? ''}
-            onChange={(event) => table.getColumn('caption')?.setFilterValue(event.target.value)}
+            placeholder="Filter by title..."
+            value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
+            onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
             className="h-8 w-[150px] lg:w-[250px]"
           />
           <DataTableViewOptions table={table} />

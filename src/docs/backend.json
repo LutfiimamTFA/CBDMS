@@ -168,7 +168,6 @@
         "content": { "type": "string", "description": "The main content of the article in HTML format." },
         "description": { "type": "string" },
         "statusInternal": { "type": "string" },
-        "status": { "type": "string" },
         "assigneeIds": { "type": "array", "items": { "type": "string" } },
         "dueDate": { "type": "string", "format": "date-time" },
         "priority": { "type": "string" },
@@ -177,7 +176,7 @@
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
         "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
       },
-      "required": ["id", "brandId", "title", "status", "assigneeIds", "priority", "companyId"]
+      "required": ["id", "brandId", "title", "statusInternal", "assigneeIds", "priority", "companyId"]
     },
     "RevisionItem": {
         "$schema": "http://json-schema.org/draft-07/schema#",
@@ -338,7 +337,9 @@
         "createdBy": { "type": "string" },
         "companyId": { "type": "string" },
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
-        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
+        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } },
+        "subtasks": { "type": "array", "items": { "$ref": "#/backend/entities/Subtask" } },
+        "attachments": { "type": "array", "items": { "$ref": "#/backend/entities/Attachment" } }
       },
       "required": ["id", "title", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
     },
@@ -383,6 +384,17 @@
             "connectedAt": { "type": "string", "format": "date-time" }
         },
         "required": ["id", "platform", "userId", "companyId", "instagramUserId", "accessToken", "expiresAt"]
+    },
+    "Subtask": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Subtask",
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "completed": { "type": "boolean" }
+        },
+        "required": ["id", "title", "completed"]
     }
   },
   "auth": {
