@@ -1,4 +1,5 @@
 
+
 // This file is intended for server-side type definitions only.
 // Do not import this file in any client-side components.
 // It exists to prevent circular dependencies between server and client modules.
@@ -78,16 +79,29 @@ export type Task = {
 
 export type SocialMediaPost = {
   id: string;
+  title: string;
+  brandId: string;
   platform: string;
   caption: string;
   mediaUrl?: string;
   status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Publishing' | 'Posted' | 'Error';
-  scheduledAt: string;
+  statusInternal: string;
+  startDate?: string;
+  dueDate?: string;
+  scheduledAt?: string;
   postedAt?: FirebaseFirestore.Timestamp;
-  createdBy: string;
+  createdBy: {
+    id: string;
+    name: string;
+    avatarUrl: string;
+  };
   companyId: string;
   postType?: 'Post' | 'Reels';
   errorDetails?: string;
+  assigneeIds: string[];
+  priority: 'Urgent' | 'High' | 'Medium' | 'Low';
+  dependencies?: string[];
+  createdAt: string;
 };
 
 export type SocialMediaConnection = {
@@ -142,3 +156,6 @@ export type SystemSettings = {
 export type Brand = any;
 export type WorkflowStatus = any;
 export type SharedTask = any;
+
+
+    

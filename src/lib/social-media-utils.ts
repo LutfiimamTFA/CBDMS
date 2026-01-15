@@ -17,6 +17,12 @@ export function normalizeSocialPost(post: SocialMediaPost, currentUserProfile: U
 
   // Due Date: Prioritize the new `dueDate` field, but fall back to the legacy `scheduledAt`.
   const dueDate = post.dueDate || post.scheduledAt || undefined;
+  
+  // Start Date:
+  const startDate = post.startDate || undefined;
+
+  // Scheduled At (Upload/Publish Date)
+  const scheduledAt = post.scheduledAt || undefined;
 
   // Priority: Default to 'Medium' if not set.
   const priority = post.priority || 'Medium';
@@ -36,9 +42,14 @@ export function normalizeSocialPost(post: SocialMediaPost, currentUserProfile: U
     ...post,
     title,
     dueDate,
+    startDate,
+    scheduledAt,
     priority,
     status,
     assigneeIds,
     dependencies,
   };
 }
+
+
+    

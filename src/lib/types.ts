@@ -254,21 +254,22 @@ export type Task = WorkItem & {
 };
 
 export type SocialMediaPost = WorkItem & {
-  // New fields to align with Tasks
+  // Fields to align with Tasks
+  startDate?: string;
   dependencies?: string[];
 
   // Existing fields
   platform: 'Instagram' | 'Facebook' | 'Twitter' | 'LinkedIn';
   caption: string;
   mediaUrl?: string;
-  scheduledAt: string; // Legacy field, use dueDate as primary
+  scheduledAt?: string; // This is now Upload/Publish Date
   postedAt?: string;
   postType: 'Upload' | 'Branding';
   mediaType?: 'image' | 'video';
   crop?: { x: number; y: number; zoom: number };
   objectPosition?: number;
-  // `createdBy` is now part of WorkItem
 };
+
 
 export type WebArticle = WorkItem & {
     content: string;
@@ -334,3 +335,6 @@ export type Notification = {
     avatarUrl: string;
   };
 };
+
+
+    
