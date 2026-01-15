@@ -49,23 +49,17 @@ import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
-import { ShareTaskDialog } from '../share/share-task-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { Card, CardContent } from '../ui/card';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { RichTextEditor } from '../ui/rich-text-editor';
 import { usePermissions } from '@/context/permissions-provider';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { getInitials } from '@/lib/utils';
+import { normalizeSocialPost } from '@/lib/social-media-utils';
 
 
 const postDetailsSchema = z.object({
@@ -117,8 +111,8 @@ export function SocialMediaPostDetailsSheet({
   const { t } = useI18n();
   const { toast } = useToast();
   
-  const [postState, setPostState] = useState(initialPost);
-  useEffect(() => { setPostState(initialPost) }, [initialPost]);
+  const [postState, setPostState] = useState(() => normalizeSocialPost(initialPost, initialPost.createdBy as User));
+  useEffect(() => { setPostState(normalizeSocialPost(initialPost, initialPost.createdBy as User)) }, [initialPost]);
   
   const [newComment, setNewComment] = useState('');
   const [newSubtask, setNewSubtask] = useState('');
@@ -127,7 +121,6 @@ export function SocialMediaPostDetailsSheet({
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   
   const firestore = useFirestore();
-  const storage = useStorage();
   const { user: authUser, profile: currentUser } = useUserProfile();
   const { permissions, isLoading: arePermsLoading } = usePermissions();
 
@@ -139,8 +132,7 @@ export function SocialMediaPostDetailsSheet({
   
   const usersQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
-    let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
-    return q;
+    return query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
   }, [firestore, currentUser]);
   const { data: allUsers } = useCollection<User>(usersQuery);
   
@@ -251,9 +243,7 @@ export function SocialMediaPostDetailsSheet({
             return post ? (
                 <Badge key={id} variant="secondary">
                     {post.title}
-                    <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
-                        <X className="h-3 w-3" />
-                    </button>
+                    <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
                 </Badge>
             ) : null;
         })}
@@ -269,7 +259,6 @@ export function SocialMediaPostDetailsSheet({
         return !duplicate;
     });
   };
-  
 
   return (
     <>
@@ -356,5 +345,3 @@ export function SocialMediaPostDetailsSheet({
     </>
   );
 }
-
-    
