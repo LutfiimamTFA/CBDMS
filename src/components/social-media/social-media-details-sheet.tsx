@@ -68,6 +68,7 @@ import { tags as allTags } from '@/lib/data';
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { usePermissions } from '@/context/permissions-provider';
+import { getInitials } from '@/lib/utils';
 
 
 const postDetailsSchema = z.object({
@@ -118,13 +119,6 @@ const formatHours = (hours: number = 0) => {
     return `${h}h ${m}m`;
 };
 
-const getInitials = (name?: string | null) => {
-    if (!name) return 'A';
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('');
-};
 
 const getCurrentSubmissionCycle = (post: SocialMediaPost | null): number => {
     if (!post) return 1;
@@ -233,6 +227,7 @@ export function SocialMediaPostDetailsSheet({
   const [isMentioning, setIsMentioning] = React.useState(false);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
 
   
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
@@ -459,11 +454,10 @@ export function SocialMediaPostDetailsSheet({
                             </Accordion>
                             
                              <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-5">
+                                <TabsList className="grid w-full grid-cols-4">
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                                  <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                                   <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
@@ -471,7 +465,26 @@ export function SocialMediaPostDetailsSheet({
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                       {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                                   </div>
-                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                        {newSubtaskAssignee ? (
+                                            <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{getInitials(newSubtaskAssignee.name)}</AvatarFallback></Avatar>
+                                        ) : (
+                                            <UserPlus className="h-4 w-4" />
+                                        )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-60 p-1">
+                                        <ScrollArea className="max-h-60">
+                                            <div className="space-y-1">
+                                                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                            </div>
+                                        </ScrollArea>
+                                    </PopoverContent>
+                                    </Popover>
+                                  <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
                                     <div>
@@ -505,6 +518,27 @@ export function SocialMediaPostDetailsSheet({
                                     <Separator/>
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                 </TabsContent>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                      <ScrollArea className="max-h-48 pr-2">
+                                          <div className="space-y-4">
+                                              {(taskState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                              {(taskState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                          </div>
+                                      </ScrollArea>
+                                      <div className="space-y-2 pt-4 border-t">
+                                          <div className="flex-1 relative">
+                                              <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
+                                          </div>
+                                          <div className="flex justify-between items-center">
+                                              <div className="flex-1"></div>
+                                              <Button type="button" onClick={handlePostComment} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                                    Post Comment
+                                              </Button>
+                                          </div>
+                                      </div>
+                                </TabsContent>
                                  <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
                                     {(postState.revisionHistory && postState.revisionHistory.length > 0) ? (
                                         <Accordion type="single" collapsible>
@@ -527,27 +561,6 @@ export function SocialMediaPostDetailsSheet({
                                     ) : (
                                         <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this post.</p> 
                                     )}
-                                </TabsContent>
-                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                                      <ScrollArea className="max-h-48 pr-2">
-                                          <div className="space-y-4">
-                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
-                                              {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
-                                          </div>
-                                      </ScrollArea>
-                                      <div className="space-y-2 pt-4 border-t">
-                                          <div className="flex-1 relative">
-                                              <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
-                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
-                                          </div>
-                                          <div className="flex justify-between items-center">
-                                              <div className="flex-1"></div>
-                                              <Button type="button" onClick={handlePostComment} disabled={!newComment.trim() || isUploadingCommentAttachment}>
-                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                                    Post Comment
-                                              </Button>
-                                          </div>
-                                      </div>
                                 </TabsContent>
                             </Tabs>
                         </div>

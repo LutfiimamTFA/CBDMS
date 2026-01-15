@@ -56,7 +56,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { formatHours } from '@/lib/utils';
+import { formatHours, getInitials } from '@/lib/utils';
 
 const postSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -106,6 +106,9 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
   const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+  const [isMentioning, setIsMentioning] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<UserType[]>([]);
+
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const deliverableFileInputRef = useRef<HTMLInputElement>(null);
@@ -157,7 +160,6 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
       return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
   }, [dependencyOptions, brandMap]);
 
-
   const form = useForm<PostFormValues>({
     resolver: zodResolver(postSchema),
     defaultValues: {
@@ -173,6 +175,17 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
       postType: 'Upload',
     },
   });
+
+  const assigneeIds = form.watch('assigneeIds');
+  const subtaskAssigneeOptions = useMemo(() => {
+    if (!allUsers) return {};
+    const mainAssignees = allUsers.filter(u => assigneeIds.includes(u.id));
+    const otherUsers = allUsers.filter(u => u.role !== 'Client' && !assigneeIds.includes(u.id));
+    return {
+        "Task Assignees": mainAssignees,
+        "Other Members": otherUsers
+    }
+  }, [allUsers, assigneeIds]);
   
   const singleBrandId = useMemo(() => (brands && brands.length === 1) ? brands[0].id : null, [brands]);
 
@@ -375,6 +388,50 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     </div>
   );
 
+  const handlePostComment = () => {
+    if (!newComment.trim() || !currentUserProfile || !user) return;
+    const comment: Comment = {
+      id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      user: {
+        id: user.uid,
+        name: currentUserProfile.name || 'Unknown User',
+        email: currentUserProfile.email || '',
+        avatarUrl: currentUserProfile.avatarUrl || '',
+        role: currentUserProfile.role,
+        companyId: currentUserProfile.companyId,
+        createdAt: currentUserProfile.createdAt,
+      },
+      text: newComment,
+      timestamp: new Date().toISOString(),
+      replies: [],
+    };
+    setComments([...comments, comment]);
+    setNewComment('');
+    setIsMentioning(false);
+  };
+  
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+    if (allUsers) {
+      const mentionMatch = text.match(/@(\w*)$/);
+      if (mentionMatch) {
+        setIsMentioning(true);
+        setMentionSuggestions(allUsers.filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+      } else {
+        setIsMentioning(false);
+      }
+    }
+  };
+
+  const handleMentionSelect = (user: UserType) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
+  };
+
   return (
     <>
     <Sheet open={open} onOpenChange={setOpen}>
@@ -438,10 +495,9 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                     </div>
                   </div>
                    <Tabs defaultValue="subtasks" className="w-full">
-                        <TabsList className="grid w-full grid-cols-5 gap-1">
+                        <TabsList className="grid w-full grid-cols-4">
                           <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                          <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
-                          <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                          <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                           <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
                           <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                         </TabsList>
@@ -449,15 +505,53 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                           <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                               {subtasks.map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                           </div>
-                          <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                          <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                          <Popover>
+                              <PopoverTrigger asChild>
+                                <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                  {newSubtaskAssignee ? (
+                                    <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{getInitials(newSubtaskAssignee.name)}</AvatarFallback></Avatar>
+                                  ) : (
+                                    <UserPlus className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-60 p-1">
+                                <ScrollArea className="max-h-60">
+                                  <div className="space-y-1">
+                                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
+                                    {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                      users.length > 0 && (
+                                        <React.Fragment key={group}>
+                                          <Separator />
+                                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                          {users.map(user => (
+                                            <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                              <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                              <span className="truncate">{user.name}</span>
+                                            </Button>
+                                          ))}
+                                        </React.Fragment>
+                                      )
+                                    ))}
+                                  </div>
+                                </ScrollArea>
+                              </PopoverContent>
+                            </Popover>
+                          <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                         </TabsContent>
-                        <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
-                          <div className="space-y-2">{attachments.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link from Google Drive</Button></div>
-                        </TabsContent>
-                         <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
-                          <div className="space-y-2">{deliverables.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'deliverable')}><X className="h-4 w-4" /></Button></div> ))}</div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>Link from Google Drive</Button></div>
+                        <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
+                            <div>
+                                <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                <div className="space-y-2">{attachments.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
+                            </div>
+                            <Separator/>
+                            <div>
+                               <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                                <div className="space-y-2">{deliverables.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'deliverable')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t"><input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Deliverable</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>Link Deliverable</Button></div>
+                            </div>
                         </TabsContent>
                         <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
                             <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>{renderDependencyList(dependencies.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
@@ -466,8 +560,38 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                             <Separator/>
                             <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Tugas terkait tapi tidak saling memblokir.</p>{renderDependencyList(dependencies.linked || [], 'linked')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
                         </TabsContent>
-                         <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4">
-                            <p className="text-center text-muted-foreground text-sm py-8">Comments can be added after the post is created.</p>
+                         <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                            <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
+                                {comments.map((comment) => (
+                                <div key={comment.id} className="flex items-start gap-3">
+                                    <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar>
+                                    <div>
+                                    <p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p>
+                                    <p className="text-sm">{comment.text}</p>
+                                    </div>
+                                </div>
+                                ))}
+                                {comments.length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                            </div>
+                            <div className="flex items-start gap-2 pt-4 border-t">
+                                <Avatar className="h-9 w-9"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{getInitials(currentUserProfile?.name)}</AvatarFallback></Avatar>
+                                <div className="flex-1 relative">
+                                <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                {isMentioning && (
+                                    <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
+                                    <CardContent className="p-1">
+                                        {mentionSuggestions.map(user => (
+                                        <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}>
+                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                            {user.name}
+                                        </Button>
+                                        ))}
+                                    </CardContent>
+                                    </Card>
+                                )}
+                                </div>
+                                <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                            </div>
                         </TabsContent>
                     </Tabs>
                 </form>
