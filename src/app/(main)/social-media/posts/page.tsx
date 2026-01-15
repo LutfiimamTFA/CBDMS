@@ -11,6 +11,8 @@ import { usePermissions } from '@/context/permissions-provider';
 import { AddSocialMediaPostDialog } from '@/components/social-media/add-post-dialog';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useSafeBrands } from '@/hooks/use-safe-brands';
+import { normalizeSocialPost } from '@/lib/social-media-utils';
 
 
 export default function SocialMediaPostsPage() {
@@ -18,12 +20,13 @@ export default function SocialMediaPostsPage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const { permissions, isLoading: arePermsLoading } = usePermissions();
+  const { brands: safeBrands, brandMap, isLoading: areBrandsLoading } = useSafeBrands();
 
   const postsQuery = React.useMemo(() => {
-    if (!firestore || !companyId) return null;
+    if (!firestore || !companyId || !profile) return null;
     let q = query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', companyId));
 
-    if (profile?.role === 'Manager') {
+    if (profile.role === 'Manager') {
         if (!profile.brandIds || profile.brandIds.length === 0) {
             return query(collection(firestore, 'socialMediaPosts'), where('__name__', '==', 'dummy-id'));
         }
@@ -33,10 +36,15 @@ export default function SocialMediaPostsPage() {
     return q;
   }, [firestore, companyId, profile]);
 
-  const { data: posts, isLoading: arePostsLoading } = useCollection<SocialMediaPost>(postsQuery);
+  const { data: rawPosts, isLoading: arePostsLoading } = useCollection<SocialMediaPost>(postsQuery);
   const { data: users, isLoading: areUsersLoading } = useCollection<User>(useMemo(() => firestore && companyId ? query(collection(firestore, 'users'), where('companyId', '==', companyId)) : null, [firestore, companyId]));
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(useMemo(() => firestore && companyId ? query(collection(firestore, 'brands'), where('companyId', '==', companyId)) : null, [firestore, companyId]));
-  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null, [firestore]));
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => firestore ? query(collection(firestore, 'socialMediaStatuses'), orderBy('order')) : null, [firestore]));
+
+  const normalizedPosts = useMemo(() => {
+    if (!rawPosts || !profile) return [];
+    return rawPosts.map(post => normalizeSocialPost(post, profile));
+  }, [rawPosts, profile]);
+
 
   const isLoading = arePostsLoading || isProfileLoading || areUsersLoading || areBrandsLoading || areStatusesLoading;
   
@@ -73,14 +81,14 @@ export default function SocialMediaPostsPage() {
           </div>
         ) : (
           <SocialMediaDataTable 
-            posts={posts || []}
+            posts={normalizedPosts}
             users={users || []}
-            brands={brands || []}
+            brands={safeBrands || []}
+            brandMap={brandMap}
+            statuses={statuses || []}
           />
         )}
       </main>
     </div>
   );
 }
-
-    

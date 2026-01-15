@@ -203,7 +203,7 @@
                 "properties": {
                     "id": { "type": "string" },
                     "name": { "type": "string" },
-                    "avatarUrl": { "type": "string" }
+                    "avatarUrl": { "type": "string" },
                 },
                 "required": ["id", "name"]
             },
@@ -328,24 +328,21 @@
         "postType": { "type": "string", "enum": ["Upload", "Branding"], "description": "Category of the social media work."},
         "caption": { "type": "string", "description": "The text content of the post." },
         "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video for the post." },
-        "status": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "Workflow status of the post." },
         "statusInternal": { "type": "string" },
         "assigneeIds": { "type": "array", "items": { "type": "string" } },
         "priority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "startDate": { "type": "string", "format": "date-time" },
         "scheduledAt": { "type": "string", "format": "date-time", "description": "The date and time the post is scheduled to be published." },
         "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was published." },
         "createdBy": { "type": "string" },
         "companyId": { "type": "string" },
+        "dependencies": { "type": "array", "items": { "type": "string" } },
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
-        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } },
-        "subtasks": { "type": "array", "items": { "$ref": "#/backend/entities/Subtask" } },
-        "attachments": { "type": "array", "items": { "$ref": "#/backend/entities/Attachment" } },
-        "deliverables": { "type": "array", "items": { "$ref": "#/backend/entities/Attachment" } },
-        "waitingOnTaskIds": { "type": "array", "items": { "type": "string" } },
-        "blockingTaskIds": { "type": "array", "items": { "type": "string" } },
-        "linkedTaskIds": { "type": "array", "items": { "type": "string" } }
+        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
       },
-      "required": ["id", "title", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
+      "required": ["id", "title", "platform", "caption", "status", "statusInternal", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
     },
     "SharedLink": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -388,17 +385,6 @@
             "connectedAt": { "type": "string", "format": "date-time" }
         },
         "required": ["id", "platform", "userId", "companyId", "instagramUserId", "accessToken", "expiresAt"]
-    },
-    "Subtask": {
-        "$schema": "http://json-schema.org/draft-07/schema#",
-        "title": "Subtask",
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "title": { "type": "string" },
-          "completed": { "type": "boolean" }
-        },
-        "required": ["id", "title", "completed"]
     }
   },
   "auth": {
@@ -418,8 +404,6 @@
       { "path": "/navigationItems/{navItemId}", "definition": { "entityName": "NavigationItem", "schema": { "$ref": "#/backend/entities/NavigationItem" } } },
       { "path": "/users/{userId}/notifications/{notificationId}", "definition": { "entityName": "Notification", "schema": { "$ref": "#/backend/entities/Notification" } } },
       { "path": "/statuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
-      { "path": "/socialMediaStatuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
-      { "path": "/webStatuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
       { "path": "/socialMediaPosts/{postId}", "definition": { "entityName": "SocialMediaPost", "schema": { "$ref": "#/backend/entities/SocialMediaPost" } } },
       { "path": "/webArticles/{articleId}", "definition": { "entityName": "WebArticle", "schema": { "$ref": "#/backend/entities/WebArticle" } } },
       { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },

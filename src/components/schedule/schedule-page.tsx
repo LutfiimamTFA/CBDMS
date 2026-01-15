@@ -1,8 +1,9 @@
+
 'use client';
 
 import React, { useState, useMemo } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { Task } from '@/lib/types';
+import type { Task, SocialMediaPost } from '@/lib/types';
 import { collection, query, where } from 'firebase/firestore';
 import {
   eachDayOfInterval,
@@ -17,6 +18,7 @@ import {
   isSameDay,
   isWithinInterval,
   parseISO,
+  isPast
 } from 'date-fns';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,10 +32,14 @@ import {
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskCard } from '@/components/tasks/task-card';
+import { SocialPostCard } from '../social-media/social-post-card';
+import { normalizeSocialPost } from '@/lib/social-media-utils';
 
 interface SchedulePageProps {
   workstream: 'tasks' | 'socialMediaPosts' | 'webArticles';
 }
+
+type WorkItem = Task | SocialMediaPost;
 
 export function SchedulePage({ workstream }: SchedulePageProps) {
   const firestore = useFirestore();
@@ -41,20 +47,29 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const dataQuery = useMemo(() => {
-    if (!firestore || !companyId) return null;
+    if (!firestore || !companyId || !currentUser) return null;
     let q = query(collection(firestore, workstream), where('companyId', '==', companyId));
-    if (currentUser?.role === 'Manager') {
+    if (currentUser.role === 'Manager') {
       if (!currentUser.brandIds || currentUser.brandIds.length === 0) {
         return query(collection(firestore, workstream), where('__name__', '==', 'dummy-id-to-get-empty-result'));
       }
       q = query(q, where('brandId', 'in', currentUser.brandIds));
-    } else if (currentUser?.role === 'Employee' || currentUser?.role === 'PIC') {
+    } else if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
       q = query(q, where('assigneeIds', 'array-contains', currentUser.id));
     }
     return q;
   }, [firestore, companyId, currentUser, workstream]);
 
-  const { data: allItems, isLoading } = useCollection<Task>(dataQuery);
+  const { data: allItems, isLoading } = useCollection<WorkItem>(dataQuery);
+
+  const normalizedItems = useMemo(() => {
+    if (!allItems || !currentUser) return [];
+    if (workstream === 'socialMediaPosts') {
+      return allItems.map(item => normalizeSocialPost(item as SocialMediaPost, currentUser));
+    }
+    return allItems;
+  }, [allItems, currentUser, workstream]);
+
 
   const calendarGrid = useMemo(() => {
     const firstDayOfMonth = startOfMonth(currentDate);
@@ -65,13 +80,12 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
   }, [currentDate]);
 
   const itemsByDueDate = useMemo(() => {
-    const map = new Map<string, Task[]>();
-    if (!allItems) return map;
+    const map = new Map<string, WorkItem[]>();
+    if (!normalizedItems) return map;
     
-    const dateField = workstream === 'socialMediaPosts' ? 'scheduledAt' : 'dueDate';
-
-    allItems.forEach(item => {
-      const dateValue = item[dateField as keyof Task] as string | undefined;
+    normalizedItems.forEach(item => {
+      // The `dueDate` is now reliable thanks to the normalizer.
+      const dateValue = item.dueDate;
       if (dateValue) {
         const dueDate = parseISO(dateValue);
         if (isWithinInterval(dueDate, { start: calendarGrid.start, end: calendarGrid.end })) {
@@ -84,7 +98,7 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
       }
     });
     return map;
-  }, [allItems, calendarGrid, workstream]);
+  }, [normalizedItems, calendarGrid, workstream]);
   
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => ({
@@ -165,13 +179,17 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
                               "font-semibold text-sm", 
                               isSameDay(day, new Date()) && "flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground",
                                !isSameMonth(day, currentDate) && "text-muted-foreground/50",
+                               (isPast(day) && !isSameDay(day, new Date())) && "text-destructive"
                                )}>
                               {format(day, 'd')}
                           </span>
                           <div className="mt-2 flex-1 space-y-1 overflow-auto">
-                            {dayItems.map(item => (
-                              <TaskCard key={item.id} task={item} />
-                            ))}
+                            {dayItems.map(item => {
+                               if (workstream === 'socialMediaPosts') {
+                                  return <SocialPostCard key={item.id} post={item as SocialMediaPost} />
+                               }
+                               return <TaskCard key={item.id} task={item as Task} />
+                            })}
                           </div>
                       </div>
                   )

@@ -211,7 +211,7 @@ export type WorkItem = {
   brandId: string;
   description?: string;
   status: Status;
-  statusInternal: Status;
+  statusInternal: Status; // Legacy field
   priority: Priority;
   assignees?: User[];
   assigneeIds: string[];
@@ -254,22 +254,20 @@ export type Task = WorkItem & {
 };
 
 export type SocialMediaPost = WorkItem & {
+  // New fields to align with Tasks
+  dependencies?: string[];
+
+  // Existing fields
   platform: 'Instagram' | 'Facebook' | 'Twitter' | 'LinkedIn';
   caption: string;
   mediaUrl?: string;
-  scheduledAt: string;
+  scheduledAt: string; // Legacy field, use dueDate as primary
   postedAt?: string;
   postType: 'Upload' | 'Branding';
   mediaType?: 'image' | 'video';
   crop?: { x: number; y: number; zoom: number };
   objectPosition?: number;
-  creator: { name: string, avatarUrl?: string };
-  // Inheriting dependency and attachment fields
-  waitingOnTaskIds?: string[];
-  blockingTaskIds?: string[];
-  linkedTaskIds?: string[];
-  attachments?: Attachment[];
-  deliverables?: Attachment[];
+  // `createdBy` is now part of WorkItem
 };
 
 export type WebArticle = WorkItem & {
