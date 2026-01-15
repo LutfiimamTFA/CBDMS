@@ -148,7 +148,6 @@ export function SocialMediaPostDetailsSheet({
   useEffect(() => { setPostState(initialPost) }, [initialPost]);
   
   const [newComment, setNewComment] = useState('');
-  const [newSubtask, setNewSubtask] = useState('');
   
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -287,7 +286,106 @@ export function SocialMediaPostDetailsSheet({
   }, [postState.deliverables]);
 
 
-  const PriorityIcon = priorityInfo[postState.priority]?.icon;
+  const [isUploadingCommentAttachment, setIsUploadingCommentAttachment] = useState(false);
+
+  const handlePostComment = async () => {
+    if (!newComment.trim()) return;
+    if (!firestore || !currentUser) return;
+    setIsUploadingCommentAttachment(true);
+    try {
+      const newCommentData: Comment = {
+        id: crypto.randomUUID(),
+        user: {
+          id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '',
+          email: currentUser.email, role: currentUser.role, companyId: currentUser.companyId, createdAt: currentUser.createdAt
+        },
+        text: newComment,
+        timestamp: new Date().toISOString(),
+        replies: [],
+      };
+
+      const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
+      const updates = {
+        comments: [...(postState.comments || []), newCommentData],
+        activities: [...(postState.activities || []), newActivity],
+        lastActivity: newActivity,
+      };
+
+      await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), updates);
+      toast({ title: 'Comment Posted' });
+      setNewComment('');
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Comment Failed', description: error.message });
+    } finally {
+      setIsUploadingCommentAttachment(false);
+    }
+  };
+
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+    if (allUsers) {
+      const mentionMatch = text.match(/@(\w*)$/);
+      if (mentionMatch) {
+        setIsMentioning(true);
+        setMentionSuggestions(allUsers.filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+      } else {
+        setIsMentioning(false);
+      }
+    }
+  };
+
+  const handleMentionSelect = (user: User) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
+  };
+  
+  const handleAddDependency = async (postId: string, type: keyof Dependencies) => {
+    if (!firestore) return;
+    const currentDeps = postState.dependencies?.[type] || [];
+    if (!currentDeps.includes(postId)) {
+        await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [`dependencies.${type}`]: [...currentDeps, postId] });
+    }
+  };
+  
+  const handleRemoveDependency = async (postId: string, type: keyof Dependencies) => {
+    if (!firestore) return;
+    const currentDeps = postState.dependencies?.[type] || [];
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [`dependencies.${type}`]: currentDeps.filter(id => id !== taskId) });
+  };
+  
+  const dependencyOptions = useMemo(() => (allPosts || []).filter(p => p.id !== postState.id), [allPosts, postState.id]);
+  const groupedDependencyOptions = useMemo(() => {
+      const grouped: Record<string, SocialMediaPost[]> = {};
+      dependencyOptions.forEach(post => {
+          const brandName = brands?.find(b => b.id === post.brandId)?.name || 'Unbranded';
+          if (!grouped[brandName]) grouped[brandName] = [];
+          grouped[brandName].push(post);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  }, [dependencyOptions, brands]);
+  
+  const renderDependencyList = (ids: string[], type: keyof Dependencies) => (
+    <div className="flex flex-wrap gap-2">
+        {(ids || []).map(id => {
+            const post = allPosts?.find(p => p.id === id);
+            return post ? (
+                <Badge key={id} variant="secondary">
+                    {post.title}
+                    {canEditContent && (
+                        <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
+                    )}
+                </Badge>
+            ) : null;
+        })}
+    </div>
+  );
+
+  const priorityValue = form.watch('priority');
+  const PriorityIcon = priorityInfo[priorityValue]?.icon || priorityInfo[postState.priority]?.icon;
 
   return (
     <>
@@ -312,7 +410,7 @@ export function SocialMediaPostDetailsSheet({
             </SheetHeader>
             <div className="flex-1 flex min-h-0">
               <Form {...form}>
-              <form id="add-post-form" className='flex-1 flex min-h-0' onSubmit={form.handleSubmit(() => {})}>
+              <form id="add-post-form" className='flex-1 flex min-h-0'>
                 <div className="flex-1 grid md:grid-cols-3 min-h-0">
                     <ScrollArea className="md:col-span-2 h-full">
                         <div className="p-6 space-y-6">
@@ -335,8 +433,26 @@ export function SocialMediaPostDetailsSheet({
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4">
-                                  <p className="text-center text-muted-foreground text-sm py-8">Comments will be available soon.</p>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                      <ScrollArea className="max-h-48 pr-2">
+                                          <div className="space-y-4">
+                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                              {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                          </div>
+                                      </ScrollArea>
+                                      <div className="space-y-2 pt-4 border-t">
+                                          <div className="flex-1 relative">
+                                              <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
+                                          </div>
+                                          <div className="flex justify-between items-center">
+                                              <div className="flex-1"></div>
+                                              <Button type="button" onClick={handlePostComment} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                                    Post Comment
+                                              </Button>
+                                          </div>
+                                      </div>
                                 </TabsContent>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                   <p className="text-center text-muted-foreground text-sm py-8">Subtasks will be available soon.</p>
@@ -359,12 +475,19 @@ export function SocialMediaPostDetailsSheet({
                                   <Separator/>
                                   <div>
                                     <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                                    <div className="space-y-2">{postState.attachments?.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                                    <div className="space-y-2">{(postState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}</div>
+                                    {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                    {canEditContent && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
+                                    )}
                                   </div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
-                                  <p className="text-center text-muted-foreground text-sm py-8">Dependencies will be available soon.</p>
+                                  <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                  <Separator/>
+                                  <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                  <Separator/>
+                                  <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                 </TabsContent>
                             </Tabs>
                         </div>
@@ -428,7 +551,7 @@ export function SocialMediaPostDetailsSheet({
             </div>
             <DialogFooter>
                 <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
+                <Button onClick={() => handleConfirmGdriveLink()}>Add Link</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
