@@ -286,6 +286,8 @@ export function SocialMediaPostDetailsSheet({
   }, [postState.deliverables]);
 
 
+  const PriorityIcon = priorityInfo[postState.priority]?.icon;
+
   return (
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -361,7 +363,7 @@ export function SocialMediaPostDetailsSheet({
                                 <Separator/>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Brand</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></FormItem>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Status</FormLabel><div className="col-span-2 text-sm font-medium">{postState.status}</div></FormItem>
-                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />{postState.priority}</div></FormItem>
+                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />}{postState.priority}</div></FormItem>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></FormItem>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Publish Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></FormItem>
                             </div>
@@ -379,13 +381,6 @@ export function SocialMediaPostDetailsSheet({
                                   return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
                                 })}
                                 </FormItem>
-                            </div>
-                            
-                            <div className='space-y-4 p-4 rounded-lg border'>
-                                <h3 className='font-semibold text-sm'>Time Management</h3>
-                                <Separator/>
-                                <div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Estimasi</span><span className="col-span-2 text-sm font-medium">{postState.timeEstimate || 0} jam</span></div>
-                                <div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Total Logged</span><span className="col-span-2 text-sm font-medium">{formatHours(postState.timeTracked)}</span></div>
                             </div>
                         </div>
                     </ScrollArea>
@@ -427,3 +422,12 @@ export function SocialMediaPostDetailsSheet({
     </>
   );
 }
+
+// Helper to remove duplicate activities by ID, keeping the latest one.
+const getUniqueActivities = (activities: Activity[]): Activity[] => {
+  const activityMap = new Map<string, Activity>();
+  activities.forEach(activity => {
+      activityMap.set(activity.id, activity);
+  });
+  return Array.from(activityMap.values());
+};
