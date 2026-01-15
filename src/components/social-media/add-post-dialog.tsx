@@ -34,7 +34,7 @@ import {
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Timer } from 'lucide-react';
+import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Timer, Send } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
@@ -564,7 +564,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                             </Popover>
                           <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                         </TabsContent>
-                        <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
+                        <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
                             <div>
                                 <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
                                 <div className="space-y-2">{attachments.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
