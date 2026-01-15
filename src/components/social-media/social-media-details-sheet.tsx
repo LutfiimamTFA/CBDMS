@@ -9,7 +9,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { SocialMediaPost, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, Dependencies } from '@/lib/types';
+import type { SocialMediaPost, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle, SharedTask, Dependencies } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '../ui/textarea';
@@ -37,7 +37,13 @@ import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo,
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
+import { Progress } from '../ui/progress';
+import { format, formatDistanceToNow, parseISO } from 'date-fns';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Checkbox } from '../ui/checkbox';
+import { ScrollArea } from '../ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
@@ -49,6 +55,7 @@ import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
+import { ShareTaskDialog } from '../share/share-task-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -58,11 +65,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { usePermissions } from '@/context/permissions-provider';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { getInitials } from '@/lib/utils';
-import { Checkbox } from '../ui/checkbox';
-import { ScrollArea } from '../ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+
 
 const postDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -211,12 +215,12 @@ export function SocialMediaPostDetailsSheet({
     await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: newSubtasks });
   };
 
-  const handleAddDependency = async (taskId: string, type: keyof Dependencies) => {
+  const handleAddDependency = async (postId: string, type: keyof Dependencies) => {
     if (!firestore) return;
     const currentDeps = { ...(postState.dependencies as Dependencies) };
     const list = currentDeps[type] || [];
-    if (!list.includes(taskId)) {
-        (currentDeps[type] as string[]).push(taskId);
+    if (!list.includes(postId)) {
+        (currentDeps[type] as string[]).push(postId);
         await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { dependencies: currentDeps });
     }
   };
@@ -352,3 +356,5 @@ export function SocialMediaPostDetailsSheet({
     </>
   );
 }
+
+    
