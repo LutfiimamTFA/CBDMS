@@ -64,7 +64,7 @@ const getFocusItems = (items: WorkItem[] | null | undefined): WorkItem[] => {
 
 export function TodaysFocus() {
     const firestore = useFirestore();
-    const { user, profile, isLoading: userLoading } = useUserProfile();
+    const { user, profile, isLoading: userLoading, companyId } = useUserProfile();
     const router = useRouter();
 
     const tasksQuery = useMemo(() => {
@@ -91,11 +91,17 @@ export function TodaysFocus() {
     }, [firestore, user]);
     const { data: webArticles, isLoading: webArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
     
+    const usersQuery = useMemo(() => {
+        if (!firestore || !companyId) return null;
+        return query(collection(firestore, 'users'), where('companyId', '==', companyId));
+    }, [firestore, companyId]);
+    const { data: allUsers, isLoading: usersLoading } = useCollection<User>(usersQuery);
+
     const todaysTasks = useMemo(() => getFocusItems(tasks), [tasks]);
     const todaysSocialPosts = useMemo(() => getFocusItems(socialPosts), [socialPosts]);
     const todaysWebArticles = useMemo(() => getFocusItems(webArticles), [webArticles]);
 
-    const isLoading = userLoading || tasksLoading || socialPostsLoading || webArticlesLoading;
+    const isLoading = userLoading || tasksLoading || socialPostsLoading || webArticlesLoading || usersLoading;
 
     const renderSection = (title: string, icon: React.ElementType, items: WorkItem[], emptyMessage: string) => (
       <Card>
@@ -111,7 +117,7 @@ export function TodaysFocus() {
                   <div className="space-y-3">
                       {items.map(item => {
                           if (isSocialMediaPost(item)) {
-                              return <SocialPostCard key={item.id} post={item as SocialMediaPost} />;
+                              return <SocialPostCard key={item.id} post={item as SocialMediaPost} allUsers={allUsers || []} />;
                           }
                           if (isWebArticle(item)) {
                               return <WebArticleCard key={item.id} article={item as WebArticle} />;

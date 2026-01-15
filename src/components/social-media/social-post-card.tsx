@@ -1,7 +1,7 @@
 
 'use client';
-import React, { useMemo } from 'react';
-import type { SocialMediaPost } from '@/lib/types';
+import React from 'react';
+import type { SocialMediaPost, User } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
 interface SocialPostCardProps {
   post: SocialMediaPost;
+  allUsers: User[];
 }
 
 const statusConfig: Record<string, { color: string; icon: React.ElementType, label: string }> = {
@@ -39,7 +40,7 @@ const StatusIcon = ({ status }: { status: SocialMediaPost['status'] }) => {
 };
 
 
-export function SocialPostCard({ post }: SocialPostCardProps) {
+export function SocialPostCard({ post, allUsers }: SocialPostCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
   const statusStyling = statusConfig[post.statusInternal || post.status] || statusConfig['Draft'];
@@ -51,7 +52,11 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
       return `${user.name} ${action} ${timeAgo}`;
   }, [post.lastActivity]);
 
-  const assignees = post.assignees || [];
+  const assignees = React.useMemo(() => {
+    return (post.assigneeIds || [])
+      .map(id => allUsers.find(u => u.id === id))
+      .filter(Boolean) as User[];
+  }, [post.assigneeIds, allUsers]);
   
   const PriorityIcon = priorityInfo[post.priority].icon;
   const priorityColor = priorityInfo[post.priority].color;
