@@ -123,7 +123,7 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       cell: ({ row }) => {
         const brandId = row.getValue('brandId') as string;
         const brandName = brandMap.get(brandId) || 'Restricted';
-        return <Badge variant="outline" className="font-normal">{brandName}</Badge>;
+        return <span className="font-medium">{brandName}</span>;
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))

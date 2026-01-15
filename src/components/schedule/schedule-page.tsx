@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { Task, SocialMediaPost } from '@/lib/types';
+import type { Task, SocialMediaPost, User } from '@/lib/types';
 import { collection, query, where } from 'firebase/firestore';
 import {
   eachDayOfInterval,
@@ -34,6 +34,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { TaskCard } from '@/components/tasks/task-card';
 import { SocialPostCard } from '../social-media/social-post-card';
 import { normalizeSocialPost } from '@/lib/social-media-utils';
+import { useSafeBrands } from '@/hooks/use-safe-brands';
+import { MultiSelect } from '../ui/multi-select';
+import { Label } from '../ui/label';
 
 interface SchedulePageProps {
   workstream: 'tasks' | 'socialMediaPosts' | 'webArticles';
@@ -45,6 +48,14 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
   const firestore = useFirestore();
   const { profile: currentUser, companyId } = useUserProfile();
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+
+  const { brands, brandMap, isLoading: areBrandsLoading } = useSafeBrands();
+  const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(
+    useMemo(() => (firestore && companyId ? query(collection(firestore, 'users'), where('companyId', '==', companyId)) : null), [firestore, companyId])
+  );
 
   const dataQuery = useMemo(() => {
     if (!firestore || !companyId || !currentUser) return null;
@@ -61,14 +72,27 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
   }, [firestore, companyId, currentUser, workstream]);
 
   const { data: allItems, isLoading } = useCollection<WorkItem>(dataQuery);
+  
+  const userOptions = useMemo(() => (allUsers || []).map(u => ({ value: u.id, label: u.name })), [allUsers]);
+  const brandOptions = useMemo(() => (brands || []).map(b => ({ value: b.id, label: b.name })), [brands]);
+
 
   const normalizedItems = useMemo(() => {
     if (!allItems || !currentUser) return [];
-    if (workstream === 'socialMediaPosts') {
-      return allItems.map(item => normalizeSocialPost(item as SocialMediaPost, currentUser));
+    
+    let filtered = allItems;
+    if (selectedBrands.length > 0) {
+      filtered = filtered.filter(item => item.brandId && selectedBrands.includes(item.brandId));
     }
-    return allItems;
-  }, [allItems, currentUser, workstream]);
+    if (selectedUsers.length > 0) {
+      filtered = filtered.filter(item => item.assigneeIds.some(id => selectedUsers.includes(id)));
+    }
+    
+    if (workstream === 'socialMediaPosts') {
+      return filtered.map(item => normalizeSocialPost(item as SocialMediaPost, currentUser));
+    }
+    return filtered;
+  }, [allItems, currentUser, workstream, selectedBrands, selectedUsers]);
 
 
   const calendarGrid = useMemo(() => {
@@ -84,21 +108,24 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
     if (!normalizedItems) return map;
     
     normalizedItems.forEach(item => {
-      // The `dueDate` is now reliable thanks to the normalizer.
-      const dateValue = item.dueDate;
+      const dateValue = item.dueDate || (item as SocialMediaPost).scheduledAt;
       if (dateValue) {
-        const dueDate = parseISO(dateValue);
-        if (isWithinInterval(dueDate, { start: calendarGrid.start, end: calendarGrid.end })) {
-          const key = format(dueDate, 'yyyy-MM-dd');
-          if (!map.has(key)) {
-            map.set(key, []);
+        try {
+          const dueDate = parseISO(dateValue);
+          if (isWithinInterval(dueDate, { start: calendarGrid.start, end: calendarGrid.end })) {
+            const key = format(dueDate, 'yyyy-MM-dd');
+            if (!map.has(key)) {
+              map.set(key, []);
+            }
+            map.get(key)?.push(item);
           }
-          map.get(key)?.push(item);
+        } catch (e) {
+          // ignore invalid dates
         }
       }
     });
     return map;
-  }, [normalizedItems, calendarGrid, workstream]);
+  }, [normalizedItems, calendarGrid.start, calendarGrid.end]);
   
   const years = Array.from({ length: 11 }, (_, i) => new Date().getFullYear() - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => ({
@@ -145,6 +172,10 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
               </Button>
             </div>
           </div>
+          <div className="flex gap-2">
+              <div><Label className="text-xs">Brands</Label><MultiSelect options={brandOptions} onValueChange={setSelectedBrands} defaultValue={selectedBrands} placeholder="Filter brands..." /></div>
+              <div><Label className="text-xs">Users</Label><MultiSelect options={userOptions} onValueChange={setSelectedUsers} defaultValue={selectedUsers} placeholder="Filter users..." /></div>
+          </div>
         </div>
 
         <div className="grid grid-cols-7 border-t border-l border-border bg-secondary/30">
@@ -156,7 +187,7 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
             ))}
         </div>
         <div className="flex-1 min-h-0">
-          {isLoading ? (
+          {isLoading || areBrandsLoading || areUsersLoading ? (
              <div className="flex items-center justify-center h-full">
               <Loader2 className="h-8 w-8 animate-spin" />
             </div>

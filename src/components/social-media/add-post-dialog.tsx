@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -35,7 +35,7 @@ import {
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText } from 'lucide-react';
+import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Timer } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
@@ -56,6 +56,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { formatHours } from '@/lib/utils';
 
 const postSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -66,6 +67,7 @@ const postSchema = z.object({
   startDate: z.date().optional(),
   dueDate: z.date().optional(),
   scheduledAt: z.date().optional(),
+  timeEstimate: z.coerce.number().min(0).optional(),
   postType: z.enum(['Upload', 'Branding']).default('Upload'),
 }).refine((data) => {
     if (data.startDate && data.dueDate) return data.dueDate >= data.startDate;
@@ -167,6 +169,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
       startDate: undefined,
       dueDate: undefined,
       scheduledAt: undefined,
+      timeEstimate: undefined,
       postType: 'Upload',
     },
   });
@@ -184,6 +187,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
           startDate: undefined,
           dueDate: undefined,
           scheduledAt: undefined,
+          timeEstimate: undefined,
           postType: 'Upload',
         });
         
@@ -236,6 +240,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
         startDate: data.startDate?.toISOString(),
         dueDate: data.dueDate?.toISOString(),
         scheduledAt: data.scheduledAt?.toISOString(),
+        timeEstimate: data.timeEstimate,
         dependencies: dependencies,
         postType: data.postType,
         status: 'To Do',
@@ -256,9 +261,11 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
         const notificationRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
         const notification: Omit<Notification, 'id'> = {
             userId: assigneeId,
-            title: 'New Social Media Post Assigned',
-            message: `${currentUserProfile.name} assigned you a new post: "${data.title}"`,
-            taskId: newPostRef.id,
+            title: '[Social] New Post Assigned',
+            message: `${currentUserProfile.name} assigned you: "${data.title}"`,
+            entityId: newPostRef.id,
+            entityType: 'socialPost',
+            workstream: 'social',
             isRead: false,
             createdAt: serverTimestamp(),
             createdBy: { id: currentUserProfile.id, name: currentUserProfile.name, avatarUrl: currentUserProfile.avatarUrl || '' }
@@ -399,12 +406,39 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                       <div className="space-y-4 rounded-lg border p-4">
                         <FormField control={form.control} name="startDate" render={({ field }) => ( <FormItem><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
                         <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem><FormLabel>Internal Due Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
-                        <FormField control={form.control} name="scheduledAt" render={({ field }) => ( <FormItem><FormLabel>Upload/Publish Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
+                        <FormField control={form.control} name="scheduledAt" render={({ field }) => ( <FormItem><FormLabel>Upload/Publish Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP, p") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
+                      </div>
+                       <div className='space-y-4 p-4 rounded-lg border'>
+                          <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                          <Separator/>
+                            <FormField
+                                control={form.control}
+                                name="timeEstimate"
+                                render={({ field }) => (
+                                    <FormItem className="grid grid-cols-3 items-center gap-2">
+                                        <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
+                                        <div className="col-span-2 flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={field.value !== undefined ? field.value / 8 : ''} 
+                                                onChange={(e) => {
+                                                    const days = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                    const hours = days !== undefined ? days * 8 : undefined;
+                                                    field.onChange(hours);
+                                                }}
+                                                placeholder="e.g., 1.5"
+                                            />
+                                            <span className="text-sm text-muted-foreground whitespace-nowrap">({field.value || 0} jam)</span>
+                                        </div>
+                                    </FormItem>
+                                )}
+                            />
                       </div>
                     </div>
                   </div>
                    <Tabs defaultValue="subtasks" className="w-full">
-                        <TabsList className="grid w-full grid-cols-5">
+                        <TabsList className="grid w-full grid-cols-5 gap-1">
                           <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                           <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
                           <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
@@ -467,4 +501,3 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
   );
 }
 
-    
