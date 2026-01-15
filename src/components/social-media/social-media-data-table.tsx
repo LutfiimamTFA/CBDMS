@@ -147,22 +147,43 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       cell: ({ row }) => {
         const assigneeIds = row.getValue('assigneeIds') as string[] || [];
         const assignees = users.filter(u => assigneeIds.includes(u.id));
+        
+        if (assignees.length === 0) {
+            return <div className="text-muted-foreground">-</div>;
+        }
+
+        const firstAssignee = assignees[0];
+
         return (
-          <div className="flex -space-x-2">
-            {assignees.slice(0, 3).map(user => (
-                <TooltipProvider key={user.id}><Tooltip><TooltipTrigger asChild>
-                    <Avatar className="h-7 w-7 border-2 border-background">
-                        <AvatarImage src={user.avatarUrl} alt={user.name} />
-                        <AvatarFallback>{user.name?.[0]}</AvatarFallback>
-                    </Avatar>
-                </TooltipTrigger><TooltipContent><p>{user.name}</p></TooltipContent></Tooltip></TooltipProvider>
-            ))}
-            {assignees.length > 3 && (
-                <TooltipProvider><Tooltip><TooltipTrigger asChild>
-                    <Avatar className="h-7 w-7 border-2 border-background"><AvatarFallback>+{assignees.length - 3}</AvatarFallback></Avatar>
-                </TooltipTrigger><TooltipContent><p>{assignees.slice(3).map(u => u.name).join(', ')}</p></TooltipContent></Tooltip></TooltipProvider>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                    <div className='flex items-center gap-2'>
+                        <Avatar className="h-7 w-7 border-2 border-background">
+                            <AvatarImage src={firstAssignee.avatarUrl} alt={firstAssignee.name} />
+                            <AvatarFallback>{firstAssignee.name?.[0]}</AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium truncate max-w-[120px]">{firstAssignee.name}</span>
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent><p>{firstAssignee.name}</p></TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {assignees.length > 1 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="cursor-default">+{assignees.length - 1}</Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {assignees.slice(1).map(u => <p key={u.id}>{u.name}</p>)}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
-            </div>
+          </div>
         );
       },
       filterFn: (row, id, value) => {
