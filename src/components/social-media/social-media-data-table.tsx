@@ -103,14 +103,7 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       cell: ({ row }) => {
         const post = row.original;
         return (
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-muted rounded-md overflow-hidden shrink-0">
-              {post.mediaUrl && <img src={post.mediaUrl} alt="Post media" className="w-full h-full object-cover" />}
-            </div>
-            <div>
-              <p className="font-medium line-clamp-2">{post.title}</p>
-            </div>
-          </div>
+            <p className="font-medium line-clamp-2">{post.title}</p>
         );
       }
     },
@@ -121,7 +114,7 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       ),
       cell: ({ row }) => {
         const dueDate = row.getValue('dueDate') as string | undefined;
-        return dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>;
+        return <div className="text-left font-medium">{dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>}</div>;
       }
     },
      {
@@ -192,14 +185,6 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       },
        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
-    {
-        id: "actions",
-        cell: ({ row }) => (
-            <Button variant="outline" size="sm" onClick={() => router.push(`/social-media/posts/${row.original.id}`)}>
-                View
-            </Button>
-        ),
-    },
   ];
 
   const table = useReactTable({
@@ -248,7 +233,16 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
                 <TableBody>
                     {table.getRowModel().rows?.length ? (
                         table.getRowModel().rows.map((row) => (
-                            <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>{row.getVisibleCells().map((cell) => (<TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>))}</TableRow>
+                            <TableRow 
+                                key={row.id} 
+                                data-state={row.getIsSelected() && 'selected'}
+                                onClick={() => router.push(`/social-media/posts/${row.original.id}`)}
+                                className="cursor-pointer"
+                            >
+                                {row.getVisibleCells().map((cell) => (
+                                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                                ))}
+                            </TableRow>
                         ))
                     ) : (<TableRow><TableCell colSpan={columns.length} className="h-24 text-center">No posts found.</TableCell></TableRow>)}
                 </TableBody>
