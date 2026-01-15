@@ -51,7 +51,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
   return (
       <Card
         className={cn(
-          "transition-shadow duration-200 hover:shadow-lg w-full relative",
+          "transition-shadow duration-200 hover:shadow-xl w-full relative",
           draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
         )}
       >
