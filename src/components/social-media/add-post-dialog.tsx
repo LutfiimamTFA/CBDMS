@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -177,15 +176,41 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
   });
 
   const assigneeIds = form.watch('assigneeIds');
+  
   const subtaskAssigneeOptions = useMemo(() => {
-    if (!allUsers) return {};
+    if (!allUsers || !currentUserProfile) return {};
     const mainAssignees = allUsers.filter(u => assigneeIds.includes(u.id));
-    const otherUsers = allUsers.filter(u => u.role !== 'Client' && !assigneeIds.includes(u.id));
-    return {
-        "Task Assignees": mainAssignees,
-        "Other Members": otherUsers
+    const createGroup = (title: string, users: UserType[]) => users.length > 0 ? { [title]: users } : {};
+
+    if (currentUserProfile.role === 'Super Admin') {
+        const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
+        const employees = allUsers.filter(u => u.role === 'Employee' && !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("Managers", managers),
+            ...createGroup("Employees", employees),
+        };
     }
-  }, [allUsers, assigneeIds]);
+    
+    if (currentUserProfile.role === 'Manager') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUserProfile.id || u.id === currentUserProfile.id);
+        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherMembers),
+        };
+    }
+    
+    if (currentUserProfile.role === 'Employee') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUserProfile.managerId);
+        const otherTeamMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return {
+            ...createGroup("Task Assignees", mainAssignees),
+            ...createGroup("My Team", otherTeamMembers),
+        };
+    }
+    return {};
+  }, [allUsers, currentUserProfile, assigneeIds]);
   
   const singleBrandId = useMemo(() => (brands && brands.length === 1) ? brands[0].id : null, [brands]);
 
@@ -519,7 +544,6 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                               <PopoverContent className="w-60 p-1">
                                 <ScrollArea className="max-h-60">
                                   <div className="space-y-1">
-                                    <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
                                     {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
                                       users.length > 0 && (
                                         <React.Fragment key={group}>
@@ -624,4 +648,3 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     </>
   );
 }
-
