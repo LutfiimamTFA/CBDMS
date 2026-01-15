@@ -43,16 +43,6 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
   const statusStyling = statusConfig[post.statusInternal || post.status] || statusConfig['Draft'];
-  
-  const imageStyle: React.CSSProperties | undefined = post.crop
-    ? {
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
-        transform: `translate(${post.crop.x}px, ${post.crop.y}px) scale(${post.crop.zoom})`,
-        transformOrigin: 'center center',
-      }
-    : { objectFit: 'cover' };
     
   const lastActivityText = React.useMemo(() => {
       if (!post.lastActivity) return null;
@@ -60,6 +50,8 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
       const timeAgo = timestamp ? formatDistanceToNow(timestamp.toDate ? timestamp.toDate() : new Date(timestamp), { addSuffix: true }) : '';
       return `${user.name} ${action} ${timeAgo}`;
   }, [post.lastActivity]);
+
+  const assignees = post.assignees || [];
 
   const handleOpenChange = (open: boolean) => {
     if (open) {
@@ -81,7 +73,7 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
                 <p className="font-semibold text-base line-clamp-2 pr-2">{post.title}</p>
                  {post.mediaUrl ? (
                     <div className="relative aspect-square w-16 h-16 shrink-0 ml-2 rounded-md overflow-hidden bg-secondary">
-                        <img src={post.mediaUrl} alt="media preview" style={imageStyle} className="w-full h-full object-cover"/>
+                        <img src={post.mediaUrl} alt="media preview" className="w-full h-full object-cover"/>
                     </div>
                 ) : null}
             </div>
@@ -103,7 +95,7 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
           </CardContent>
           <CardFooter className="p-3 flex justify-between items-center bg-card border-t">
               <div className="flex items-center -space-x-2">
-                {(post.assignees || []).slice(0, 3).map(assignee => (
+                {(assignees).slice(0, 3).map(assignee => (
                   <TooltipProvider key={assignee.id}>
                     <Tooltip>
                       <TooltipTrigger>
@@ -116,16 +108,16 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
                     </Tooltip>
                   </TooltipProvider>
                 ))}
-                {(post.assignees?.length || 0) > 3 && (
+                {(assignees?.length || 0) > 3 && (
                    <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger>
                           <Avatar className="h-7 w-7 border-2 border-background">
-                              <AvatarFallback>+{(post.assignees?.length || 0) - 3}</AvatarFallback>
+                              <AvatarFallback>+{(assignees?.length || 0) - 3}</AvatarFallback>
                           </Avatar>
                       </TooltipTrigger>
                       <TooltipContent>
-                          {(post.assignees || []).slice(3).map(a => <p key={a.id}>{a.name}</p>)}
+                          {(assignees || []).slice(3).map(a => <p key={a.id}>{a.name}</p>)}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
