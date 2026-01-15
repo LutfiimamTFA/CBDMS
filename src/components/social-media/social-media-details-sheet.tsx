@@ -9,7 +9,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { SocialMediaPost, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle, SharedTask, Dependencies } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle, SharedTask, Dependencies, SocialMediaPost } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '../ui/textarea';
@@ -31,14 +31,14 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { priorityInfo } from '@/lib/utils';
+import { priorityInfo, formatLateness } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks, RotateCcw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { Progress } from '../ui/progress';
-import { format, formatDistanceToNow, parseISO } from 'date-fns';
+import { format, formatDistanceToNow, parseISO, isAfter, endOfDay } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
@@ -50,20 +50,24 @@ import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
+import { ShareTaskDialog } from '../share/share-task-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-import { usePermissions } from '@/context/permissions-provider';
+import { Card, CardContent } from '../ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useSharedSession } from '@/context/shared-session-provider';
+import { tags as allTags } from '@/lib/data';
+import { RichTextEditor } from '../ui/rich-text-editor';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import { getInitials } from '@/lib/utils';
-import { normalizeSocialPost } from '@/lib/social-media-utils';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
+import { usePermissions } from '@/context/permissions-provider';
 
 
 const postDetailsSchema = z.object({
@@ -106,6 +110,21 @@ const formatDate = (date: any): string => {
     if (isNaN(dateObj.getTime())) return 'Invalid date';
     return format(dateObj, 'PP, p');
 };
+  
+const formatHours = (hours: number = 0) => {
+    const h = Math.floor(hours);
+    const m = Math.floor((hours - h) * 60);
+    return `${h}h ${m}m`;
+};
+
+const getInitials = (name?: string | null) => {
+    if (!name) return 'A';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('');
+};
+
 
 export function SocialMediaPostDetailsSheet({ 
   post: initialPost, 
@@ -115,8 +134,8 @@ export function SocialMediaPostDetailsSheet({
   const { t } = useI18n();
   const { toast } = useToast();
   
-  const [postState, setPostState] = useState(() => normalizeSocialPost(initialPost, initialPost.createdBy as User));
-  useEffect(() => { setPostState(normalizeSocialPost(initialPost, initialPost.createdBy as User)) }, [initialPost]);
+  const [postState, setPostState] = useState(initialPost);
+  useEffect(() => { setPostState(initialPost) }, [initialPost]);
   
   const [newComment, setNewComment] = useState('');
   const [newSubtask, setNewSubtask] = useState('');
@@ -126,7 +145,6 @@ export function SocialMediaPostDetailsSheet({
   
   const firestore = useFirestore();
   const { user: authUser, profile: currentUser } = useUserProfile();
-  const { permissions, isLoading: arePermsLoading } = usePermissions();
 
   const allPostsQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
@@ -136,7 +154,8 @@ export function SocialMediaPostDetailsSheet({
   
   const usersQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
-    return query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
+    let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
+    return q;
   }, [firestore, currentUser]);
   const { data: allUsers } = useCollection<User>(usersQuery);
   
@@ -158,12 +177,12 @@ export function SocialMediaPostDetailsSheet({
         dueDate: postState.dueDate ? format(parseISO(postState.dueDate), 'yyyy-MM-dd') : undefined,
     }
   });
-  
+
   const canEditContent = useMemo(() => {
-      if (!currentUser) return false;
-      const isCreator = currentUser.id === postState.createdBy.id;
-      const isManagerOfBrand = currentUser.role === 'Manager' && postState.brandId && (currentUser.brandIds || []).includes(postState.brandId);
-      return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
+    if (!currentUser) return false;
+    const isCreator = currentUser.id === postState.createdBy.id;
+    const isManagerOfBrand = currentUser.role === 'Manager' && postState.brandId && (currentUser.brandIds || []).includes(postState.brandId);
+    return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
   }, [currentUser, postState]);
 
   const handleDelete = () => {
@@ -173,8 +192,8 @@ export function SocialMediaPostDetailsSheet({
     onOpenChange(false);
     setDeleteConfirmOpen(false);
   };
-  
-   const handlePostComment = async () => {
+
+  const handlePostComment = async () => {
     if (!newComment.trim() || !firestore || !currentUser) return;
     const newCommentData: Comment = {
         id: crypto.randomUUID(),
@@ -191,8 +210,8 @@ export function SocialMediaPostDetailsSheet({
     });
     setNewComment('');
   };
-  
-   const handleAddSubtask = async () => {
+
+  const handleAddSubtask = async () => {
     if (!newSubtask.trim() || !firestore) return;
     const subtask: Subtask = { id: `st-${Date.now()}`, title: newSubtask, completed: false };
     await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: [...(postState.subtasks || []), subtask] });
@@ -264,6 +283,8 @@ export function SocialMediaPostDetailsSheet({
     });
   };
 
+  const PriorityIcon = priorityInfo[postState.priority].icon;
+
   return (
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -284,53 +305,113 @@ export function SocialMediaPostDetailsSheet({
                 </div>
             </SheetHeader>
              <div className="flex-1 min-h-0">
+              <Form {...form}>
+              <form id="add-post-form" onSubmit={form.handleSubmit(() => {})}>
                 <ScrollArea className="h-full" style={{height: 'calc(100vh - 65px)'}}>
-                    <div className="p-6">
-                        <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
-                         <Tabs defaultValue="comments" className="w-full mt-6">
-                            <TabsList className="grid w-full grid-cols-5">
+                    <div className="grid md:grid-cols-3">
+                        <div className="md:col-span-2 p-6 space-y-6">
+                            <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
+                            <Accordion type="single" collapsible defaultValue="description">
+                                <AccordionItem value="description" className="border-none">
+                                    <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
+                                        {postState.caption ? 'View/Edit Caption' : 'Add Caption'}
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pt-2">
+                                        <FormField control={form.control} name="caption" render={({ field }) => ( <FormItem><FormControl><RichTextEditor value={field.value || ''} onChange={field.onChange} placeholder="Write the post caption here..." readOnly={!canEditContent} /></FormControl><FormMessage /></FormItem> )}/>
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                            
+                             <div className="space-y-4 rounded-lg border p-4">
+                                <h3 className="font-semibold text-base">Files</h3>
+                                <Separator />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                    {/* Materials Section */}
+                                    <div>
+                                        <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                        <div className="space-y-2">
+                                            {(postState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div>))}
+                                            {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                        </div>
+                                    </div>
+                                    {/* Deliverables Section */}
+                                    <div>
+                                        <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                                        <div className="space-y-2">
+                                            {(postState.deliverables || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div>))}
+                                            {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <Tabs defaultValue="comments" className="w-full">
+                                <TabsList className="grid w-full grid-cols-5">
                                 <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                 <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                                <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
-                                <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
                                 <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                            </TabsList>
-                             <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                                <ScrollArea className="max-h-48 pr-2"><div className="space-y-4">
-                                {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
-                                {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet.</p>}
-                                </div></ScrollArea>
-                                <div className="flex items-start gap-2 pt-4 border-t">
-                                    <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{getInitials(currentUser?.name)}</AvatarFallback></Avatar>
-                                    <Textarea placeholder="Write a comment..." value={newComment} onChange={(e) => setNewComment(e.target.value)} />
-                                    <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
-                                </div>
-                            </TabsContent>
-                            <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                    {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
-                                </div>
-                                <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
-                            </TabsContent>
-                             <TabsContent value="materials" className="mt-4 space-y-2 rounded-lg border p-4">
-                                 {(postState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div>))}
-                                 {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                            </TabsContent>
-                             <TabsContent value="deliverables" className="mt-4 space-y-2 rounded-lg border p-4">
-                                 {(postState.deliverables || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div>))}
-                                 {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
-                            </TabsContent>
-                            <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
-                                <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>{renderDependencyList((postState.dependencies as Dependencies)?.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                    <ScrollArea className="max-h-48 pr-2"><div className="space-y-4">
+                                    {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                    {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet.</p>}
+                                    </div></ScrollArea>
+                                    <div className="flex items-start gap-2 pt-4 border-t">
+                                        <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{getInitials(currentUser?.name)}</AvatarFallback></Avatar>
+                                        <Textarea placeholder="Write a comment..." value={newComment} onChange={(e) => setNewComment(e.target.value)} />
+                                        <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                                    </div>
+                                </TabsContent>
+                                <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                        {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                                    </div>
+                                    <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                                </TabsContent>
+                                <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>{renderDependencyList((postState.dependencies as Dependencies)?.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>{renderDependencyList((postState.dependencies as Dependencies)?.blocking || [], 'blocking')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Tugas terkait tapi tidak saling memblokir.</p>{renderDependencyList((postState.dependencies as Dependencies)?.linked || [], 'linked')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                </TabsContent>
+                                <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
+                                {(postState.revisionHistory && postState.revisionHistory.length > 0) ? ( <Accordion type="single" collapsible>{postState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => ( <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}><AccordionTrigger><div className="flex flex-col items-start text-left"><span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span><span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span></div></AccordionTrigger><AccordionContent><ul className="list-disc pl-5 space-y-1">{cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}</ul></AccordionContent></AccordionItem> ))}</Accordion> ) : ( <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this task.</p> )}
+                                </TabsContent>
+                            </Tabs>
+                        </div>
+                         <div className="md:col-span-1 p-6 space-y-6">
+                            <div className='space-y-4 p-4 rounded-lg border'>
+                                <h3 className='font-semibold text-sm'>Social Media Details</h3>
                                 <Separator/>
-                                <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>{renderDependencyList((postState.dependencies as Dependencies)?.blocking || [], 'blocking')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Brand</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></FormItem>
+                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Status</FormLabel><div className="col-span-2 text-sm font-medium">{postState.status}</div></FormItem>
+                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />{postState.priority}</div></FormItem>
+                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></FormItem>
+                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Publish Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></FormItem>
+                            </div>
+
+                            <div className='space-y-4 p-4 rounded-lg border'>
+                                <h3 className='font-semibold text-sm'>People</h3>
                                 <Separator/>
-                                <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Tugas terkait tapi tidak saling memblokir.</p>{renderDependencyList((postState.dependencies as Dependencies)?.linked || [], 'linked')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
-                            </TabsContent>
-                        </Tabs>
+                                <FormItem><FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
+                                {(postState.assignees || []).map((user) => ( <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div> ))}
+                                </FormItem>
+                            </div>
+                            
+                            <div className='space-y-4 p-4 rounded-lg border'>
+                                <h3 className='font-semibold text-sm'>Time Management</h3>
+                                <Separator/>
+                                <div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Estimasi</span><span className="col-span-2 text-sm font-medium">{postState.timeEstimate || 0} jam</span></div>
+                                <div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Total Logged</span><span className="col-span-2 text-sm font-medium">{formatHours(postState.timeTracked)}</span></div>
+                            </div>
+                        </div>
                     </div>
-                </ScrollArea>
-             </div>
+                  </ScrollArea>
+                </form>
+              </Form>
+            </div>
         </SheetContent>
     </Sheet>
     
@@ -341,7 +422,7 @@ export function SocialMediaPostDetailsSheet({
                 {postState.activities && postState.activities.length > 0 ? (getUniqueActivities(postState.activities).slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> ))) : ( <p className="text-center text-muted-foreground py-8">No activities recorded.</p> )}
             </div></ScrollArea>
         </DialogContent>
-    </Dialog>
+       </Dialog>
     
     <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this post?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the post: <strong className="text-foreground">{postState.title}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Yes, Delete Post</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
