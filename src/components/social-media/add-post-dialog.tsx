@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm, useWatch, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -33,25 +33,29 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { CalendarIcon, Loader2, Plus, Wand2, Building2 } from 'lucide-react';
+import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import { collection, serverTimestamp, writeBatch, doc, query, where } from 'firebase/firestore';
+import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
+import { collection, serverTimestamp, writeBatch, doc, query, where, getDocs } from 'firebase/firestore';
 import { Calendar as CalendarComponent } from '../ui/calendar';
 import { cn } from '@/lib/utils';
 import { MultiSelect } from '../ui/multi-select';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { useSafeBrands } from '@/hooks/use-safe-brands';
-import type { SocialMediaPost, User as UserType, Brand, Notification } from '@/lib/types';
+import type { SocialMediaPost, User as UserType, Brand, Notification, Subtask, Attachment, Dependencies, Comment } from '@/lib/types';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
-
+import { Checkbox } from '../ui/checkbox';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 const postSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -63,7 +67,6 @@ const postSchema = z.object({
   dueDate: z.date().optional(),
   scheduledAt: z.date().optional(),
   postType: z.enum(['Upload', 'Branding']).default('Upload'),
-  dependencies: z.array(z.string()).optional(),
 }).refine((data) => {
     if (data.startDate && data.dueDate) return data.dueDate >= data.startDate;
     return true;
@@ -80,11 +83,34 @@ type PostFormValues = z.infer<typeof postSchema>;
 export function AddSocialMediaPostDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
   const [isSuggesting, setIsSuggesting] = React.useState(false);
+  const [isUploading, setIsUploading] = React.useState(false);
   const [suggestionReason, setSuggestionReason] = React.useState<string | null>(null);
   const { t, language } = useI18n();
   const { toast } = useToast();
   
+  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
+
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [deliverables, setDeliverables] = useState<Attachment[]>([]);
+
+  const [dependencies, setDependencies] = useState<Dependencies>({ waitingOn: [], blocking: [], linked: []});
+
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  
+  const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
+  const [gdriveLink, setGdriveLink] = useState('');
+  const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const deliverableFileInputRef = useRef<HTMLInputElement>(null);
+
+  
   const firestore = useFirestore();
+  const storage = useStorage();
 
   const { user, profile: currentUserProfile, companyId } = useUserProfile();
   const { brands, brandMap, isLoading: areBrandsLoading } = useSafeBrands();
@@ -118,18 +144,16 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     return [];
   }, [allUsers, currentUserProfile]);
   
-  const dependencyOptions = useMemo(() => {
-    if (!allPosts) return [];
-    const grouped: Record<string, {label: string; value: string}[]> = {};
-    allPosts.forEach(post => {
-        const brandName = brandMap.get(post.brandId) || 'Unbranded';
-        if (!grouped[brandName]) {
-            grouped[brandName] = [];
-        }
-        grouped[brandName].push({ label: post.title, value: post.id });
-    });
-    return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
-  }, [allPosts, brandMap]);
+  const dependencyOptions = useMemo(() => (allPosts || []), [allPosts]);
+  const groupedDependencyOptions = useMemo(() => {
+      const grouped: Record<string, SocialMediaPost[]> = {};
+      dependencyOptions.forEach(post => {
+          const brandName = brandMap.get(post.brandId) || 'Unbranded';
+          if (!grouped[brandName]) grouped[brandName] = [];
+          grouped[brandName].push(post);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  }, [dependencyOptions, brandMap]);
 
 
   const form = useForm<PostFormValues>({
@@ -144,20 +168,16 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
       dueDate: undefined,
       scheduledAt: undefined,
       postType: 'Upload',
-      dependencies: [],
     },
   });
   
-  const effectiveBrandId = useMemo(() => {
-      if (brands && brands.length === 1) return brands[0].id;
-      return null;
-  }, [brands]);
+  const singleBrandId = useMemo(() => (brands && brands.length === 1) ? brands[0].id : null, [brands]);
 
   useEffect(() => {
     if (open) {
         form.reset({
           title: '',
-          brandId: effectiveBrandId || '',
+          brandId: singleBrandId || '',
           caption: '',
           priority: 'Medium',
           assigneeIds: [],
@@ -165,25 +185,27 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
           dueDate: undefined,
           scheduledAt: undefined,
           postType: 'Upload',
-          dependencies: [],
         });
         
         setSuggestionReason(null);
+        setSubtasks([]);
+        setAttachments([]);
+        setDeliverables([]);
+        setDependencies({ waitingOn: [], blocking: [], linked: [] });
+        setComments([]);
+
         if (currentUserProfile && user && currentUserProfile.role === 'Employee') {
             form.setValue('assigneeIds', [user.uid]);
         }
-        if (effectiveBrandId) {
-            form.setValue('brandId', effectiveBrandId);
+        if (singleBrandId) {
+            form.setValue('brandId', singleBrandId);
         }
     }
-  }, [open, currentUserProfile, user, form, effectiveBrandId]);
+  }, [open, currentUserProfile, user, form, singleBrandId]);
 
   const handleSuggestPriority = async () => {
     const title = form.getValues('title');
-    if (!title) {
-      toast({ variant: 'destructive', title: 'Title is required' });
-      return;
-    }
+    if (!title) { toast({ variant: 'destructive', title: 'Title is required' }); return; }
     setIsSuggesting(true);
     setSuggestionReason(null);
     try {
@@ -214,18 +236,18 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
         startDate: data.startDate?.toISOString(),
         dueDate: data.dueDate?.toISOString(),
         scheduledAt: data.scheduledAt?.toISOString(),
-        dependencies: data.dependencies || [],
+        dependencies: dependencies,
         postType: data.postType,
         status: 'To Do',
         statusInternal: 'To Do',
         platform: 'Instagram', 
         companyId: currentUserProfile.companyId,
         createdAt: serverTimestamp(),
-        createdBy: {
-          id: currentUserProfile.id,
-          name: currentUserProfile.name,
-          avatarUrl: currentUserProfile.avatarUrl || '',
-        },
+        createdBy: { id: currentUserProfile.id, name: currentUserProfile.name, avatarUrl: currentUserProfile.avatarUrl || '' },
+        subtasks,
+        attachments,
+        deliverables,
+        comments
     };
     batch.set(newPostRef, newPostData);
 
@@ -239,31 +261,112 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
             taskId: newPostRef.id,
             isRead: false,
             createdAt: serverTimestamp(),
-            createdBy: {
-                id: currentUserProfile.id,
-                name: currentUserProfile.name,
-                avatarUrl: currentUserProfile.avatarUrl || '',
-            }
+            createdBy: { id: currentUserProfile.id, name: currentUserProfile.name, avatarUrl: currentUserProfile.avatarUrl || '' }
         };
         batch.set(notificationRef, notification);
     });
 
     try {
         await batch.commit();
-        toast({
-            title: 'Social Media Post Created',
-            description: `${data.title} has been added.`
-        });
+        toast({ title: 'Social Media Post Created', description: `${data.title} has been added.` });
         setOpen(false);
     } catch (error) {
         console.error("Failed to create post:", error);
-        toast({
-            variant: 'destructive',
-            title: 'Creation Failed',
-            description: 'Could not create the post. Please try again.'
-        });
+        toast({ variant: 'destructive', title: 'Creation Failed', description: 'Could not create the post. Please try again.' });
     }
   };
+  
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
+    if (!event.target.files || !storage) return;
+    setIsUploading(true);
+    const files = Array.from(event.target.files);
+    try {
+        const uploadPromises = files.map(async (file) => {
+            const storageRef = ref(storage, `attachments/${Date.now()}-${file.name}`);
+            await uploadBytes(storageRef, file);
+            const url = await getDownloadURL(storageRef);
+            return { id: `local-${Date.now()}-${file.name}`, name: file.name, type: 'local' as const, url };
+        });
+        const newFiles = await Promise.all(uploadPromises);
+        if (fileType === 'attachment') { setAttachments(prev => [...prev, ...newFiles]); }
+        else { setDeliverables(prev => [...prev, ...newFiles]); }
+        toast({ title: 'Upload Successful' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Upload Failed' });
+    } finally {
+        setIsUploading(false);
+        if(event.target) event.target.value = '';
+    }
+  };
+  
+  const handleConfirmGdriveLink = () => {
+    if (!gdriveLink || !gdriveName) { toast({ variant: 'destructive', title: 'Missing Info' }); return; }
+    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink };
+    if (gdriveFileType === 'attachment') { setAttachments(prev => [...prev, newFile]); }
+    else { setDeliverables(prev => [...prev, newFile]); }
+    setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
+  };
+  
+  const handleRemoveAttachment = (id: string, type: 'attachment' | 'deliverable') => {
+    if (type === 'attachment') setAttachments(prev => prev.filter(att => att.id !== id));
+    else setDeliverables(prev => prev.filter(del => del.id !== id));
+  };
+  
+  const handleAddSubtask = () => {
+    if (newSubtaskTitle.trim()) {
+      const newSubtask: Subtask = {
+        id: `sub-${Date.now()}`,
+        title: newSubtaskTitle,
+        completed: false,
+        ...(newSubtaskAssignee && { assignee: { id: newSubtaskAssignee.id, name: newSubtaskAssignee.name, avatarUrl: newSubtaskAssignee.avatarUrl || '' } }),
+      };
+      setSubtasks([...subtasks, newSubtask]);
+      setNewSubtaskTitle(''); setNewSubtaskAssignee(null);
+    }
+  };
+
+  const handleToggleSubtask = (subtaskId: string) => {
+    setSubtasks(subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st));
+  };
+  
+  const handleRemoveSubtask = (subtaskId: string) => { setSubtasks(subtasks.filter(st => st.id !== subtaskId)); };
+
+  const handleAddDependency = (postId: string, type: keyof Dependencies) => {
+    setDependencies(prev => {
+        const list = prev[type] || [];
+        if (!list.includes(postId)) {
+            return { ...prev, [type]: [...list, postId] };
+        }
+        return prev;
+    });
+  };
+
+  const handleRemoveDependency = (postId: string, type: keyof Dependencies) => {
+    setDependencies(prev => ({
+        ...prev,
+        [type]: (prev[type] || []).filter(id => id !== postId),
+    }));
+  };
+  
+  const getFileIcon = (fileName: string): React.ReactElement => {
+    if (fileName.match(/\.(pdf)$/i)) return <FileText className="h-5 w-5 text-red-500" />;
+    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
+    return <FileText className="h-5 w-5 text-muted-foreground" />;
+  };
+
+  const renderDependencyList = (ids: string[], type: keyof Dependencies) => (
+    <div className="flex flex-wrap gap-2">
+        {(ids || []).map(id => {
+            const post = allPosts?.find(p => p.id === id);
+            return post ? (
+                <Badge key={id} variant="secondary">
+                    {post.title}
+                    <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
+                </Badge>
+            ) : null;
+        })}
+    </div>
+  );
 
   return (
     <>
@@ -285,8 +388,8 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                        <FormField control={form.control} name="caption" render={({ field }) => ( <FormItem><FormLabel>Caption</FormLabel><FormControl><RichTextEditor value={field.value || ''} onChange={field.onChange} placeholder="Write the post caption here..." /></FormControl><FormMessage /></FormItem> )}/>
                     </div>
                     <div className="space-y-6 lg:col-span-1">
-                      {effectiveBrandId ? (
-                        <div className="space-y-2"><FormLabel>Brand</FormLabel><div className="p-2 bg-secondary rounded-md text-sm flex items-center gap-2"><Building2 className="h-4 w-4"/>{brandMap.get(effectiveBrandId) || '...'}</div></div>
+                      {singleBrandId ? (
+                        <div className="space-y-2"><FormLabel>Brand</FormLabel><div className="p-2 bg-secondary rounded-md text-sm flex items-center gap-2"><Building2 className="h-4 w-4"/>{brandMap.get(singleBrandId) || '...'}</div></div>
                       ) : (
                         <FormField control={form.control} name="brandId" render={({ field }) => ( <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? <div className="p-2"><Loader2 className="h-4 w-4 animate-spin"/></div> : brands?.map((brand) => ( <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
                       )}
@@ -298,23 +401,41 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                         <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem><FormLabel>Internal Due Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
                         <FormField control={form.control} name="scheduledAt" render={({ field }) => ( <FormItem><FormLabel>Upload/Publish Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
                       </div>
-
-                      <FormField control={form.control} name="dependencies" render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Dependencies</FormLabel>
-                            <MultiSelect
-                              options={dependencyOptions.flatMap(([_, posts]) => posts)}
-                              onValueChange={field.onChange}
-                              defaultValue={field.value || []}
-                              placeholder="Link to other posts..."
-                            />
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
                     </div>
                   </div>
+                   <Tabs defaultValue="subtasks" className="w-full">
+                        <TabsList className="grid w-full grid-cols-5">
+                          <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                          <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
+                          <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                          <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                          <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                          <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                              {subtasks.map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                          </div>
+                          <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                        </TabsContent>
+                        <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
+                          <div className="space-y-2">{attachments.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link from Google Drive</Button></div>
+                        </TabsContent>
+                         <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                          <div className="space-y-2">{deliverables.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'deliverable')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>Link from Google Drive</Button></div>
+                        </TabsContent>
+                        <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                            <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>{renderDependencyList(dependencies.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                            <Separator/>
+                            <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>{renderDependencyList(dependencies.blocking || [], 'blocking')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                            <Separator/>
+                            <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Tugas terkait tapi tidak saling memblokir.</p>{renderDependencyList(dependencies.linked || [], 'linked')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                        </TabsContent>
+                         <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4">
+                            <p className="text-center text-muted-foreground text-sm py-8">Comments can be added after the post is created.</p>
+                        </TabsContent>
+                    </Tabs>
                 </form>
               </Form>
             </div>
@@ -325,9 +446,25 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
         </SheetFooter>
       </SheetContent>
     </Sheet>
+    
+     <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Link Google Drive File</DialogTitle>
+                <DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2"><Label htmlFor="gdrive-name">File Name</Label><Input id="gdrive-name" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
+                <div className="space-y-2"><Label htmlFor="gdrive-link">File Link</Label><Input id="gdrive-link" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleConfirmGdriveLink}>Add Link</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }
-
 
     
