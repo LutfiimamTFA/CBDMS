@@ -24,9 +24,9 @@ function isWebArticle(item: WorkItem): item is WebArticle {
 
 
 // A simple card for web articles, can be expanded later
-function WebArticleCard({ article, onClick }: { article: WebArticle, onClick: () => void }) {
+function WebArticleCard({ article }: { article: WebArticle }) {
     return (
-        <div onClick={onClick}>
+        <div>
             <TaskCard task={article as Task} />
         </div>
     )
@@ -96,16 +96,6 @@ export function TodaysFocus() {
     const todaysWebArticles = useMemo(() => getFocusItems(webArticles), [webArticles]);
 
     const isLoading = userLoading || tasksLoading || socialPostsLoading || webArticlesLoading;
-    
-    const handleCardClick = (item: WorkItem) => {
-        if (isSocialMediaPost(item)) {
-            router.push(`/social-media/posts/${item.id}`);
-        } else if (isWebArticle(item)) {
-             router.push(`/web/articles/${item.id}`);
-        } else { // Task
-            router.push(`/tasks/${item.id}`);
-        }
-    }
 
     const renderSection = (title: string, icon: React.ElementType, items: WorkItem[], emptyMessage: string) => (
       <Card>
@@ -121,12 +111,12 @@ export function TodaysFocus() {
                   <div className="space-y-3">
                       {items.map(item => {
                           if (isSocialMediaPost(item)) {
-                              return <div key={item.id} onClick={() => handleCardClick(item)}><SocialPostCard post={item as SocialMediaPost} /></div>;
+                              return <SocialPostCard key={item.id} post={item as SocialMediaPost} />;
                           }
                           if (isWebArticle(item)) {
-                              return <WebArticleCard key={item.id} article={item as WebArticle} onClick={() => handleCardClick(item)} />;
+                              return <WebArticleCard key={item.id} article={item as WebArticle} />;
                           }
-                          return <div key={item.id} onClick={() => handleCardClick(item)}><TaskCard task={item as Task} /></div>;
+                          return <TaskCard key={item.id} task={item as Task} />;
                       })}
                   </div>
               ) : (
@@ -148,6 +138,7 @@ export function TodaysFocus() {
 
     return (
         <div className="space-y-8">
+            <h3 className="text-xl font-bold tracking-tight mb-4">Today's Focus</h3>
             {renderSection("General Tasks", ClipboardList, todaysTasks, "No regular tasks need your focus today. Great job!")}
             {renderSection("Social Media Posts", Share2, todaysSocialPosts, "No social media posts need your focus today.")}
             {renderSection("Web Articles", Globe, todaysWebArticles, "No web articles need your focus today.")}

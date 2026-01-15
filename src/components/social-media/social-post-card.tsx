@@ -5,7 +5,7 @@ import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
-import { Instagram, FileText, Clapperboard, RefreshCcw, AlertTriangle, HelpCircle, CheckCircle, Clock, History } from 'lucide-react';
+import { Instagram, FileText, Clapperboard, RefreshCcw, AlertTriangle, HelpCircle, CheckCircle, Clock, History, Calendar, UploadCloud } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -123,10 +123,38 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
                   </TooltipProvider>
                 )}
             </div>
-            <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs font-medium', statusStyling.color)}>
-                <StatusIcon status={post.statusInternal || post.status} />
-                <span>{statusStyling.label}</span>
-            </Badge>
+            <div className="flex items-center gap-2">
+                {post.dueDate && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <Badge variant="outline" className="flex items-center gap-1.5 text-xs font-medium">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>{format(parseISO(post.dueDate), 'MMM d')}</span>
+                                </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Internal Due: {format(parseISO(post.dueDate), 'PPP')}</p></TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+                 {post.scheduledAt && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <Badge variant="outline" className="flex items-center gap-1.5 text-xs font-medium">
+                                    <UploadCloud className="h-3 w-3" />
+                                    <span>{format(parseISO(post.scheduledAt), 'MMM d, p')}</span>
+                                </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Publish Date: {format(parseISO(post.scheduledAt), 'PPP p')}</p></TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+                <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs font-medium', statusStyling.color)}>
+                    <StatusIcon status={post.statusInternal || post.status} />
+                    <span>{statusStyling.label}</span>
+                </Badge>
+            </div>
           </CardFooter>
         </Card>
       </div>
