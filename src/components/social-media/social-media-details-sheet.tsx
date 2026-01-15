@@ -232,6 +232,8 @@ export function SocialMediaPostDetailsSheet({
   const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
   const [isMentioning, setIsMentioning] = React.useState(false);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+
   
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
       if (!event.target.files || !storage || !postState?.id || !firestore || !currentUser) return;
@@ -457,10 +459,11 @@ export function SocialMediaPostDetailsSheet({
                             </Accordion>
                             
                              <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
+                                <TabsList className="grid w-full grid-cols-5">
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                                  <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                                   <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
@@ -471,7 +474,7 @@ export function SocialMediaPostDetailsSheet({
                                   <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
-                                  <div>
+                                    <div>
                                       <h4 className="font-medium text-sm mb-2">Deliverables</h4>
                                       <div className="space-y-2">
                                         {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
@@ -494,13 +497,36 @@ export function SocialMediaPostDetailsSheet({
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
                                       )}
                                     </div>
-                                  </TabsContent>
+                                </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                     <Separator/>
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                     <Separator/>
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                </TabsContent>
+                                 <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
+                                    {(postState.revisionHistory && postState.revisionHistory.length > 0) ? (
+                                        <Accordion type="single" collapsible>
+                                            {postState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                                <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
+                                                    <AccordionTrigger>
+                                                        <div className="flex flex-col items-start text-left">
+                                                            <span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span>
+                                                            <span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span>
+                                                        </div>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent>
+                                                        <ul className="list-disc pl-5 space-y-1">
+                                                            {cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}
+                                                        </ul>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+                                            ))}
+                                        </Accordion>
+                                    ) : (
+                                        <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this post.</p> 
+                                    )}
                                 </TabsContent>
                                 <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                                       <ScrollArea className="max-h-48 pr-2">
