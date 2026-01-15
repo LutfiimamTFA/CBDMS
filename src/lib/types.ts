@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -260,17 +261,14 @@ export type Task = WorkItem & {
 };
 
 export type SocialMediaPost = WorkItem & {
-  // Fields to align with Tasks
   startDate?: string;
   dependencies?: Dependencies | string[]; // Can be old array or new object
-
-  // Existing fields
   platform: 'Instagram' | 'Facebook' | 'Twitter' | 'LinkedIn';
   caption: string;
   mediaUrl?: string;
   scheduledAt?: string; // This is now Upload/Publish Date
   postedAt?: string;
-  postType: 'Upload' | 'Branding';
+  postType: 'Upload' | 'Branding' | 'Reels';
   mediaType?: 'image' | 'video';
   crop?: { x: number; y: number; zoom: number };
   objectPosition?: number;
@@ -342,4 +340,7 @@ export type Notification = {
     name: string;
     avatarUrl: string;
   };
+  entityType?: 'task' | 'socialPost' | 'webArticle';
+  entityId?: string;
+  workstream?: 'tasks' | 'social' | 'web';
 };

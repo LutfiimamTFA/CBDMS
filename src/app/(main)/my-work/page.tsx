@@ -9,7 +9,7 @@ import { TodaysFocus } from '@/components/my-work/todays-focus';
 import { DailyChecklist } from '@/components/my-work/daily-checklist';
 
 export default function MyWorkPage() {
-  const { profile, isLoading: isProfileLoading, user } = useUserProfile();
+  const { profile, isLoading: isProfileLoading } = useUserProfile();
   
   if (isProfileLoading || !profile) {
     return (

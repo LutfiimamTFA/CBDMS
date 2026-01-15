@@ -82,8 +82,6 @@ interface TasksDataTableProps {
     statuses: WorkflowStatus[];
     brands: Brand[];
     users: User[];
-    permissions?: SharedLink['permissions'] | null;
-    isShareView?: boolean;
 }
 
 const formatDate = (date: any): string => {
@@ -94,11 +92,11 @@ const formatDate = (date: any): string => {
     return format(dateObj, 'PP, p');
 };
 
-export function TasksDataTable({ tasks, statuses, brands, users, permissions: sharedPermissions = null, isShareView = false }: TasksDataTableProps) {
+export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTableProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   
-  const { permissions, isLoading: arePermsLoading } = !isShareView ? usePermissions() : { permissions: null, isLoading: false };
+  const { permissions, isLoading: arePermsLoading } = usePermissions();
   
   const router = useRouter();
   
@@ -128,10 +126,9 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
 
 
   const canChangePriority = React.useMemo(() => {
-      if (sharedPermissions) return false;
       if (!profile) return false;
       return profile.role === 'Super Admin' || profile.role === 'Manager';
-  }, [profile, sharedPermissions]);
+  }, [profile]);
 
   const statusOptions = React.useMemo(() => {
     const getIcon = (statusName: string) => {
@@ -344,7 +341,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
       cell: ({ row }) => {
         const brandId = row.getValue('brandId') as string;
         const brand = brands?.find(b => b.id === brandId);
-        return brand ? <Badge variant="outline" className="font-normal bg-secondary/50"><Building2 className='mr-2 h-4 w-4'/>{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
+        return brand ? <Badge variant="outline" className="font-normal">{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
@@ -498,7 +495,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
         const task = row.original;
         
         const canDelete = React.useMemo(() => {
-            if (isShareView || !profile || arePermsLoading) return false;
+            if (!profile || arePermsLoading) return false;
             if (profile.role === 'Super Admin') return true;
             if (profile.role === 'Manager' && permissions) {
                 return permissions.Manager.canDeleteTasks && (profile.brandIds || []).includes(task.brandId);
@@ -507,9 +504,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
               return task.createdBy?.id === profile.id;
             }
             return false;
-        }, [profile, permissions, arePermsLoading, task, isShareView]);
-
-        if (isShareView) return null;
+        }, [profile, permissions, arePermsLoading, task]);
 
         return (
           <DropdownMenu>
@@ -641,7 +636,7 @@ export function TasksDataTable({ tasks, statuses, brands, users, permissions: sh
                     className="group cursor-pointer"
                     onClick={() => {
                         const task = row.original;
-                        const path = isShareView ? `/tasks/${task.id}?shared=true` : `/tasks/${task.id}`;
+                        const path = `/tasks/${task.id}`;
                         router.push(path);
                     }}
                   >

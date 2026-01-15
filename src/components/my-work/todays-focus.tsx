@@ -11,11 +11,16 @@ import { useRouter } from 'next/navigation';
 import { TaskCard } from '../tasks/task-card';
 import { SocialPostCard } from '../social-media/social-post-card';
 import { normalizeSocialPost } from '@/lib/social-media-utils';
+import { Badge } from '../ui/badge';
 
 // Type guard to check if an item is a SocialMediaPost
 function isSocialMediaPost(item: WorkItem): item is SocialMediaPost {
   return 'platform' in item && 'caption' in item;
 }
+function isWebArticle(item: WorkItem): item is WebArticle {
+  return 'content' in item;
+}
+
 
 // A simple card for web articles, can be expanded later
 function WebArticleCard({ article, onClick }: { article: WebArticle, onClick: () => void }) {
@@ -94,7 +99,7 @@ export function TodaysFocus() {
     const handleCardClick = (item: WorkItem) => {
         if (isSocialMediaPost(item)) {
             router.push(`/social-media/posts/${item.id}`);
-        } else if ('content' in item) { // Web Article
+        } else if (isWebArticle(item)) {
              router.push(`/web/articles/${item.id}`);
         } else { // Task
             router.push(`/tasks/${item.id}`);
@@ -106,14 +111,15 @@ export function TodaysFocus() {
             <h3 className="text-xl font-bold tracking-tight mb-4 flex items-center gap-2">
                 {React.createElement(icon, { className: "h-6 w-6 text-primary" })}
                 {title}
+                {items.length > 0 && <Badge variant="outline">{items.length}</Badge>}
             </h3>
             {items.length > 0 ? (
                 <div className="space-y-3">
                     {items.map(item => {
                         if (isSocialMediaPost(item)) {
-                            return <div key={item.id} onClick={() => handleCardClick(item)}><SocialPostCard post={item} /></div>;
+                            return <div key={item.id} onClick={() => handleCardClick(item)}><SocialPostCard post={item as SocialMediaPost} /></div>;
                         }
-                        if ('content' in item) { // Web Article
+                        if (isWebArticle(item)) {
                             return <WebArticleCard key={item.id} article={item as WebArticle} onClick={() => handleCardClick(item)} />;
                         }
                         return <div key={item.id} onClick={() => handleCardClick(item)}><TaskCard task={item as Task} /></div>;
