@@ -1,5 +1,6 @@
 
 'use client';
+import React from 'react';
 import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
