@@ -217,7 +217,7 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
                           <div className="mt-2 flex-1 space-y-1 overflow-auto">
                             {dayItems.map(item => {
                                if (workstream === 'socialMediaPosts') {
-                                  return <SocialPostCard key={item.id} post={item as SocialMediaPost} />
+                                  return <SocialPostCard key={item.id} post={item as SocialMediaPost} allUsers={allUsers || []} />
                                }
                                return <TaskCard key={item.id} task={item as Task} />
                             })}
