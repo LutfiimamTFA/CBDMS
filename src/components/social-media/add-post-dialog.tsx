@@ -34,7 +34,7 @@ import {
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Timer, Send } from 'lucide-react';
+import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Timer, Send, History } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
@@ -56,6 +56,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatHours, getInitials } from '@/lib/utils';
+import { Label } from '@/components/ui/label';
 
 const postSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -519,7 +520,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                       </div>
                     </div>
                   </div>
-                   <Tabs defaultValue="subtasks" className="w-full">
+                   <Tabs defaultValue="comments" className="w-full">
                         <TabsList className="grid w-full grid-cols-4">
                           <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                           <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
@@ -528,7 +529,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                         </TabsList>
                         <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                           <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                              {subtasks.map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                              {subtasks.map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                           </div>
                           <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
                           <Popover>
