@@ -1,7 +1,6 @@
-
 'use client';
 
-import type { SocialMediaPost, User } from './types';
+import type { SocialMediaPost, User, Dependencies } from './types';
 
 /**
  * Normalizes a SocialMediaPost object to ensure backward compatibility and provide default values.
@@ -35,8 +34,26 @@ export function normalizeSocialPost(post: SocialMediaPost, currentUserProfile: U
     ? post.assigneeIds
     : (post.createdBy ? [post.createdBy.id] : [currentUserProfile.id]);
 
-  // Dependencies: Default to an empty array.
-  const dependencies = post.dependencies || [];
+  // Dependencies: Handle both legacy string array and new object structure.
+  let dependencies: Dependencies;
+  if (Array.isArray(post.dependencies)) {
+    // Legacy format: Treat all as 'linked'
+    dependencies = {
+      waitingOn: [],
+      blocking: [],
+      linked: post.dependencies,
+    };
+  } else if (typeof post.dependencies === 'object' && post.dependencies !== null) {
+    // New format
+    dependencies = {
+      waitingOn: post.dependencies.waitingOn || [],
+      blocking: post.dependencies.blocking || [],
+      linked: post.dependencies.linked || [],
+    };
+  } else {
+    // Default empty object
+    dependencies = { waitingOn: [], blocking: [], linked: [] };
+  }
 
   return {
     ...post,
@@ -48,8 +65,9 @@ export function normalizeSocialPost(post: SocialMediaPost, currentUserProfile: U
     status,
     assigneeIds,
     dependencies,
+    subtasks: post.subtasks || [],
+    attachments: post.attachments || [],
+    deliverables: post.deliverables || [],
+    comments: post.comments || [],
   };
 }
-
-
-    

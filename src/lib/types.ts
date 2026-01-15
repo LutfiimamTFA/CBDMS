@@ -1,4 +1,3 @@
-
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -204,6 +203,13 @@ export type RevisionCycle = {
     items: RevisionItem[];
 }
 
+export type Dependencies = {
+    waitingOn?: string[];
+    blocking?: string[];
+    linked?: string[];
+};
+
+
 // Base type for all work items
 export type WorkItem = {
   id: string;
@@ -256,7 +262,7 @@ export type Task = WorkItem & {
 export type SocialMediaPost = WorkItem & {
   // Fields to align with Tasks
   startDate?: string;
-  dependencies?: string[];
+  dependencies?: Dependencies | string[]; // Can be old array or new object
 
   // Existing fields
   platform: 'Instagram' | 'Facebook' | 'Twitter' | 'LinkedIn';
@@ -268,6 +274,8 @@ export type SocialMediaPost = WorkItem & {
   mediaType?: 'image' | 'video';
   crop?: { x: number; y: number; zoom: number };
   objectPosition?: number;
+  attachments?: Attachment[];
+  deliverables?: Attachment[];
 };
 
 
@@ -335,6 +343,3 @@ export type Notification = {
     avatarUrl: string;
   };
 };
-
-
-    
