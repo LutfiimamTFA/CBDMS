@@ -125,6 +125,16 @@ const getInitials = (name?: string | null) => {
       .join('');
 };
 
+const getCurrentSubmissionCycle = (post: SocialMediaPost | null): number => {
+    if (!post) return 1;
+    const historyLength = post.revisionHistory?.length ?? 0;
+    const currentStatus = post.statusInternal || post.status;
+    if (currentStatus === 'Revisi') {
+        return historyLength + 1;
+    }
+    return historyLength > 0 ? historyLength : 1;
+};
+
 
 export function SocialMediaPostDetailsSheet({ 
   post: initialPost, 
@@ -144,6 +154,7 @@ export function SocialMediaPostDetailsSheet({
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   
   const firestore = useFirestore();
+  const storage = useStorage();
   const { user: authUser, profile: currentUser } = useUserProfile();
 
   const allPostsQuery = useMemo(() => {
@@ -178,6 +189,9 @@ export function SocialMediaPostDetailsSheet({
     }
   });
 
+  const isAssignee = !!currentUser && postState.assigneeIds.includes(currentUser.id);
+  const isManagerOrAdmin = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin');
+
   const canEditContent = useMemo(() => {
     if (!currentUser) return false;
     const isCreator = currentUser.id === postState.createdBy.id;
@@ -185,105 +199,92 @@ export function SocialMediaPostDetailsSheet({
     return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
   }, [currentUser, postState]);
 
+  const canUploadDeliverables = useMemo(() => {
+    if (!currentUser) return false;
+    return isAssignee || isManagerOrAdmin;
+  }, [currentUser, isAssignee, isManagerOrAdmin]);
+
+  const canDeleteTask = useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'Super Admin') return true;
+    if (currentUser.role === 'Manager') {
+        return (currentUser.brandIds || []).includes(postState.brandId);
+    }
+    return postState.createdBy?.id === currentUser.id;
+  }, [currentUser, postState]);
+
   const handleDelete = () => {
-    if (!firestore || !postState) return;
+    if (!firestore || !postState || !canDeleteTask) return;
     deleteDocumentNonBlocking(doc(firestore, 'socialMediaPosts', postState.id));
     toast({ title: "Post Deleted", description: "The post is being removed." });
     onOpenChange(false);
     setDeleteConfirmOpen(false);
   };
-
-  const handlePostComment = async () => {
-    if (!newComment.trim() || !firestore || !currentUser) return;
-    const newCommentData: Comment = {
-        id: crypto.randomUUID(),
-        user: currentUser as User,
-        text: newComment,
-        timestamp: new Date().toISOString(),
-        replies: [],
-    };
-    const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { 
-        comments: [...(postState.comments || []), newCommentData],
-        lastActivity: newActivity,
-        activities: [...(postState.activities || []), newActivity]
-    });
-    setNewComment('');
-  };
-
-  const handleAddSubtask = async () => {
-    if (!newSubtask.trim() || !firestore) return;
-    const subtask: Subtask = { id: `st-${Date.now()}`, title: newSubtask, completed: false };
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: [...(postState.subtasks || []), subtask] });
-    setNewSubtask('');
-  };
-
-  const handleToggleSubtask = async (subtaskId: string) => {
-    if (!firestore) return;
-    const newSubtasks = postState.subtasks?.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st) || [];
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: newSubtasks });
-  };
   
-  const handleRemoveSubtask = async (subtaskId: string) => {
-    if (!firestore) return;
-    const newSubtasks = postState.subtasks?.filter(st => st.id !== subtaskId) || [];
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: newSubtasks });
+  const [isUploading, setIsUploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const deliverableFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
+  const [gdriveLink, setGdriveLink] = useState('');
+  const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+  
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
+      if (!event.target.files || !storage || !postState?.id || !firestore || !currentUser) return;
+      setIsUploading(true);
+      try {
+          const files = Array.from(event.target.files);
+          const currentCycle = getCurrentSubmissionCycle(postState);
+          const uploadPromises = files.map(async (file) => {
+              const attachmentId = `${Date.now()}-${file.name}`;
+              const storageRef = ref(storage, `social-media/${postState.companyId}/${attachmentId}`);
+              await uploadBytes(storageRef, file);
+              const url = await getDownloadURL(storageRef);
+              return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
+          });
+          const newFiles = await Promise.all(uploadPromises);
+          const currentFiles = fileType === 'attachment' ? (postState.attachments || []) : (postState.deliverables || []);
+          await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
+          toast({ title: 'Upload Successful' });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Upload Failed' });
+      } finally {
+          setIsUploading(false);
+          if (event.target) event.target.value = '';
+      }
   };
 
-  const handleAddDependency = async (postId: string, type: keyof Dependencies) => {
-    if (!firestore) return;
-    const currentDeps = { ...(postState.dependencies as Dependencies) };
-    const list = currentDeps[type] || [];
-    if (!list.includes(postId)) {
-        (currentDeps[type] as string[]).push(postId);
-        await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { dependencies: currentDeps });
+  const handleConfirmGdriveLink = async () => {
+    if (!gdriveLink || !gdriveName) {
+        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
+        return;
     }
-  };
-
-  const handleRemoveDependency = async (taskId: string, type: keyof Dependencies) => {
-    if (!firestore) return;
-    const currentDeps = { ...(postState.dependencies as Dependencies) };
-    const list = currentDeps[type] || [];
-    currentDeps[type] = list.filter(id => id !== taskId);
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { dependencies: currentDeps });
+    if (!firestore || !currentUser) return;
+    
+    const currentCycle = getCurrentSubmissionCycle(postState);
+    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: gdriveFileType === 'deliverable' ? currentCycle : undefined };
+    const fieldToUpdate = gdriveFileType === 'attachment' ? 'attachments' : 'deliverables';
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fieldToUpdate]: [...(postState[fieldToUpdate] || []), newFile] });
+    setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
   
-  const dependencyOptions = useMemo(() => (allPosts || []).filter(p => p.id !== postState.id), [allPosts, postState.id]);
-  const groupedDependencyOptions = useMemo(() => {
-      const grouped: Record<string, SocialMediaPost[]> = {};
-      dependencyOptions.forEach(post => {
-          const brandName = brands?.find(b => b.id === post.brandId)?.name || 'Unbranded';
-          if (!grouped[brandName]) grouped[brandName] = [];
-          grouped[brandName].push(post);
-      });
-      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
-  }, [dependencyOptions, brands]);
+  const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
+      if (!firestore) return;
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+      const updatedFiles = (postState[fieldToUpdate] as Attachment[] | undefined)?.filter(att => att.id !== id);
+      await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fieldToUpdate]: updatedFiles });
+  };
   
-  const renderDependencyList = (ids: string[], type: keyof Dependencies) => (
-    <div className="flex flex-wrap gap-2">
-        {(ids || []).map(id => {
-            const post = allPosts?.find(p => p.id === id);
-            return post ? (
-                <Badge key={id} variant="secondary">
-                    {post.title}
-                    <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
-                </Badge>
-            ) : null;
-        })}
-    </div>
-  );
-
-  const getUniqueActivities = (activities: Activity[]): Activity[] => {
-    if (!activities) return [];
-    const seen = new Set();
-    return activities.filter(activity => {
-        const duplicate = seen.has(activity.id);
-        seen.add(activity.id);
-        return !duplicate;
+  const groupedDeliverables = useMemo(() => {
+    const groups: Record<number, Attachment[]> = {};
+    (postState.deliverables || []).forEach(d => {
+        const cycle = d.forRevisionCycle ?? 1;
+        if (!groups[cycle]) groups[cycle] = [];
+        groups[cycle].push(d);
     });
-  };
+    return groups;
+  }, [postState.deliverables]);
 
-  const PriorityIcon = priorityInfo[postState.priority].icon;
 
   return (
     <>
@@ -299,7 +300,9 @@ export function SocialMediaPostDetailsSheet({
                       <DropdownMenuTrigger asChild><Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
                       <DropdownMenuContent>
                           <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="mr-2 h-4 w-4"/>Delete Post</DropdownMenuItem>
+                          {canDeleteTask && (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="mr-2 h-4 w-4"/>Delete Post</DropdownMenuItem>
+                          )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                 </div>
@@ -326,7 +329,6 @@ export function SocialMediaPostDetailsSheet({
                                 <h3 className="font-semibold text-base">Files</h3>
                                 <Separator />
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                    {/* Materials Section */}
                                     <div>
                                         <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
                                         <div className="space-y-2">
@@ -334,52 +336,22 @@ export function SocialMediaPostDetailsSheet({
                                             {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
                                         </div>
                                     </div>
-                                    {/* Deliverables Section */}
                                     <div>
                                         <h4 className="font-medium text-sm mb-2">Deliverables</h4>
                                         <div className="space-y-2">
-                                            {(postState.deliverables || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div>))}
+                                            {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
                                             {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                         </div>
+                                        {canUploadDeliverables && (
+                                            <div className="flex gap-2 mt-2">
+                                                <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                                <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload</Button>
+                                                <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link</Button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
-                            
-                            <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-5">
-                                <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
-                                <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                                <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                                <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                                    <ScrollArea className="max-h-48 pr-2"><div className="space-y-4">
-                                    {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
-                                    {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet.</p>}
-                                    </div></ScrollArea>
-                                    <div className="flex items-start gap-2 pt-4 border-t">
-                                        <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{getInitials(currentUser?.name)}</AvatarFallback></Avatar>
-                                        <Textarea placeholder="Write a comment..." value={newComment} onChange={(e) => setNewComment(e.target.value)} />
-                                        <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
-                                    </div>
-                                </TabsContent>
-                                <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                        {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
-                                    </div>
-                                    <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
-                                </TabsContent>
-                                <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList((postState.dependencies as Dependencies)?.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
-                                    <Separator/>
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post prevents the following posts from starting.</p>{renderDependencyList((postState.dependencies as Dependencies)?.blocking || [], 'blocking')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
-                                    <Separator/>
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList((postState.dependencies as Dependencies)?.linked || [], 'linked')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
-                                </TabsContent>
-                                <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
-                                {(postState.revisionHistory && postState.revisionHistory.length > 0) ? ( <Accordion type="single" collapsible>{postState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => ( <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}><AccordionTrigger><div className="flex flex-col items-start text-left"><span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span><span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span></div></AccordionTrigger><AccordionContent><ul className="list-disc pl-5 space-y-1">{cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}</ul></AccordionContent></AccordionItem> ))}</Accordion> ) : ( <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this task.</p> )}
-                                </TabsContent>
-                            </Tabs>
                         </div>
                     </ScrollArea>
                     <ScrollArea className="md:col-span-1 h-full border-l">
@@ -397,8 +369,15 @@ export function SocialMediaPostDetailsSheet({
                             <div className='space-y-4 p-4 rounded-lg border'>
                                 <h3 className='font-semibold text-sm'>People</h3>
                                 <Separator/>
+                                <FormItem><FormLabel className="text-muted-foreground text-sm">Created by</FormLabel>
+                                 <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={postState.createdBy.avatarUrl} /><AvatarFallback>{getInitials(postState.createdBy.name)}</AvatarFallback></Avatar><p className="text-sm font-medium">{postState.createdBy.name}</p></div></div>
+                                </FormItem>
                                 <FormItem><FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
-                                {(postState.assignees || []).map((user) => ( <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div> ))}
+                                {postState.assigneeIds.map(id => {
+                                  const user = allUsers?.find(u => u.id === id);
+                                  if (!user) return null;
+                                  return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
+                                })}
                                 </FormItem>
                             </div>
                             
@@ -429,6 +408,22 @@ export function SocialMediaPostDetailsSheet({
     <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this post?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the post: <strong className="text-foreground">{postState.title}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Yes, Delete Post</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
     </AlertDialog>
+     <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Link Google Drive File</DialogTitle>
+                <DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2"><Label htmlFor="gdrive-name">File Name</Label><Input id="gdrive-name" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
+                <div className="space-y-2"><Label htmlFor="gdrive-link">File Link</Label><Input id="gdrive-link" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
+                <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }
