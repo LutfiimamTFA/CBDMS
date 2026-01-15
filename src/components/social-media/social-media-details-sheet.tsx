@@ -304,12 +304,12 @@ export function SocialMediaPostDetailsSheet({
                     </DropdownMenu>
                 </div>
             </SheetHeader>
-             <div className="flex-1 min-h-0">
+            <div className="flex-1 flex min-h-0">
               <Form {...form}>
-              <form id="add-post-form" onSubmit={form.handleSubmit(() => {})}>
-                <ScrollArea className="h-full" style={{height: 'calc(100vh - 65px)'}}>
-                    <div className="grid md:grid-cols-3">
-                        <div className="md:col-span-2 p-6 space-y-6">
+              <form id="add-post-form" className='flex-1 flex min-h-0' onSubmit={form.handleSubmit(() => {})}>
+                <div className="flex-1 grid md:grid-cols-3 min-h-0">
+                    <ScrollArea className="md:col-span-2 h-full">
+                        <div className="p-6 space-y-6">
                             <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
                             <Accordion type="single" collapsible defaultValue="description">
                                 <AccordionItem value="description" className="border-none">
@@ -370,18 +370,20 @@ export function SocialMediaPostDetailsSheet({
                                     <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>{renderDependencyList((postState.dependencies as Dependencies)?.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList((postState.dependencies as Dependencies)?.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
                                     <Separator/>
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>{renderDependencyList((postState.dependencies as Dependencies)?.blocking || [], 'blocking')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post prevents the following posts from starting.</p>{renderDependencyList((postState.dependencies as Dependencies)?.blocking || [], 'blocking')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
                                     <Separator/>
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Tugas terkait tapi tidak saling memblokir.</p>{renderDependencyList((postState.dependencies as Dependencies)?.linked || [], 'linked')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList((postState.dependencies as Dependencies)?.linked || [], 'linked')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
                                 </TabsContent>
                                 <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
                                 {(postState.revisionHistory && postState.revisionHistory.length > 0) ? ( <Accordion type="single" collapsible>{postState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => ( <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}><AccordionTrigger><div className="flex flex-col items-start text-left"><span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span><span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span></div></AccordionTrigger><AccordionContent><ul className="list-disc pl-5 space-y-1">{cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}</ul></AccordionContent></AccordionItem> ))}</Accordion> ) : ( <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this task.</p> )}
                                 </TabsContent>
                             </Tabs>
                         </div>
-                         <div className="md:col-span-1 p-6 space-y-6">
+                    </ScrollArea>
+                    <ScrollArea className="md:col-span-1 h-full border-l">
+                         <div className="p-6 space-y-6">
                             <div className='space-y-4 p-4 rounded-lg border'>
                                 <h3 className='font-semibold text-sm'>Social Media Details</h3>
                                 <Separator/>
@@ -407,10 +409,10 @@ export function SocialMediaPostDetailsSheet({
                                 <div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Total Logged</span><span className="col-span-2 text-sm font-medium">{formatHours(postState.timeTracked)}</span></div>
                             </div>
                         </div>
-                    </div>
-                  </ScrollArea>
-                </form>
-              </Form>
+                    </ScrollArea>
+                </div>
+               </form>
+             </Form>
             </div>
         </SheetContent>
     </Sheet>
