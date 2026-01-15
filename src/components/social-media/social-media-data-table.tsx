@@ -102,7 +102,6 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       ),
       cell: ({ row }) => {
         const post = row.original;
-        const brandName = brandMap.get(post.brandId) || 'Restricted';
         return (
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 bg-muted rounded-md overflow-hidden shrink-0">
@@ -110,7 +109,6 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
             </div>
             <div>
               <p className="font-medium line-clamp-2">{post.title}</p>
-              <Badge variant="outline" className="mt-1 font-normal">{brandName}</Badge>
             </div>
           </div>
         );
@@ -125,6 +123,18 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
         const dueDate = row.getValue('dueDate') as string | undefined;
         return dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>;
       }
+    },
+     {
+      accessorKey: 'brandId',
+      header: 'Brand',
+      cell: ({ row }) => {
+        const brandId = row.getValue('brandId') as string;
+        const brandName = brandMap.get(brandId) || 'Restricted';
+        return <Badge variant="outline" className="font-normal">{brandName}</Badge>;
+      },
+      filterFn: (row, id, value) => {
+        return value.includes(row.getValue(id))
+      },
     },
     {
       accessorKey: 'priority',
@@ -251,5 +261,3 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
     </div>
   );
 }
-
-    
