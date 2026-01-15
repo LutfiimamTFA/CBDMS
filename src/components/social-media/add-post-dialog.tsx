@@ -58,7 +58,6 @@ import { Card, CardContent } from '../ui/card';
 import { MultiSelect } from '../ui/multi-select';
 import { addDays, format, formatDistanceToNow, parse, parseISO, startOfWeek, nextSaturday } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { getInitials } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
 import { Badge } from '@/components/ui/badge';
@@ -66,6 +65,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { formatHours } from '@/lib/utils';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
+import remarkGfm from 'remark-gfm';
 
 
 const postSchema = z.object({
@@ -525,10 +525,12 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
           </div>
           <DialogFooter>
               <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-              <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
+              <Button onClick={() => handleConfirmGdriveLink()}>Add Link</Button>
           </DialogFooter>
       </DialogContent>
     </Dialog>
     </>
   );
 }
+
+    
