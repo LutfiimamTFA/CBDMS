@@ -1,13 +1,13 @@
 
 'use client';
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { SocialMediaPost } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import { Instagram, FileText, Clapperboard, RefreshCcw, AlertTriangle, HelpCircle, CheckCircle, Clock, History, Calendar, UploadCloud } from 'lucide-react';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { cn, priorityInfo } from '@/lib/utils';
 import { useState } from 'react';
 import { SocialMediaPostDetailsSheet } from './social-media-details-sheet';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -52,6 +52,9 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
   }, [post.lastActivity]);
 
   const assignees = post.assignees || [];
+  
+  const PriorityIcon = priorityInfo[post.priority].icon;
+  const priorityColor = priorityInfo[post.priority].color;
 
   const handleOpenChange = (open: boolean) => {
     if (open) {
@@ -71,11 +74,16 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
           <CardContent className="p-4 space-y-3">
              <div className="flex items-start justify-between">
                 <p className="font-semibold text-base line-clamp-2 pr-2">{post.title}</p>
-                 {post.mediaUrl ? (
-                    <div className="relative aspect-square w-16 h-16 shrink-0 ml-2 rounded-md overflow-hidden bg-secondary">
-                        <img src={post.mediaUrl} alt="media preview" className="w-full h-full object-cover"/>
-                    </div>
-                ) : null}
+                 <TooltipProvider>
+                  <Tooltip>
+                      <TooltipTrigger asChild>
+                           <PriorityIcon className={cn("h-5 w-5 shrink-0", priorityColor)} />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                          <p>{priorityInfo[post.priority].label}</p>
+                      </TooltipContent>
+                  </Tooltip>
+              </TooltipProvider>
             </div>
              {lastActivityText && (
                 <TooltipProvider>
@@ -95,7 +103,7 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
           </CardContent>
           <CardFooter className="p-3 flex justify-between items-center bg-card border-t">
               <div className="flex items-center -space-x-2">
-                {(assignees).slice(0, 3).map(assignee => (
+                {assignees.slice(0, 3).map(assignee => (
                   <TooltipProvider key={assignee.id}>
                     <Tooltip>
                       <TooltipTrigger>
@@ -108,16 +116,16 @@ export function SocialPostCard({ post }: SocialPostCardProps) {
                     </Tooltip>
                   </TooltipProvider>
                 ))}
-                {(assignees?.length || 0) > 3 && (
+                {assignees.length > 3 && (
                    <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger>
                           <Avatar className="h-7 w-7 border-2 border-background">
-                              <AvatarFallback>+{(assignees?.length || 0) - 3}</AvatarFallback>
+                              <AvatarFallback>+{assignees.length - 3}</AvatarFallback>
                           </Avatar>
                       </TooltipTrigger>
                       <TooltipContent>
-                          {(assignees || []).slice(3).map(a => <p key={a.id}>{a.name}</p>)}
+                          {assignees.slice(3).map(a => <p key={a.id}>{a.name}</p>)}
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
