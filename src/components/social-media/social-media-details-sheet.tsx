@@ -206,11 +206,12 @@ export function SocialMediaPostDetailsSheet({
 
   const canDeleteTask = useMemo(() => {
     if (!currentUser) return false;
+    const isCreator = postState.createdBy?.id === currentUser.id;
     if (currentUser.role === 'Super Admin') return true;
     if (currentUser.role === 'Manager') {
         return (currentUser.brandIds || []).includes(postState.brandId);
     }
-    return postState.createdBy?.id === currentUser.id;
+    return isCreator;
   }, [currentUser, postState]);
 
   const handleDelete = () => {
@@ -327,33 +328,41 @@ export function SocialMediaPostDetailsSheet({
                                 </AccordionItem>
                             </Accordion>
                             
-                             <div className="space-y-4 rounded-lg border p-4">
-                                <h3 className="font-semibold text-base">Files</h3>
-                                <Separator />
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                                    <div>
-                                        <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                                        <div className="space-y-2">
-                                            {(postState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a></div>))}
-                                            {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                        </div>
+                             <Tabs defaultValue="subtasks" className="w-full">
+                                <TabsList className="grid w-full grid-cols-5 gap-1">
+                                <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                                <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
+                                <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                                <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                                <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                                  {/* Subtasks content here */}
+                                </TabsContent>
+                                <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
+                                    <div className="space-y-2">{postState.attachments?.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link from Google Drive</Button></div>
+                                </TabsContent>
+                                <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                                    <div className="space-y-2">
+                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
+                                        {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                     </div>
-                                    <div>
-                                        <h4 className="font-medium text-sm mb-2">Deliverables</h4>
-                                        <div className="space-y-2">
-                                            {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
-                                            {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                    {canUploadDeliverables && (
+                                        <div className="flex gap-2 mt-2 pt-4 border-t">
+                                            <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
                                         </div>
-                                        {canUploadDeliverables && (
-                                            <div className="flex gap-2 mt-2">
-                                                <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
-                                                <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload</Button>
-                                                <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link</Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
+                                    )}
+                                </TabsContent>
+                                <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                                  {/* Dependencies content here */}
+                                </TabsContent>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4">
+                                  {/* Comments content here */}
+                                </TabsContent>
+                            </Tabs>
                         </div>
                     </ScrollArea>
                     <ScrollArea className="md:col-span-1 h-full border-l">
@@ -415,7 +424,7 @@ export function SocialMediaPostDetailsSheet({
             </div>
             <DialogFooter>
                 <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
+                <Button onClick={() => handleConfirmGdriveLink()}>Add Link</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
@@ -425,9 +434,12 @@ export function SocialMediaPostDetailsSheet({
 
 // Helper to remove duplicate activities by ID, keeping the latest one.
 const getUniqueActivities = (activities: Activity[]): Activity[] => {
+  if (!activities) return [];
   const activityMap = new Map<string, Activity>();
   activities.forEach(activity => {
       activityMap.set(activity.id, activity);
   });
   return Array.from(activityMap.values());
 };
+
+    
