@@ -78,6 +78,7 @@ const postDetailsSchema = z.object({
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assigneeIds: z.array(z.string()).optional(),
   dueDate: z.string().optional(),
+  timeEstimate: z.coerce.number().min(0).optional(),
 });
 
 type PostDetailsFormValues = z.infer<typeof postDetailsSchema>;
@@ -185,6 +186,7 @@ export function SocialMediaPostDetailsSheet({
         priority: postState.priority,
         assigneeIds: postState.assigneeIds,
         dueDate: postState.dueDate ? format(parseISO(postState.dueDate), 'yyyy-MM-dd') : undefined,
+        timeEstimate: postState.timeEstimate,
     }
   });
 
@@ -257,10 +259,7 @@ export function SocialMediaPostDetailsSheet({
   };
 
   const handleConfirmGdriveLink = async () => {
-    if (!gdriveLink || !gdriveName) {
-        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
-        return;
-    }
+    if (!gdriveLink || !gdriveName) { toast({ variant: 'destructive', title: 'Missing Info' }); return; }
     if (!firestore || !currentUser) return;
     
     const currentCycle = getCurrentSubmissionCycle(postState);
@@ -386,8 +385,37 @@ export function SocialMediaPostDetailsSheet({
     </div>
   );
 
-  const priorityValue = form.watch('priority');
-  const PriorityIcon = priorityInfo[priorityValue]?.icon || priorityInfo[postState.priority]?.icon;
+  const handleAddSubtask = async () => {
+    if (!newSubtaskTitle.trim() || !firestore) return;
+    const newSubtask: Subtask = {
+      id: `sub-${Date.now()}`,
+      title: newSubtaskTitle,
+      completed: false,
+    };
+    const updatedSubtasks = [...(postState.subtasks || []), newSubtask];
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+    setNewSubtaskTitle('');
+  };
+
+  const handleToggleSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
+    const updatedSubtasks = (postState.subtasks || []).map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+  };
+
+  const handleRemoveSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
+    const updatedSubtasks = (postState.subtasks || []).filter(st => st.id !== subtaskId);
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+  };
+  
+  const subtaskProgress = useMemo(() => {
+    if (!postState.subtasks || postState.subtasks.length === 0) return 0;
+    const completedCount = postState.subtasks.filter(st => st.completed).length;
+    return (completedCount / postState.subtasks.length) * 100;
+  }, [postState.subtasks]);
+
+  const PriorityIcon = priorityInfo[postState.priority]?.icon;
 
   return (
     <>
@@ -429,34 +457,21 @@ export function SocialMediaPostDetailsSheet({
                             </Accordion>
                             
                              <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-3 gap-1">
-                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                                <TabsList className="grid w-full grid-cols-4">
+                                  <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                                      <ScrollArea className="max-h-48 pr-2">
-                                          <div className="space-y-4">
-                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
-                                              {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
-                                          </div>
-                                      </ScrollArea>
-                                      <div className="space-y-2 pt-4 border-t">
-                                          <div className="flex-1 relative">
-                                              <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
-                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
-                                          </div>
-                                          <div className="flex justify-between items-center">
-                                              <div className="flex-1"></div>
-                                              <Button type="button" onClick={handlePostComment} disabled={!newComment.trim() || isUploadingCommentAttachment}>
-                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                                    Post Comment
-                                              </Button>
-                                          </div>
-                                      </div>
+                                <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                                  <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(postState.subtasks || []).filter(st => st.completed).length}/{(postState.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
+                                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                      {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                                  </div>
+                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
-                                    <div>
+                                  <div>
                                       <h4 className="font-medium text-sm mb-2">Deliverables</h4>
                                       <div className="space-y-2">
                                         {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
@@ -481,11 +496,32 @@ export function SocialMediaPostDetailsSheet({
                                     </div>
                                   </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
-                                  <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
-                                  <Separator/>
-                                  <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
-                                  <Separator/>
-                                  <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                </TabsContent>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                      <ScrollArea className="max-h-48 pr-2">
+                                          <div className="space-y-4">
+                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                              {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                          </div>
+                                      </ScrollArea>
+                                      <div className="space-y-2 pt-4 border-t">
+                                          <div className="flex-1 relative">
+                                              <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
+                                          </div>
+                                          <div className="flex justify-between items-center">
+                                              <div className="flex-1"></div>
+                                              <Button type="button" onClick={handlePostComment} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                                    Post Comment
+                                              </Button>
+                                          </div>
+                                      </div>
                                 </TabsContent>
                             </Tabs>
                         </div>
@@ -497,7 +533,7 @@ export function SocialMediaPostDetailsSheet({
                                 <Separator/>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Brand</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></FormItem>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Status</FormLabel><div className="col-span-2 text-sm font-medium">{postState.status}</div></FormItem>
-                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />}{postState.priority}</div></FormItem>
+                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />{postState.priority}</div></FormItem>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></FormItem>
                                 <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Publish Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></FormItem>
                             </div>
@@ -515,6 +551,23 @@ export function SocialMediaPostDetailsSheet({
                                   return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
                                 })}
                                 </FormItem>
+                            </div>
+
+                             <div className='space-y-4 p-4 rounded-lg border'>
+                                <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                                <Separator/>
+                                  <FormField
+                                      control={form.control}
+                                      name="timeEstimate"
+                                      render={({ field }) => (
+                                          <FormItem className="grid grid-cols-3 items-center gap-2">
+                                              <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
+                                              <div className="col-span-2">
+                                                <Input type="number" step="0.5" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} placeholder="e.g. 4" readOnly={!canEditContent} />
+                                              </div>
+                                          </FormItem>
+                                      )}
+                                  />
                             </div>
                         </div>
                     </ScrollArea>
@@ -567,4 +620,3 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
   return Array.from(activityMap.values());
 };
 
-    
