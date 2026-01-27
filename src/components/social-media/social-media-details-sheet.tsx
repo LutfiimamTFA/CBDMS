@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -143,7 +142,6 @@ export function SocialMediaPostDetailsSheet({
   useEffect(() => { setPostState(initialPost) }, [initialPost]);
   
   const [newComment, setNewComment] = useState('');
-  const [isMentioning, setIsMentioning] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -247,8 +245,9 @@ export function SocialMediaPostDetailsSheet({
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
-  const [gdriveFileType, setGdriveFileType] = '<attachment' | 'deliverable'>('attachment');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
+  const [isMentioning, setIsMentioning] = React.useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
 
@@ -620,43 +619,77 @@ export function SocialMediaPostDetailsSheet({
                             </Accordion>
                             
                              <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
+                                <TabsList className="grid w-full grid-cols-5">
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
+                                  <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
                                   <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                   <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(postState.subtasks || []).filter(st => st.completed).length}/{(postState.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                      {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                                      {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                                   </div>
-                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                                  <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                          {newSubtaskAssignee ? (
+                                            <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{getInitials(newSubtaskAssignee.name)}</AvatarFallback></Avatar>
+                                          ) : (
+                                            <UserPlus className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-60 p-1">
+                                        <ScrollArea className="max-h-60">
+                                          <div className="space-y-1">
+                                               {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                                  users.length > 0 && (
+                                                      <React.Fragment key={group}>
+                                                          <Separator />
+                                                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                          {users.map(user => (
+                                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                                                  <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                                                  <span className="truncate">{user.name}</span>
+                                                              </Button>
+                                                          ))}
+                                                      </React.Fragment>
+                                                  )
+                                              ))}
+                                          </div>
+                                      </ScrollArea>
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
-                                    <div>
-                                      <h4 className="font-medium text-sm mb-2">Deliverables</h4>
-                                      <div className="space-y-2">
+                                  <div>
+                                    <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                    <div className="space-y-2">{postState.attachments?.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                                    {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                    {canEditContent && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
+                                    )}
+                                  </div>
+                                </TabsContent>
+                                <TabsContent value="deliverables" className="mt-4 space-y-6 rounded-lg border p-4">
+                                  <div>
+                                    <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                                    <div className="space-y-2">
                                         {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
                                         {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
-                                      </div>
-                                      {canUploadDeliverables && (
-                                          <div className="flex gap-2 mt-2 pt-4 border-t">
-                                              <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
-                                              <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
-                                              <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
-                                          </div>
-                                      )}
                                     </div>
-                                    <Separator/>
-                                    <div>
-                                      <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                                      <div className="space-y-2">{(postState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}</div>
-                                      {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                      {canEditContent && (
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
-                                      )}
-                                    </div>
+                                    {canUploadDeliverables && (
+                                        <div className="flex gap-2 mt-2 pt-4 border-t">
+                                            <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
+                                        </div>
+                                    )}
+                                  </div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
