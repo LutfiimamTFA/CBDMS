@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import {
@@ -144,10 +143,12 @@ export function SocialMediaPostDetailsSheet({
   useEffect(() => { setPostState(initialPost) }, [initialPost]);
   
   const [newComment, setNewComment] = useState('');
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [isMentioning, setIsMentioning] = React.useState(false);
   
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [blockingAlert, setBlockingAlert] = useState<{ isOpen: boolean, title: string, reasons: string[], suggestion?: string }>({ isOpen: false, title: '', reasons: [], suggestion: '' });
+
   
   const firestore = useFirestore();
   const storage = useStorage();
@@ -188,6 +189,7 @@ export function SocialMediaPostDetailsSheet({
 
   const isAssignee = !!currentUser && postState.assigneeIds.includes(currentUser.id);
   const isManagerOrAdmin = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin');
+  const isEmployeeOrPIC = currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC');
 
   const canEditContent = useMemo(() => {
     if (!currentUser) return false;
@@ -210,6 +212,25 @@ export function SocialMediaPostDetailsSheet({
     }
     return isCreator;
   }, [currentUser, postState]);
+  
+  const canSubmit = useMemo(() => {
+    if (!postState || !isEmployeeOrPIC) return false;
+    
+    // All subtasks must be completed
+    const allSubtasksCompleted = (postState.subtasks || []).every(st => st.completed);
+    if (!allSubtasksCompleted) return false;
+
+    // Must have at least one deliverable for the current submission cycle
+    const currentCycle = getCurrentSubmissionCycle(postState);
+    const hasDeliverableForCycle = (postState.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+    if (!hasDeliverableForCycle) return false;
+
+    // Status must be one that allows submission
+    const nonSubmittableStatuses = ['Preview', 'Done', 'Scheduled', 'Posted'];
+    if (nonSubmittableStatuses.includes(postState.status)) return false;
+
+    return true;
+}, [postState, isEmployeeOrPIC]);
 
   const handleDelete = () => {
     if (!firestore || !postState || !canDeleteTask) return;
@@ -226,8 +247,8 @@ export function SocialMediaPostDetailsSheet({
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
   const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
-  const [isMentioning, setIsMentioning] = React.useState(false);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
 
   
@@ -451,7 +472,109 @@ export function SocialMediaPostDetailsSheet({
     }
     return {};
   }, [allUsers, currentUser, assigneeIds]);
+  
+  const getBlockingReasonsForStatusChange = (targetStatus: string, currentItem: SocialMediaPost): { blocked: boolean, title: string, reasons: string[], suggestion?: string } => {
+    const reasons: string[] = [];
+    const baseResult = { blocked: false, title: '', reasons: [], suggestion: '' };
 
+    if (targetStatus === 'Preview') {
+        const allSubtasksCompleted = (currentItem.subtasks || []).every(st => st.completed);
+        if (!allSubtasksCompleted) reasons.push("Selesaikan semua subtasks dulu.");
+
+        const isInRevision = currentItem.status === 'Revisi' || (currentItem.revisionItems && currentItem.revisionItems.length > 0);
+        if (isInRevision) {
+            const allRevisionsCompleted = (currentItem.revisionItems || []).every(item => item.completed);
+            if (!allRevisionsCompleted) reasons.push("Checklist revisi belum selesai.");
+        }
+
+        const currentCycle = getCurrentSubmissionCycle(currentItem);
+        const hasDeliverableForCycle = (currentItem.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+        if (!hasDeliverableForCycle) reasons.push("Upload minimal 1 file BARU di Deliverables untuk submission cycle ini.");
+
+        if (reasons.length > 0) {
+            return { blocked: true, title: "Belum Siap untuk Direview", reasons, suggestion: "Mohon lengkapi item di atas sebelum mengirimkan tugas untuk review." };
+        }
+    }
+    
+    if (isEmployeeOrPIC && targetStatus === 'Done') {
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Hanya Manager yang bisa menyelesaikan tugas."], suggestion: "Ubah status ke 'Preview' agar bisa direview oleh Manager." };
+    }
+
+    return baseResult;
+  };
+  
+  const handleStatusChange = async (newStatus: string) => {
+    const oldStatus = form.getValues('status');
+    if (oldStatus === newStatus) return;
+
+    if (getBlockingReasonsForStatusChange(newStatus, postState).blocked) {
+        setBlockingAlert({ isOpen: true, ...getBlockingReasonsForStatusChange(newStatus, postState) });
+        return;
+    }
+    
+    form.setValue('status', newStatus);
+    
+    if (!firestore || !currentUser) {
+        form.setValue('status', oldStatus);
+        return;
+    }
+    
+    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    const postRef = doc(firestore, 'socialMediaPosts', postState.id);
+    
+    try {
+        const batch = writeBatch(firestore);
+        const updates: any = { // Using any to allow dynamic properties
+            status: newStatus, 
+            statusInternal: newStatus,
+            activities: [...(postState.activities || []), newActivity], 
+            lastActivity: newActivity, 
+            updatedAt: serverTimestamp() 
+        };
+
+        const notificationTitle = `Status Changed: ${postState.title}`;
+        const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
+        
+        const notifiedUserIds = new Set<string>();
+        postState.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
+        if (postState.createdBy.id !== currentUser.id) notifiedUserIds.add(postState.createdBy.id);
+
+        notifiedUserIds.forEach(userId => {
+            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+            batch.set(notifRef, { 
+                userId, 
+                title: notificationTitle, 
+                message: notificationMessage, 
+                entityId: postState.id, 
+                entityType: 'socialPost', 
+                isRead: false, 
+                createdAt: serverTimestamp(), 
+                createdBy: newActivity.user 
+            });
+        });
+        
+        batch.update(postRef, updates);
+        await batch.commit();
+
+        toast({ title: 'Status Updated', description: `Post status changed to ${newStatus}.` });
+    } catch (error: any) {
+        console.error('Failed to update status:', error);
+        form.setValue('status', oldStatus);
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update post status.' });
+    }
+  };
+  
+  const handleSubmitForReview = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Preview');
+  };
+  
+  const handleRecallSubmission = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Doing');
+    toast({ title: "Submission Recalled", description: "You can continue working on the task." });
+  };
+  
   return (
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -540,7 +663,7 @@ export function SocialMediaPostDetailsSheet({
                                  <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                                       <ScrollArea className="max-h-48 pr-2">
                                           <div className="space-y-4">
-                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
+                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
                                               {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
                                           </div>
                                       </ScrollArea>
@@ -586,6 +709,29 @@ export function SocialMediaPostDetailsSheet({
                     </ScrollArea>
                     <ScrollArea className="md:col-span-1 h-full border-l">
                          <div className="p-6 space-y-6">
+                            {(isAssignee && !isManagerOrAdmin && postState.status !== 'Done') && (
+                              <div className="space-y-2">
+                                {postState.status === 'Preview' ? (
+                                    <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Recall Submission
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        className="w-full"
+                                        onClick={handleSubmitForReview}
+                                        disabled={!canSubmit || isSaving}
+                                    >
+                                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                        Submit for Review
+                                    </Button>
+                                )}
+                                {!canSubmit && postState.status !== 'Preview' && postState.status !== 'Done' && (
+                                    <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
+                                )}
+                              </div>
+                            )}
+
                             <div className='space-y-4 p-4 rounded-lg border'>
                                 <h3 className='font-semibold text-sm'>Social Media Details</h3>
                                 <Separator/>
@@ -664,6 +810,26 @@ export function SocialMediaPostDetailsSheet({
             </DialogFooter>
         </DialogContent>
     </Dialog>
+     <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {blockingAlert.suggestion}
+                </AlertDialogDescription>
+                  {blockingAlert.reasons.length > 0 && (
+                      <div className="pt-2">
+                           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                              {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                          </ul>
+                      </div>
+                  )}
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, title: '', reasons: [] })}>OK</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
@@ -679,5 +845,7 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
 };
 
 
+
+    
 
     
