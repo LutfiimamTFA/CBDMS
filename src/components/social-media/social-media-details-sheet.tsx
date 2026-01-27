@@ -148,6 +148,7 @@ export function SocialMediaPostDetailsSheet({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockingAlert, setBlockingAlert] = useState<{ isOpen: boolean, title: string, reasons: string[], suggestion?: string }>({ isOpen: false, title: '', reasons: [], suggestion: '' });
+  const [isSaving, setIsSaving] = useState(false);
 
   
   const firestore = useFirestore();
@@ -246,7 +247,7 @@ export function SocialMediaPostDetailsSheet({
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
-  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+  const [gdriveFileType, setGdriveFileType] = '<attachment' | 'deliverable'>('attachment');
   const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
@@ -566,13 +567,17 @@ export function SocialMediaPostDetailsSheet({
   
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
+    setIsSaving(true);
     await handleStatusChange('Preview');
+    setIsSaving(false);
   };
   
   const handleRecallSubmission = async () => {
     if (!currentUser) return;
+    setIsSaving(true);
     await handleStatusChange('Doing');
     toast({ title: "Submission Recalled", description: "You can continue working on the task." });
+    setIsSaving(false);
   };
   
   return (
@@ -709,11 +714,11 @@ export function SocialMediaPostDetailsSheet({
                     </ScrollArea>
                     <ScrollArea className="md:col-span-1 h-full border-l">
                          <div className="p-6 space-y-6">
-                            {(isAssignee && !isManagerOrAdmin && postState.status !== 'Done') && (
+                            {(isAssignee && !isManagerOrAdmin) && (
                               <div className="space-y-2">
                                 {postState.status === 'Preview' ? (
                                     <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
-                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RotateCcw className="mr-2 h-4 w-4" />}
                                         Recall Submission
                                     </Button>
                                 ) : (
@@ -845,6 +850,8 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
 };
 
 
+
+    
 
     
 
