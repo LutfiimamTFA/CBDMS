@@ -9,6 +9,12 @@ import {
 } from '@/components/ui/sheet';
 import type { WebArticle, User, Brand, WorkflowStatus, RevisionItem, RevisionCycle, Dependencies, Comment, Attachment, Subtask, Notification, Activity } from '@/lib/types';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -352,3 +358,5 @@ export function WebArticleDetailsSheet({
     </>
   );
 }
+
+    
