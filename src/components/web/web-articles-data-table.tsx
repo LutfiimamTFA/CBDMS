@@ -28,10 +28,7 @@ import { Input } from '@/components/ui/input';
 import type { WebArticle, User, Brand, WorkflowStatus } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
 import { DataTableViewOptions } from '../tasks/data-table-view-options';
-import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -87,7 +84,12 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
   const columns: ColumnDef<WebArticle>[] = [
     {
       accessorKey: 'title',
-      header: 'Title',
+      header: ({ column }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Title
+            <ChevronsUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => {
         const article = row.original;
         return (
@@ -109,7 +111,12 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
     },
     {
       accessorKey: 'dueDate',
-      header: 'Due Date',
+      header: ({ column }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Due Date
+            <ChevronsUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => {
         const dueDate = row.getValue('dueDate') as string | undefined;
         return dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : '-';
