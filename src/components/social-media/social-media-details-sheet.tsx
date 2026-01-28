@@ -568,6 +568,56 @@ export function SocialMediaPostDetailsSheet({
     });
     return groups;
   }, [postState.deliverables]);
+  
+  const handleStatusChange = useCallback(async (newStatus: string) => {
+    const oldStatus = postState.status;
+    if (oldStatus === newStatus || !firestore || !currentUser) return;
+    
+    setPostState(prev => ({ ...prev, status: newStatus, statusInternal: newStatus }));
+
+    const batch = writeBatch(firestore);
+    const postRef = doc(firestore, 'socialMediaPosts', postState.id);
+    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    
+    const updates: any = {
+      status: newStatus,
+      statusInternal: newStatus,
+      activities: [...(postState.activities || []), newActivity],
+      lastActivity: newActivity,
+      updatedAt: serverTimestamp()
+    };
+    batch.update(postRef, updates);
+
+    const notificationTitle = `Status Changed: ${postState.title}`;
+    const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
+    const notifiedUserIds = new Set<string>();
+    postState.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
+    if (postState.createdBy.id !== currentUser.id) notifiedUserIds.add(postState.createdBy.id);
+
+    notifiedUserIds.forEach(userId => {
+      const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+      batch.set(notifRef, {
+        userId,
+        title: notificationTitle,
+        message: notificationMessage,
+        entityId: postState.id,
+        entityType: 'socialPost',
+        workstream: 'social',
+        isRead: false,
+        createdAt: serverTimestamp(),
+        createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }
+      });
+    });
+
+    try {
+      await batch.commit();
+      toast({ title: 'Status Updated' });
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      setPostState(prev => ({ ...prev, status: oldStatus, statusInternal: oldStatus })); 
+      toast({ variant: 'destructive', title: 'Update Failed' });
+    }
+  }, [firestore, currentUser, postState, toast]);
 
 
   return (
@@ -592,36 +642,37 @@ export function SocialMediaPostDetailsSheet({
                 </div>
             </SheetHeader>
             <div className="flex-1 flex min-h-0">
-              <form id="add-post-form" className='flex-1 flex min-h-0'>
-                <div className="flex-1 grid md:grid-cols-3 min-h-0">
-                    <ScrollArea className="md:col-span-2 h-full">
-                        <div className="p-6 space-y-6">
-                           <Input value={postState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
-                            {(postState.status === 'Revisi' || postState.statusInternal === 'Revisi') && postState.revisionItems && postState.revisionItems.length > 0 && (
-                                <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
-                                    <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
-                                    <div className="space-y-2">
-                                        {postState.revisionItems.map(item => (
-                                            <div key={item.id} className="flex items-center gap-3">
-                                                <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee} />
-                                                <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            <Accordion type="single" collapsible defaultValue="caption">
-                                <AccordionItem value="caption" className="border-none">
-                                    <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
-                                        {postState.caption ? 'View/Edit Caption' : 'Add Caption'}
-                                    </AccordionTrigger>
-                                    <AccordionContent className="pt-2">
-                                        <RichTextEditor value={postState.caption || ''} onChange={() => {}} placeholder="Write the post caption here..." readOnly={!canEditContent} />
-                                    </AccordionContent>
-                                </AccordionItem>
-                            </Accordion>
-                            
-                             <Tabs defaultValue="comments" className="w-full">
+              <Form {...form}>
+                <form id="edit-post-form" className='flex-1 flex min-h-0'>
+                  <div className="flex-1 grid md:grid-cols-3 min-h-0">
+                      <ScrollArea className="md:col-span-2 h-full">
+                          <div className="p-6 space-y-6">
+                            <Input value={postState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
+                              {(postState.status === 'Revisi' || postState.statusInternal === 'Revisi') && postState.revisionItems && postState.revisionItems.length > 0 && (
+                                  <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                                      <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
+                                      <div className="space-y-2">
+                                          {postState.revisionItems.map(item => (
+                                              <div key={item.id} className="flex items-center gap-3">
+                                                  <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee} />
+                                                  <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
+                              )}
+                              <Accordion type="single" collapsible defaultValue="caption">
+                                  <AccordionItem value="caption" className="border-none">
+                                      <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
+                                          {postState.caption ? 'View/Edit Caption' : 'Add Caption'}
+                                      </AccordionTrigger>
+                                      <AccordionContent className="pt-2">
+                                          <RichTextEditor value={postState.caption || ''} onChange={() => {}} placeholder="Write the post caption here..." readOnly={!canEditContent} />
+                                      </AccordionContent>
+                                  </AccordionItem>
+                              </Accordion>
+                              
+                              <Tabs defaultValue="comments" className="w-full">
                                 <TabsList className="grid w-full grid-cols-4">
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
@@ -671,12 +722,17 @@ export function SocialMediaPostDetailsSheet({
                                       <h4 className="font-medium text-sm mb-2">Deliverables</h4>
                                       <div className="space-y-2">
                                         {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button></div> ))}</div> ))}
-                                        {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                          {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                       </div>
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
                                         <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
                                         <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
-                                        <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
+                                        <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>
+                                          <div className="flex items-center justify-center gap-2">
+                                            <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
+                                            Link from Google Drive
+                                          </div>
+                                        </Button>
                                       </div>
                                     </div>
                                     <Separator />
@@ -705,116 +761,117 @@ export function SocialMediaPostDetailsSheet({
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                 </TabsContent>
                                  <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
-                                    {(postState.revisionHistory && postState.revisionHistory.length > 0) ? (
-                                        <Accordion type="single" collapsible>
-                                            {postState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => (
-                                                <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
-                                                    <AccordionTrigger>
-                                                        <div className="flex flex-col items-start text-left">
-                                                            <span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span>
-                                                            <span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span>
-                                                        </div>
-                                                    </AccordionTrigger>
-                                                    <AccordionContent>
-                                                        <ul className="list-disc pl-5 space-y-1">
-                                                            {cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}
-                                                        </ul>
-                                                    </AccordionContent>
-                                                </AccordionItem>
-                                            ))}
-                                        </Accordion>
-                                    ) : (
-                                        <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this post.</p> 
-                                    )}
-                                </TabsContent>
-                            </Tabs>
-                        </div>
-                    </ScrollArea>
-                    <ScrollArea className="md:col-span-1 h-full border-l">
-                         <div className="p-6 space-y-6">
-                            {(isAssignee && !isManagerOrAdmin) && (
-                              <div className="space-y-2">
-                                {postState.status === 'Preview' ? (
-                                    <Button type="button" className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
-                                        <RotateCcw className="mr-2 h-4 w-4" />
-                                        Recall Submission
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        type="button"
-                                        className="w-full"
-                                        onClick={handleSubmitForReview}
-                                        disabled={!canSubmit || isSaving}
-                                    >
-                                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
-                                        Submit for Review
-                                    </Button>
-                                )}
-                                {!canSubmit && postState.status !== 'Preview' && postState.status !== 'Done' && (
-                                    <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
-                                )}
-                              </div>
-                            )}
-
-                             {isManagerOrAdmin && postState.status === 'Preview' && ( 
-                                <div className="flex flex-col w-full gap-2">
-                                    <Button type="button" className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: postState })} disabled={isSaving}>
-                                        <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
-                                    </Button>
-                                    <Button type="button" variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: postState, items: [], currentItemText: '' })} disabled={isSaving}>
-                                        <XCircle className="mr-2 h-4 w-4"/> Request Revisions
-                                    </Button>
-                                </div>
-                            )}
-
-                             {isManagerOrAdmin && postState.status === 'Done' && ( <Button type="button" className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
-
-
-                            <div className='space-y-4 p-4 rounded-lg border'>
-                                <h3 className='font-semibold text-sm'>Social Media Details</h3>
-                                <Separator/>
-                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Brand</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></FormItem>
-                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Status</FormLabel><div className="col-span-2 text-sm font-medium">{postState.status}</div></FormItem>
-                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />{postState.priority}</div></FormItem>
-                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></FormItem>
-                                <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Publish Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></FormItem>
-                            </div>
-
-                            <div className='space-y-4 p-4 rounded-lg border'>
-                                <h3 className='font-semibold text-sm'>People</h3>
-                                <Separator/>
-                                <FormItem><FormLabel className="text-muted-foreground text-sm">Created by</FormLabel>
-                                 <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={postState.createdBy.avatarUrl} /><AvatarFallback>{getInitials(postState.createdBy.name)}</AvatarFallback></Avatar><p className="text-sm font-medium">{postState.createdBy.name}</p></div></div>
-                                </FormItem>
-                                <FormItem><FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
-                                {postState.assigneeIds.map(id => {
-                                  const user = allUsers?.find(u => u.id === id);
-                                  if (!user) return null;
-                                  return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
-                                })}
-                                </FormItem>
-                            </div>
-
-                             <div className='space-y-4 p-4 rounded-lg border'>
-                                <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
-                                <Separator/>
-                                  <FormField
-                                      control={form.control}
-                                      name="timeEstimate"
-                                      render={({ field }) => (
-                                          <FormItem className="grid grid-cols-3 items-center gap-2">
-                                              <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
-                                              <div className="col-span-2">
-                                                <Input type="number" step="0.5" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} placeholder="e.g. 4" readOnly={!canEditContent} />
-                                              </div>
-                                          </FormItem>
+                                      {(postState.revisionHistory && postState.revisionHistory.length > 0) ? (
+                                          <Accordion type="single" collapsible>
+                                              {postState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                                  <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
+                                                      <AccordionTrigger>
+                                                          <div className="flex flex-col items-start text-left">
+                                                              <span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span>
+                                                              <span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span>
+                                                          </div>
+                                                      </AccordionTrigger>
+                                                      <AccordionContent>
+                                                          <ul className="list-disc pl-5 space-y-1">
+                                                              {cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}
+                                                          </ul>
+                                                      </AccordionContent>
+                                                  </AccordionItem>
+                                              ))}
+                                          </Accordion>
+                                      ) : (
+                                          <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this post.</p> 
                                       )}
-                                  />
-                            </div>
-                        </div>
-                    </ScrollArea>
-                </div>
-               </form>
+                                  </TabsContent>
+                              </Tabs>
+                          </div>
+                      </ScrollArea>
+                      <ScrollArea className="md:col-span-1 h-full border-l">
+                          <div className="p-6 space-y-6">
+                              {(isAssignee && !isManagerOrAdmin) && (
+                                <div className="space-y-2">
+                                  {postState.status === 'Preview' ? (
+                                      <Button type="button" className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                          <RotateCcw className="mr-2 h-4 w-4" />
+                                          Recall Submission
+                                      </Button>
+                                  ) : (
+                                      <Button
+                                          type="button"
+                                          className="w-full"
+                                          onClick={handleSubmitForReview}
+                                          disabled={!canSubmit || isSaving}
+                                      >
+                                          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                          Submit for Review
+                                      </Button>
+                                  )}
+                                  {!canSubmit && postState.status !== 'Preview' && postState.status !== 'Done' && (
+                                      <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {isManagerOrAdmin && postState.statusInternal === 'Preview' && ( 
+                                  <div className="flex flex-col w-full gap-2">
+                                      <Button type="button" className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: postState })} disabled={isSaving}>
+                                          <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                                      </Button>
+                                      <Button type="button" variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: postState, items: [], currentItemText: '' })} disabled={isSaving}>
+                                          <XCircle className="mr-2 h-4 w-4"/> Request Revisions
+                                      </Button>
+                                  </div>
+                              )}
+
+                              {isManagerOrAdmin && postState.statusInternal === 'Done' && ( <Button type="button" className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Article</Button> )}
+
+
+                              <div className='space-y-4 p-4 rounded-lg border'>
+                                  <h3 className='font-semibold text-sm'>Social Media Details</h3>
+                                  <Separator/>
+                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Brand</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></FormItem>
+                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Status</FormLabel><div className="col-span-2 text-sm font-medium">{postState.status}</div></FormItem>
+                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />}{postState.priority}</div></FormItem>
+                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></FormItem>
+                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Publish Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></FormItem>
+                              </div>
+
+                              <div className='space-y-4 p-4 rounded-lg border'>
+                                  <h3 className='font-semibold text-sm'>People</h3>
+                                  <Separator/>
+                                  <FormItem><FormLabel className="text-muted-foreground text-sm">Created by</FormLabel>
+                                  <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={postState.createdBy.avatarUrl} /><AvatarFallback>{getInitials(postState.createdBy.name)}</AvatarFallback></Avatar><p className="text-sm font-medium">{postState.createdBy.name}</p></div></div>
+                                  </FormItem>
+                                  <FormItem><FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
+                                  {postState.assigneeIds.map(id => {
+                                    const user = allUsers?.find(u => u.id === id);
+                                    if (!user) return null;
+                                    return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
+                                  })}
+                                  </FormItem>
+                              </div>
+
+                              <div className='space-y-4 p-4 rounded-lg border'>
+                                  <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                                  <Separator/>
+                                    <FormField
+                                        control={form.control}
+                                        name="timeEstimate"
+                                        render={({ field }) => (
+                                            <FormItem className="grid grid-cols-3 items-center gap-2">
+                                                <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
+                                                <div className="col-span-2">
+                                                  <Input type="number" step="0.5" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} placeholder="e.g. 4" readOnly={!canEditContent} />
+                                                </div>
+                                            </FormItem>
+                                        )}
+                                    />
+                              </div>
+                          </div>
+                      </ScrollArea>
+                  </div>
+                </form>
+              </Form>
             </div>
         </SheetContent>
     </Sheet>
@@ -916,7 +973,7 @@ export function SocialMediaPostDetailsSheet({
                             <Input 
                                 value={revisionState.currentItemText}
                                 onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
-                                placeholder="e.g., Fix the logo placement"
+                                placeholder="e.g., Fix the typo in paragraph 2"
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter') {
                                     e.preventDefault();
@@ -1006,15 +1063,3 @@ export function SocialMediaPostDetailsSheet({
     </>
   );
 }
-
-// Helper to remove duplicate activities by ID, keeping the latest one.
-const getUniqueActivities = (activities: Activity[]): Activity[] => {
-  if (!activities) return [];
-  const activityMap = new Map<string, Activity>();
-  activities.forEach(activity => {
-      activityMap.set(activity.id, activity);
-  });
-  return Array.from(activityMap.values());
-};
-
-const itemType = 'socialMediaPosts'; // Define itemType here or pass as prop if it's dynamic
