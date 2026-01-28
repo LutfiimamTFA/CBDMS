@@ -82,6 +82,23 @@ const postSchema = z.object({
 
 type PostFormValues = z.infer<typeof postSchema>;
 
+const MAX_IMAGE_SIZE_MB = 5;
+const MAX_DOC_SIZE_MB = 10;
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES].join(',');
+
 
 export function AddSocialMediaPostDialog({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = React.useState(false);
@@ -277,7 +294,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
         caption: data.caption || '',
         priority: data.priority,
         assigneeIds: data.assigneeIds,
-        startDate: data.startDate?.toISOString(),
+        startDate: data.startDate,
         dueDate: data.dueDate?.toISOString(),
         scheduledAt: data.scheduledAt?.toISOString(),
         timeEstimate: data.timeEstimate,
@@ -326,9 +343,54 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
     if (!event.target.files || !storage) return;
     setIsUploading(true);
+    
     const files = Array.from(event.target.files);
+    
+    const validatedFiles = files.filter(file => {
+      const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+      const isDoc = ALLOWED_DOC_TYPES.includes(file.type);
+  
+      if (!isImage && !isDoc) {
+        toast({
+          variant: 'destructive',
+          title: 'Tipe File Tidak Diizinkan',
+          description: `File "${file.name}" tidak dapat diunggah. Hanya gambar dan dokumen yang diizinkan.`,
+          duration: 10000,
+        });
+        return false;
+      }
+  
+      if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+        toast({
+          variant: 'destructive',
+          title: 'Ukuran Gambar Terlalu Besar',
+          description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_IMAGE_SIZE_MB} MB. Coba kompres file atau gunakan Google Drive.`,
+          duration: 10000,
+        });
+        return false;
+      }
+  
+      if (isDoc && file.size > MAX_DOC_SIZE_BYTES) {
+        toast({
+          variant: 'destructive',
+          title: 'Ukuran Dokumen Terlalu Besar',
+          description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_DOC_SIZE_MB} MB. Gunakan Google Drive untuk file besar.`,
+          duration: 10000,
+        });
+        return false;
+      }
+  
+      return true;
+    });
+
+    if (validatedFiles.length === 0) {
+        setIsUploading(false);
+        if (event.target) event.target.value = '';
+        return;
+    }
+
     try {
-        const uploadPromises = files.map(async (file) => {
+        const uploadPromises = validatedFiles.map(async (file) => {
             const storageRef = ref(storage, `attachments/${Date.now()}-${file.name}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
@@ -439,8 +501,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     setIsMentioning(false);
   };
   
-  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = e.target.value;
+  const handleCommentChange = (text: string) => {
     setNewComment(text);
     if (allUsers) {
       const mentionMatch = text.match(/@(\w*)$/);
@@ -487,7 +548,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                         <FormField control={form.control} name="brandId" render={({ field }) => ( <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? <div className="p-2"><Loader2 className="h-4 w-4 animate-spin"/></div> : brands?.map((brand) => ( <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
                       )}
                       <FormField control={form.control} name="priority" render={({ field }) => ( <FormItem><FormLabel>Priority</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex gap-2"><p.icon className={`h-4 w-4 ${p.color}`}/>{p.label}</div></SelectItem>))}</SelectContent></Select><Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting}><Wand2 className="h-4 w-4"/></Button></div>{suggestionReason && <FormDescription>{suggestionReason}</FormDescription>}<FormMessage/></FormItem> )}/>
-                      <FormField control={form.control} name="assigneeIds" render={({ field }) => ( <FormItem><FormLabel>Assign To</FormLabel>{areUsersLoading ? <Loader2 className="h-5 w-5 animate-spin"/> : <MultiSelect options={userOptions} onValueChange={(v) => form.setValue('assigneeIds', v)} defaultValue={field.value || []} placeholder="Select members..."/>}<FormMessage /></FormItem> )}/>
+                      <FormField control={form.control} name="assigneeIds" render={({ field }) => ( <FormItem><FormLabel>Assign To</FormLabel>{areUsersLoading ? <Loader2 className="h-5 w-5 animate-spin"/> : <MultiSelect options={userOptions} onValueChange={(v) => { form.setValue('assigneeIds', v); setSelectedUsers(allUsers?.filter(u => v.includes(u.id)) || []); }} defaultValue={field.value || []} placeholder="Select members..."/>}<FormMessage /></FormItem> )}/>
                       
                       <div className="space-y-4 rounded-lg border p-4">
                         <FormField control={form.control} name="startDate" render={({ field }) => ( <FormItem><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
@@ -584,7 +645,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                               </div>
                               {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables attached.</p>}
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} />
                                 <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>
                                   {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Deliverable
                                 </Button>
@@ -611,16 +672,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                                     ))}
                                 </div>
                                 {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                    <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button>
-                                    <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>
-                                        <div className="flex items-center justify-center gap-2">
-                                            <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
-                                            Link from Google Drive
-                                        </div>
-                                    </Button>
-                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
                             </div>
                         </TabsContent>
                         <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
@@ -694,3 +746,5 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     </>
   );
 }
+
+    

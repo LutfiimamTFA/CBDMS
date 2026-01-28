@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -40,7 +41,7 @@ import { suggestPriority } from '@/ai/flows/suggest-priority';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, serverTimestamp, writeBatch, doc, query, where } from 'firebase/firestore';
+import { collection, serverTimestamp, writeBatch, doc, query, where, orderBy } from 'firebase/firestore';
 import { Calendar as CalendarComponent } from '../ui/calendar';
 import { cn } from '@/lib/utils';
 import { MultiSelect } from '../ui/multi-select';
@@ -73,6 +74,23 @@ const articleSchema = z.object({
 
 
 type ArticleFormValues = z.infer<typeof articleSchema>;
+
+const MAX_IMAGE_SIZE_MB = 5;
+const MAX_DOC_SIZE_MB = 10;
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES].join(',');
 
 
 export function AddWebArticleDialog({ children }: { children: React.ReactNode }) {
@@ -268,7 +286,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
         assigneeIds: data.assigneeIds,
         assignees: selectedUsers,
         startDate: data.startDate,
-        dueDate: data.dueDate,
+        dueDate: data.dueDate?.toISOString(),
         timeEstimate: data.timeEstimate,
         dependencies: dependencies,
         status: 'To Do',
@@ -312,9 +330,54 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || !storage || !user) return;
     setIsUploading(true);
+    
     const files = Array.from(event.target.files);
+    
+    const validatedFiles = files.filter(file => {
+        const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+        const isDoc = ALLOWED_DOC_TYPES.includes(file.type);
+    
+        if (!isImage && !isDoc) {
+          toast({
+            variant: 'destructive',
+            title: 'Tipe File Tidak Diizinkan',
+            description: `File "${file.name}" tidak dapat diunggah. Hanya gambar dan dokumen yang diizinkan.`,
+            duration: 10000,
+          });
+          return false;
+        }
+    
+        if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+          toast({
+            variant: 'destructive',
+            title: 'Ukuran Gambar Terlalu Besar',
+            description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_IMAGE_SIZE_MB} MB. Coba kompres file atau gunakan Google Drive.`,
+            duration: 10000,
+          });
+          return false;
+        }
+    
+        if (isDoc && file.size > MAX_DOC_SIZE_BYTES) {
+          toast({
+            variant: 'destructive',
+            title: 'Ukuran Dokumen Terlalu Besar',
+            description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_DOC_SIZE_MB} MB. Gunakan Google Drive untuk file besar.`,
+            duration: 10000,
+          });
+          return false;
+        }
+    
+        return true;
+    });
+
+    if (validatedFiles.length === 0) {
+        setIsUploading(false);
+        if (event.target) event.target.value = '';
+        return;
+    }
+
     try {
-        const uploadPromises = files.map(async (file) => {
+        const uploadPromises = validatedFiles.map(async (file) => {
             const storageRef = ref(storage, `attachments/web-articles/${user.uid}/${Date.now()}-${file.name}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
@@ -562,41 +625,9 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                         </TabsContent>
                         <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                           <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                              {subtasks.map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                              {(subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                           </div>
-                          <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
-                          <Popover>
-                              <PopoverTrigger asChild>
-                                <Button variant="ghost" size="icon" className="text-muted-foreground">
-                                  {newSubtaskAssignee ? (
-                                    <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{getInitials(newSubtaskAssignee.name)}</AvatarFallback></Avatar>
-                                  ) : (
-                                    <UserPlus className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-60 p-1">
-                                <ScrollArea className="max-h-60">
-                                  <div className="space-y-1">
-                                       {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
-                                          users.length > 0 && (
-                                              <React.Fragment key={group}>
-                                                  <Separator />
-                                                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
-                                                  {users.map(user => (
-                                                      <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
-                                                          <span className="truncate">{user.name}</span>
-                                                      </Button>
-                                                  ))}
-                                              </React.Fragment>
-                                          )
-                                      ))}
-                                  </div>
-                              </ScrollArea>
-                            </PopoverContent>
-                          </Popover>
-                          <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                          <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                         </TabsContent>
                         <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
                             <div>
@@ -614,7 +645,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                                 </div>
                                 {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No files attached.</p>}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
+                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" accept={ALLOWED_FILE_TYPES} />
                                     <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Files</Button>
                                     <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}>
                                         <div className="flex items-center justify-center gap-2">
@@ -665,3 +696,5 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
     </>
   );
 }
+
+    

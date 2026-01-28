@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -91,6 +92,23 @@ type CustomField = {
   value: string;
   options?: string; // For dropdown options
 };
+
+const MAX_IMAGE_SIZE_MB = 5;
+const MAX_DOC_SIZE_MB = 10;
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES].join(',');
 
 
 export function AddTaskDialog({ children }: { children: React.ReactNode }) {
@@ -589,9 +607,52 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     
     setIsUploading(true);
     const files = Array.from(event.target.files);
+
+    const validatedFiles = files.filter(file => {
+      const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+      const isDoc = ALLOWED_DOC_TYPES.includes(file.type);
+  
+      if (!isImage && !isDoc) {
+        toast({
+          variant: 'destructive',
+          title: 'Tipe File Tidak Diizinkan',
+          description: `File "${file.name}" tidak dapat diunggah. Hanya gambar dan dokumen yang diizinkan.`,
+          duration: 10000,
+        });
+        return false;
+      }
+  
+      if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+        toast({
+          variant: 'destructive',
+          title: 'Ukuran Gambar Terlalu Besar',
+          description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_IMAGE_SIZE_MB} MB. Coba kompres file atau gunakan Google Drive.`,
+          duration: 10000,
+        });
+        return false;
+      }
+  
+      if (isDoc && file.size > MAX_DOC_SIZE_BYTES) {
+        toast({
+          variant: 'destructive',
+          title: 'Ukuran Dokumen Terlalu Besar',
+          description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_DOC_SIZE_MB} MB. Gunakan Google Drive untuk file besar.`,
+          duration: 10000,
+        });
+        return false;
+      }
+  
+      return true;
+    });
+
+    if (validatedFiles.length === 0) {
+        setIsUploading(false);
+        if (event.target) event.target.value = '';
+        return;
+    }
     
     try {
-        const uploadPromises = files.map(async (file) => {
+        const uploadPromises = validatedFiles.map(async (file) => {
             const storageRef = ref(storage, `attachments/${user.uid}/${Date.now()}-${file.name}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
@@ -606,7 +667,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         const newFiles = await Promise.all(uploadPromises);
         setAttachments(prev => [...prev, ...newFiles]);
         
-        toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
+        toast({ title: 'Upload Successful', description: `${validatedFiles.length} file(s) have been attached.` });
 
     } catch (error) {
         console.error("File upload failed:", error);
@@ -1177,7 +1238,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                         </div>
                         {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No files attached.</p>}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                            <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" accept={ALLOWED_FILE_TYPES} />
                             <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
                             <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
                         </div>
@@ -1287,3 +1348,5 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     </>
   );
 }
+
+    

@@ -69,7 +69,6 @@ import { RichTextEditor } from '../ui/rich-text-editor';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { usePermissions } from '@/context/permissions-provider';
 
-
 const postDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   brandId: z.string().min(1, 'Brand is required'),
@@ -106,6 +105,23 @@ const formatDate = (date: any): string => {
     return format(dateObj, 'PP, p');
 };
   
+const MAX_IMAGE_SIZE_MB = 5;
+const MAX_DOC_SIZE_MB = 10;
+const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
+const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES].join(',');
+
 
 const getCurrentSubmissionCycle = (post: SocialMediaPost | null): number => {
     if (!post) return 1;
@@ -222,7 +238,7 @@ export function SocialMediaPostDetailsSheet({
     if (!firestore || !currentUser) return null;
     return query(collection(firestore, 'brands'), orderBy('name'));
   }, [firestore, currentUser]);
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
+  const { data: brands } = useCollection<Brand>(brandsQuery);
 
   const form = useForm<PostDetailsFormValues>({
     resolver: zodResolver(postDetailsSchema),
@@ -357,10 +373,54 @@ export function SocialMediaPostDetailsSheet({
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
       if (!event.target.files || !storage || !postState?.id || !firestore || !currentUser) return;
       setIsUploading(true);
+      
+      const files = Array.from(event.target.files);
+      const validatedFiles = files.filter(file => {
+          const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
+          const isDoc = ALLOWED_DOC_TYPES.includes(file.type);
+      
+          if (!isImage && !isDoc) {
+            toast({
+              variant: 'destructive',
+              title: 'Tipe File Tidak Diizinkan',
+              description: `File "${file.name}" tidak dapat diunggah. Hanya gambar dan dokumen yang diizinkan.`,
+              duration: 10000,
+            });
+            return false;
+          }
+      
+          if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+            toast({
+              variant: 'destructive',
+              title: 'Ukuran Gambar Terlalu Besar',
+              description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_IMAGE_SIZE_MB} MB. Coba kompres file atau gunakan Google Drive.`,
+              duration: 10000,
+            });
+            return false;
+          }
+      
+          if (isDoc && file.size > MAX_DOC_SIZE_BYTES) {
+            toast({
+              variant: 'destructive',
+              title: 'Ukuran Dokumen Terlalu Besar',
+              description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_DOC_SIZE_MB} MB. Gunakan Google Drive untuk file besar.`,
+              duration: 10000,
+            });
+            return false;
+          }
+      
+          return true;
+      });
+
+      if (validatedFiles.length === 0) {
+          setIsUploading(false);
+          if (event.target) event.target.value = '';
+          return;
+      }
+
       try {
-          const files = Array.from(event.target.files);
           const currentCycle = getCurrentSubmissionCycle(postState);
-          const uploadPromises = files.map(async (file) => {
+          const uploadPromises = validatedFiles.map(async (file) => {
               const attachmentId = `${Date.now()}-${file.name}`;
               const storageRef = ref(storage, `social-media/${postState.companyId}/${attachmentId}`);
               await uploadBytes(storageRef, file);
@@ -368,8 +428,9 @@ export function SocialMediaPostDetailsSheet({
               return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
           });
           const newFiles = await Promise.all(uploadPromises);
-          const currentFiles = fileType === 'attachment' ? (postState.attachments || []) : (postState.deliverables || []);
-          await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
+          const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+          const currentFiles = postState[fieldToUpdate] || [];
+          await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fieldToUpdate]: [...currentFiles, ...newFiles] });
           toast({ title: 'Upload Successful' });
       } catch (error) {
           toast({ variant: 'destructive', title: 'Upload Failed' });
@@ -580,11 +641,38 @@ export function SocialMediaPostDetailsSheet({
     return groups;
   }, [postState.deliverables]);
   
+  const getBlockingReasonsForStatusChange = (targetStatus: string, currentItem: SocialMediaPost): Omit<BlockingReason, 'isOpen'> => {
+    const reasons: string[] = [];
+    if (targetStatus === 'Preview') {
+        if (!currentItem.caption || currentItem.caption.length < 10) reasons.push("Caption is too short or empty.");
+        const allSubtasksCompleted = (currentItem.subtasks || []).every(st => st.completed);
+        if (!allSubtasksCompleted) reasons.push("Complete all subtasks first.");
+        
+        const currentCycle = getCurrentSubmissionCycle(currentItem);
+        const hasDeliverableForCycle = (currentItem.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+        if (!hasDeliverableForCycle) reasons.push("Upload at least one new deliverable for this submission cycle.");
+
+        if (reasons.length > 0) {
+            return { blocked: true, title: "Not Ready for Review", reasons, suggestion: "Please complete the items above before submitting for review." };
+        }
+    }
+    if (isEmployeeOrPIC && targetStatus === 'Done') {
+        return { blocked: true, title: "Action Not Allowed", reasons: ["Only Managers can complete posts."], suggestion: "Change status to 'Preview' for manager review." };
+    }
+    return { blocked: false, title: '', reasons: [] };
+  };
+
   const handleStatusChange = useCallback(async (newStatus: string) => {
-    const oldStatus = postState.status;
+    const oldStatus = postState.statusInternal;
     if (oldStatus === newStatus || !firestore || !currentUser) return;
     
-    setPostState(prev => ({ ...prev, status: newStatus, statusInternal: newStatus }));
+    const block = getBlockingReasonsForStatusChange(newStatus, postState);
+    if (block.blocked) {
+        setBlockingAlert({ isOpen: true, ...block });
+        return;
+    }
+    
+    setPostState(prev => ({ ...prev, statusInternal: newStatus, status: newStatus }));
 
     const batch = writeBatch(firestore);
     const postRef = doc(firestore, 'socialMediaPosts', postState.id);
@@ -625,11 +713,10 @@ export function SocialMediaPostDetailsSheet({
       toast({ title: 'Status Updated' });
     } catch (error) {
       console.error('Failed to update status:', error);
-      setPostState(prev => ({ ...prev, status: oldStatus, statusInternal: oldStatus })); 
+      setPostState(prev => ({ ...prev, statusInternal: oldStatus, status: oldStatus })); 
       toast({ variant: 'destructive', title: 'Update Failed' });
     }
   }, [firestore, currentUser, postState, toast]);
-
 
   return (
     <>
@@ -653,13 +740,12 @@ export function SocialMediaPostDetailsSheet({
                 </div>
             </SheetHeader>
             <div className="flex-1 flex min-h-0">
-              <Form {...form}>
-                <form id="edit-post-form" className='flex-1 flex min-h-0'>
-                  <div className="flex-1 grid md:grid-cols-3 min-h-0">
+              <form id="edit-post-form" className='flex-1 flex min-h-0'>
+                <div className="flex-1 grid md:grid-cols-3 min-h-0">
                       <ScrollArea className="md:col-span-2 h-full">
                           <div className="p-6 space-y-6">
                             <Input value={postState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
-                              {(postState.status === 'Revisi' || postState.statusInternal === 'Revisi') && postState.revisionItems && postState.revisionItems.length > 0 && (
+                              {(postState.statusInternal === 'Revisi') && postState.revisionItems && postState.revisionItems.length > 0 && (
                                   <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
                                       <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
                                       <div className="space-y-2">
@@ -684,12 +770,11 @@ export function SocialMediaPostDetailsSheet({
                               </Accordion>
                               
                               <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-5">
+                                <TabsList className="grid w-full grid-cols-4">
                                   <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                                  <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                                     <ScrollArea className="max-h-48 pr-2">
@@ -703,16 +788,18 @@ export function SocialMediaPostDetailsSheet({
                                         <div className="flex-1 relative">
                                         <RichTextEditor value={newComment} onChange={handleCommentChange} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
                                         {isMentioning && (
-                                            <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
-                                            <CardContent className="p-1">
+                                            <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto border bg-background rounded-md shadow-lg z-10">
+                                            <Command>
+                                                <CommandList>
                                                 {mentionSuggestions.map(user => (
-                                                <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}>
-                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                                <CommandItem key={user.id} onSelect={() => handleMentionSelect(user)}>
+                                                    <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
                                                     {user.name}
-                                                </Button>
+                                                </CommandItem>
                                                 ))}
-                                            </CardContent>
-                                            </Card>
+                                                </CommandList>
+                                            </Command>
+                                            </div>
                                         )}
                                         </div>
                                         <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
@@ -722,39 +809,7 @@ export function SocialMediaPostDetailsSheet({
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                       {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                                   </div>
-                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
-                                  <Popover>
-                                      <PopoverTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="text-muted-foreground">
-                                          {newSubtaskAssignee ? (
-                                            <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{getInitials(newSubtaskAssignee.name)}</AvatarFallback></Avatar>
-                                          ) : (
-                                            <UserPlus className="h-4 w-4" />
-                                          )}
-                                        </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-60 p-1">
-                                        <ScrollArea className="max-h-60">
-                                          <div className="space-y-1">
-                                               {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
-                                                  users.length > 0 && (
-                                                      <React.Fragment key={group}>
-                                                          <Separator />
-                                                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
-                                                          {users.map(user => (
-                                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                                  <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
-                                                                  <span className="truncate">{user.name}</span>
-                                                              </Button>
-                                                          ))}
-                                                      </React.Fragment>
-                                                  )
-                                              ))}
-                                          </div>
-                                      </ScrollArea>
-                                    </PopoverContent>
-                                  </Popover>
-                                  <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
                                    <div>
@@ -764,7 +819,7 @@ export function SocialMediaPostDetailsSheet({
                                           {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                       </div>
                                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                        <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                        <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} />
                                         <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
                                         <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>
                                           <div className="flex items-center justify-center gap-2">
@@ -789,7 +844,7 @@ export function SocialMediaPostDetailsSheet({
                                             ))}
                                         </div>
                                         {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
@@ -829,7 +884,7 @@ export function SocialMediaPostDetailsSheet({
                           <div className="p-6 space-y-6">
                               {(isAssignee && !isManagerOrAdmin) && (
                                 <div className="space-y-2">
-                                  {postState.status === 'Preview' ? (
+                                  {postState.statusInternal === 'Preview' ? (
                                       <Button type="button" className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
                                           <RotateCcw className="mr-2 h-4 w-4" />
                                           Recall Submission
@@ -845,8 +900,8 @@ export function SocialMediaPostDetailsSheet({
                                           Submit for Review
                                       </Button>
                                   )}
-                                  {!canSubmit && postState.status !== 'Preview' && postState.status !== 'Done' && (
-                                      <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
+                                  {!canSubmit && postState.statusInternal !== 'Preview' && postState.statusInternal !== 'Done' && (
+                                      <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
                                   )}
                                 </div>
                               )}
@@ -868,52 +923,43 @@ export function SocialMediaPostDetailsSheet({
                               <div className='space-y-4 p-4 rounded-lg border'>
                                   <h3 className='font-semibold text-sm'>Social Media Details</h3>
                                   <Separator/>
-                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Brand</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></FormItem>
-                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Status</FormLabel><div className="col-span-2 text-sm font-medium">{postState.status}</div></FormItem>
-                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />}{postState.priority}</div></FormItem>
-                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></FormItem>
-                                  <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Publish Date</FormLabel><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></FormItem>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Brand</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2 text-sm font-medium">{postState.status}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Priority</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />}{postState.priority}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Due Date</Label><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Publish Date</Label><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></div>
                               </div>
 
                               <div className='space-y-4 p-4 rounded-lg border'>
                                   <h3 className='font-semibold text-sm'>People</h3>
                                   <Separator/>
-                                  <FormItem><FormLabel className="text-muted-foreground text-sm">Created by</FormLabel>
-                                  <div className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={postState.createdBy.avatarUrl} /><AvatarFallback>{getInitials(postState.createdBy.name)}</AvatarFallback></Avatar><p className="text-sm font-medium">{postState.createdBy.name}</p></div></div>
-                                  </FormItem>
-                                  <FormItem><FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
-                                  {postState.assigneeIds.map(id => {
-                                    const user = allUsers?.find(u => u.id === id);
-                                    if (!user) return null;
-                                    return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
-                                  })}
-                                  </FormItem>
+                                  <div className='space-y-2'>
+                                      <Label className="text-muted-foreground text-sm">Assignees</Label>
+                                      {(postState.assigneeIds || []).map(id => {
+                                        const user = allUsers?.find(u => u.id === id);
+                                        if (!user) return null;
+                                        return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
+                                      })}
+                                  </div>
                               </div>
 
                               <div className='space-y-4 p-4 rounded-lg border'>
                                   <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
                                   <Separator/>
-                                    <FormField
-                                        control={form.control}
-                                        name="timeEstimate"
-                                        render={({ field }) => (
-                                            <FormItem className="grid grid-cols-3 items-center gap-2">
-                                                <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
-                                                <div className="col-span-2">
-                                                  <Input type="number" step="0.5" {...field} onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)} placeholder="e.g. 4" readOnly={!canEditContent} />
-                                                </div>
-                                            </FormItem>
-                                        )}
-                                    />
+                                    <div className="grid grid-cols-3 items-center gap-2">
+                                        <Label className="text-muted-foreground text-sm">Estimasi (hari)</Label>
+                                        <div className="col-span-2">
+                                            <Input type="number" step="0.5" value={postState.timeEstimate || ''} readOnly={!canEditContent} className="text-sm" />
+                                        </div>
+                                    </div>
                               </div>
                           </div>
                       </ScrollArea>
                   </div>
-                </form>
-              </Form>
+               </form>
             </div>
         </SheetContent>
-    </Sheet>
+      </Sheet>
     
      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-w-2xl">
@@ -924,9 +970,7 @@ export function SocialMediaPostDetailsSheet({
         </DialogContent>
        </Dialog>
     
-    <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this post?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the post: <strong className="text-foreground">{postState.title}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Yes, Delete Post</AlertDialogAction></AlertDialogFooter></AlertDialogContent>
-    </AlertDialog>
+    <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this post?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the post: <strong className="text-foreground">{postState.title}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Yes, Delete Post</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
      <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
         <DialogContent>
             <DialogHeader>
@@ -937,7 +981,7 @@ export function SocialMediaPostDetailsSheet({
                 <div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
                 <div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
             </div>
-            <DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter>
+            <DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink()}>Add Link</Button></DialogFooter>
         </DialogContent>
     </Dialog>
      <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
@@ -1102,3 +1146,5 @@ export function SocialMediaPostDetailsSheet({
     </>
   );
 }
+
+    
