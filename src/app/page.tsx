@@ -57,7 +57,7 @@ export default function RootPage() {
               <div className="bg-primary p-2 rounded-lg">
                 <ArrowUpRight className="h-5 w-5 text-primary-foreground" />
               </div>
-              <h1 className="font-headline text-xl font-bold truncate">CBDMS</h1>
+              <h1 className="font-headline text-xl font-bold truncate">CBDMS Workspace</h1>
             </div>
         </div>
 
@@ -66,7 +66,7 @@ export default function RootPage() {
               {format(currentTime, 'eeee, d MMMM yyyy, HH:mm:ss')}
           </div>
           <div className="space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight">Welcome to CBDMS</h1>
+              <h1 className="text-4xl font-bold tracking-tight">Welcome to CBDMS Workspace</h1>
               <p className="text-lg text-muted-foreground">
                   Collaborate, manage projects, and reach new productivity peaks.
               </p>
