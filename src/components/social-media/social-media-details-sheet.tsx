@@ -168,6 +168,16 @@ interface RevisionState {
   currentItemText: string;
 }
 
+// Helper to remove duplicate activities by ID, keeping the latest one.
+const getUniqueActivities = (activities: Activity[]): Activity[] => {
+  if (!activities) return [];
+  const activityMap = new Map<string, Activity>();
+  activities.forEach(activity => {
+      activityMap.set(activity.id, activity);
+  });
+  return Array.from(activityMap.values());
+};
+
 export function SocialMediaPostDetailsSheet({ 
   post: initialPost, 
   open,
@@ -272,16 +282,6 @@ export function SocialMediaPostDetailsSheet({
 
     return true;
 }, [postState, isEmployeeOrPIC]);
-
-  const getUniqueActivities = (activities: Activity[]): Activity[] => {
-    if (!activities) return [];
-    const seen = new Set();
-    return activities.filter(activity => {
-        const duplicate = seen.has(activity.id);
-        seen.add(activity.id);
-        return !duplicate;
-    });
-  };
 
   const handleDelete = () => {
     if (!firestore || !postState || !canDelete) return;
@@ -684,12 +684,40 @@ export function SocialMediaPostDetailsSheet({
                               </Accordion>
                               
                               <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
+                                <TabsList className="grid w-full grid-cols-5">
+                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                                  <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                                 </TabsList>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                    <ScrollArea className="max-h-48 pr-2">
+                                        <div className="space-y-4">
+                                            {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
+                                            {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                        </div>
+                                    </ScrollArea>
+                                    <div className="flex items-start gap-2 pt-4 border-t">
+                                        <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{getInitials(currentUser?.name)}</AvatarFallback></Avatar>
+                                        <div className="flex-1 relative">
+                                        <RichTextEditor value={newComment} onChange={handleCommentChange} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                        {isMentioning && (
+                                            <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
+                                            <CardContent className="p-1">
+                                                {mentionSuggestions.map(user => (
+                                                <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}>
+                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                                    {user.name}
+                                                </Button>
+                                                ))}
+                                            </CardContent>
+                                            </Card>
+                                        )}
+                                        </div>
+                                        <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                                    </div>
+                                </TabsContent>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                       {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
