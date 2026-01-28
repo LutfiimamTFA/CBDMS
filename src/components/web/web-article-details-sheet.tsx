@@ -34,9 +34,9 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { priorityInfo } from '@/lib/utils';
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Loader2, Plus, XCircle, HelpCircle, History, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Workflow, Blocks, Send, GitMerge, ListTodo, MessageSquare, Trash, Trash2, CalendarIcon, Clock, Timer } from 'lucide-react';
+import { priorityInfo, getInitials, getFileIcon } from '@/lib/utils';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Loader2, Plus, XCircle, HelpCircle, History, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Workflow, Blocks, Send, GitMerge, ListTodo, MessageSquare, Trash, Trash2, CalendarIcon, Clock, Timer, RotateCcw } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
@@ -44,7 +44,6 @@ import { collection, serverTimestamp, writeBatch, doc, query, where, orderBy, up
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { getFileIcon, getInitials } from '@/lib/utils';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Badge } from '../ui/badge';
@@ -57,7 +56,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Calendar } from '../ui/calendar';
 import { cn } from '@/lib/utils';
-
+import { usePermissions } from '@/context/permissions-provider';
 
 const articleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -90,7 +89,7 @@ const createActivity = (user: User, action: string): Activity => {
 const getCurrentSubmissionCycle = (article: WebArticle | null): number => {
     if (!article) return 1;
     const historyLength = article.revisionHistory?.length ?? 0;
-    if (article.status === 'Revisi') {
+    if (article.statusInternal === 'Revisi') {
         return historyLength + 1;
     }
     return historyLength > 0 ? historyLength : 1;
@@ -113,8 +112,6 @@ export function WebArticleDetailsSheet({
   const [articleState, setArticleState] = useState(initialArticle);
   useEffect(() => { setArticleState(initialArticle) }, [initialArticle]);
   
-  const [newComment, setNewComment] = useState('');
-  
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -122,6 +119,7 @@ export function WebArticleDetailsSheet({
   
   const firestore = useFirestore();
   const { user: authUser, profile: currentUser } = useUserProfile();
+  const { permissions } = usePermissions();
 
   const allArticlesQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
@@ -149,10 +147,14 @@ export function WebArticleDetailsSheet({
   const { data: statuses } = useCollection<WorkflowStatus>(statusesQuery);
   
   const isAssignee = useMemo(() => !!currentUser && articleState.assigneeIds.includes(currentUser.id), [currentUser, articleState.assigneeIds]);
+  const isManagerOrAdmin = useMemo(() => currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin'), [currentUser]);
+  const isEmployeeOrPIC = useMemo(() => currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC'), [currentUser]);
 
   const canEditContent = useMemo(() => {
     if (!currentUser) return false;
-    return currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || currentUser.id === articleState.createdBy.id;
+    const isCreator = currentUser.id === articleState.createdBy.id;
+    const isManagerOfBrand = currentUser.role === 'Manager' && articleState.brandId && (currentUser.brandIds || []).includes(articleState.brandId);
+    return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
   }, [currentUser, articleState]);
 
   const canDelete = useMemo(() => {
@@ -170,13 +172,13 @@ export function WebArticleDetailsSheet({
     const articleRef = doc(firestore, 'webArticles', articleState.id);
     const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
     
-    const updates = {
+    const updates: any = {
       statusInternal: newStatus,
       activities: [...(articleState.activities || []), newActivity],
       lastActivity: newActivity,
       updatedAt: serverTimestamp()
     };
-    batch.update(articleRef, updates as any);
+    batch.update(articleRef, updates);
 
     const notificationTitle = `Status Changed: ${articleState.title}`;
     const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
@@ -273,6 +275,7 @@ export function WebArticleDetailsSheet({
     }
   };
 
+  const PriorityIcon = priorityInfo[articleState.priority]?.icon;
   
   return (
     <>
@@ -301,11 +304,39 @@ export function WebArticleDetailsSheet({
                     <ScrollArea className="md:col-span-2 h-full">
                         <div className="p-6 space-y-6">
                            <Input value={articleState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
+                           {(articleState.statusInternal === 'Revisi') && articleState.revisionItems && articleState.revisionItems.length > 0 && (
+                                 <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                                     <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
+                                     <div className="space-y-2">
+                                         {articleState.revisionItems.map(item => (
+                                             <div key={item.id} className="flex items-center gap-3">
+                                                 <Checkbox id={`rev-${item.id}`} checked={item.completed} disabled={!isAssignee} />
+                                                 <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
+                                             </div>
+                                         ))}
+                                     </div>
+                                 </div>
+                             )}
                            <RichTextEditor value={articleState.content || ''} onChange={() => {}} placeholder="Write your article content here..." readOnly={!canEditContent} />
                         </div>
                     </ScrollArea>
                     <ScrollArea className="md:col-span-1 h-full border-l">
-                         {/* Details sidebar will go here */}
+                         <div className="p-6 space-y-6">
+                            <div className='space-y-4 p-4 rounded-lg border'>
+                                <h3 className='font-semibold text-sm'>Article Details</h3>
+                                <Separator/>
+                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Brand</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === articleState.brandId)?.name || 'N/A'}</div></div>
+                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2 text-sm font-medium">{articleState.statusInternal}</div></div>
+                                <div className="grid grid-cols-3 items-center gap-2">
+                                    <Label className="text-muted-foreground">Priority</Label>
+                                    <div className="col-span-2 flex items-center gap-2 text-sm font-medium">
+                                        {PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[articleState.priority].color}`} />}{' '}
+                                        {articleState.priority}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Due Date</Label><div className="col-span-2 text-sm font-medium">{articleState.dueDate ? format(parseISO(articleState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></div>
+                            </div>
+                         </div>
                     </ScrollArea>
                 </div>
                </form>
