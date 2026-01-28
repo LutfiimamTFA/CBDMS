@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -28,12 +29,12 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { priorityInfo } from '@/lib/utils';
-import React, { useState, useEffect, useMemo } from 'react';
-import { Loader2, Plus, XCircle, HelpCircle, History, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Workflow, Blocks, Send, GitMerge, ListTodo, MessageSquare, Trash, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Loader2, Plus, XCircle, HelpCircle, History, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Workflow, Blocks, Send, GitMerge, ListTodo, MessageSquare, Trash, Trash2, CalendarIcon, Clock, Timer } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
-import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, where } from 'firebase/firestore';
+import { collection, serverTimestamp, writeBatch, doc, query, where, orderBy, updateDoc, deleteField } from 'firebase/firestore';
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
@@ -48,19 +49,22 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { format, formatDistanceToNow, parseISO } from 'date-fns';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { Calendar } from '../ui/calendar';
+import { cn } from '@/lib/utils';
 
 
-const articleDetailsSchema = z.object({
+const articleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   brandId: z.string().min(1, 'Brand is required'),
   content: z.string().optional(),
-  status: z.string(),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
-  assigneeIds: z.array(z.string()).optional(),
-  dueDate: z.string().optional(),
+  assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required'),
+  startDate: z.date().optional(),
+  dueDate: z.date().optional(),
+  timeEstimate: z.coerce.number().min(0).optional(),
 });
 
-type ArticleDetailsFormValues = z.infer<typeof articleDetailsSchema>;
+type ArticleFormValues = z.infer<typeof articleSchema>;
 
 interface WebArticleDetailsSheetProps {
   article: WebArticle;
@@ -131,13 +135,15 @@ export function WebArticleDetailsSheet({
     return query(collection(firestore, 'brands'), orderBy('name'));
   }, [firestore, currentUser]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
-  
+
   const statusesQuery = useMemo(() => {
     if(!firestore) return null;
     return query(collection(firestore, 'webStatuses'), orderBy('order'))
   }, [firestore]);
   const { data: statuses } = useCollection<WorkflowStatus>(statusesQuery);
   
+  const isAssignee = useMemo(() => !!currentUser && articleState.assigneeIds.includes(currentUser.id), [currentUser, articleState.assigneeIds]);
+
   const canEditContent = useMemo(() => {
     if (!currentUser) return false;
     return currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || currentUser.id === articleState.createdBy.id;
@@ -147,7 +153,62 @@ export function WebArticleDetailsSheet({
     if (!currentUser) return false;
     return currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || currentUser.id === articleState.createdBy.id;
   }, [currentUser, articleState]);
-  
+
+  const handleStatusChange = useCallback(async (newStatus: string) => {
+    const oldStatus = articleState.statusInternal;
+    if (oldStatus === newStatus || !firestore || !currentUser) return;
+
+    setArticleState(prev => ({ ...prev, statusInternal: newStatus }));
+
+    const batch = writeBatch(firestore);
+    const articleRef = doc(firestore, 'webArticles', articleState.id);
+    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    
+    const updates = {
+      statusInternal: newStatus,
+      activities: [...(articleState.activities || []), newActivity],
+      lastActivity: newActivity,
+      updatedAt: serverTimestamp()
+    };
+    batch.update(articleRef, updates as any);
+
+    const notificationTitle = `Status Changed: ${articleState.title}`;
+    const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
+    const notifiedUserIds = new Set<string>();
+    articleState.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
+    if (articleState.createdBy.id !== currentUser.id) notifiedUserIds.add(articleState.createdBy.id);
+
+    notifiedUserIds.forEach(userId => {
+      const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+      batch.set(notifRef, {
+        userId,
+        title: notificationTitle,
+        message: notificationMessage,
+        entityId: articleState.id,
+        entityType: 'webArticle',
+        workstream: 'web',
+        isRead: false,
+        createdAt: serverTimestamp(),
+        createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }
+      });
+    });
+
+    try {
+      await batch.commit();
+      toast({ title: 'Status Updated' });
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      setArticleState(prev => ({ ...prev, statusInternal: oldStatus })); 
+      toast({ variant: 'destructive', title: 'Update Failed' });
+    }
+  }, [firestore, currentUser, articleState, toast]);
+
+  useEffect(() => {
+    if (open && isAssignee && articleState.statusInternal === 'To Do') {
+      handleStatusChange('Doing');
+    }
+  }, [open, isAssignee, articleState.statusInternal, handleStatusChange]);
+
 
   const handleDelete = () => {
     if (!firestore || !articleState || !canDelete) return;
