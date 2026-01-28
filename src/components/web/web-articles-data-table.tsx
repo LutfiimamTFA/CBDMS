@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -34,6 +33,7 @@ import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { Badge } from '../ui/badge';
 import { useRouter } from 'next/navigation';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { WebArticleDetailsSheet } from './web-article-details-sheet';
 
 interface WebArticlesDataTableProps {
     articles: WebArticle[];
@@ -115,20 +115,6 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
             </div>
           );
         },
-    },
-    {
-      id: "actions",
-      cell: ({ row }) => {
-        const article = row.original;
-        return (
-            <Button variant="outline" size="sm" onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/web/articles/${article.id}`);
-            }}>
-                View
-            </Button>
-        );
-      },
     },
   ];
 

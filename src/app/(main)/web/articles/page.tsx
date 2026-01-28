@@ -54,7 +54,7 @@ export default function WebArticlesPage() {
   }, [firestore, profile]);
   
   const statusesQuery = React.useMemo(() => 
-    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    firestore ? query(collection(firestore, 'webStatuses'), orderBy('order')) : null,
     [firestore]
   );
   
@@ -109,5 +109,3 @@ export default function WebArticlesPage() {
     </div>
   );
 }
-
-    
