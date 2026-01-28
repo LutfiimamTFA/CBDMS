@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -130,16 +129,55 @@ const getCurrentSubmissionCycle = (post: SocialMediaPost | null): number => {
     return historyLength > 0 ? historyLength : 1;
 };
 
+interface FinalReviewState {
+  isOpen: boolean;
+  item: SocialMediaPost | null;
+}
+
+interface EndOfDayState {
+  isOpen: boolean;
+}
+
+type BlockingReason = {
+  blocked: boolean;
+  title: string;
+  reasons: string[];
+  suggestion?: string;
+};
+
+interface TaskDetailsSheetProps {
+  task: Task;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function SharedViewLogic({ onDataLoaded }: { onDataLoaded: (data: any) => void }) {
+    const { session, isLoading, error } = useSharedSession();
+
+    useEffect(() => {
+        if (!isLoading) {
+            onDataLoaded({ session, error });
+        }
+    }, [session, isLoading, error, onDataLoaded]);
+
+    return null;
+}
+
+
+const createActivityServer = (user: User, action: string): Activity => {
+    return {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+      action: action,
+      timestamp: new Date().toISOString() as any,
+    };
+};
+
 interface RevisionState {
   isOpen: boolean;
   item: SocialMediaPost | null;
   items: Omit<RevisionItem, 'id' | 'completed'>[];
   currentItemText: string;
-}
-
-interface FinalReviewState {
-  isOpen: boolean;
-  item: SocialMediaPost | null;
 }
 
 export function SocialMediaPostDetailsSheet({ 
@@ -618,7 +656,7 @@ export function SocialMediaPostDetailsSheet({
     }
     setIsSaving(true);
     const item = revisionState.item;
-    const itemRef = doc(firestore, 'socialMediaPosts', item.id);
+    const itemRef = doc(firestore, itemType, item.id);
     const newStatus = 'Revisi';
     
     const newRevisionItems: RevisionItem[] = revisionState.items.map(revItem => ({ id: crypto.randomUUID(), text: revItem.text, completed: false }));
@@ -716,7 +754,7 @@ export function SocialMediaPostDetailsSheet({
                                       <PopoverContent className="w-60 p-1">
                                         <ScrollArea className="max-h-60">
                                           <div className="space-y-1">
-                                              {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                               {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
                                                   users.length > 0 && (
                                                       <React.Fragment key={group}>
                                                           <Separator />
@@ -737,14 +775,39 @@ export function SocialMediaPostDetailsSheet({
                                   <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
-                                  <div>
-                                    <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                                    <div className="space-y-2">{(postState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
-                                    {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                    {canEditContent && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
-                                    )}
-                                  </div>
+                                   <div>
+                                      <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                                      <div className="space-y-2">
+                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
+                                        {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                      </div>
+                                      {canUploadDeliverables && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                          <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                          <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                        <div className="space-y-2">
+                                            {(postState.attachments || []).map((att) => (
+                                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                    {getFileIcon(att.name)}
+                                                    <span className="truncate" title={att.name}>{att.name}</span>
+                                                    </a>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                        {canEditContent && (
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
+                                        )}
+                                    </div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
@@ -908,8 +971,8 @@ export function SocialMediaPostDetailsSheet({
                 <DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
-                <div className="space-y-2"><Label htmlFor="gdrive-name">File Name</Label><Input id="gdrive-name" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
-                <div className="space-y-2"><Label htmlFor="gdrive-link">File Link</Label><Input id="gdrive-link" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
+                <div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
+                <div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
             </div>
             <DialogFooter>
                 <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
@@ -946,33 +1009,65 @@ export function SocialMediaPostDetailsSheet({
                 Revisions for item: <span className="font-bold text-foreground">{revisionState.item?.title}</span>
                 </DialogDescription>
             </DialogHeader>
-            <div className="py-4 space-y-4">
-                <div className="space-y-2">
-                    {revisionState.items.map((item, index) => (
-                        <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
-                            <span className="flex-1 text-sm">{item.text}</span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                <div className="space-y-4 px-6 py-4">
+                    <div className="space-y-2">
+                        <h4 className="font-semibold text-sm">Files for this Submission Cycle</h4>
+                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {(() => {
+                                const currentCycle = getCurrentSubmissionCycle(revisionState.item);
+                                const cycleDeliverables = (revisionState.item?.deliverables || []).filter(d => d.forRevisionCycle === currentCycle);
+                                
+                                if (cycleDeliverables.length > 0) {
+                                    return cycleDeliverables.map(att => (
+                                        <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                {getFileIcon(att.name)}
+                                                <span className="truncate" title={att.name}>{att.name}</span>
+                                            </a>
+                                            <div className="text-xs text-muted-foreground text-right shrink-0 ml-2">
+                                                <p>{att.submittedBy?.name}</p>
+                                                <p>{att.submittedAt ? formatDistanceToNow(new Date(att.submittedAt), { addSuffix: true }) : ''}</p>
+                                            </div>
+                                        </div>
+                                    ));
+                                } else {
+                                    return <p className="text-sm text-muted-foreground">No new files were submitted for this cycle.</p>;
+                                }
+                            })()}
                         </div>
-                    ))}
+                    </div>
+                    <Separator/>
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-sm">Revision Points</h4>
+                        <div className="space-y-2">
+                            {revisionState.items.map((item, index) => (
+                                <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                    <span className="flex-1 text-sm">{item.text}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Input 
+                                value={revisionState.currentItemText}
+                                onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                                placeholder="e.g., Fix the logo placement"
+                                onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddRevisionItem();
+                                }
+                                }}
+                            />
+                            <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                                <Plus className="mr-2 h-4 w-4"/> Add
+                            </Button>
+                        </div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Input 
-                        value={revisionState.currentItemText}
-                        onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
-                        placeholder="e.g., Fix the logo placement"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleAddRevisionItem();
-                          }
-                        }}
-                    />
-                    <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
-                        <Plus className="mr-2 h-4 w-4"/> Add
-                    </Button>
-                </div>
-            </div>
-            <DialogFooter>
+            </ScrollArea>
+            <DialogFooter className="p-6 pt-4 border-t">
                 <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>Cancel</Button>
                 <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1008,18 +1103,29 @@ export function SocialMediaPostDetailsSheet({
                     </div>
                 </div>
                  <div className="space-y-3">
-                    <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                    <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables for this Submission</h4>
                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                        {finalReviewState.item?.deliverables && finalReviewState.item.deliverables.length > 0 ? (
-                             finalReviewState.item.deliverables.map(att => ( 
-                                <div key={att.id} className="flex items-center gap-2 text-sm">
-                                    <span>-</span>
-                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
-                                </div>
-                            )) 
-                        ) : ( 
-                            <p className="text-sm text-muted-foreground">No deliverables for this item.</p> 
-                        )}
+                         {(() => {
+                            const currentCycle = getCurrentSubmissionCycle(finalReviewState.item);
+                            const cycleDeliverables = (finalReviewState.item?.deliverables || []).filter(d => d.forRevisionCycle === currentCycle);
+                            
+                            if (cycleDeliverables.length > 0) {
+                                return cycleDeliverables.map(att => ( 
+                                    <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                            {getFileIcon(att.name)}
+                                            <span className="truncate" title={att.name}>{att.name}</span>
+                                        </a>
+                                        <div className="text-xs text-muted-foreground text-right shrink-0 ml-2">
+                                            <p>{att.submittedBy?.name}</p>
+                                            <p>{att.submittedAt ? formatDistanceToNow(new Date(att.submittedAt), { addSuffix: true }) : ''}</p>
+                                        </div>
+                                    </div>
+                                ));
+                            } else {
+                                return <p className="text-sm text-muted-foreground">No new files submitted for this cycle.</p>;
+                            }
+                        })()}
                     </div>
                 </div>
               </div>
@@ -1047,6 +1153,7 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
   return Array.from(activityMap.values());
 };
 
+const itemType = 'socialMediaPosts'; // Define itemType here or pass as prop if it's dynamic
 
 
     
@@ -1054,3 +1161,4 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
     
 
     
+
