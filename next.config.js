@@ -5,9 +5,7 @@
 const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig = {
-  experimental: {
-    allowedDevOrigins: ["https://*.cloudworkstations.dev"],
-  },
+  allowedDevOrigins: ["https://*.cloudworkstations.dev"],
   typescript: {
     ignoreBuildErrors: true,
   },

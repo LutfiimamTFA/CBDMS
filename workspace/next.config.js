@@ -1,9 +1,7 @@
 /** @type {import('next').NextConfig} */
 
 const nextConfig = {
-  experimental: {
-    allowedDevOrigins: ["https://*.cloudworkstations.dev"],
-  },
+  allowedDevOrigins: ["https://*.cloudworkstations.dev"],
   typescript: {
     ignoreBuildErrors: true,
   },
