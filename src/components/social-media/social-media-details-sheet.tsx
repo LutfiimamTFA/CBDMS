@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -271,6 +272,16 @@ export function SocialMediaPostDetailsSheet({
 
     return true;
 }, [postState, isEmployeeOrPIC]);
+
+  const getUniqueActivities = (activities: Activity[]): Activity[] => {
+    if (!activities) return [];
+    const seen = new Set();
+    return activities.filter(activity => {
+        const duplicate = seen.has(activity.id);
+        seen.add(activity.id);
+        return !duplicate;
+    });
+  };
 
   const handleDelete = () => {
     if (!firestore || !postState || !canDelete) return;
