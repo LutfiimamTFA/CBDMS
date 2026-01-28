@@ -32,10 +32,10 @@ import {
   FormDescription,
 } from '@/components/ui/form';
 import { tags as allTags } from '@/lib/data';
-import { priorityInfo } from '@/lib/utils';
+import { priorityInfo, getFileIcon, formatHours } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, FileImage, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, ListOrdered, Table as TableIcon, Upload, Workflow } from 'lucide-react';
+import { Calendar, Clock, Copy, Loader2, Mail, Plus, Repeat, Share, Tag, Trash, Trash2, User, UserPlus, Users, Wand2, X, Hash, Calendar as CalendarIcon, Type, List, Paperclip, FileUp, Link as LinkIcon, HelpCircle, Star, Timer, Blocks, GitMerge, ListTodo, MessageSquare, AtSign, Send, Edit, FileText, Building2, Bold, Italic, List as ListIcon, ListOrdered, Table as TableIcon, Upload, Workflow } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -64,7 +64,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { RichTextEditor } from '../ui/rich-text-editor';
-import { formatHours } from '@/lib/utils';
 
 
 const taskSchema = z.object({
@@ -583,19 +582,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const handleRemoveCustomField = (id: number) => {
     setCustomFields(customFields.filter(cf => cf.id !== id));
-  };
-
-  const getFileIcon = (fileName: string): React.ReactElement => {
-    if (fileName.match(/\.(pdf)$/i)) {
-      return <FileText className="h-5 w-5 text-red-500" />;
-    }
-    if (fileName.match(/\.(doc|docx)$/i)) {
-      return <FileText className="h-5 w-5 text-blue-500" />;
-    }
-    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
-      return <FileImage className="h-5 w-5 text-green-500" />;
-    }
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1174,24 +1160,27 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                       </div>
                     </TabsContent>
                     <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
-                      <div className="space-y-2">
-                          {attachments.map((att) => (
-                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                  {getFileIcon(att.name)}
-                                  <span className="truncate" title={att.name}>{att.name}</span>
-                                  </a>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
-                                      <X className="h-4 w-4" />
-                                  </Button>
-                              </div>
-                          ))}
-                          {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No files attached.</p>}
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-                          <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
-                          <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                          <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                      <div>
+                        <h4 className="font-medium text-sm mb-2">Files</h4>
+                        <div className="space-y-2">
+                            {attachments.map((att) => (
+                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                    {getFileIcon(att.name)}
+                                    <span className="truncate" title={att.name}>{att.name}</span>
+                                    </a>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                        {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No files attached.</p>}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                            <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
+                            <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
+                            <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                        </div>
                       </div>
                     </TabsContent>
                     <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">

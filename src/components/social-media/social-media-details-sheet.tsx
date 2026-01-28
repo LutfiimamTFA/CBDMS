@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -31,9 +30,9 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { priorityInfo, formatLateness } from '@/lib/utils';
+import { priorityInfo, formatLateness, getFileIcon, formatHours, getInitials } from '@/lib/utils';
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks, RotateCcw } from 'lucide-react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks, RotateCcw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
@@ -68,7 +67,6 @@ import { tags as allTags } from '@/lib/data';
 import { RichTextEditor } from '../ui/rich-text-editor';
 import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { usePermissions } from '@/context/permissions-provider';
-import { getInitials } from '@/lib/utils';
 
 
 const postDetailsSchema = z.object({
@@ -91,12 +89,6 @@ interface SocialMediaPostDetailsSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const getFileIcon = (fileName: string): React.ReactElement => {
-    if (fileName.match(/\.(pdf)$/i)) return <FileText className="h-5 w-5 text-red-500" />;
-    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
-};
-
 const createActivity = (user: User, action: string) => {
   return {
     id: `act-${crypto.randomUUID()}`,
@@ -113,12 +105,6 @@ const formatDate = (date: any): string => {
     return format(dateObj, 'PP, p');
 };
   
-const formatHours = (hours: number = 0) => {
-    const h = Math.floor(hours);
-    const m = Math.floor((hours - h) * 60);
-    return `${h}h ${m}m`;
-};
-
 
 const getCurrentSubmissionCycle = (post: SocialMediaPost | null): number => {
     if (!post) return 1;
@@ -647,57 +633,7 @@ export function SocialMediaPostDetailsSheet({
     if (!currentUser || !isManagerOrAdmin) return;
     await handleStatusChange('Revisi');
   }
-  
-  const handleAddRevisionItem = () => {
-    if (revisionState.currentItemText.trim()) {
-        setRevisionState(prev => ({
-            ...prev,
-            items: [...prev.items, { text: prev.currentItemText }],
-            currentItemText: '',
-        }));
-    }
-  };
 
- const handleConfirmRejection = async () => {
-    if (!revisionState.item || revisionState.items.length === 0 || !firestore || !currentUser) {
-        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
-        return;
-    }
-    setIsSaving(true);
-    const item = revisionState.item;
-    const itemRef = doc(firestore, 'socialMediaPosts', item.id);
-    const newStatus = 'Revisi';
-    
-    const newRevisionItems: RevisionItem[] = revisionState.items.map(revItem => ({ id: crypto.randomUUID(), text: revItem.text, completed: false }));
-    
-    const newRevisionCycle: RevisionCycle = {
-        cycleNumber: (item.revisionHistory?.length ?? 0) + 1,
-        requestedAt: new Date().toISOString() as any,
-        requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
-        items: newRevisionItems,
-    };
-    
-    const itemUpdateData: any = {
-        status: newStatus,
-        statusInternal: newStatus,
-        revisionItems: newRevisionItems,
-        revisionHistory: [...(item.revisionHistory || []), newRevisionCycle],
-        lastActivity: createActivity(currentUser, `requested revisions and moved item to "${newStatus}"`),
-        updatedAt: serverTimestamp() as any,
-    };
-    itemUpdateData['activities'] = [...(item.activities || []), itemUpdateData.lastActivity];
-    
-    try {
-        await updateDoc(itemRef, itemUpdateData);
-        toast({ title: 'Revisions Requested', description: 'The item has been sent for revision.' });
-    } catch (error) {
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send item for revision.' });
-    } finally {
-        setIsSaving(false);
-        setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' });
-    }
-  };
-  
   return (
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -712,7 +648,7 @@ export function SocialMediaPostDetailsSheet({
                       <DropdownMenuTrigger asChild><Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
                       <DropdownMenuContent>
                           <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
-                          {canDeleteTask && (
+                          {canDelete && (
                             <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="mr-2 h-4 w-4"/>Delete Post</DropdownMenuItem>
                           )}
                       </DropdownMenuContent>
@@ -751,13 +687,33 @@ export function SocialMediaPostDetailsSheet({
                             </Accordion>
                             
                              <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-5">
+                                <TabsList className="grid w-full grid-cols-4">
                                   <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                                  <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                                 </TabsList>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                      <ScrollArea className="max-h-48 pr-2">
+                                          <div className="space-y-4">
+                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
+                                              {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                          </div>
+                                      </ScrollArea>
+                                      <div className="space-y-2 pt-4 border-t">
+                                          <div className="flex-1 relative">
+                                              <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
+                                          </div>
+                                          <div className="flex justify-between items-center">
+                                              <div className="flex-1"></div>
+                                              <Button type="button" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                                    Post Comment
+                                              </Button>
+                                          </div>
+                                      </div>
+                                </TabsContent>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                       {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
@@ -837,27 +793,6 @@ export function SocialMediaPostDetailsSheet({
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                     <Separator/>
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
-                                </TabsContent>
-                                 <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                                      <ScrollArea className="max-h-48 pr-2">
-                                          <div className="space-y-4">
-                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
-                                              {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
-                                          </div>
-                                      </ScrollArea>
-                                      <div className="space-y-2 pt-4 border-t">
-                                          <div className="flex-1 relative">
-                                              <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
-                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
-                                          </div>
-                                          <div className="flex justify-between items-center">
-                                              <div className="flex-1"></div>
-                                              <Button type="button" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
-                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                                    Post Comment
-                                              </Button>
-                                          </div>
-                                      </div>
                                 </TabsContent>
                                  <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
                                     {(postState.revisionHistory && postState.revisionHistory.length > 0) ? (
@@ -1032,7 +967,7 @@ export function SocialMediaPostDetailsSheet({
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                <div className="space-y-4 px-6 py-4">
+                <div className="py-4 space-y-6 px-6">
                     <div className="space-y-2">
                         <h4 className="font-semibold text-sm">Files for this Submission Cycle</h4>
                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
@@ -1176,5 +1111,3 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
 };
 
 const itemType = 'socialMediaPosts'; // Define itemType here or pass as prop if it's dynamic
-
-    

@@ -30,10 +30,10 @@ import {
   FormMessage,
   FormDescription,
 } from '@/components/ui/form';
-import { priorityInfo } from '@/lib/utils';
+import { priorityInfo, getFileIcon } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Send, Timer } from 'lucide-react';
+import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, Send, Timer } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
@@ -52,7 +52,7 @@ import { Checkbox } from '../ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { formatHours, getInitials, getFileIcon } from '@/lib/utils';
+import { formatHours, getInitials } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -512,7 +512,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                             <div className="flex items-start gap-2 pt-4 border-t">
                                 <Avatar className="h-9 w-9"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{getInitials(currentUserProfile?.name)}</AvatarFallback></Avatar>
                                 <div className="flex-1 relative">
-                                <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                <RichTextEditor value={newComment} onChange={handleCommentChange} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
                                 {isMentioning && (
                                     <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto border bg-background rounded-md shadow-lg z-10">
                                     <Command>
