@@ -17,7 +17,7 @@ import { formatDuration } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
 import { notFound } from 'next/navigation';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '../ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 
 
