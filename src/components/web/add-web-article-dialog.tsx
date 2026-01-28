@@ -98,6 +98,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
   const [gdriveName, setGdriveName] = useState('');
   const [isMentioning, setIsMentioning] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<UserType[]>([]);
+  const [selectedUsers, setSelectedUsers] = React.useState<UserType[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -220,15 +221,20 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
         setAttachments([]);
         setDependencies({ waitingOn: [], blocking: [], linked: [] });
         setComments([]);
+        setSelectedUsers([]);
 
         if (currentUserProfile && user && currentUserProfile.role === 'Employee') {
-            form.setValue('assigneeIds', [user.uid]);
+            const selfUser = allUsers?.find(u => u.id === user.uid);
+            if (selfUser) {
+                setSelectedUsers([selfUser]);
+                form.setValue('assigneeIds', [user.uid]);
+            }
         }
         if (singleBrandId) {
             form.setValue('brandId', singleBrandId);
         }
     }
-  }, [open, currentUserProfile, user, form, singleBrandId]);
+  }, [open, currentUserProfile, user, form, allUsers, singleBrandId]);
 
   const handleSuggestPriority = async () => {
     const title = form.getValues('title');
@@ -260,8 +266,9 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
         content: data.content || '',
         priority: data.priority,
         assigneeIds: data.assigneeIds,
-        startDate: data.startDate?.toISOString(),
-        dueDate: data.dueDate?.toISOString(),
+        assignees: selectedUsers,
+        startDate: data.startDate,
+        dueDate: data.dueDate,
         timeEstimate: data.timeEstimate,
         dependencies: dependencies,
         status: 'To Do',
@@ -308,7 +315,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
     const files = Array.from(event.target.files);
     try {
         const uploadPromises = files.map(async (file) => {
-            const storageRef = ref(storage, `attachments/${user.uid}/${Date.now()}-${file.name}`);
+            const storageRef = ref(storage, `attachments/web-articles/${user.uid}/${Date.now()}-${file.name}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
             return { id: `local-${Date.now()}-${file.name}`, name: file.name, type: 'local' as const, url };
@@ -454,13 +461,35 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                         <FormField control={form.control} name="brandId" render={({ field }) => ( <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? <div className="p-2"><Loader2 className="h-4 w-4 animate-spin"/></div> : brands?.map((brand) => ( <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem> ))}</SelectContent></Select><FormMessage /></FormItem> )}/>
                       )}
                       <FormField control={form.control} name="priority" render={({ field }) => ( <FormItem><FormLabel>Priority</FormLabel><div className="flex gap-2"><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex gap-2"><p.icon className={`h-4 w-4 ${p.color}`}/>{p.label}</div></SelectItem>))}</SelectContent></Select><Button type="button" variant="outline" size="icon" onClick={handleSuggestPriority} disabled={isSuggesting}><Wand2 className="h-4 w-4"/></Button></div>{suggestionReason && <FormDescription>{suggestionReason}</FormDescription>}<FormMessage/></FormItem> )}/>
-                      <FormField control={form.control} name="assigneeIds" render={({ field }) => ( <FormItem><FormLabel>Assign To</FormLabel>{areUsersLoading ? <Loader2 className="h-5 w-5 animate-spin"/> : <MultiSelect options={userOptions} onValueChange={(v) => form.setValue('assigneeIds', v)} defaultValue={field.value || []} placeholder="Select members..."/>}<FormMessage /></FormItem> )}/>
+                      <FormField
+                        control={form.control}
+                        name="assigneeIds"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Assign To</FormLabel>
+                            {areUsersLoading ? (
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                            ) : (
+                              <MultiSelect
+                                options={userOptions}
+                                onValueChange={(value) => {
+                                    form.setValue('assigneeIds', value);
+                                    setSelectedUsers(allUsers?.filter(u => value.includes(u.id)) || []);
+                                }}
+                                defaultValue={field.value || []}
+                                placeholder="Select members..."
+                              />
+                            )}
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       
                       <div className="space-y-4 rounded-lg border p-4">
                         <FormField control={form.control} name="startDate" render={({ field }) => ( <FormItem><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
                         <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem><FormLabel>Due Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
                       </div>
-                      <div className='space-y-4 p-4 rounded-lg border'>
+                       <div className='space-y-4 p-4 rounded-lg border'>
                           <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
                           <Separator/>
                             <FormField
@@ -585,7 +614,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                                 </div>
                                 {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No files attached.</p>}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                    <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e)} multiple className="hidden" />
+                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
                                     <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Files</Button>
                                     <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}>
                                         <div className="flex items-center justify-center gap-2">

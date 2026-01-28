@@ -46,6 +46,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 
 interface WebArticlesDataTableProps {
     articles: WebArticle[];
@@ -131,21 +132,77 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
       accessorKey: 'assigneeIds',
       header: 'Assignees',
       cell: ({ row }) => {
-        const assigneeIds = row.getValue('assigneeIds') as string[] || [];
-        const assignees = users.filter(u => assigneeIds.includes(u.id));
-        if (assignees.length === 0) return '-';
+        const assignees = row.original.assignees || [];
+        if (assignees.length === 0) {
+            const assigneeIds = row.original.assigneeIds || [];
+            const foundUsers = users.filter(u => assigneeIds.includes(u.id));
+            if (foundUsers.length === 0) return <div className="text-muted-foreground">-</div>;
+            
+            const firstUser = foundUsers[0];
+            return (
+                 <div className="flex items-center gap-2">
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className='flex items-center gap-2'>
+                                    <Avatar className="h-7 w-7 border-2 border-background">
+                                    <AvatarImage src={firstUser.avatarUrl} alt={firstUser.name} />
+                                    <AvatarFallback>{firstUser.name.charAt(0)}</AvatarFallback>
+                                    </Avatar>
+                                    <span className="font-medium truncate max-w-[120px]">{firstUser.name}</span>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{firstUser.name}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    {foundUsers.length > 1 && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Badge variant="secondary" className="cursor-default">+{foundUsers.length - 1}</Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    {foundUsers.slice(1).map(u => <p key={u.id}>{u.name}</p>)}
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
+                </div>
+            )
+        }
+        
+        const firstAssignee = assignees[0];
         return (
-          <div className="flex -space-x-2">
-            {assignees.slice(0, 3).map(user => (
-              <Avatar key={user.id} className="h-7 w-7 border-2 border-background">
-                <AvatarImage src={user.avatarUrl} alt={user.name} />
-                <AvatarFallback>{user.name?.[0]}</AvatarFallback>
-              </Avatar>
-            ))}
-            {assignees.length > 3 && (
-              <Avatar className="h-7 w-7 border-2 border-background">
-                <AvatarFallback>+{assignees.length - 3}</AvatarFallback>
-              </Avatar>
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className='flex items-center gap-2'>
+                    <Avatar className="h-7 w-7 border-2 border-background">
+                      <AvatarImage src={firstAssignee.avatarUrl} alt={firstAssignee.name} />
+                      <AvatarFallback>{firstAssignee.name.charAt(0)}</AvatarFallback>
+                    </Avatar>
+                    <span className="font-medium truncate max-w-[120px]">{firstAssignee.name}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{firstAssignee.name}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            {assignees.length > 1 && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="secondary" className="cursor-default">+{assignees.length - 1}</Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {assignees.slice(1).map(u => <p key={u.id}>{u.name}</p>)}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
         );
