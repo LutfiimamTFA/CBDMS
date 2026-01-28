@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -36,7 +37,7 @@ import {
 } from '@/components/ui/form';
 import { priorityInfo, getInitials, getFileIcon, formatHours } from '@/lib/utils';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Loader2, Plus, XCircle, HelpCircle, History, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Workflow, Blocks, Send, GitMerge, ListTodo, MessageSquare, Trash, Trash2, CalendarIcon, Clock, Timer, RotateCcw, X } from 'lucide-react';
+import { Loader2, Plus, XCircle, HelpCircle, History, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Workflow, Blocks, Send, GitMerge, ListTodo, MessageSquare, Trash, Trash2, CalendarIcon, Clock, Timer, RotateCcw, X, UploadCloud } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
@@ -825,10 +826,13 @@ export function WebArticleDetailsSheet({
       <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, item: null })}>
           <DialogContent>
               <DialogHeader><DialogTitle>Final Review & Complete Article</DialogTitle><DialogDescription>You are about to mark this article as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader>
-              <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6 px-6"><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.item?.subtasks && finalReviewState.item.subtasks.length > 0 ? ( finalReviewState.item.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div></div></ScrollArea>
+              <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6 px-6"><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.item?.subtasks && finalReviewState.item.subtasks.length > 0 ? ( finalReviewState.item.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.item?.deliverables && finalReviewState.item.deliverables.length > 0 ? ( finalReviewState.item.deliverables.map(att => ( <div key={att.id} className="flex items-center gap-2 text-sm"><span>-</span><a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a></div> )) ) : ( <p className="text-sm text-muted-foreground">No deliverables for this item.</p> )}</div></div></div></ScrollArea>
               <DialogFooter className="p-6 pt-0"><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, item: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter>
           </DialogContent>
       </Dialog>
     </>
   );
 }
+
+
+    
