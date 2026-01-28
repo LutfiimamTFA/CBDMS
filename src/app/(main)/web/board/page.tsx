@@ -1,4 +1,3 @@
-
 'use client';
 import { GenericKanbanBoard } from '@/components/tasks/generic-kanban-board';
 import { useUserProfile } from '@/firebase';
