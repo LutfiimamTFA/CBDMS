@@ -8,11 +8,11 @@ export function Logo() {
 
   return (
     <div className="flex items-center gap-2">
-      <div className="bg-primary p-2 rounded-lg">
+      <div className="p-1">
         {company?.logoUrl ? (
-           <img src={company.logoUrl} alt="Company Logo" className="h-5 w-auto" />
+           <img src={company.logoUrl} alt="Company Logo" className="h-7 w-auto" />
         ) : (
-          <Briefcase className="h-5 w-5 text-primary-foreground" />
+          <Briefcase className="h-7 w-7 text-primary" />
         )}
       </div>
       {isLoading ? (
