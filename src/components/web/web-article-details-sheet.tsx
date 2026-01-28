@@ -14,6 +14,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu"
 import { Input } from '@/components/ui/input';
 import {
@@ -102,6 +103,18 @@ interface RevisionState {
   currentItemText: string;
 }
 
+interface FinalReviewState {
+  isOpen: boolean;
+  item: WebArticle | null;
+}
+
+type BlockingReason = {
+  blocked: boolean;
+  title: string;
+  reasons: string[];
+  suggestion?: string;
+};
+
 export function WebArticleDetailsSheet({ 
   article: initialArticle, 
   open,
@@ -116,7 +129,9 @@ export function WebArticleDetailsSheet({
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
-  
+  const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, item: null });
+  const [blockingAlert, setBlockingAlert] = useState<BlockingReason>({ isOpen: false, blocked: false, title: '', reasons: [], suggestion: '' });
+
   const firestore = useFirestore();
   const { user: authUser, profile: currentUser } = useUserProfile();
   const { permissions } = usePermissions();
@@ -129,8 +144,7 @@ export function WebArticleDetailsSheet({
   
   const usersQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
-    let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
-    return q;
+    return query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
   }, [firestore, currentUser]);
   const { data: allUsers } = useCollection<User>(usersQuery);
   
@@ -161,11 +175,23 @@ export function WebArticleDetailsSheet({
     if (!currentUser) return false;
     return currentUser.role === 'Super Admin' || currentUser.role === 'Manager' || currentUser.id === articleState.createdBy.id;
   }, [currentUser, articleState]);
+  
+  const canSubmit = useMemo(() => {
+    if (!articleState || !isEmployeeOrPIC) return false;
+    
+    const allSubtasksCompleted = (articleState.subtasks || []).every(st => st.completed);
+    if (!allSubtasksCompleted) return false;
+    
+    const nonSubmittableStatuses = ['Preview', 'Done'];
+    if (nonSubmittableStatuses.includes(articleState.statusInternal)) return false;
+
+    return true;
+}, [articleState, isEmployeeOrPIC]);
 
   const handleStatusChange = useCallback(async (newStatus: string) => {
     const oldStatus = articleState.statusInternal;
     if (oldStatus === newStatus || !firestore || !currentUser) return;
-
+    
     setArticleState(prev => ({ ...prev, statusInternal: newStatus }));
 
     const batch = writeBatch(firestore);
@@ -216,7 +242,6 @@ export function WebArticleDetailsSheet({
       handleStatusChange('Doing');
     }
   }, [open, isAssignee, articleState.statusInternal, handleStatusChange]);
-
 
   const handleDelete = () => {
     if (!firestore || !articleState || !canDelete) return;
@@ -275,8 +300,54 @@ export function WebArticleDetailsSheet({
     }
   };
 
-  const PriorityIcon = priorityInfo[articleState.priority]?.icon;
+  const handleToggleRevisionItem = async (itemId: string) => {
+    if (!isAssignee || !firestore) return;
+    const newItems = (articleState.revisionItems || []).map(item =>
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    await updateDoc(doc(firestore, 'webArticles', articleState.id), { revisionItems: newItems });
+  };
   
+  const getBlockingReasonsForStatusChange = (targetStatus: string, currentItem: WebArticle): BlockingReason => {
+    const reasons: string[] = [];
+    if (targetStatus === 'Preview') {
+        if (!currentItem.content || currentItem.content.length < 50) reasons.push("Content is too short or empty.");
+        const allSubtasksCompleted = (currentItem.subtasks || []).every(st => st.completed);
+        if (!allSubtasksCompleted) reasons.push("Complete all subtasks first.");
+        if (reasons.length > 0) {
+            return { blocked: true, title: "Not Ready for Review", reasons, suggestion: "Please complete the items above before submitting for review." };
+        }
+    }
+    if (isEmployeeOrPIC && targetStatus === 'Done') {
+        return { blocked: true, title: "Action Not Allowed", reasons: ["Only Managers can complete articles."], suggestion: "Change status to 'Preview' for manager review." };
+    }
+    return { blocked: false, title: '', reasons: [] };
+  };
+
+  const handleSubmitForReview = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Preview');
+  };
+  
+  const handleRecallSubmission = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Doing');
+    toast({ title: "Submission Recalled", description: "You can continue working on the article." });
+  };
+  
+  const handleFinalReviewAndComplete = async () => {
+    if (!isManagerOrAdmin || !articleState) return;
+    await handleStatusChange('Done');
+    setFinalReviewState({ isOpen: false, item: null });
+  };
+
+  const handleReopenTask = async () => {
+    if (!currentUser || !isManagerOrAdmin) return;
+    await handleStatusChange('Revisi');
+  }
+
+  const PriorityIcon = priorityInfo[articleState.priority]?.icon;
+
   return (
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -310,7 +381,7 @@ export function WebArticleDetailsSheet({
                                      <div className="space-y-2">
                                          {articleState.revisionItems.map(item => (
                                              <div key={item.id} className="flex items-center gap-3">
-                                                 <Checkbox id={`rev-${item.id}`} checked={item.completed} disabled={!isAssignee} />
+                                                 <Checkbox id={`rev-${item.id}`} checked={item.completed} disabled={!isAssignee} onCheckedChange={() => handleToggleRevisionItem(item.id)} />
                                                  <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
                                              </div>
                                          ))}
@@ -322,11 +393,50 @@ export function WebArticleDetailsSheet({
                     </ScrollArea>
                     <ScrollArea className="md:col-span-1 h-full border-l">
                          <div className="p-6 space-y-6">
+                             {(isAssignee && !isManagerOrAdmin) && (
+                              <div className="space-y-2">
+                                {articleState.statusInternal === 'Preview' ? (
+                                    <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RotateCcw className="mr-2 h-4 w-4" />}
+                                        Recall Submission
+                                    </Button>
+                                ) : (
+                                    <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
+                                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                        Submit for Review
+                                    </Button>
+                                )}
+                              </div>
+                            )}
+
+                             {isManagerOrAdmin && articleState.statusInternal === 'Preview' && ( 
+                                <div className="flex flex-col w-full gap-2">
+                                    <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: articleState })} disabled={isSaving}>
+                                        <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                                    </Button>
+                                    <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: articleState, items: [], currentItemText: '' })} disabled={isSaving}>
+                                        <XCircle className="mr-2 h-4 w-4"/> Request Revisions
+                                    </Button>
+                                </div>
+                            )}
+
+                             {isManagerOrAdmin && articleState.statusInternal === 'Done' && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
+
                             <div className='space-y-4 p-4 rounded-lg border'>
                                 <h3 className='font-semibold text-sm'>Article Details</h3>
                                 <Separator/>
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Brand</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === articleState.brandId)?.name || 'N/A'}</div></div>
-                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2 text-sm font-medium">{articleState.statusInternal}</div></div>
+                                <div className="grid grid-cols-3 items-center gap-2">
+                                    <Label className="text-muted-foreground">Status</Label>
+                                    <div className="col-span-2">
+                                        <Select onValueChange={(value) => handleStatusChange(value)} value={articleState.statusInternal}>
+                                            <SelectTrigger><SelectValue/></SelectTrigger>
+                                            <SelectContent>
+                                                {statuses?.map(status => <SelectItem key={status.id} value={status.name}>{status.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-3 items-center gap-2">
                                     <Label className="text-muted-foreground">Priority</Label>
                                     <div className="col-span-2 flex items-center gap-2 text-sm font-medium">
@@ -386,8 +496,63 @@ export function WebArticleDetailsSheet({
             </DialogFooter>
         </DialogContent>
     </Dialog>
+
+    <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, item: null })}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Final Review & Complete Task</DialogTitle>
+                <DialogDescription>
+                    You are about to mark this item as "Done". Please review the items below to ensure everything is complete.
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+              <div className="py-4 space-y-6 px-6">
+                <div className="space-y-3">
+                    <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                        {finalReviewState.item?.subtasks && finalReviewState.item.subtasks.length > 0 ? (
+                             finalReviewState.item.subtasks.map(subtask => ( 
+                                <div key={subtask.id} className="flex items-center gap-3">
+                                    <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                </div> 
+                            )) 
+                        ) : ( 
+                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
+                        )}
+                    </div>
+                </div>
+              </div>
+            </ScrollArea>
+            <DialogFooter className="p-6 pt-0">
+                <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, item: null })}>Cancel</Button>
+                <Button variant="default" onClick={handleFinalReviewAndComplete}>
+                    <Check className="mr-2 h-4 w-4" />
+                    Confirm & Complete
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {blockingAlert.suggestion}
+                </AlertDialogDescription>
+                  {blockingAlert.reasons.length > 0 && (
+                      <div className="pt-2">
+                           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                              {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                          </ul>
+                      </div>
+                  )}
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, blocked: false, title: '', reasons: [] })}>OK</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
-
-    
