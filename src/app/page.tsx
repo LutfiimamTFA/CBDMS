@@ -4,7 +4,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowRight, Briefcase, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Loader2 } from "lucide-react";
 import { format } from 'date-fns';
 import { useUserProfile } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -55,9 +55,9 @@ export default function RootPage() {
         <div className="flex justify-center">
             <div className="flex items-center gap-2">
               <div className="bg-primary p-2 rounded-lg">
-                <Briefcase className="h-5 w-5 text-primary-foreground" />
+                <ArrowUpRight className="h-5 w-5 text-primary-foreground" />
               </div>
-              <h1 className="font-headline text-xl font-bold truncate">WorkWise</h1>
+              <h1 className="font-headline text-xl font-bold truncate">CBDMS</h1>
             </div>
         </div>
 
@@ -66,7 +66,7 @@ export default function RootPage() {
               {format(currentTime, 'eeee, d MMMM yyyy, HH:mm:ss')}
           </div>
           <div className="space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight">Welcome to WorkWise</h1>
+              <h1 className="text-4xl font-bold tracking-tight">Welcome to CBDMS</h1>
               <p className="text-lg text-muted-foreground">
                   Collaborate, manage projects, and reach new productivity peaks.
               </p>

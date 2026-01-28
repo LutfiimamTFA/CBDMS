@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Briefcase, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Loader2 } from 'lucide-react';
 import {
   initiateEmailSignIn,
 } from '@/firebase/non-blocking-login';
@@ -97,9 +96,9 @@ export default function LoginPage() {
           <div className="mb-4 flex justify-center">
             <div className="flex items-center gap-2">
               <div className="bg-primary p-2 rounded-lg">
-                <Briefcase className="h-5 w-5 text-primary-foreground" />
+                <ArrowUpRight className="h-5 w-5 text-primary-foreground" />
               </div>
-              <h1 className="font-headline text-xl font-bold truncate">WorkWise</h1>
+              <h1 className="font-headline text-xl font-bold truncate">CBDMS</h1>
             </div>
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
