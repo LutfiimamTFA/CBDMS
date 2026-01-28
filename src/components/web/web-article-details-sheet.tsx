@@ -145,6 +145,8 @@ export function WebArticleDetailsSheet({
   const [articleState, setArticleState] = useState(initialArticle);
   useEffect(() => { setArticleState(initialArticle) }, [initialArticle]);
   
+  const [newComment, setNewComment] = useState('');
+  
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -152,10 +154,6 @@ export function WebArticleDetailsSheet({
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, item: null });
   const [blockingAlert, setBlockingAlert] = useState<BlockingReason>({ isOpen: false, blocked: false, title: '', reasons: [], suggestion: '' });
 
-  const [newComment, setNewComment] = useState('');
-  const [isMentioning, setIsMentioning] = useState(false);
-  const [mentionSuggestions, setMentionSuggestions] = useState<User[]>([]);
-  
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
 
@@ -164,6 +162,8 @@ export function WebArticleDetailsSheet({
   const [gdriveName, setGdriveName] = useState('');
   const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
   const [isUploading, setIsUploading] = useState(false);
+  const [isMentioning, setIsMentioning] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = useState<User[]>([]);
 
   const firestore = useFirestore();
   const storage = useStorage();
@@ -171,6 +171,7 @@ export function WebArticleDetailsSheet({
   const { permissions, isLoading: arePermsLoading } = usePermissions();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const deliverableFileInputRef = useRef<HTMLInputElement>(null);
 
   const allArticlesQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
@@ -385,26 +386,29 @@ export function WebArticleDetailsSheet({
 
   const PriorityIcon = priorityInfo[articleState.priority]?.icon;
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
       if (!event.target.files || !storage || !articleState?.id || !firestore || !currentUser) return;
       setIsUploading(true);
       try {
           const files = Array.from(event.target.files);
+          const currentCycle = getCurrentSubmissionCycle(articleState);
           const uploadPromises = files.map(async (file) => {
               const attachmentId = `${Date.now()}-${file.name}`;
               const storageRef = ref(storage, `attachments/web-articles/${articleState.id}/${attachmentId}`);
               await uploadBytes(storageRef, file);
               const url = await getDownloadURL(storageRef);
-              return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }};
+              return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
           });
           const newFiles = await Promise.all(uploadPromises);
-          await updateDoc(doc(firestore, 'webArticles', articleState.id), { attachments: [...(articleState.attachments || []), ...newFiles] });
+          const currentFiles = fileType === 'attachment' ? (articleState.attachments || []) : (articleState.deliverables || []);
+          await updateDoc(doc(firestore, 'webArticles', articleState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
           toast({ title: 'Upload Successful' });
       } catch (error) {
           toast({ variant: 'destructive', title: 'Upload Failed' });
       } finally {
           setIsUploading(false);
-          if (event.target) event.target.value = '';
+          if (fileInputRef.current) fileInputRef.current.value = '';
+          if (deliverableFileInputRef.current) deliverableFileInputRef.current.value = '';
       }
   };
 
@@ -412,14 +416,17 @@ export function WebArticleDetailsSheet({
     if (!gdriveLink || !gdriveName) { toast({ variant: 'destructive', title: 'Missing Info' }); return; }
     if (!firestore || !currentUser) return;
     
-    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }};
-    await updateDoc(doc(firestore, 'webArticles', articleState.id), { attachments: [...(articleState.attachments || []), newFile] });
+    const currentCycle = getCurrentSubmissionCycle(articleState);
+    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: gdriveFileType === 'deliverable' ? currentCycle : undefined };
+    const fieldToUpdate = gdriveFileType === 'attachment' ? 'attachments' : 'deliverables';
+    await updateDoc(doc(firestore, 'webArticles', articleState.id), { [fieldToUpdate]: [...(articleState[fieldToUpdate] || []), newFile] });
     setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
   
-  const handleRemoveFile = async (id: string) => {
+  const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
       if (!firestore) return;
-      await updateDoc(doc(firestore, 'webArticles', articleState.id), { attachments: articleState.attachments?.filter(att => att.id !== id) });
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+      await updateDoc(doc(firestore, 'webArticles', articleState.id), { [fieldToUpdate]: articleState[fieldToUpdate]?.filter(att => att.id !== id) });
   };
   
   const handleAddSubtask = async () => {
@@ -538,6 +545,32 @@ export function WebArticleDetailsSheet({
         })}
     </div>
   );
+  
+  const assigneeIds = articleState.assigneeIds;
+  const subtaskAssigneeOptions = useMemo(() => {
+    if (!allUsers || !currentUser) return {};
+    const mainAssignees = allUsers.filter(u => (assigneeIds || []).includes(u.id));
+    const createGroup = (title: string, users: UserType[]) => users.length > 0 ? { [title]: users } : {};
+
+    if (currentUser.role === 'Super Admin') {
+        const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
+        const employees = allUsers.filter(u => u.role === 'Employee' && !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("Managers", managers), ...createGroup("Employees", employees) };
+    }
+    
+    if (currentUser.role === 'Manager') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
+        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("My Team", otherMembers) };
+    }
+    
+    if (currentUser.role === 'Employee') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
+        const otherTeamMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("My Team", otherTeamMembers) };
+    }
+    return {};
+  }, [allUsers, currentUser, assigneeIds]);
 
   return (
     <>
@@ -566,19 +599,6 @@ export function WebArticleDetailsSheet({
                     <ScrollArea className="md:col-span-2 h-full">
                         <div className="p-6 space-y-6">
                            <Input value={articleState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
-                           {(articleState.statusInternal === 'Revisi') && articleState.revisionItems && articleState.revisionItems.length > 0 && (
-                                 <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
-                                     <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
-                                     <div className="space-y-2">
-                                         {articleState.revisionItems.map(item => (
-                                             <div key={item.id} className="flex items-center gap-3">
-                                                 <Checkbox id={`rev-${item.id}`} checked={item.completed} disabled={!isAssignee} onCheckedChange={() => handleToggleRevisionItem(item.id)} />
-                                                 <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
-                                             </div>
-                                         ))}
-                                     </div>
-                                 </div>
-                             )}
                            <RichTextEditor value={articleState.content || ''} onChange={() => {}} placeholder="Write your article content here..." readOnly={!canEditContent} />
                              <Tabs defaultValue="comments" className="w-full">
                                 <TabsList className="grid w-full grid-cols-4">
@@ -590,43 +610,70 @@ export function WebArticleDetailsSheet({
                                 <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                                     <ScrollArea className="max-h-48 pr-2">
                                         <div className="space-y-4">
-                                            {(articleState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
+                                            {(articleState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
                                             {(articleState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
                                         </div>
                                     </ScrollArea>
                                     <div className="flex items-start gap-2 pt-4 border-t">
                                         <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{getInitials(currentUser?.name)}</AvatarFallback></Avatar>
                                         <div className="flex-1 relative">
-                                            <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
-                                            {isMentioning && ( <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto border bg-background rounded-md shadow-lg z-10"><Command><CommandList>{mentionSuggestions.map(user => ( <CommandItem key={user.id} onSelect={() => handleMentionSelect(user)}><Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</CommandItem> ))}</CommandList></Command></div> )}
+                                        <RichTextEditor value={newComment} onChange={handleCommentChange} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                        {isMentioning && (
+                                            <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto border bg-background rounded-md shadow-lg z-10">
+                                            <Command>
+                                                <CommandList>
+                                                {mentionSuggestions.map(user => (
+                                                <CommandItem key={user.id} onSelect={() => handleMentionSelect(user)}>
+                                                    <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                                    {user.name}
+                                                </CommandItem>
+                                                ))}
+                                                </CommandList>
+                                            </Command>
+                                            </div>
+                                        )}
                                         </div>
                                         <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                                  {/* Subtask content here */}
+                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                        {(articleState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                                    </div>
+                                    <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
-                                    {/* Files content here */}
+                                     <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                    <div className="space-y-2">
+                                        {(articleState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id)}><X className="h-4 w-4" /></Button></div> ))}
+                                    </div>
+                                    {(articleState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
+                                        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload</Button>
+                                        <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                                    </div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
-                                    {/* Dependencies content here */}
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These articles must be completed before this one can start.</p>{renderDependencyList(articleState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search articles..." /><CommandList><CommandEmpty>No articles found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, articles]) => (<CommandGroup key={brandName} heading={brandName}>{articles.map(article => (<CommandItem key={article.id} onSelect={() => handleAddDependency(article.id, 'waitingOn')}>{article.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This article is blocking the following articles.</p>{renderDependencyList(articleState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search articles..." /><CommandList><CommandEmpty>No articles found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, articles]) => (<CommandGroup key={brandName} heading={brandName}>{articles.map(article => (<CommandItem key={article.id} onSelect={() => handleAddDependency(article.id, 'blocking')}>{article.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Articles</h4><p className="text-xs text-muted-foreground">Related articles that are not dependent.</p>{renderDependencyList(articleState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search articles..." /><CommandList><CommandEmpty>No articles found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, articles]) => (<CommandGroup key={brandName} heading={brandName}>{articles.map(article => (<CommandItem key={article.id} onSelect={() => handleAddDependency(article.id, 'linked')}>{article.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                 </TabsContent>
                             </Tabs>
                         </div>
                     </ScrollArea>
                     <ScrollArea className="md:col-span-1 h-full border-l">
                          <div className="p-6 space-y-6">
-                            {/* Action buttons */}
-                             {(isAssignee && !isManagerOrAdmin) && (
-                                <div className="space-y-2">
+                            {(isAssignee && !isManagerOrAdmin) && (
+                              <div className="space-y-2">
                                 {articleState.statusInternal === 'Preview' ? ( <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}><RotateCcw className="mr-2 h-4 w-4" />Recall Submission</Button> ) : ( <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}><Check className="mr-2 h-4 w-4"/>Submit for Review</Button> )}
-                                </div>
+                              </div>
                             )}
                              {isManagerOrAdmin && articleState.statusInternal === 'Preview' && ( <div className="flex flex-col w-full gap-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: articleState })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button><Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: articleState, items: [], currentItemText: '' })} disabled={isSaving}><XCircle className="mr-2 h-4 w-4"/> Request Revisions</Button></div> )}
                              {isManagerOrAdmin && articleState.statusInternal === 'Done' && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Article</Button> )}
 
-                            {/* Details Panel */}
                             <div className='space-y-4 p-4 rounded-lg border'>
                                 <h3 className='font-semibold text-sm'>Article Details</h3>
                                 <Separator/>
@@ -636,7 +683,6 @@ export function WebArticleDetailsSheet({
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Due Date</Label><div className="col-span-2 text-sm font-medium">{articleState.dueDate ? format(parseISO(articleState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></div>
                             </div>
                             
-                            {/* People Panel */}
                             <div className='space-y-4 p-4 rounded-lg border'>
                                 <h3 className='font-semibold text-sm'>People</h3>
                                 <Separator/>
@@ -655,7 +701,48 @@ export function WebArticleDetailsSheet({
                </form>
             </div>
         </SheetContent>
-    </Sheet>
+      </Sheet>
+      
+      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Article Activity Log: {articleState?.title}</DialogTitle></DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">
+                {articleState.activities && articleState.activities.length > 0 ? (getUniqueActivities(articleState.activities).slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> ))) : ( <p className="text-center text-muted-foreground py-8">No activities recorded.</p> )}
+            </div></ScrollArea>
+        </DialogContent>
+       </Dialog>
+    
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this article?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the article: <strong className="text-foreground">{articleState.title}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Yes, Delete Article</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+       <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+          <DialogContent>
+              <DialogHeader><DialogTitle>Link Google Drive File</DialogTitle></DialogHeader>
+              <div className="space-y-4 py-2">
+                  <div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
+                  <div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
+              </div>
+              <DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink('attachment')}>Add Link</Button></DialogFooter>
+          </DialogContent>
+      </Dialog>
+       <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
+          <AlertDialogContent>
+              <AlertDialogHeader><AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle><AlertDialogDescription>{blockingAlert.suggestion}</AlertDialogDescription>{blockingAlert.reasons.length > 0 && ( <div className="pt-2"><ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">{blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul></div> )}</AlertDialogHeader>
+              <AlertDialogFooter><AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, blocked: false, title: '', reasons: [] })}>OK</AlertDialogAction></AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+      <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>
+          <DialogContent>
+              <DialogHeader><DialogTitle>Create Revision Checklist</DialogTitle><DialogDescription>Revisions for article: <span className="font-bold text-foreground">{revisionState.item?.title}</span></DialogDescription></DialogHeader>
+              <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6 px-6"><div className="space-y-4"><h4 className="font-semibold text-sm">Revision Points</h4><div className="space-y-2">{revisionState.items.map((item, index) => ( <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md"><span className="flex-1 text-sm">{item.text}</span><Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button></div> ))}</div><div className="flex items-center gap-2"><Input value={revisionState.currentItemText} onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))} placeholder="e.g., Fix the typo in paragraph 2" onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())} /><Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}><Plus className="mr-2 h-4 w-4"/> Add</Button></div></div></div></ScrollArea>
+              <DialogFooter className="p-6 pt-4 border-t"><Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>Cancel</Button><Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Request Revisions</Button></DialogFooter>
+          </DialogContent>
+      </Dialog>
+      <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, item: null })}>
+          <DialogContent>
+              <DialogHeader><DialogTitle>Final Review & Complete Article</DialogTitle><DialogDescription>You are about to mark this article as "Done". Please review the items below to ensure everything is complete.</DialogDescription></DialogHeader>
+              <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="py-4 space-y-6 px-6"><div className="space-y-3"><h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4><div className="space-y-2 max-h-32 overflow-y-auto pr-2">{finalReviewState.item?.subtasks && finalReviewState.item.subtasks.length > 0 ? ( finalReviewState.item.subtasks.map(subtask => ( <div key={subtask.id} className="flex items-center gap-3"><Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled /><label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label></div> )) ) : ( <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> )}</div></div></div></ScrollArea>
+              <DialogFooter className="p-6 pt-0"><Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, item: null })}>Cancel</Button><Button variant="default" onClick={handleFinalReviewAndComplete}><Check className="mr-2 h-4 w-4" />Confirm & Complete</Button></DialogFooter>
+          </DialogContent>
+      </Dialog>
     </>
   );
 }

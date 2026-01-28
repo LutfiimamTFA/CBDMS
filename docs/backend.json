@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "User": {
@@ -173,7 +174,17 @@
         "companyId": { "type": "string" },
         "lastActivity": { "$ref": "#/backend/entities/Activity" },
         "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
-        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
+        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } },
+        "attachments": {
+            "type": "array",
+            "description": "A list of supporting files or links for this article.",
+            "items": { "$ref": "#/backend/entities/Attachment" }
+        },
+        "deliverables": {
+            "type": "array",
+            "description": "A list of submitted files or links for this article, with historical versions.",
+            "items": { "$ref": "#/backend/entities/Attachment" }
+        }
       },
       "required": ["id", "brandId", "title", "statusInternal", "assigneeIds", "priority", "companyId"]
     },
@@ -409,5 +420,3 @@
     ]
   }
 }
-
-    
