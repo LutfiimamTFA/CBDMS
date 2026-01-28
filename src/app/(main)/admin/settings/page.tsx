@@ -31,6 +31,7 @@ export default function AppSettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [logoPreview, setLogoPreview] = useState<string | null>(null);
+    const creationAttempted = useRef(false);
 
     const companyDocRef = useMemo(() => {
         if (!firestore || !profile?.companyId) return null;
@@ -52,8 +53,12 @@ export default function AppSettingsPage() {
             if (company.logoUrl) {
               setLogoPreview(company.logoUrl);
             }
-        } else if (!isCompanyLoading && companyDocRef) {
-            // Create a default company document if one doesn't exist
+            // Mark as true because a document exists, so we should never try to create one.
+            creationAttempted.current = true;
+        } else if (!isCompanyLoading && !company && companyDocRef && !creationAttempted.current) {
+            // If loading is done, no company data exists, we have a valid doc ref,
+            // and we haven't attempted to create a doc yet, then create the default.
+            creationAttempted.current = true;
             setDoc(companyDocRef, { id: profile?.companyId, name: 'My Company', logoUrl: '' });
         }
     }, [company, isCompanyLoading, form, companyDocRef, profile?.companyId]);
@@ -106,7 +111,7 @@ export default function AppSettingsPage() {
     };
 
 
-  if (isCompanyLoading) {
+  if (isCompanyLoading && !creationAttempted.current) {
     return <div className="flex h-svh items-center justify-center"><Loader2 className="animate-spin h-8 w-8" /></div>
   }
 
