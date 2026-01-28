@@ -354,9 +354,11 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
   
-  const handleRemoveAttachment = (id: string, type: 'attachment' | 'deliverable') => {
-    if (type === 'attachment') setAttachments(prev => prev.filter(att => att.id !== id));
-    else setDeliverables(prev => prev.filter(del => del.id !== id));
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+  const handleRemoveDeliverable = (id: string) => {
+    setDeliverables(prev => prev.filter(att => att.id !== id));
   };
   
   const handleAddSubtask = () => {
@@ -567,11 +569,59 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                           <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                         </TabsContent>
                         <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
-                          <div>
-                            <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                            <div className="space-y-2">{attachments.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
-                          </div>
+                           <div>
+                              <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                              <div className="space-y-2">
+                                {deliverables.map((att) => (
+                                  <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                      {getFileIcon(att.name)}
+                                      <span className="truncate" title={att.name}>{att.name}</span>
+                                    </a>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveDeliverable(att.id)}><X className="h-4 w-4" /></Button>
+                                  </div>
+                                ))}
+                              </div>
+                              {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables attached.</p>}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>
+                                  {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Deliverable
+                                </Button>
+                                <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
+                                    Link from Google Drive
+                                  </div>
+                                </Button>
+                              </div>
+                            </div>
+                            <Separator />
+                            <div>
+                                <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                <div className="space-y-2">
+                                    {attachments.map((att) => (
+                                        <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                            {getFileIcon(att.name)}
+                                            <span className="truncate" title={att.name}>{att.name}</span>
+                                            </a>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}><X className="h-4 w-4" /></Button>
+                                        </div>
+                                    ))}
+                                </div>
+                                {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                    <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button>
+                                    <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
+                                            Link from Google Drive
+                                        </div>
+                                    </Button>
+                                </div>
+                            </div>
                         </TabsContent>
                         <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
                             <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(dependencies.waitingOn || [], 'waitingOn')}<Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover></div>
