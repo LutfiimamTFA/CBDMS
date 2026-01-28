@@ -281,6 +281,56 @@ export function SocialMediaPostDetailsSheet({
     setDeleteConfirmOpen(false);
   };
   
+  const handleConfirmRejection = async () => {
+    if (!revisionState.item || revisionState.items.length === 0 || !firestore || !currentUser) {
+        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
+        return;
+    }
+    setIsSaving(true);
+    const item = revisionState.item;
+    const itemRef = doc(firestore, 'socialMediaPosts', item.id);
+    const newStatus = 'Revisi';
+    
+    const newRevisionItems: RevisionItem[] = revisionState.items.map(revItem => ({ id: crypto.randomUUID(), text: revItem.text, completed: false }));
+    
+    const newRevisionCycle: RevisionCycle = {
+        cycleNumber: (item.revisionHistory?.length ?? 0) + 1,
+        requestedAt: new Date().toISOString() as any,
+        requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        items: newRevisionItems,
+    };
+    
+    const itemUpdateData: any = {
+        status: newStatus,
+        statusInternal: newStatus,
+        revisionItems: newRevisionItems,
+        revisionHistory: [...(item.revisionHistory || []), newRevisionCycle],
+        lastActivity: createActivity(currentUser, `requested revisions and moved item to "${newStatus}"`),
+        updatedAt: serverTimestamp() as any,
+    };
+    itemUpdateData['activities'] = [...(item.activities || []), itemUpdateData.lastActivity];
+    
+    try {
+        await updateDoc(itemRef, itemUpdateData);
+        toast({ title: 'Revisions Requested', description: 'The item has been sent for revision.' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send item for revision.' });
+    } finally {
+        setIsSaving(false);
+        setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' });
+    }
+  };
+
+  const handleAddRevisionItem = () => {
+    if (revisionState.currentItemText.trim()) {
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
+    }
+  };
+  
   const [isUploading, setIsUploading] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const deliverableFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -640,16 +690,6 @@ export function SocialMediaPostDetailsSheet({
     await handleStatusChange('Revisi');
   }
 
-  const handleAddRevisionItem = () => {
-    if (revisionState.currentItemText.trim()) {
-        setRevisionState(prev => ({
-            ...prev,
-            items: [...prev.items, { text: prev.currentItemText }],
-            currentItemText: '',
-        }));
-    }
-  };
-
   return (
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -979,7 +1019,7 @@ export function SocialMediaPostDetailsSheet({
             <DialogHeader>
                 <DialogTitle>Create Revision Checklist</DialogTitle>
                 <DialogDescription>
-                Revisions for item: <span className="font-bold text-foreground">{revisionState.item?.title}</span>
+                  Revisions for item: <span className="font-bold text-foreground">{revisionState.item?.title}</span>
                 </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[60vh] -mx-6 px-6">
