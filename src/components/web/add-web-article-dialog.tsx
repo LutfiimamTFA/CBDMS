@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -33,7 +34,7 @@ import {
 import { priorityInfo } from '@/lib/utils';
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Send } from 'lucide-react';
+import { CalendarIcon, Loader2, Plus, Wand2, Building2, Paperclip, Upload, GitMerge, MessageSquare, ListTodo, Link as LinkIcon, Trash, UserPlus, Workflow, Blocks, X, FileImage, FileText, Send, Timer } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { suggestPriority } from '@/ai/flows/suggest-priority';
@@ -54,6 +55,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { formatHours, getInitials } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 
 const articleSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -61,11 +63,13 @@ const articleSchema = z.object({
   content: z.string().optional(),
   priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
   assigneeIds: z.array(z.string()).min(1, 'At least one assignee is required'),
+  startDate: z.date().optional(),
   dueDate: z.date().optional(),
+  timeEstimate: z.coerce.number().min(0).optional(),
 }).refine((data) => {
-    if (data.dueDate) return true; // simplified for now
+    if (data.startDate && data.dueDate) return data.dueDate >= data.startDate;
     return true;
-});
+}, { message: "Due date must be after start date.", path: ["dueDate"]});
 
 
 type ArticleFormValues = z.infer<typeof articleSchema>;
@@ -94,9 +98,12 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
   const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+  const [isMentioning, setIsMentioning] = useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<UserType[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const deliverableFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   
   const firestore = useFirestore();
@@ -153,7 +160,9 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
       content: '',
       priority: 'Medium',
       assigneeIds: [],
+      startDate: undefined,
       dueDate: undefined,
+      timeEstimate: undefined,
     },
   });
 
@@ -204,7 +213,9 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
           content: '',
           priority: 'Medium',
           assigneeIds: [],
+          startDate: undefined,
           dueDate: undefined,
+          timeEstimate: undefined,
         });
         
         setSuggestionReason(null);
@@ -253,7 +264,9 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
         content: data.content || '',
         priority: data.priority,
         assigneeIds: data.assigneeIds,
+        startDate: data.startDate?.toISOString(),
         dueDate: data.dueDate?.toISOString(),
+        timeEstimate: data.timeEstimate,
         dependencies: dependencies,
         status: 'To Do',
         statusInternal: 'To Do',
@@ -263,7 +276,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
         subtasks,
         attachments,
         deliverables,
-        comments
+        comments,
     };
     batch.set(newArticleRef, newArticleData);
 
@@ -294,7 +307,6 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
     }
   };
   
-  const [isUploading, setIsUploading] = useState(false);
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
     if (!event.target.files || !storage) return;
     setIsUploading(true);
@@ -369,10 +381,47 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
     }));
   };
   
-  const getFileIcon = (fileName: string): React.ReactElement => {
-    if (fileName.match(/\.(pdf)$/i)) return <FileText className="h-5 w-5 text-red-500" />;
-    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
+  const handlePostComment = () => {
+    if (!newComment.trim() || !currentUserProfile || !user) return;
+    const comment: Comment = {
+      id: `c-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      user: {
+        id: user.uid,
+        name: currentUserProfile.name || 'Unknown User',
+        email: currentUserProfile.email || '',
+        avatarUrl: currentUserProfile.avatarUrl || '',
+        role: currentUserProfile.role,
+        companyId: currentUserProfile.companyId,
+        createdAt: currentUserProfile.createdAt,
+      },
+      text: newComment,
+      timestamp: new Date().toISOString(),
+      replies: [],
+    };
+    setComments([...comments, comment]);
+    setNewComment('');
+    setIsMentioning(false);
+  };
+  
+  const handleCommentChange = (text: string) => {
+    setNewComment(text);
+    if (allUsers) {
+      const mentionMatch = text.match(/@(\w*)$/);
+      if (mentionMatch) {
+        setIsMentioning(true);
+        setMentionSuggestions(allUsers.filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+      } else {
+        setIsMentioning(false);
+      }
+    }
+  };
+
+  const handleMentionSelect = (user: UserType) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
   };
 
   const renderDependencyList = (ids: string[], type: keyof Dependencies) => (
@@ -418,17 +467,80 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                       <FormField control={form.control} name="assigneeIds" render={({ field }) => ( <FormItem><FormLabel>Assign To</FormLabel>{areUsersLoading ? <Loader2 className="h-5 w-5 animate-spin"/> : <MultiSelect options={userOptions} onValueChange={(v) => form.setValue('assigneeIds', v)} defaultValue={field.value || []} placeholder="Select members..."/>}<FormMessage /></FormItem> )}/>
                       
                       <div className="space-y-4 rounded-lg border p-4">
+                        <FormField control={form.control} name="startDate" render={({ field }) => ( <FormItem><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
                         <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem><FormLabel>Due Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4"/>{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><CalendarComponent mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem> )}/>
+                      </div>
+                      <div className='space-y-4 p-4 rounded-lg border'>
+                          <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                          <Separator/>
+                            <FormField
+                                control={form.control}
+                                name="timeEstimate"
+                                render={({ field }) => (
+                                    <FormItem className="grid grid-cols-3 items-center gap-2">
+                                        <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
+                                        <div className="col-span-2 flex items-center gap-2">
+                                            <Input
+                                                type="number"
+                                                step="0.1"
+                                                value={field.value !== undefined ? field.value / 8 : ''} 
+                                                onChange={(e) => {
+                                                    const days = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                    const hours = days !== undefined ? days * 8 : undefined;
+                                                    field.onChange(hours);
+                                                }}
+                                                placeholder="e.g., 1.5"
+                                            />
+                                            <span className="text-sm text-muted-foreground whitespace-nowrap">({field.value || 0} jam)</span>
+                                        </div>
+                                    </FormItem>
+                                )}
+                            />
                       </div>
                     </div>
                   </div>
-                   <Tabs defaultValue="subtasks" className="w-full">
+                   <Tabs defaultValue="comments" className="w-full">
                         <TabsList className="grid w-full grid-cols-4">
+                          <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                           <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                           <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                           <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                          <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                         </TabsList>
+                        <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                            <div className="space-y-4 max-h-48 overflow-y-auto pr-2">
+                                {comments.map((comment) => (
+                                <div key={comment.id} className="flex items-start gap-3">
+                                    <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar>
+                                    <div>
+                                    <p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p>
+                                    <div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} />
+                                    </div>
+                                </div>
+                                ))}
+                                {comments.length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                            </div>
+                            <div className="flex items-start gap-2 pt-4 border-t">
+                                <Avatar className="h-9 w-9"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{getInitials(currentUserProfile?.name)}</AvatarFallback></Avatar>
+                                <div className="flex-1 relative">
+                                <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                {isMentioning && (
+                                    <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto border bg-background rounded-md shadow-lg z-10">
+                                    <Command>
+                                        <CommandList>
+                                        {mentionSuggestions.map(user => (
+                                        <CommandItem key={user.id} onSelect={() => handleMentionSelect(user)}>
+                                            <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                            {user.name}
+                                        </CommandItem>
+                                        ))}
+                                        </CommandList>
+                                    </Command>
+                                    </div>
+                                )}
+                                </div>
+                                <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                            </div>
+                        </TabsContent>
                         <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                           <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                               {subtasks.map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}

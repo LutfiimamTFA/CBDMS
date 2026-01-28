@@ -279,6 +279,7 @@ export type SocialMediaPost = WorkItem & {
 
 export type WebArticle = WorkItem & {
     content: string;
+    startDate?: string;
 };
 
 
