@@ -159,6 +159,8 @@ export function SocialMediaPostDetailsSheet({
   const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [blockingAlert, setBlockingAlert] = useState<{ isOpen: boolean, title: string, reasons: string[], suggestion?: string }>({ isOpen: false, title: '', reasons: [], suggestion: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
+  const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, item: null });
 
   
   const firestore = useFirestore();
@@ -318,8 +320,7 @@ export function SocialMediaPostDetailsSheet({
   const [isUploadingCommentAttachment, setIsUploadingCommentAttachment] = useState(false);
 
   const handlePostComment = async () => {
-    if (!newComment.trim()) return;
-    if (!firestore || !currentUser) return;
+    if (!newComment.trim() || !firestore || !currentUser) return;
     setIsUploadingCommentAttachment(true);
     try {
       const newCommentData: Comment = {
@@ -699,14 +700,46 @@ export function SocialMediaPostDetailsSheet({
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                   <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(postState.subtasks || []).filter(st => st.completed).length}/{(postState.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                      {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                                      {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                                   </div>
-                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
+                                  <Popover>
+                                      <PopoverTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="text-muted-foreground">
+                                          {newSubtaskAssignee ? (
+                                            <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{getInitials(newSubtaskAssignee.name)}</AvatarFallback></Avatar>
+                                          ) : (
+                                            <UserPlus className="h-4 w-4" />
+                                          )}
+                                        </Button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-60 p-1">
+                                        <ScrollArea className="max-h-60">
+                                          <div className="space-y-1">
+                                              {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
+                                                  users.length > 0 && (
+                                                      <React.Fragment key={group}>
+                                                          <Separator />
+                                                          <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
+                                                          {users.map(user => (
+                                                              <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
+                                                                  <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                                                  <span className="truncate">{user.name}</span>
+                                                              </Button>
+                                                          ))}
+                                                      </React.Fragment>
+                                                  )
+                                              ))}
+                                          </div>
+                                      </ScrollArea>
+                                    </PopoverContent>
+                                  </Popover>
+                                  <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
                                 <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
                                   <div>
                                     <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                                    <div className="space-y-2">{postState.attachments?.map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
+                                    <div className="space-y-2">{(postState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}</div>
                                     {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
                                     {canEditContent && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
@@ -880,7 +913,7 @@ export function SocialMediaPostDetailsSheet({
             </div>
             <DialogFooter>
                 <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => handleConfirmGdriveLink()}>Add Link</Button>
+                <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
@@ -927,7 +960,12 @@ export function SocialMediaPostDetailsSheet({
                         value={revisionState.currentItemText}
                         onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
                         placeholder="e.g., Fix the logo placement"
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddRevisionItem();
+                          }
+                        }}
                     />
                     <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
                         <Plus className="mr-2 h-4 w-4"/> Add
@@ -1016,4 +1054,3 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
     
 
     
-
