@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -639,6 +640,16 @@ export function SocialMediaPostDetailsSheet({
     await handleStatusChange('Revisi');
   }
 
+  const handleAddRevisionItem = () => {
+    if (revisionState.currentItemText.trim()) {
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
+    }
+  };
+
   return (
     <>
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -701,7 +712,7 @@ export function SocialMediaPostDetailsSheet({
                                 <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                                       <ScrollArea className="max-h-48 pr-2">
                                           <div className="space-y-4">
-                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
+                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
                                               {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
                                           </div>
                                       </ScrollArea>
