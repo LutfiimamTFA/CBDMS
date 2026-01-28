@@ -400,15 +400,15 @@ export function WebArticleDetailsSheet({
               return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
           });
           const newFiles = await Promise.all(uploadPromises);
-          const currentFiles = fileType === 'attachment' ? (articleState.attachments || []) : (articleState.deliverables || []);
-          await updateDoc(doc(firestore, 'webArticles', articleState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
+          const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+          const currentFiles = articleState[fieldToUpdate] || [];
+          await updateDoc(doc(firestore, 'webArticles', articleState.id), { [fieldToUpdate]: [...currentFiles, ...newFiles] });
           toast({ title: 'Upload Successful' });
       } catch (error) {
           toast({ variant: 'destructive', title: 'Upload Failed' });
       } finally {
           setIsUploading(false);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          if (deliverableFileInputRef.current) deliverableFileInputRef.current.value = '';
+          if (event.target) event.target.value = '';
       }
   };
 
@@ -571,6 +571,17 @@ export function WebArticleDetailsSheet({
     }
     return {};
   }, [allUsers, currentUser, assigneeIds]);
+  
+  const groupedDeliverables = useMemo(() => {
+    const groups: Record<number, Attachment[]> = {};
+    (articleState.deliverables || []).forEach(d => {
+        const cycle = d.forRevisionCycle ?? 1;
+        if (!groups[cycle]) groups[cycle] = [];
+        groups[cycle].push(d);
+    });
+    return groups;
+  }, [articleState.deliverables]);
+
 
   return (
     <>
@@ -599,6 +610,19 @@ export function WebArticleDetailsSheet({
                     <ScrollArea className="md:col-span-2 h-full">
                         <div className="p-6 space-y-6">
                            <Input value={articleState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
+                           {articleState.revisionItems && articleState.revisionItems.length > 0 && (
+                                <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                                    <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
+                                    <div className="space-y-2">
+                                        {articleState.revisionItems.map(item => (
+                                            <div key={item.id} className="flex items-center gap-3">
+                                                <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee} />
+                                                <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                            <RichTextEditor value={articleState.content || ''} onChange={() => {}} placeholder="Write your article content here..." readOnly={!canEditContent} />
                              <Tabs defaultValue="comments" className="w-full">
                                 <TabsList className="grid w-full grid-cols-4">
@@ -637,21 +661,32 @@ export function WebArticleDetailsSheet({
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                        {(articleState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
-                                    </div>
-                                    <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                      {(articleState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                                  </div>
+                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
-                                <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
-                                     <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
-                                    <div className="space-y-2">
-                                        {(articleState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id)}><X className="h-4 w-4" /></Button></div> ))}
+                                <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
+                                    <div className="space-y-3">
+                                      <h4 className="font-medium text-sm">Deliverables</h4>
+                                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                                          {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{<Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button>}</div> ))}</div> ))}
+                                          {(articleState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                          <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                          <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
+                                      </div>
                                     </div>
-                                    {(articleState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                        <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
-                                        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload</Button>
-                                        <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                                    <Separator />
+                                    <div className="space-y-3">
+                                        <h4 className="font-medium text-sm">Supporting Materials</h4>
+                                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                                            {(articleState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}
+                                            {(articleState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
@@ -660,6 +695,29 @@ export function WebArticleDetailsSheet({
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This article is blocking the following articles.</p>{renderDependencyList(articleState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search articles..." /><CommandList><CommandEmpty>No articles found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, articles]) => (<CommandGroup key={brandName} heading={brandName}>{articles.map(article => (<CommandItem key={article.id} onSelect={() => handleAddDependency(article.id, 'blocking')}>{article.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                     <Separator/>
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Articles</h4><p className="text-xs text-muted-foreground">Related articles that are not dependent.</p>{renderDependencyList(articleState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search articles..." /><CommandList><CommandEmpty>No articles found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, articles]) => (<CommandGroup key={brandName} heading={brandName}>{articles.map(article => (<CommandItem key={article.id} onSelect={() => handleAddDependency(article.id, 'linked')}>{article.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                </TabsContent>
+                                <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
+                                    {(articleState.revisionHistory && articleState.revisionHistory.length > 0) ? (
+                                        <Accordion type="single" collapsible>
+                                            {articleState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                                <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
+                                                    <AccordionTrigger>
+                                                        <div className="flex flex-col items-start text-left">
+                                                            <span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span>
+                                                            <span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span>
+                                                        </div>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent>
+                                                        <ul className="list-disc pl-5 space-y-1">
+                                                            {cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}
+                                                        </ul>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+                                            ))}
+                                        </Accordion>
+                                    ) : (
+                                        <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this article.</p> 
+                                    )}
                                 </TabsContent>
                             </Tabs>
                         </div>
@@ -678,7 +736,7 @@ export function WebArticleDetailsSheet({
                                 <h3 className='font-semibold text-sm'>Article Details</h3>
                                 <Separator/>
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Brand</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === articleState.brandId)?.name || 'N/A'}</div></div>
-                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2"><Select onValueChange={(value) => handleStatusChange(value)} value={articleState.statusInternal}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{statuses?.map(status => <SelectItem key={status.id} value={status.name}>{status.name}</SelectItem>)}</SelectContent></Select></div></div>
+                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2"><Select onValueChange={(value) => handleStatusChange(value)} value={articleState.statusInternal}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{statuses?.map(status => <SelectItem key={status.id} value={status.name} disabled={isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi')}>{status.name}</SelectItem>)}</SelectContent></Select></div></div>
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Priority</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[articleState.priority].color}`} />}{articleState.priority}</div></div>
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Due Date</Label><div className="col-span-2 text-sm font-medium">{articleState.dueDate ? format(parseISO(articleState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></div>
                             </div>
@@ -691,10 +749,13 @@ export function WebArticleDetailsSheet({
                                 )}
                                 <div>
                                   <Label className="text-muted-foreground text-sm">Assignees</Label>
-                                  {(articleState.assignees || []).map(user => ( <div key={user.id} className="flex items-center gap-3 mt-1"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div> ))}
+                                  {(articleState.assigneeIds || []).map(id => {
+                                      const user = allUsers?.find(u => u.id === id);
+                                      if (!user) return null;
+                                      return <div key={user.id} className="flex items-center gap-3 mt-1"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div>
+                                  })}
                                 </div>
                             </div>
-
                          </div>
                     </ScrollArea>
                 </div>
@@ -715,7 +776,7 @@ export function WebArticleDetailsSheet({
       <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this article?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the article: <strong className="text-foreground">{articleState.title}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Yes, Delete Article</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
        <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
           <DialogContent>
-              <DialogHeader><DialogTitle>Link Google Drive File</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle>Link Google Drive File</DialogTitle><DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription></DialogHeader>
               <div className="space-y-4 py-2">
                   <div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
                   <div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
