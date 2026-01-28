@@ -16,9 +16,7 @@ import { Label } from '@/components/ui/label';
 import { formatDuration } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
 import { notFound } from 'next/navigation';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
 
 
 // --- Komponen untuk Laporan Personal (Hanya untuk Karyawan) ---
@@ -137,48 +135,39 @@ function PersonalReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
   );
 }
 
-function CompletedItemsTable({ items }: { items: any[] }) {
-    if (items.length === 0) {
-        return <p className="text-muted-foreground text-center py-4">No completed items in this period.</p>;
+function PunctualitySummary({ onTime, total }: { onTime: number; total: number }) {
+    if (total === 0) {
+        return (
+            <Card>
+                <CardContent className="p-6 text-center text-muted-foreground">
+                    No completed items with due dates in this period to analyze punctuality.
+                </CardContent>
+            </Card>
+        );
     }
+    
+    const late = total - onTime;
     
     return (
         <Card>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Title</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Completed On</TableHead>
-                        <TableHead>Result</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {items.map(item => {
-                        const completionDate = item.actualCompletionDate || item.postedAt;
-                        const dueDate = item.dueDate;
-                        let result: 'On Time' | 'Late' | 'N/A' = 'N/A';
-                        if (completionDate && dueDate) {
-                            result = isAfter(parseISO(completionDate), parseISO(dueDate)) ? 'Late' : 'On Time';
-                        }
-                        
-                        return (
-                            <TableRow key={item.id}>
-                                <TableCell className="font-medium">{item.title}</TableCell>
-                                <TableCell><Badge variant="outline">{item.type}</Badge></TableCell>
-                                <TableCell>{completionDate ? format(parseISO(completionDate), 'PP') : '-'}</TableCell>
-                                <TableCell>
-                                    {result === 'On Time' && <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">On Time</Badge>}
-                                    {result === 'Late' && <Badge variant="destructive">Late</Badge>}
-                                    {result === 'N/A' && <span className="text-muted-foreground">-</span>}
-                                </TableCell>
-                            </TableRow>
-                        );
-                    })}
-                </TableBody>
-            </Table>
+            <CardHeader>
+                <CardTitle>Work Punctuality</CardTitle>
+                <CardDescription>Summary of on-time vs. late completions for items with a due date.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-green-100 dark:bg-green-900/50 rounded-lg text-center">
+                        <p className="text-3xl font-bold text-green-700 dark:text-green-300">{onTime}</p>
+                        <p className="text-sm font-medium text-green-600 dark:text-green-400">On Time</p>
+                    </div>
+                    <div className="p-4 bg-red-100 dark:bg-red-900/50 rounded-lg text-center">
+                        <p className="text-3xl font-bold text-red-700 dark:text-red-300">{late}</p>
+                        <p className="text-sm font-medium text-red-600 dark:text-red-400">Late</p>
+                    </div>
+                </div>
+            </CardContent>
         </Card>
-    )
+    );
 }
 
 // --- Komponen untuk Dasbor Analisis (Super Admin & Manajer) ---
@@ -237,18 +226,6 @@ function TeamAnalysisDashboard({
     };
   }, [filteredTasks, filteredSocialPosts, filteredWebArticles]);
   
-  const allCompletedItemsForTable = useMemo(() => {
-    return [
-        ...completedTasks.map(t => ({...t, type: 'Task'})),
-        ...completedSocialPosts.map(p => ({...p, type: 'Social Post'})),
-        ...completedWebArticles.map(a => ({...a, type: 'Web Article'}))
-    ].sort((a,b) => {
-        const dateA = a.actualCompletionDate || a.postedAt;
-        const dateB = b.actualCompletionDate || b.postedAt;
-        if (!dateA || !dateB) return 0;
-        return new Date(dateB).getTime() - new Date(dateA).getTime()
-    });
-  }, [completedTasks, completedSocialPosts, completedWebArticles]);
 
   const onTimeCompletionRate = useMemo(() => {
     const relevantTasks = allCompletedItems.filter(t => t.actualCompletionDate && t.dueDate);
@@ -261,6 +238,8 @@ function TeamAnalysisDashboard({
       total: relevantTasks.length
     };
   }, [allCompletedItems]);
+  
+  const { onTime, total } = onTimeCompletionRate;
 
   const averageCompletionTime = useMemo(() => {
     const relevantTasks = allCompletedItems.filter(t => t.actualCompletionDate && t.actualStartDate);
@@ -323,7 +302,7 @@ function TeamAnalysisDashboard({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Tasks Completed</CardTitle>
@@ -356,18 +335,6 @@ function TeamAnalysisDashboard({
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('reports.metric.onTimeRate')}</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
-            <p className="text-xs text-muted-foreground">
-              {onTimeCompletionRate.onTime} {t('reports.metric.onTimeRate.sub.onTime')} {onTimeCompletionRate.total}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('reports.metric.avgCompletion')}</CardTitle>
             <Timer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -388,11 +355,7 @@ function TeamAnalysisDashboard({
         </Card>
       </div>
       <div className="mt-6">
-        <h3 className="text-xl font-bold tracking-tight">Completed Work</h3>
-        <p className="text-muted-foreground">Detailed list of all completed items in the selected period.</p>
-        <div className="mt-4">
-            <CompletedItemsTable items={allCompletedItemsForTable} />
-        </div>
+        <PunctualitySummary onTime={onTime} total={total} />
       </div>
     </>
   );
