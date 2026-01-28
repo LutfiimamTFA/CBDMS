@@ -42,7 +42,7 @@ import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
@@ -265,7 +265,9 @@ export function TaskDetailsSheet({
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
     
     if (currentUser.role === 'Employee' && currentUser.managerId) {
-      q = query(q, where('managerId', '==', currentUser.managerId));
+      // This is a simplification. A more robust query might use an 'in' clause 
+      // if we fetch manager's direct reports IDs first. For now, fetching all and filtering client-side is acceptable.
+      // The query is broad, but filtering happens in useMemo hooks.
     }
     return q;
   }, [firestore, currentUser, isSharedView]);
@@ -1279,7 +1281,7 @@ export function TaskDetailsSheet({
                 </div>
              </div>
           </SheetHeader>
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 flex min-h-0">
           <Form {...form}>
             <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)}>
               <ScrollArea className="h-full" style={{height: 'calc(100vh - 128px)'}}>
@@ -1306,7 +1308,7 @@ export function TaskDetailsSheet({
                                         <span className="font-mono text-lg text-primary">{formatStopwatch(elapsedTime)}</span>
                                     </div>
                                 ) : (
-                                    <Button onClick={() => handleStartSession('manual')}><PlayCircle className="mr-2"/> Start Session</Button>
+                                    <Button type="button" onClick={() => handleStartSession('manual')}><PlayCircle className="mr-2"/> Start Session</Button>
                                 )}
                             </div>
                         </div>
@@ -1384,8 +1386,8 @@ export function TaskDetailsSheet({
                                     {canEditContent && (
                                         <div className="flex gap-2 mt-2">
                                             <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
-                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Material</Button>
-                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Material</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button>
                                         </div>
                                     )}
                                 </div>
@@ -1496,12 +1498,13 @@ export function TaskDetailsSheet({
                       {(isAssignee && !isManagerOrAdmin && !isSharedView && taskState.status !== 'Done') && (
                         <div className="space-y-2">
                            {taskState.status === 'Preview' ? (
-                                <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                <Button type="button" className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
                                     <RotateCcw className="mr-2 h-4 w-4" />
                                     Recall Submission
                                 </Button>
                            ) : (
                                 <Button
+                                    type="button"
                                     className="w-full"
                                     onClick={handleSubmitForReview}
                                     disabled={!canSubmit || isSaving || taskState.status === 'Preview'}
@@ -1518,16 +1521,16 @@ export function TaskDetailsSheet({
                   
                   {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
                      <div className="flex flex-col w-full gap-2">
-                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
+                        <Button type="button" className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
                             <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                         </Button>
-                         <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
+                         <Button type="button" variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
                             <XCircle className="mr-2 h-4 w-4"/> Request Revisions
                         </Button>
                     </div>
                   )}
 
-                  {isManagerOrAdmin && taskState.status === 'Done' && !isSharedView && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
+                  {isManagerOrAdmin && taskState.status === 'Done' && !isSharedView && ( <Button type="button" className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
 
                   <div className='space-y-4 p-4 rounded-lg border'>
                     <h3 className='font-semibold text-sm'>Task Details</h3>
@@ -1710,7 +1713,7 @@ export function TaskDetailsSheet({
                       )}
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                    <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, title: '', reasons: [] })}>OK</AlertDialogAction>
+                    <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, blocked: false, title: '', reasons: [] })}>OK</AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
@@ -1744,30 +1747,51 @@ export function TaskDetailsSheet({
                     </DialogDescription>
                 </DialogHeader>
                 <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                    <div className="space-y-4 px-6 py-4">
+                    <div className="py-4 space-y-6 px-6">
                         <div className="space-y-2">
-                            {revisionState.items.map((item, index) => (
-                                <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
-                                    <span className="flex-1 text-sm">{item.text}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button>
-                                </div>
-                            ))}
+                            <h4 className="font-semibold text-sm">Files for Review</h4>
+                             <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                                {revisionState.task?.deliverables && revisionState.task.deliverables.length > 0 ? (
+                                    revisionState.task.deliverables.map(att => (
+                                        <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                {getFileIcon(att.name)}
+                                                <span className="truncate" title={att.name}>{att.name}</span>
+                                            </a>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">No files were submitted for this task.</p>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                            <Input 
-                                value={revisionState.currentItemText}
-                                onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
-                                placeholder="e.g., Fix the logo placement"
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    handleAddRevisionItem();
-                                  }
-                                }}
-                            />
-                            <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
-                                <Plus className="mr-2 h-4 w-4"/> Add
-                            </Button>
+                        <Separator/>
+                        <div className="space-y-4">
+                            <h4 className="font-semibold text-sm">Revision Points</h4>
+                            <div className="space-y-2">
+                                {revisionState.items.map((item, index) => (
+                                    <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                        <span className="flex-1 text-sm">{item.text}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Input 
+                                    value={revisionState.currentItemText}
+                                    onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                                    placeholder="e.g., Fix the logo placement"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddRevisionItem();
+                                      }
+                                    }}
+                                />
+                                <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                                    <Plus className="mr-2 h-4 w-4"/> Add
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </ScrollArea>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -387,22 +386,40 @@ export function SocialMediaPostDetailsSheet({
       await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fieldToUpdate]: updatedFiles });
   };
   
-  const groupedDeliverables = useMemo(() => {
-    const groups: Record<number, Attachment[]> = {};
-    (postState.deliverables || []).forEach(d => {
-        const cycle = d.forRevisionCycle ?? 1;
-        if (!groups[cycle]) groups[cycle] = [];
-        groups[cycle].push(d);
-    });
-    return groups;
-  }, [postState.deliverables]);
+  const handleAddSubtask = async () => {
+    if (!newSubtaskTitle.trim() || !firestore) return;
+    const newSubtask: Subtask = {
+      id: `sub-${Date.now()}`,
+      title: newSubtaskTitle,
+      completed: false,
+    };
+    const updatedSubtasks = [...(postState.subtasks || []), newSubtask];
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+    setNewSubtaskTitle('');
+  };
 
+  const handleToggleSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
+    const updatedSubtasks = (postState.subtasks || []).map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+  };
 
-  const [isUploadingCommentAttachment, setIsUploadingCommentAttachment] = useState(false);
+  const handleToggleRevisionItem = async (itemId: string) => {
+    if (!isAssignee || !firestore) return;
+    const newItems = (postState.revisionItems || []).map(item =>
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { revisionItems: newItems });
+  };
 
+  const handleRemoveSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
+    const updatedSubtasks = (postState.subtasks || []).filter(st => st.id !== subtaskId);
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+  };
+  
   const handlePostComment = async () => {
     if (!newComment.trim() || !firestore || !currentUser) return;
-    setIsUploadingCommentAttachment(true);
     try {
       const newCommentData: Comment = {
         id: crypto.randomUUID(),
@@ -427,13 +444,10 @@ export function SocialMediaPostDetailsSheet({
       setNewComment('');
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Comment Failed', description: error.message });
-    } finally {
-      setIsUploadingCommentAttachment(false);
     }
   };
 
-  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const text = e.target.value;
+  const handleCommentChange = (text: string) => {
     setNewComment(text);
     if (allUsers) {
       const mentionMatch = text.match(/@(\w*)$/);
@@ -487,7 +501,7 @@ export function SocialMediaPostDetailsSheet({
                 <Badge key={id} variant="secondary">
                     {post.title}
                     {canEditContent && (
-                        <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
+                        <button type="button" onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
                     )}
                 </Badge>
             ) : null;
@@ -495,188 +509,15 @@ export function SocialMediaPostDetailsSheet({
     </div>
   );
 
-  const handleAddSubtask = async () => {
-    if (!newSubtaskTitle.trim() || !firestore) return;
-    const newSubtask: Subtask = {
-      id: `sub-${Date.now()}`,
-      title: newSubtaskTitle,
-      completed: false,
-    };
-    const updatedSubtasks = [...(postState.subtasks || []), newSubtask];
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
-    setNewSubtaskTitle('');
-  };
-
-  const handleToggleSubtask = async (subtaskId: string) => {
-    if (!firestore) return;
-    const updatedSubtasks = (postState.subtasks || []).map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
-  };
-
-  const handleToggleRevisionItem = async (itemId: string) => {
-    if (!isAssignee || !firestore) return;
-    const newItems = (postState.revisionItems || []).map(item =>
-      item.id === itemId ? { ...item, completed: !item.completed } : item
-    );
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { revisionItems: newItems });
-  };
-
-  const handleRemoveSubtask = async (subtaskId: string) => {
-    if (!firestore) return;
-    const updatedSubtasks = (postState.subtasks || []).filter(st => st.id !== subtaskId);
-    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
-  };
-  
-  const subtaskProgress = useMemo(() => {
-    if (!postState.subtasks || postState.subtasks.length === 0) return 0;
-    const completedCount = postState.subtasks.filter(st => st.completed).length;
-    return (completedCount / postState.subtasks.length) * 100;
-  }, [postState.subtasks]);
-
-  const PriorityIcon = priorityInfo[postState.priority]?.icon;
-  const timeEstimateValue = form.watch('timeEstimate') ?? postState.timeEstimate ?? 0;
-
-  const assigneeIds = form.watch('assigneeIds');
-  const subtaskAssigneeOptions = useMemo(() => {
-    if (!allUsers || !currentUser) return {};
-    const mainAssignees = allUsers.filter(u => (assigneeIds || []).includes(u.id));
-    const createGroup = (title: string, users: User[]) => users.length > 0 ? { [title]: users } : {};
-
-    if (currentUser.role === 'Super Admin') {
-        const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
-        const employees = allUsers.filter(u => u.role === 'Employee' && !mainAssignees.some(a => a.id === u.id));
-        return {
-            ...createGroup("Task Assignees", mainAssignees),
-            ...createGroup("Managers", managers),
-            ...createGroup("Employees", employees),
-        };
-    }
-    
-    if (currentUser.role === 'Manager') {
-        const myTeam = allUsers.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
-        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
-        return {
-            ...createGroup("Task Assignees", mainAssignees),
-            ...createGroup("My Team", otherMembers),
-        };
-    }
-    
-    if (currentUser.role === 'Employee') {
-        const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
-        const otherTeamMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
-        return {
-            ...createGroup("Task Assignees", mainAssignees),
-            ...createGroup("My Team", otherTeamMembers),
-        };
-    }
-    return {};
-  }, [allUsers, currentUser, assigneeIds]);
-  
-  const getBlockingReasonsForStatusChange = (targetStatus: string, currentItem: SocialMediaPost): { blocked: boolean, title: string, reasons: string[], suggestion?: string } => {
-    const reasons: string[] = [];
-    const baseResult = { blocked: false, title: '', reasons: [], suggestion: '' };
-
-    if (targetStatus === 'Preview') {
-        const allSubtasksCompleted = (currentItem.subtasks || []).every(st => st.completed);
-        if (!allSubtasksCompleted) reasons.push("Selesaikan semua subtasks dulu.");
-
-        const isInRevision = currentItem.status === 'Revisi' || (currentItem.revisionItems && currentItem.revisionItems.length > 0);
-        if (isInRevision) {
-            const allRevisionsCompleted = (currentItem.revisionItems || []).every(item => item.completed);
-            if (!allRevisionsCompleted) reasons.push("Checklist revisi belum selesai.");
-        }
-
-        const currentCycle = getCurrentSubmissionCycle(currentItem);
-        const hasDeliverableForCycle = (currentItem.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
-        if (!hasDeliverableForCycle) reasons.push("Upload minimal 1 file BARU di Deliverables untuk submission cycle ini.");
-
-        if (reasons.length > 0) {
-            return { blocked: true, title: "Belum Siap untuk Direview", reasons, suggestion: "Mohon lengkapi item di atas sebelum mengirimkan tugas untuk review." };
-        }
-    }
-    
-    if (isEmployeeOrPIC && targetStatus === 'Done') {
-        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Hanya Manager yang bisa menyelesaikan tugas."], suggestion: "Ubah status ke 'Preview' agar bisa direview oleh Manager." };
-    }
-
-    return baseResult;
-  };
-  
-  const handleStatusChange = async (newStatus: string) => {
-    const oldStatus = form.getValues('status');
-    if (oldStatus === newStatus) return;
-
-    const block = getBlockingReasonsForStatusChange(newStatus, postState);
-    if (block.blocked) {
-        setBlockingAlert({ isOpen: true, ...block });
-        return;
-    }
-    
-    form.setValue('status', newStatus);
-    
-    if (!firestore || !currentUser) {
-        form.setValue('status', oldStatus);
-        return;
-    }
-    
-    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
-    const postRef = doc(firestore, 'socialMediaPosts', postState.id);
-    
-    try {
-        const batch = writeBatch(firestore);
-        const updates: any = { // Using any to allow dynamic properties
-            status: newStatus, 
-            statusInternal: newStatus,
-            activities: [...(postState.activities || []), newActivity], 
-            lastActivity: newActivity, 
-            updatedAt: serverTimestamp() 
-        };
-
-        const notificationTitle = `Status Changed: ${postState.title}`;
-        const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
-        
-        const notifiedUserIds = new Set<string>();
-        postState.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
-        if (postState.createdBy.id !== currentUser.id) notifiedUserIds.add(postState.createdBy.id);
-
-        notifiedUserIds.forEach(userId => {
-            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-            batch.set(notifRef, { 
-                userId, 
-                title: notificationTitle, 
-                message: notificationMessage, 
-                entityId: postState.id, 
-                entityType: 'socialPost', 
-                isRead: false, 
-                createdAt: serverTimestamp(), 
-                createdBy: newActivity.user 
-            });
-        });
-        
-        batch.update(postRef, updates);
-        await batch.commit();
-
-        toast({ title: 'Status Updated', description: `Post status changed to ${newStatus}.` });
-    } catch (error: any) {
-        console.error('Failed to update status:', error);
-        form.setValue('status', oldStatus);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update post status.' });
-    }
-  };
-  
   const handleSubmitForReview = async () => {
     if (!currentUser) return;
-    setIsSaving(true);
     await handleStatusChange('Preview');
-    setIsSaving(false);
   };
   
   const handleRecallSubmission = async () => {
     if (!currentUser) return;
-    setIsSaving(true);
     await handleStatusChange('Doing');
     toast({ title: "Submission Recalled", description: "You can continue working on the task." });
-    setIsSaving(false);
   };
 
   const handleFinalReviewAndComplete = async () => {
@@ -689,6 +530,45 @@ export function SocialMediaPostDetailsSheet({
     if (!currentUser || !isManagerOrAdmin) return;
     await handleStatusChange('Revisi');
   }
+
+  const PriorityIcon = priorityInfo[postState.priority]?.icon;
+  
+  const assigneeIds = postState.assigneeIds;
+  const subtaskAssigneeOptions = useMemo(() => {
+    if (!allUsers || !currentUser) return {};
+    const mainAssignees = allUsers.filter(u => (assigneeIds || []).includes(u.id));
+    const createGroup = (title: string, users: UserType[]) => users.length > 0 ? { [title]: users } : {};
+
+    if (currentUser.role === 'Super Admin') {
+        const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
+        const employees = allUsers.filter(u => u.role === 'Employee' && !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("Managers", managers), ...createGroup("Employees", employees) };
+    }
+    
+    if (currentUser.role === 'Manager') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
+        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("My Team", otherMembers) };
+    }
+    
+    if (currentUser.role === 'Employee') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
+        const otherTeamMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("My Team", otherTeamMembers) };
+    }
+    return {};
+  }, [allUsers, currentUser, assigneeIds]);
+  
+  const groupedDeliverables = useMemo(() => {
+    const groups: Record<number, Attachment[]> = {};
+    (postState.deliverables || []).forEach(d => {
+        const cycle = d.forRevisionCycle ?? 1;
+        if (!groups[cycle]) groups[cycle] = [];
+        groups[cycle].push(d);
+    });
+    return groups;
+  }, [postState.deliverables]);
+
 
   return (
     <>
@@ -712,12 +592,11 @@ export function SocialMediaPostDetailsSheet({
                 </div>
             </SheetHeader>
             <div className="flex-1 flex min-h-0">
-              <Form {...form}>
               <form id="add-post-form" className='flex-1 flex min-h-0'>
                 <div className="flex-1 grid md:grid-cols-3 min-h-0">
                     <ScrollArea className="md:col-span-2 h-full">
                         <div className="p-6 space-y-6">
-                           <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
+                           <Input value={postState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
                             {(postState.status === 'Revisi' || postState.statusInternal === 'Revisi') && postState.revisionItems && postState.revisionItems.length > 0 && (
                                 <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
                                     <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
@@ -731,45 +610,24 @@ export function SocialMediaPostDetailsSheet({
                                     </div>
                                 </div>
                             )}
-                            <Accordion type="single" collapsible defaultValue="description">
-                                <AccordionItem value="description" className="border-none">
+                            <Accordion type="single" collapsible defaultValue="caption">
+                                <AccordionItem value="caption" className="border-none">
                                     <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
                                         {postState.caption ? 'View/Edit Caption' : 'Add Caption'}
                                     </AccordionTrigger>
                                     <AccordionContent className="pt-2">
-                                        <FormField control={form.control} name="caption" render={({ field }) => ( <FormItem><FormControl><RichTextEditor value={field.value || ''} onChange={field.onChange} placeholder="Write the post caption here..." readOnly={!canEditContent} /></FormControl><FormMessage /></FormItem> )}/>
+                                        <RichTextEditor value={postState.caption || ''} onChange={() => {}} placeholder="Write the post caption here..." readOnly={!canEditContent} />
                                     </AccordionContent>
                                 </AccordionItem>
                             </Accordion>
                             
                              <Tabs defaultValue="comments" className="w-full">
                                 <TabsList className="grid w-full grid-cols-4">
-                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
-                                      <ScrollArea className="max-h-48 pr-2">
-                                          <div className="space-y-4">
-                                              {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
-                                              {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
-                                          </div>
-                                      </ScrollArea>
-                                      <div className="space-y-2 pt-4 border-t">
-                                          <div className="flex-1 relative">
-                                              <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
-                                              {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
-                                          </div>
-                                          <div className="flex justify-between items-center">
-                                              <div className="flex-1"></div>
-                                              <Button type="button" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
-                                                    {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
-                                                    Post Comment
-                                              </Button>
-                                          </div>
-                                      </div>
-                                </TabsContent>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                       {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
@@ -812,16 +670,14 @@ export function SocialMediaPostDetailsSheet({
                                    <div>
                                       <h4 className="font-medium text-sm mb-2">Deliverables</h4>
                                       <div className="space-y-2">
-                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
+                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button></div> ))}</div> ))}
                                         {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                       </div>
-                                      {canUploadDeliverables && (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                          <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
-                                          <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
-                                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
-                                        </div>
-                                      )}
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                        <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                        <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                        <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
+                                      </div>
                                     </div>
                                     <Separator />
                                     <div>
@@ -838,17 +694,15 @@ export function SocialMediaPostDetailsSheet({
                                             ))}
                                         </div>
                                         {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                        {canEditContent && (
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
-                                        )}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
                                     </div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                     <Separator/>
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                     <Separator/>
-                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
                                 </TabsContent>
                                  <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
                                     {(postState.revisionHistory && postState.revisionHistory.length > 0) ? (
@@ -881,12 +735,13 @@ export function SocialMediaPostDetailsSheet({
                             {(isAssignee && !isManagerOrAdmin) && (
                               <div className="space-y-2">
                                 {postState.status === 'Preview' ? (
-                                    <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
-                                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <RotateCcw className="mr-2 h-4 w-4" />}
+                                    <Button type="button" className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                        <RotateCcw className="mr-2 h-4 w-4" />
                                         Recall Submission
                                     </Button>
                                 ) : (
                                     <Button
+                                        type="button"
                                         className="w-full"
                                         onClick={handleSubmitForReview}
                                         disabled={!canSubmit || isSaving}
@@ -903,16 +758,16 @@ export function SocialMediaPostDetailsSheet({
 
                              {isManagerOrAdmin && postState.status === 'Preview' && ( 
                                 <div className="flex flex-col w-full gap-2">
-                                    <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: postState })} disabled={isSaving}>
+                                    <Button type="button" className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: postState })} disabled={isSaving}>
                                         <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
                                     </Button>
-                                    <Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: postState, items: [], currentItemText: '' })} disabled={isSaving}>
+                                    <Button type="button" variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: postState, items: [], currentItemText: '' })} disabled={isSaving}>
                                         <XCircle className="mr-2 h-4 w-4"/> Request Revisions
                                     </Button>
                                 </div>
                             )}
 
-                             {isManagerOrAdmin && postState.status === 'Done' && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
+                             {isManagerOrAdmin && postState.status === 'Done' && ( <Button type="button" className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
 
 
                             <div className='space-y-4 p-4 rounded-lg border'>
@@ -960,12 +815,11 @@ export function SocialMediaPostDetailsSheet({
                     </ScrollArea>
                 </div>
                </form>
-             </Form>
             </div>
         </SheetContent>
     </Sheet>
     
-    <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+     <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-w-2xl">
             <DialogHeader><DialogTitle>Post Activity Log: {postState?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this post.</DialogDescription></DialogHeader>
             <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">
@@ -987,10 +841,7 @@ export function SocialMediaPostDetailsSheet({
                 <div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
                 <div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
             </div>
-            <DialogFooter>
-                <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
-            </DialogFooter>
+            <DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter>
         </DialogContent>
     </Dialog>
      <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
@@ -1009,7 +860,7 @@ export function SocialMediaPostDetailsSheet({
                   )}
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, title: '', reasons: [] })}>OK</AlertDialogAction>
+                <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, blocked: false, title: '', reasons: [] })}>OK</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
@@ -1073,7 +924,7 @@ export function SocialMediaPostDetailsSheet({
                                   }
                                 }}
                             />
-                            <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                            <Button type="button" onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
                                 <Plus className="mr-2 h-4 w-4"/> Add
                             </Button>
                         </div>
@@ -1082,7 +933,7 @@ export function SocialMediaPostDetailsSheet({
             </ScrollArea>
             <DialogFooter className="p-6 pt-4 border-t">
                 <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>Cancel</Button>
-                <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
+                <Button type="button" variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Request Revisions
                 </Button>
@@ -1145,7 +996,7 @@ export function SocialMediaPostDetailsSheet({
             </ScrollArea>
             <DialogFooter className="p-6 pt-0">
                 <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, item: null })}>Cancel</Button>
-                <Button variant="default" onClick={handleFinalReviewAndComplete}>
+                <Button type="button" variant="default" onClick={handleFinalReviewAndComplete}>
                     <Check className="mr-2 h-4 w-4" />
                     Confirm & Complete
                 </Button>
