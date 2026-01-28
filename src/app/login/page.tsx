@@ -98,7 +98,7 @@ export default function LoginPage() {
               <div className="bg-primary p-2 rounded-lg">
                 <ArrowUpRight className="h-5 w-5 text-primary-foreground" />
               </div>
-              <h1 className="font-headline text-xl font-bold truncate">CBDMS</h1>
+              <h1 className="font-headline text-xl font-bold truncate">CBDMS Workspace</h1>
             </div>
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
