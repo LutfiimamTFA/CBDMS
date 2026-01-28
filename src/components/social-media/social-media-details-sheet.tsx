@@ -665,7 +665,7 @@ export function SocialMediaPostDetailsSheet({
     }
     setIsSaving(true);
     const item = revisionState.item;
-    const itemRef = doc(firestore, itemType, item.id);
+    const itemRef = doc(firestore, 'socialMediaPosts', item.id);
     const newStatus = 'Revisi';
     
     const newRevisionItems: RevisionItem[] = revisionState.items.map(revItem => ({ id: crypto.randomUUID(), text: revItem.text, completed: false }));
@@ -751,14 +751,14 @@ export function SocialMediaPostDetailsSheet({
                             </Accordion>
                             
                              <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
+                                <TabsList className="grid w-full grid-cols-5">
+                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
                                   <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
-                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                                  <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
-                                  <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(postState.subtasks || []).filter(st => st.completed).length}/{(postState.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
                                   <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
                                       {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
                                   </div>
@@ -1177,3 +1177,4 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
 
 const itemType = 'socialMediaPosts'; // Define itemType here or pass as prop if it's dynamic
 
+    
