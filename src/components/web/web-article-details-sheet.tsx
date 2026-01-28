@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -219,6 +218,10 @@ export function WebArticleDetailsSheet({
     
     const allSubtasksCompleted = (articleState.subtasks || []).every(st => st.completed);
     if (!allSubtasksCompleted) return false;
+
+    const currentCycle = getCurrentSubmissionCycle(articleState);
+    const hasDeliverableForCycle = (articleState.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+    if (!hasDeliverableForCycle) return false;
     
     const nonSubmittableStatuses = ['Preview', 'Done'];
     if (nonSubmittableStatuses.includes(articleState.statusInternal)) return false;
@@ -625,10 +628,11 @@ export function WebArticleDetailsSheet({
                             )}
                            <RichTextEditor value={articleState.content || ''} onChange={() => {}} placeholder="Write your article content here..." readOnly={!canEditContent} />
                              <Tabs defaultValue="comments" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4">
+                                <TabsList className="grid w-full grid-cols-5">
                                   <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                                   <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                                  <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
+                                  <TabsTrigger value="deliverables"><UploadCloud className="mr-2"/>Deliverables</TabsTrigger>
+                                  <TabsTrigger value="attachments"><Paperclip className="mr-2"/>Attachments</TabsTrigger>
                                   <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
                                 </TabsList>
                                 <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
@@ -666,28 +670,31 @@ export function WebArticleDetailsSheet({
                                   </div>
                                   <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                                 </TabsContent>
-                                <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
-                                    <div className="space-y-3">
-                                      <h4 className="font-medium text-sm">Deliverables</h4>
-                                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                                          {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{<Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button>}</div> ))}</div> ))}
-                                          {(articleState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
-                                      </div>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                          <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
-                                          <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
-                                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
-                                      </div>
+                                <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
+                                   <div className="space-y-2">
+                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button></div> ))}</div> ))}
+                                        {(articleState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                     </div>
-                                    <Separator />
-                                    <div className="space-y-3">
-                                        <h4 className="font-medium text-sm">Supporting Materials</h4>
-                                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                                            {(articleState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button></div> ))}
-                                            {(articleState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
-                                        </div>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                        <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                        <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                        <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
                                     </div>
+                                </TabsContent>
+                                <TabsContent value="attachments" className="mt-4 space-y-4 rounded-lg border p-4">
+                                    <div className="space-y-2">
+                                        {(articleState.attachments || []).map((att) => (
+                                            <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                                <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                {getFileIcon(att.name)}
+                                                <span className="truncate" title={att.name}>{att.name}</span>
+                                                </a>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {(articleState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
                                 </TabsContent>
                                 <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
                                     <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These articles must be completed before this one can start.</p>{renderDependencyList(articleState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search articles..." /><CommandList><CommandEmpty>No articles found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, articles]) => (<CommandGroup key={brandName} heading={brandName}>{articles.map(article => (<CommandItem key={article.id} onSelect={() => handleAddDependency(article.id, 'waitingOn')}>{article.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
@@ -726,9 +733,27 @@ export function WebArticleDetailsSheet({
                          <div className="p-6 space-y-6">
                             {(isAssignee && !isManagerOrAdmin) && (
                               <div className="space-y-2">
-                                {articleState.statusInternal === 'Preview' ? ( <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}><RotateCcw className="mr-2 h-4 w-4" />Recall Submission</Button> ) : ( <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}><Check className="mr-2 h-4 w-4"/>Submit for Review</Button> )}
+                                {articleState.statusInternal === 'Preview' ? (
+                                    <Button className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Recall Submission
+                                    </Button>
+                                ) : (
+                                    <Button
+                                        className="w-full"
+                                        onClick={handleSubmitForReview}
+                                        disabled={!canSubmit || isSaving}
+                                    >
+                                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                        Submit for Review
+                                    </Button>
+                                )}
+                                {!canSubmit && articleState.statusInternal !== 'Preview' && articleState.statusInternal !== 'Done' && (
+                                    <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
+                                )}
                               </div>
                             )}
+
                              {isManagerOrAdmin && articleState.statusInternal === 'Preview' && ( <div className="flex flex-col w-full gap-2"><Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: articleState })} disabled={isSaving}><CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete</Button><Button variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: articleState, items: [], currentItemText: '' })} disabled={isSaving}><XCircle className="mr-2 h-4 w-4"/> Request Revisions</Button></div> )}
                              {isManagerOrAdmin && articleState.statusInternal === 'Done' && ( <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Article</Button> )}
 
@@ -736,7 +761,7 @@ export function WebArticleDetailsSheet({
                                 <h3 className='font-semibold text-sm'>Article Details</h3>
                                 <Separator/>
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Brand</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === articleState.brandId)?.name || 'N/A'}</div></div>
-                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2"><Select onValueChange={(value) => handleStatusChange(value)} value={articleState.statusInternal}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{statuses?.map(status => <SelectItem key={status.id} value={status.name} disabled={isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi')}>{status.name}</SelectItem>)}</SelectContent></Select></div></div>
+                                <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2"><Select onValueChange={(value) => handleStatusChange(value)} value={articleState.statusInternal} disabled={isEmployeeOrPIC}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{statuses?.map(status => <SelectItem key={status.id} value={status.name} disabled={isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi')}>{status.name}</SelectItem>)}</SelectContent></Select></div></div>
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Priority</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[articleState.priority].color}`} />}{articleState.priority}</div></div>
                                 <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Due Date</Label><div className="col-span-2 text-sm font-medium">{articleState.dueDate ? format(parseISO(articleState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></div>
                             </div>
