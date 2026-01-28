@@ -191,6 +191,8 @@ export function SocialMediaPostDetailsSheet({
   const firestore = useFirestore();
   const storage = useStorage();
   const { user: authUser, profile: currentUser } = useUserProfile();
+  const { permissions, isLoading: arePermsLoading } = usePermissions();
+
 
   const allPostsQuery = useMemo(() => {
     if (!firestore || !currentUser) return null;
@@ -236,20 +238,23 @@ export function SocialMediaPostDetailsSheet({
     return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
   }, [currentUser, postState]);
 
+  const canDelete = useMemo(() => {
+    if (!currentUser || arePermsLoading) return false;
+    const isCreator = postState.createdBy?.id === currentUser.id;
+    if (currentUser.role === 'Super Admin') return true;
+    if (currentUser.role === 'Manager' && permissions) {
+        return permissions.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(postState.brandId);
+    }
+    if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
+        return isCreator;
+    }
+    return false;
+  }, [currentUser, permissions, arePermsLoading, postState]);
+
   const canUploadDeliverables = useMemo(() => {
     if (!currentUser) return false;
     return isAssignee || isManagerOrAdmin;
   }, [currentUser, isAssignee, isManagerOrAdmin]);
-
-  const canDeleteTask = useMemo(() => {
-    if (!currentUser) return false;
-    const isCreator = postState.createdBy?.id === currentUser.id;
-    if (currentUser.role === 'Super Admin') return true;
-    if (currentUser.role === 'Manager') {
-        return (currentUser.brandIds || []).includes(postState.brandId);
-    }
-    return isCreator;
-  }, [currentUser, postState]);
   
   const canSubmit = useMemo(() => {
     if (!postState || !isEmployeeOrPIC) return false;
@@ -268,7 +273,7 @@ export function SocialMediaPostDetailsSheet({
 }, [postState, isEmployeeOrPIC]);
 
   const handleDelete = () => {
-    if (!firestore || !postState || !canDeleteTask) return;
+    if (!firestore || !postState || !canDelete) return;
     deleteDocumentNonBlocking(doc(firestore, 'socialMediaPosts', postState.id));
     toast({ title: "Post Deleted", description: "The post is being removed." });
     onOpenChange(false);
@@ -484,7 +489,7 @@ export function SocialMediaPostDetailsSheet({
   const subtaskAssigneeOptions = useMemo(() => {
     if (!allUsers || !currentUser) return {};
     const mainAssignees = allUsers.filter(u => (assigneeIds || []).includes(u.id));
-    const createGroup = (title: string, users: UserType[]) => users.length > 0 ? { [title]: users } : {};
+    const createGroup = (title: string, users: User[]) => users.length > 0 ? { [title]: users } : {};
 
     if (currentUser.role === 'Super Admin') {
         const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
