@@ -21,9 +21,9 @@ service firebase.storage {
     }
 
     // Attachments can be read by anyone who has the URL.
-    // Writes are allowed by any authenticated user.
-    // Security is enforced by Firestore rules controlling access to the URL.
-    match /attachments/{taskId}/{allPaths=**} {
+    // Writes are allowed by any authenticated user. This rule is broad enough
+    // to cover uploads before a task ID exists and after.
+    match /attachments/{allPaths=**} {
       allow read;
       allow write: if isSignedIn();
     }

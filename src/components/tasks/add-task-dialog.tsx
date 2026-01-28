@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -115,9 +114,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   
   const [customFields, setCustomFields] = React.useState<CustomField[]>([]);
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
-  const [deliverables, setDeliverables] = React.useState<Attachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const commentFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [isTablePopoverOpen, setIsTablePopoverOpen] = useState(false);
   const [tableRows, setTableRows] = useState(2);
@@ -127,7 +124,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
-  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
 
 
   const [subtasks, setSubtasks] = React.useState<Subtask[]>([]);
@@ -150,7 +146,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     if (!firestore || !currentUserProfile) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUserProfile.companyId));
     
-    // For Employees, we want to fetch their manager and their teammates for selection.
     if (currentUserProfile.role === 'Employee' && currentUserProfile.managerId) {
       // This is a simplification. A more robust query might use an 'in' clause 
       // if we fetch manager's direct reports IDs first. For now, fetching all and filtering client-side is acceptable.
@@ -397,7 +392,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         setLogNote('');
         setCustomFields([]);
         setAttachments([]);
-        setDeliverables([]);
         setSubtasks([]);
         setWaitingOnTaskIds([]);
         setBlockingTaskIds([]);
@@ -454,7 +448,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         linkedTaskIds,
         comments,
         attachments,
-        deliverables,
         companyId: currentUserProfile.companyId,
         createdBy: {
           id: currentUserProfile.id,
@@ -605,15 +598,15 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
     return <FileText className="h-5 w-5 text-muted-foreground" />;
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
-    if (!event.target.files || !storage) return;
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!event.target.files || !storage || !user) return;
     
     setIsUploading(true);
     const files = Array.from(event.target.files);
     
     try {
         const uploadPromises = files.map(async (file) => {
-            const storageRef = ref(storage, `attachments/${Date.now()}-${file.name}`);
+            const storageRef = ref(storage, `attachments/${user.uid}/${Date.now()}-${file.name}`);
             await uploadBytes(storageRef, file);
             const url = await getDownloadURL(storageRef);
             return {
@@ -625,11 +618,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         });
         
         const newFiles = await Promise.all(uploadPromises);
-        if (fileType === 'attachment') {
-            setAttachments(prev => [...prev, ...newFiles]);
-        } else {
-            setDeliverables(prev => [...prev, ...newFiles]);
-        }
+        setAttachments(prev => [...prev, ...newFiles]);
         
         toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
 
@@ -638,7 +627,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload files. Please try again.' });
     } finally {
         setIsUploading(false);
-        if(fileInputRef.current) fileInputRef.current.value = '';
+        if (event.target) event.target.value = '';
     }
   };
 
@@ -650,11 +639,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
         type: 'gdrive',
         url: gdriveLink,
       };
-       if (gdriveFileType === 'attachment') {
-        setAttachments(prev => [...prev, newFile]);
-      } else {
-        setDeliverables(prev => [...prev, newFile]);
-      }
+      setAttachments(prev => [...prev, newFile]);
       setIsGdriveDialogOpen(false);
       setGdriveLink('');
       setGdriveName('');
@@ -665,10 +650,6 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
 
   const handleRemoveAttachment = (id: string) => {
     setAttachments(prev => prev.filter(att => att.id !== id));
-  };
-  
-  const handleRemoveDeliverable = (id: string) => {
-    setDeliverables(prev => prev.filter(att => att.id !== id));
   };
   
   const handleAddSubtask = () => {
@@ -1107,10 +1088,9 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                   </div>
 
                   <Tabs defaultValue="subtasks" className="w-full">
-                    <TabsList className="grid w-full grid-cols-5">
+                    <TabsList className="grid w-full grid-cols-4">
                       <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
-                      <TabsTrigger value="materials"><Paperclip className="mr-2"/>Materials</TabsTrigger>
-                      <TabsTrigger value="deliverables"><Upload className="mr-2"/>Deliverables</TabsTrigger>
+                      <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
                       <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
                       <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
                     </TabsList>
@@ -1126,7 +1106,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                   <Popover>
                                     <PopoverTrigger asChild>
                                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                                        {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
+                                        {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
                                       </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-60 p-1">
@@ -1140,7 +1120,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                                         <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
                                                         {users.map(user => (
                                                           <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
-                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                            <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
                                                             <span className="truncate">{user.name}</span>
                                                           </Button>
                                                         ))}
@@ -1162,7 +1142,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                             <PopoverTrigger asChild>
                               <Button variant="ghost" size="icon" className="text-muted-foreground">
                                 {newSubtaskAssignee ? (
-                                  <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
+                                  <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{getInitials(newSubtaskAssignee.name)}</AvatarFallback></Avatar>
                                 ) : (
                                   <UserPlus className="h-4 w-4" />
                                 )}
@@ -1179,7 +1159,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                                   <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
                                                   {users.map(user => (
                                                       <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
+                                                          <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
                                                           <span className="truncate">{user.name}</span>
                                                       </Button>
                                                   ))}
@@ -1193,7 +1173,7 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                           <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
                       </div>
                     </TabsContent>
-                    <TabsContent value="materials" className="mt-4 space-y-4 rounded-lg border p-4">
+                    <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
                       <div className="space-y-2">
                           {attachments.map((att) => (
                               <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
@@ -1206,35 +1186,12 @@ export function AddTaskDialog({ children }: { children: React.ReactNode }) {
                                   </Button>
                               </div>
                           ))}
-                          {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No supporting materials attached.</p>}
+                          {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No files attached.</p>}
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-                          <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                          <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
                           <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
-                      </div>
-                    </TabsContent>
-                    <TabsContent value="deliverables" className="mt-4 space-y-4 rounded-lg border p-4">
-                      <div className="space-y-2">
-                          <h4 className="font-medium text-sm">Initial Submission</h4>
-                          {deliverables.length > 0 ? deliverables.map((att) => (
-                              <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                      {getFileIcon(att.name)}
-                                      <span className="truncate" title={att.name}>{att.name}</span>
-                                  </a>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveDeliverable(att.id)}>
-                                      <X className="h-4 w-4" />
-                                  </Button>
-                              </div>
-                          )) : (
-                            <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted yet.</p>
-                          )}
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t">
-                          <input type="file" ref={commentFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
-                          <Button type="button" variant="outline" onClick={() => commentFileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                          <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
+                          <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><div className="flex items-center justify-center gap-2"><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</div></Button>
                       </div>
                     </TabsContent>
                     <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
