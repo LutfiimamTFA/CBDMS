@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
-import type { Task, SocialMediaPost, User } from '@/lib/types';
+import type { Task, SocialMediaPost, User, WebArticle } from '@/lib/types';
 import { collection, query, where } from 'firebase/firestore';
 import {
   eachDayOfInterval,
@@ -37,17 +37,19 @@ import { normalizeSocialPost } from '@/lib/social-media-utils';
 import { useSafeBrands } from '@/hooks/use-safe-brands';
 import { MultiSelect } from '../ui/multi-select';
 import { Label } from '../ui/label';
+import { useRouter } from 'next/navigation';
 
 interface SchedulePageProps {
   workstream: 'tasks' | 'socialMediaPosts' | 'webArticles';
 }
 
-type WorkItem = Task | SocialMediaPost;
+type WorkItem = Task | SocialMediaPost | WebArticle;
 
 export function SchedulePage({ workstream }: SchedulePageProps) {
   const firestore = useFirestore();
   const { profile: currentUser, companyId } = useUserProfile();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const router = useRouter();
 
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
@@ -219,7 +221,17 @@ export function SchedulePage({ workstream }: SchedulePageProps) {
                                if (workstream === 'socialMediaPosts') {
                                   return <SocialPostCard key={item.id} post={item as SocialMediaPost} allUsers={allUsers || []} />
                                }
-                               return <TaskCard key={item.id} task={item as Task} />
+                               
+                               let basePath = '/tasks';
+                               if (workstream === 'webArticles') {
+                                   basePath = '/web/articles';
+                               }
+
+                               return (
+                                   <div key={item.id} onClick={() => router.push(`${basePath}/${item.id}`)} className="cursor-pointer">
+                                       <TaskCard task={item as Task} />
+                                   </div>
+                               );
                             })}
                           </div>
                       </div>

@@ -54,7 +54,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import Link from 'next/link';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { notFound } from 'next/navigation';
+import { notFound, useRouter } from 'next/navigation';
 import { TaskCard } from '@/components/tasks/task-card';
 
 type ViewMode = 'month' | 'week';
@@ -65,6 +65,7 @@ export default function CalendarPage() {
   const { session, isLoading: isSessionLoading } = useSharedSession();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const router = useRouter();
 
   // --- Filter States ---
   const [isFilterOpen, setIsFilterOpen] = useState(false);
@@ -319,7 +320,9 @@ export default function CalendarPage() {
                           </span>
                           <div className="mt-2 flex-1 space-y-1 overflow-auto">
                             {dayTasks.map(task => (
-                              <TaskCard key={task.id} task={task} />
+                              <div key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="cursor-pointer">
+                                <TaskCard task={task} />
+                              </div>
                             ))}
                           </div>
                       </div>
