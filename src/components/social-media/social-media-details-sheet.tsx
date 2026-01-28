@@ -470,6 +470,14 @@ export function SocialMediaPostDetailsSheet({
     await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
   };
 
+  const handleToggleRevisionItem = async (itemId: string) => {
+    if (!isAssignee || !firestore) return;
+    const newItems = (postState.revisionItems || []).map(item =>
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { revisionItems: newItems });
+  };
+
   const handleRemoveSubtask = async (subtaskId: string) => {
     if (!firestore) return;
     const updatedSubtasks = (postState.subtasks || []).filter(st => st.id !== subtaskId);
@@ -717,6 +725,19 @@ export function SocialMediaPostDetailsSheet({
                     <ScrollArea className="md:col-span-2 h-full">
                         <div className="p-6 space-y-6">
                            <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
+                            {(taskState.status === 'Revisi' || taskState.statusInternal === 'Revisi') && taskState.revisionItems && taskState.revisionItems.length > 0 && (
+                                <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                                    <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
+                                    <div className="space-y-2">
+                                        {taskState.revisionItems.map(item => (
+                                            <div key={item.id} className="flex items-center gap-3">
+                                                <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee} />
+                                                <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             <Accordion type="single" collapsible defaultValue="description">
                                 <AccordionItem value="description" className="border-none">
                                     <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
@@ -1154,11 +1175,3 @@ const getUniqueActivities = (activities: Activity[]): Activity[] => {
 };
 
 const itemType = 'socialMediaPosts'; // Define itemType here or pass as prop if it's dynamic
-
-
-    
-
-    
-
-    
-
