@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -110,7 +111,7 @@ interface FinalReviewState {
 }
 
 type BlockingReason = {
-  blocked: boolean;
+  isOpen: boolean;
   title: string;
   reasons: string[];
   suggestion?: string;
@@ -151,7 +152,7 @@ export function WebArticleDetailsSheet({
   const [isSaving, setIsSaving] = useState(false);
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, item: null });
-  const [blockingAlert, setBlockingAlert] = useState<BlockingReason>({ isOpen: false, blocked: false, title: '', reasons: [], suggestion: '' });
+  const [blockingAlert, setBlockingAlert] = useState<BlockingReason>({ isOpen: false, title: '', reasons: [], suggestion: '' });
 
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
@@ -233,6 +234,12 @@ export function WebArticleDetailsSheet({
     const oldStatus = articleState.statusInternal;
     if (oldStatus === newStatus || !firestore || !currentUser) return;
     
+    const block = getBlockingReasonsForStatusChange(newStatus, articleState);
+    if (block.blocked) {
+        setBlockingAlert({ isOpen: true, ...block });
+        return;
+    }
+    
     setArticleState(prev => ({ ...prev, statusInternal: newStatus }));
 
     const batch = writeBatch(firestore);
@@ -245,6 +252,15 @@ export function WebArticleDetailsSheet({
       lastActivity: newActivity,
       updatedAt: serverTimestamp()
     };
+
+    if (oldStatus === 'To Do' && newStatus === 'Doing' && !articleState.actualStartDate) {
+        updates.actualStartDate = new Date().toISOString();
+    }
+    if (newStatus === 'Done' && oldStatus !== 'Done') {
+        updates.actualCompletionDate = new Date().toISOString();
+    }
+
+
     batch.update(articleRef, updates);
 
     const notificationTitle = `Status Changed: ${articleState.title}`;
@@ -349,12 +365,17 @@ export function WebArticleDetailsSheet({
     await updateDoc(doc(firestore, 'webArticles', articleState.id), { revisionItems: newItems });
   };
   
-  const getBlockingReasonsForStatusChange = (targetStatus: string, currentItem: WebArticle): BlockingReason => {
+  const getBlockingReasonsForStatusChange = (targetStatus: string, currentItem: WebArticle): Omit<BlockingReason, 'isOpen'> => {
     const reasons: string[] = [];
     if (targetStatus === 'Preview') {
         if (!currentItem.content || currentItem.content.length < 50) reasons.push("Content is too short or empty.");
         const allSubtasksCompleted = (currentItem.subtasks || []).every(st => st.completed);
         if (!allSubtasksCompleted) reasons.push("Complete all subtasks first.");
+        
+        const currentCycle = getCurrentSubmissionCycle(currentItem);
+        const hasDeliverableForCycle = (currentItem.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+        if (!hasDeliverableForCycle) reasons.push("Upload at least one new deliverable for this submission cycle.");
+
         if (reasons.length > 0) {
             return { blocked: true, title: "Not Ready for Review", reasons, suggestion: "Please complete the items above before submitting for review." };
         }

@@ -184,7 +184,9 @@
             "type": "array",
             "description": "A list of submitted files or links for this article, with historical versions.",
             "items": { "$ref": "#/backend/entities/Attachment" }
-        }
+        },
+        "actualStartDate": { "type": "string", "format": "date-time" },
+        "actualCompletionDate": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "brandId", "title", "statusInternal", "assigneeIds", "priority", "companyId"]
     },

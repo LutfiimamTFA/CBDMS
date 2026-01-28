@@ -282,6 +282,8 @@ export type WebArticle = WorkItem & {
     startDate?: string;
     attachments?: Attachment[];
     deliverables?: Attachment[];
+    actualStartDate?: string;
+    actualCompletionDate?: string;
 };
 
 
