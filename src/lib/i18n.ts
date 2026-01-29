@@ -1,3 +1,4 @@
+
 export const languages = {
   en: { code: 'en', name: 'English', countryCode: 'gb' },
   id: { code: 'id', name: 'Indonesia', countryCode: 'id' },
@@ -14,7 +15,7 @@ export const ui = {
     'nav.guide': 'Guide',
     'nav.settings': 'Settings',
     'nav.board': 'Board',
-    'nav.list': 'All Tasks',
+    'nav.list': 'Task List',
     'nav.daily_checklist': 'Daily Checklist',
     'nav.recurring_tasks': 'Recurring Tasks',
     'nav.schedule': 'Schedule',
@@ -147,7 +148,7 @@ export const ui = {
     'nav.guide': 'Panduan',
     'nav.settings': 'Pengaturan',
     'nav.board': 'Papan',
-    'nav.list': 'Semua Tugas',
+    'nav.list': 'Daftar Tugas',
     'nav.daily_checklist': 'Ceklis Harian',
     'nav.recurring_tasks': 'Tugas Berulang',
     'nav.schedule': 'Jadwal Proyek',

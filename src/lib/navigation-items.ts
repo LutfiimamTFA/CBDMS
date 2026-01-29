@@ -37,7 +37,7 @@ export const defaultNavItems: NavigationItem[] = [
   },
   {
     id: 'nav_list',
-    label: 'All Tasks', 
+    label: 'Task List', 
     path: '/tasks',
     icon: 'List',
     order: 1.2,
