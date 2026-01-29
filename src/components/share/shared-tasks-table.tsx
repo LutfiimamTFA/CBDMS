@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { Task, Priority, User, WorkflowStatus, Brand, SharedLink, Activity } from '@/lib/types';
+import type { Task, Priority, User, WorkflowStatus, Brand, SharedLink, Activity, WorkItem } from '@/lib/types';
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
@@ -43,23 +43,24 @@ import { Calendar as CalendarComponent } from '../ui/calendar';
 import { useSharedSession } from '@/context/shared-session-provider';
 
 interface SharedTasksTableProps {
-    tasks: Task[];
+    items: WorkItem[];
     statuses: WorkflowStatus[];
     brands: Brand[];
     users: User[];
     accessLevel: SharedLink['accessLevel'];
+    workstream: 'tasks' | 'socialMediaPosts' | 'webArticles';
 }
 
-export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }: SharedTasksTableProps) {
+export function SharedTasksTable({ items, statuses, brands, users, accessLevel, workstream }: SharedTasksTableProps) {
   const router = useRouter();
   const params = useParams();
   const linkId = params.linkId as string;
   const { session } = useSharedSession();
   
-  const [data, setData] = React.useState<Task[]>(tasks);
+  const [data, setData] = React.useState<WorkItem[]>(items);
   React.useEffect(() => {
-    setData(tasks || []);
-  }, [tasks]);
+    setData(items || []);
+  }, [items]);
 
   const [sorting, setSorting] = React.useState<SortingState>([ { id: 'priority', desc: true } ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -74,20 +75,20 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
   const canChangeStatus = accessLevel === 'status' || accessLevel === 'limited-edit';
   const canEditLimited = accessLevel === 'limited-edit';
 
-  const handleCellUpdate = async (taskId: string, updates: Partial<Task>) => {
-    setUpdatingCells(prev => ({...prev, [taskId]: true}));
+  const handleCellUpdate = async (itemId: string, updates: Partial<WorkItem>) => {
+    setUpdatingCells(prev => ({...prev, [itemId]: true}));
     
-    const originalTasks = data;
+    const originalItems = data;
 
     // Optimistic UI Update
-    const updatedTasks = data.map(t => t.id === taskId ? { ...t, ...updates } : t);
-    setData(updatedTasks);
+    const updatedItems = data.map(t => t.id === itemId ? { ...t, ...updates } : t);
+    setData(updatedItems);
 
     try {
         const response = await fetch('/api/share/update-task', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ linkId, taskId, updates }),
+            body: JSON.stringify({ linkId, taskId: itemId, updates }),
         });
 
         if (!response.ok) {
@@ -97,14 +98,14 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
 
     } catch (error: any) {
         // Revert UI on failure
-        setData(originalTasks);
+        setData(originalItems);
         toast({
             variant: "destructive",
             title: "Update Failed",
             description: error.message || "Your changes could not be saved.",
         });
     } finally {
-      setUpdatingCells(prev => ({...prev, [taskId]: false}));
+      setUpdatingCells(prev => ({...prev, [itemId]: false}));
     }
   }
 
@@ -129,19 +130,19 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
     return (brands || []).map(b => ({ value: b.id, label: b.name, icon: Building2 }));
   }, [brands]);
 
-  const columns: ColumnDef<Task>[] = [
+  const columns: ColumnDef<WorkItem>[] = [
     {
       accessorKey: 'title',
       header: 'Title',
       cell: ({ row }) => {
-        const task = row.original;
-        const hasDescription = typeof task.description === 'string' && task.description.trim() !== '';
+        const item = row.original;
+        const hasDescription = typeof item.description === 'string' && item.description.trim() !== '';
         
         const completionStatus = React.useMemo(() => {
-            if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
-            const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
+            if (item.status !== 'Done' || !item.actualCompletionDate || !item.dueDate) return null;
+            const isLate = isAfter(parseISO(item.actualCompletionDate), parseISO(item.dueDate));
             return isLate ? 'Late' : 'On Time';
-        }, [task.status, task.actualCompletionDate, task.dueDate]);
+        }, [item.status, item.actualCompletionDate, item.dueDate]);
 
         return (
           <div className="flex items-center gap-2 max-w-xs">
@@ -161,7 +162,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
                     </Tooltip>
                 </TooltipProvider>
             )}
-            <span className="font-medium truncate">{task.title}</span>
+            <span className="font-medium truncate">{item.title}</span>
             {hasDescription && (
                 <TooltipProvider>
                     <Tooltip>
@@ -169,7 +170,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
                             <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                         </TooltipTrigger>
                         <TooltipContent>
-                            <p>{task.description}</p>
+                            <p>{item.description}</p>
                         </TooltipContent>
                     </Tooltip>
                 </TooltipProvider>
@@ -194,13 +195,12 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
       accessorKey: 'priority',
       header: 'Priority',
       cell: ({ row }) => {
-        const task = row.original;
+        const item = row.original;
         const currentPriority = row.getValue('priority') as Priority;
         const priority = priorityInfo[currentPriority];
         if (!priority) return null;
 
-        const creatorIsEmployee = session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
-        const taskIsFromManager = task.createdBy.id !== session?.creatorId;
+        const taskIsFromManager = item.createdBy.id !== session?.creatorId;
         const isPriorityEditable = canEditLimited && !(creatorIsEmployee && taskIsFromManager);
 
         if (!isPriorityEditable) {
@@ -215,8 +215,8 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
         return (
              <Select
               value={currentPriority}
-              onValueChange={(newPriority: Priority) => handleCellUpdate(task.id, { priority: newPriority })}
-              disabled={updatingCells[task.id]}
+              onValueChange={(newPriority: Priority) => handleCellUpdate(item.id, { priority: newPriority })}
+              disabled={updatingCells[item.id]}
             >
               <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
                  <div className="flex items-center gap-2">
@@ -296,11 +296,10 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
       accessorKey: 'dueDate',
       header: 'Due Date',
       cell: ({ row }) => {
-        const task = row.original;
-        const dueDate = task.dueDate;
+        const item = row.original;
+        const dueDate = item.dueDate;
 
-        const creatorIsEmployee = session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
-        const taskIsFromManager = task.createdBy.id !== session?.creatorId;
+        const taskIsFromManager = item.createdBy.id !== session?.creatorId;
         const isDateEditable = canEditLimited && !(creatorIsEmployee && taskIsFromManager);
 
         if (!isDateEditable) {
@@ -313,7 +312,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
               <Button
                 variant={"ghost"}
                 className="w-[150px] justify-start text-left font-normal"
-                disabled={updatingCells[task.id]}
+                disabled={updatingCells[item.id]}
               >
                 <Calendar className="mr-2 h-4 w-4" />
                 {dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span>Set date</span>}
@@ -323,7 +322,7 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
               <CalendarComponent
                 mode="single"
                 selected={dueDate ? parseISO(dueDate) : undefined}
-                onSelect={(date) => handleCellUpdate(task.id, { dueDate: date?.toISOString() })}
+                onSelect={(date) => handleCellUpdate(item.id, { dueDate: date?.toISOString() })}
                 initialFocus
               />
             </PopoverContent>
@@ -335,8 +334,8 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
-        const task = row.original;
-        const statusName = row.getValue('status') as string;
+        const item = row.original;
+        const statusName = item.status;
         const statusDetails = statuses?.find(s => s.name === statusName);
         const Icon = statusOptions.find(s => s.value === statusName)?.icon || Circle;
 
@@ -354,8 +353,8 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
         return (
             <Select 
                 value={statusName} 
-                onValueChange={(newStatus) => handleCellUpdate(task.id, { status: newStatus })}
-                disabled={updatingCells[task.id]}
+                onValueChange={(newStatus) => handleCellUpdate(item.id, { status: newStatus })}
+                disabled={updatingCells[item.id]}
             >
                 <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
                     <div className="flex items-center gap-2">
@@ -407,13 +406,21 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
   });
 
   const isFiltered = table.getState().columnFilters.length > 0;
+  
+  const getBasePath = () => {
+    switch (workstream) {
+      case 'socialMediaPosts': return 'social-media/posts';
+      case 'webArticles': return 'web/articles';
+      default: return 'tasks';
+    }
+  }
 
   return (
     <div className="space-y-4">
         <div className="flex items-center justify-between">
             <div className="flex flex-1 items-center space-x-2">
             <Input
-                placeholder="Filter tasks by title..."
+                placeholder="Filter by title..."
                 value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
                 onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
                 className="h-8 w-[150px] lg:w-[250px]"
@@ -449,8 +456,8 @@ export function SharedTasksTable({ tasks, statuses, brands, users, accessLevel }
                   data-state={row.getIsSelected() && 'selected'}
                   className="group cursor-pointer"
                   onClick={() => {
-                      const task = row.original;
-                      const path = `/share/${linkId}/tasks/${task.id}`;
+                      const item = row.original;
+                      const path = `/share/${linkId}/${getBasePath()}/${item.id}`;
                       router.push(path);
                   }}
                 >

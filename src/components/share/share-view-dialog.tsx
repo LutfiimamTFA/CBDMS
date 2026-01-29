@@ -18,7 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
-import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost } from '@/lib/types';
+import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost, WebArticle } from '@/lib/types';
 import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo, ChevronDown } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
@@ -41,7 +41,7 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 
 // Define which nav items are shareable
 const isShareable = (item: NavigationItem) => {
-    const shareablePaths = ['/dashboard', '/tasks', '/calendar', '/schedule', '/social-media', '/social-media/analytics'];
+    const shareablePaths = ['/dashboard', '/tasks', '/tasks/schedule', '/social-media/posts', '/social-media/calendar', '/social-media/schedule', '/social-media/analytics', '/web/articles', '/web/schedule'];
     return shareablePaths.includes(item.path);
 };
 
@@ -87,22 +87,32 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
   const userTasksQuery = useMemo(() => {
     if (!firestore || !profile) return null;
-    
-    if (profile.role === 'Super Admin') {
-        return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
-    }
-    
-    if (profile.role === 'Manager') {
-        if (!profile.brandIds || profile.brandIds.length === 0) return null;
-        return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('brandId', 'in', profile.brandIds));
-    }
-    
-    return query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId), where('assigneeIds', 'array-contains', profile.id));
-
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
+    if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
+    else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    return q;
   }, [firestore, profile]);
-  
+
+  const socialPostsQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    let q = query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId));
+    if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
+    else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    return q;
+  }, [firestore, profile]);
+
+  const webArticlesQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    let q = query(collection(firestore, 'webArticles'), where('companyId', '==', profile.companyId));
+    if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
+    else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    return q;
+  }, [firestore, profile]);
+
   const { data: allVisibleTasks, isLoading: tasksLoading } = useCollection<Task>(userTasksQuery);
-  
+  const { data: allVisibleSocialPosts, isLoading: socialPostsLoading } = useCollection<SocialMediaPost>(socialPostsQuery);
+  const { data: allVisibleWebArticles, isLoading: webArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
+
   const userNavItems = useMemo(() => {
     if (!profile) return [];
     return defaultNavItems.filter(item => item.roles.includes(profile.role));
@@ -114,7 +124,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
   useEffect(() => {
     if (isOpen) {
-      const dashboardItem = shareableNavItems.find(item => item.id === 'nav_task_board');
+      const dashboardItem = shareableNavItems.find(item => item.id === 'nav_dashboard');
       setSelectedNavIds(dashboardItem ? [dashboardItem.id] : []);
     }
   }, [isOpen, shareableNavItems]);
@@ -123,10 +133,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
   const handleCreateLink = async () => {
     if (!firestore || !profile) return;
-    if (!allVisibleTasks || allVisibleTasks.length === 0) {
-        toast({ variant: 'destructive', title: 'No Tasks to Share', description: 'There are no tasks in your current view to share.'});
-        return;
-    }
 
     setIsLoading(true);
     setGeneratedLink(null);
@@ -147,7 +153,9 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         }
 
         const snapshot = {
-            tasks: allVisibleTasks,
+            tasks: allVisibleTasks || [],
+            socialMediaPosts: allVisibleSocialPosts || [],
+            webArticles: allVisibleWebArticles || [],
             statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
             users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
@@ -204,6 +212,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     }
   }, [isOpen]);
 
+  const anyLoading = tasksLoading || socialPostsLoading || webArticlesLoading;
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -211,7 +221,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         <DialogHeader>
           <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
-            Create a public link to share all your currently visible tasks with external collaborators.
+            Create a public link to share a snapshot of your current work view with external collaborators.
           </DialogDescription>
         </DialogHeader>
 
@@ -327,8 +337,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateLink} disabled={isLoading || tasksLoading || selectedNavIds.length === 0}>
-                {isLoading || tasksLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
+              <Button onClick={handleCreateLink} disabled={isLoading || anyLoading || selectedNavIds.length === 0}>
+                {isLoading || anyLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
                 Create Link
               </Button>
             </>

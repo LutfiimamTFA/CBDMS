@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -14,6 +15,7 @@ import { SharedScheduleView } from '@/components/share/shared-schedule-view';
 import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 import { SidebarInset } from '@/components/ui/sidebar';
 import { SharedHeader } from '@/components/share/shared-header';
+import { SharedReportsView } from '@/components/share/shared-reports-view';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -90,7 +92,7 @@ export default function ShareScopePage() {
   
   const navItemForScope = (session.navItems || []).find(item => {
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
-    return itemPath === scope.split('/')[0];
+    return itemPath === scope;
   });
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
@@ -99,10 +101,11 @@ export default function ShareScopePage() {
     session,
     isLoading,
     tasks: snapshotData.tasks || [],
+    socialMediaPosts: snapshotData.socialMediaPosts || [],
+    webArticles: snapshotData.webArticles || [],
     statuses: snapshotData.statuses || [],
     brands: snapshotData.brands || [],
     users: snapshotData.users || [],
-    socialMediaPosts: snapshotData.socialMediaPosts || [],
   };
 
   const renderContent = () => {
@@ -110,17 +113,25 @@ export default function ShareScopePage() {
         return <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />;
     }
 
-    switch (`/${scope.split('/')[0]}`) {
+    switch (`/${scope}`) {
         case '/dashboard':
             return <SharedDashboardView {...viewProps} />;
         case '/tasks':
-            return <SharedTasksView {...viewProps} />;
-        case '/calendar':
-            return <SharedCalendarView {...viewProps} />;
-        case '/schedule':
-             return <SharedScheduleView {...viewProps} />;
-        case '/social-media':
-            return <SharedSocialMediaView {...viewProps} isAnalyticsView={scope.includes('analytics')} />;
+            return <SharedTasksView {...viewProps} workstream="tasks" />;
+        case '/tasks/schedule':
+             return <SharedScheduleView {...viewProps} workstream="tasks" />;
+        case '/social-media/posts':
+            return <SharedTasksView {...viewProps} workstream="socialMediaPosts" />;
+        case '/social-media/calendar':
+            return <SharedSocialMediaView {...viewProps} />;
+        case '/social-media/schedule':
+             return <SharedScheduleView {...viewProps} workstream="socialMediaPosts" />;
+        case '/social-media/analytics':
+             return <SharedReportsView {...viewProps} posts={snapshotData.socialMediaPosts || []} />;
+        case '/web/articles':
+             return <SharedTasksView {...viewProps} workstream="webArticles" />;
+        case '/web/schedule':
+             return <SharedScheduleView {...viewProps} workstream="webArticles" />;
         default:
             return <AccessDeniedPlaceholder pageName={scope} />;
     }

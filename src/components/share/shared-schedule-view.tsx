@@ -1,7 +1,8 @@
+
 'use client';
 
 import React, { useMemo } from 'react';
-import type { Task, SharedLink } from '@/lib/types';
+import type { Task, SharedLink, SocialMediaPost, WebArticle } from '@/lib/types';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import interactionPlugin from '@fullcalendar/interaction';
@@ -10,27 +11,46 @@ import { getBrandColor } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 
+type WorkItem = Task | SocialMediaPost | WebArticle;
+
 interface SharedScheduleViewProps {
   session: SharedLink;
   tasks: Task[] | null;
+  socialMediaPosts: SocialMediaPost[] | null;
+  webArticles: WebArticle[] | null;
   isLoading: boolean;
+  workstream: 'tasks' | 'socialMediaPosts' | 'webArticles';
 }
 
-export function SharedScheduleView({ session, tasks, isLoading }: SharedScheduleViewProps) {
+export function SharedScheduleView({ session, tasks, socialMediaPosts, webArticles, isLoading, workstream }: SharedScheduleViewProps) {
     const router = useRouter();
     const params = useParams();
     const linkId = params.linkId as string;
 
+    const items = useMemo(() => {
+      switch(workstream) {
+        case 'socialMediaPosts': return socialMediaPosts;
+        case 'webArticles': return webArticles;
+        case 'tasks':
+        default:
+          return tasks;
+      }
+    }, [workstream, tasks, socialMediaPosts, webArticles]);
+
     const calendarEvents = useMemo(() => {
-        if (!tasks) return [];
-        return tasks
-        .filter((task) => !!task.dueDate)
-        .map((task) => {
-            const brandColor = getBrandColor(task.brandId);
-            const eventDate = parseISO(task.dueDate!);
+        if (!items) return [];
+        return items
+        .filter((item) => {
+            if (workstream === 'socialMediaPosts') return !!(item as SocialMediaPost).scheduledAt;
+            return !!item.dueDate;
+        })
+        .map((item) => {
+            const dateValue = workstream === 'socialMediaPosts' ? (item as SocialMediaPost).scheduledAt : item.dueDate;
+            const brandColor = getBrandColor(item.brandId);
+            const eventDate = parseISO(dateValue!);
             return {
-            id: task.id,
-            title: task.title,
+            id: item.id,
+            title: item.title,
             start: eventDate,
             end: eventDate,
             allDay: true,
@@ -38,11 +58,14 @@ export function SharedScheduleView({ session, tasks, isLoading }: SharedSchedule
             borderColor: brandColor,
             };
         });
-    }, [tasks]);
+    }, [items, workstream]);
 
     const handleEventClick = (clickInfo: any) => {
         if (session.accessLevel) {
-            router.push(`/share/${linkId}/tasks/${clickInfo.event.id}`);
+            let basePath = 'tasks';
+            if (workstream === 'socialMediaPosts') basePath = 'social-media/posts';
+            if (workstream === 'webArticles') basePath = 'web/articles';
+            router.push(`/share/${linkId}/${basePath}/${clickInfo.event.id}`);
         }
     }
 
