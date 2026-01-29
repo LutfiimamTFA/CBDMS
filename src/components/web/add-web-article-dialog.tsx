@@ -105,6 +105,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [deliverables, setDeliverables] = useState<Attachment[]>([]);
 
   const [dependencies, setDependencies] = useState<Dependencies>({ waitingOn: [], blocking: [], linked: []});
 
@@ -114,11 +115,13 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
   const [isMentioning, setIsMentioning] = useState(false);
   const [mentionSuggestions, setMentionSuggestions] = React.useState<UserType[]>([]);
   const [selectedUsers, setSelectedUsers] = React.useState<UserType[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const deliverableFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   
@@ -237,6 +240,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
         setSuggestionReason(null);
         setSubtasks([]);
         setAttachments([]);
+        setDeliverables([]);
         setDependencies({ waitingOn: [], blocking: [], linked: [] });
         setComments([]);
         setSelectedUsers([]);
@@ -296,6 +300,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
         createdBy: { id: currentUserProfile.id, name: currentUserProfile.name, avatarUrl: currentUserProfile.avatarUrl || '' },
         subtasks,
         attachments,
+        deliverables,
         comments,
     };
     batch.set(newArticleRef, newArticleData);
@@ -327,7 +332,7 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
     }
   };
   
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
     if (!event.target.files || !storage || !user) return;
     setIsUploading(true);
     
@@ -384,7 +389,11 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
             return { id: `local-${Date.now()}-${file.name}`, name: file.name, type: 'local' as const, url };
         });
         const newFiles = await Promise.all(uploadPromises);
-        setAttachments(prev => [...prev, ...newFiles]);
+        if (fileType === 'attachment') {
+            setAttachments(prev => [...prev, ...newFiles]);
+        } else {
+            setDeliverables(prev => [...prev, ...newFiles]);
+        }
         toast({ title: 'Upload Successful' });
     } catch (error) {
         toast({ variant: 'destructive', title: 'Upload Failed' });
@@ -397,12 +406,20 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
   const handleConfirmGdriveLink = () => {
     if (!gdriveLink || !gdriveName) { toast({ variant: 'destructive', title: 'Missing Info' }); return; }
     const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink };
-    setAttachments(prev => [...prev, newFile]);
+    if (gdriveFileType === 'attachment') {
+        setAttachments(prev => [...prev, newFile]);
+    } else {
+        setDeliverables(prev => [...prev, newFile]);
+    }
     setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
   
   const handleRemoveAttachment = (id: string) => {
     setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+  
+  const handleRemoveDeliverable = (id: string) => {
+    setDeliverables(prev => prev.filter(att => att.id !== id));
   };
   
   const handleAddSubtask = () => {
@@ -629,9 +646,39 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                           </div>
                           <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
                         </TabsContent>
-                        <TabsContent value="files" className="mt-4 space-y-4 rounded-lg border p-4">
+                        <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
+                           <div>
+                              <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                              <div className="space-y-2">
+                                {deliverables.map((att) => (
+                                  <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                      {getFileIcon(att.name)}
+                                      <span className="truncate" title={att.name}>{att.name}</span>
+                                    </a>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveDeliverable(att.id)}>
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                              {deliverables.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables attached.</p>}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} />
+                                <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>
+                                  {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />}Upload Deliverable
+                                </Button>
+                                <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>
+                                  <div className="flex items-center justify-center gap-2">
+                                    <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
+                                    Link from Google Drive
+                                  </div>
+                                </Button>
+                              </div>
+                            </div>
+                            <Separator />
                             <div>
-                                <h4 className="font-medium text-sm mb-2">Files</h4>
+                                <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
                                 <div className="space-y-2">
                                     {attachments.map((att) => (
                                         <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
@@ -643,17 +690,8 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
                                         </div>
                                     ))}
                                 </div>
-                                {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No files attached.</p>}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
-                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" accept={ALLOWED_FILE_TYPES} />
-                                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Files</Button>
-                                    <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}>
-                                        <div className="flex items-center justify-center gap-2">
-                                            <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
-                                            Link from Google Drive
-                                        </div>
-                                    </Button>
-                                </div>
+                                {attachments.length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
                             </div>
                         </TabsContent>
                         <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
@@ -696,5 +734,3 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
     </>
   );
 }
-
-    
