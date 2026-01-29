@@ -1,11 +1,10 @@
-
 'use client';
 import { useMemo } from 'react';
 import type { Task, User } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor, formatLateness } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History } from 'lucide-react';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History, Circle, CircleDashed, Eye, HelpCircle } from 'lucide-react';
 import { format, parseISO, isAfter, formatDistanceToNow, endOfDay } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Progress } from '../ui/progress';
@@ -16,6 +15,15 @@ interface TaskCardProps {
   task: Task;
   draggable?: boolean;
 }
+
+const statusConfig: Record<string, { color: string; icon: React.ElementType, label: string }> = {
+  'To Do': { color: 'bg-gray-400 border-gray-400 text-white', icon: Circle, label: 'To Do' },
+  'Doing': { color: 'bg-blue-500 border-blue-500 text-white', icon: CircleDashed, label: 'Doing' },
+  'Preview': { color: 'bg-purple-500 border-purple-500 text-white', icon: Eye, label: 'Preview' },
+  'Revisi': { color: 'bg-orange-500 border-orange-500 text-white', icon: RefreshCcw, label: 'Revisi' },
+  'Done': { color: 'bg-green-500 border-green-500 text-white', icon: CheckCircle2, label: 'Done' },
+};
+
 
 export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
@@ -40,6 +48,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
   const assignees = task.assignees || [];
   const creatorId = task.createdBy?.id;
+  const statusStyling = statusConfig[task.status] || { color: 'bg-gray-400', icon: HelpCircle, label: task.status };
 
   const lastActivityText = useMemo(() => {
       if (!task.lastActivity) return null;
@@ -148,7 +157,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
                 {completionStatus && (
                     completionStatus.status === 'On Time' ? (
                         <TooltipProvider>
@@ -177,6 +186,10 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                         {format(parseISO(task.dueDate), 'MMM d')}
                     </Badge>
                 )}
+                <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs font-medium', statusStyling.color)}>
+                    <statusStyling.icon className="h-3 w-3" />
+                    <span>{statusStyling.label}</span>
+                </Badge>
             </div>
         </div>
         </CardContent>

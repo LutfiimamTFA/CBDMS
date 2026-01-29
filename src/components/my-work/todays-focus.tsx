@@ -24,10 +24,17 @@ function isWebArticle(item: WorkItem): item is WebArticle {
 
 
 // A simple card for web articles, can be expanded later
-function WebArticleCard({ article }: { article: WebArticle }) {
+function WebArticleCard({ article, allUsers }: { article: WebArticle, allUsers: User[] }) {
+    const articleWithAssignees = useMemo(() => {
+        const assignees = (article.assigneeIds || [])
+            .map(id => allUsers.find(u => u.id === id))
+            .filter((u): u is User => !!u);
+        return { ...article, assignees };
+    }, [article, allUsers]);
+    
     return (
         <div>
-            <TaskCard task={article as Task} />
+            <TaskCard task={articleWithAssignees as Task} />
         </div>
     )
 }
@@ -120,7 +127,7 @@ export function TodaysFocus() {
                               return <SocialPostCard key={item.id} post={item as SocialMediaPost} allUsers={allUsers || []} />;
                           }
                           if (isWebArticle(item)) {
-                              return <WebArticleCard key={item.id} article={item as WebArticle} />;
+                              return <WebArticleCard key={item.id} article={item as WebArticle} allUsers={allUsers || []} />;
                           }
                           return <TaskCard key={item.id} task={item as Task} />;
                       })}
