@@ -168,7 +168,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           creatorName: profile.name,
           creatorRole: profile.role,
           allowedNavItems: selectedNavIds, 
-          navItems: userNavItems.map(item => ({...item, label: t(item.label as any)})),
+          navItems: userNavItems.map(item => ({...item, label: t(item.label as any) || item.label})),
           accessLevel: accessLevel,
           snapshot,
           password: usePassword ? password : undefined,
@@ -226,7 +226,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
         </DialogHeader>
 
         {!generatedLink ? (
-         <ScrollArea className="max-h-[70vh] -mx-6 px-6">
+         <ScrollArea className="max-h-[60vh] -mx-6 px-6">
           <div className="space-y-6 py-4">
               <div className="space-y-2">
                 <Label htmlFor="link-name">Link Name (Optional)</Label>
