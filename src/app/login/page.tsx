@@ -95,9 +95,7 @@ export default function LoginPage() {
         <CardHeader className="text-center">
           <div className="mb-4 flex justify-center">
             <div className="flex items-center gap-2">
-              <div className="bg-primary p-2 rounded-lg">
-                <ArrowUpRight className="h-5 w-5 text-primary-foreground" />
-              </div>
+              <ArrowUpRight className="h-7 w-7 text-primary" />
               <h1 className="font-headline text-xl font-bold truncate">CBDMS Workspace</h1>
             </div>
           </div>
