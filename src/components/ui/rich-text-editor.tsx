@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
@@ -44,6 +43,24 @@ const CustomTableCell = TableCell.extend({
     }
   },
 })
+
+const CustomTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("style"),
+        renderHTML: (attributes) => {
+          if (!attributes.style) {
+            return {};
+          }
+          return { style: attributes.style };
+        },
+      },
+    };
+  },
+});
 
 const TipTapMenuBar = ({ editor }: { editor: Editor | null }) => {
   if (!editor) return null;
@@ -248,7 +265,7 @@ export function RichTextEditor({ value, onChange, placeholder, readOnly = false,
                 resizable: true,
             }),
             TableRow,
-            TableHeader,
+            CustomTableHeader,
             CustomTableCell,
             Placeholder.configure({
                 placeholder: placeholder || 'Write something...',
