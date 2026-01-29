@@ -13,6 +13,8 @@ import {
 import { Loader2, BookOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const RoleBadge = ({ role }: { role: string }) => {
   const roleColors: Record<string, string> = {
@@ -27,11 +29,6 @@ const RoleBadge = ({ role }: { role: string }) => {
 export default function GuidePage() {
   const { profile, isLoading } = useUserProfile();
 
-  const renderContent = (content: string) => {
-    // This is safe because we control the HTML content in guide-content.ts
-    return { __html: content };
-  };
-  
   if (isLoading || !profile) {
     return (
         <div className="flex h-svh items-center justify-center">
@@ -66,8 +63,11 @@ export default function GuidePage() {
                   <AccordionContent>
                     <div
                         className="prose prose-sm dark:prose-invert max-w-none px-2 text-base"
-                        dangerouslySetInnerHTML={renderContent(topic.content)}
-                    />
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {topic.content}
+                      </ReactMarkdown>
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
               ))}
