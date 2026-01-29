@@ -8,6 +8,7 @@ import TableCell from '@tiptap/extension-table-cell'
 import TableHeader from '@tiptap/extension-table-header'
 import TableRow from '@tiptap/extension-table-row'
 import Placeholder from '@tiptap/extension-placeholder'
+import TextAlign from '@tiptap/extension-text-align'
 import {
   Bold,
   Italic,
@@ -17,6 +18,9 @@ import {
   Table as TableIcon,
   Minus,
   Plus,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
@@ -82,6 +86,51 @@ const TipTapMenuBar = ({ editor }: { editor: Editor | null }) => {
             </Button>
           </TooltipTrigger>
           <TooltipContent><p>Miring (Italic)</p></TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive({ textAlign: 'left' }) ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().setTextAlign('left').run()}
+              aria-label="Rata Kiri"
+            >
+              <AlignLeft className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Rata Kiri</p></TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive({ textAlign: 'center' }) ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().setTextAlign('center').run()}
+              aria-label="Rata Tengah"
+            >
+              <AlignCenter className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Rata Tengah</p></TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant={editor.isActive({ textAlign: 'right' }) ? "secondary" : "ghost"}
+              size="icon"
+              onClick={() => editor.chain().focus().setTextAlign('right').run()}
+              aria-label="Rata Kanan"
+            >
+              <AlignRight className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent><p>Rata Kanan</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
@@ -203,7 +252,10 @@ export function RichTextEditor({ value, onChange, placeholder, readOnly = false,
             CustomTableCell,
             Placeholder.configure({
                 placeholder: placeholder || 'Write something...',
-            })
+            }),
+            TextAlign.configure({
+                types: ['heading', 'paragraph'],
+            }),
         ],
         content: value,
         editable: !readOnly,
