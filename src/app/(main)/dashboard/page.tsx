@@ -56,7 +56,7 @@ export default function DashboardPage() {
     }
 
     return null; // Fallback for other roles or scenarios
-  }, [firestore, companyId, profile]);
+  }, [firestore, companyId, profile?.role, profile?.id, profile?.brandIds]);
   
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
