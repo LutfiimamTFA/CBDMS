@@ -41,7 +41,7 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
 
 // Define which nav items are shareable
 const isShareable = (item: NavigationItem) => {
-    const shareablePaths = ['/dashboard', '/tasks', '/tasks/schedule', '/social-media/posts', '/social-media/calendar', '/social-media/schedule', '/social-media/analytics', '/web/articles', '/web/schedule'];
+    const shareablePaths = ['/dashboard', '/tasks', '/tasks/schedule', '/social-media/board', '/social-media/posts', '/social-media/schedule', '/social-media/analytics', '/web/board', '/web/articles', '/web/schedule'];
     return shareablePaths.includes(item.path);
 };
 
@@ -139,11 +139,15 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
 
     try {
         const statusesQuery = query(collection(firestore, 'statuses'), orderBy('order'));
+        const socialStatusesQuery = query(collection(firestore, 'socialMediaStatuses'), orderBy('order'));
+        const webStatusesQuery = query(collection(firestore, 'webStatuses'), orderBy('order'));
         const usersQuery = query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
         const brandsQuery = query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId));
         
-        const [statusesSnap, usersSnap, brandsSnap] = await Promise.all([
+        const [statusesSnap, socialStatusesSnap, webStatusesSnap, usersSnap, brandsSnap] = await Promise.all([
             getDocs(statusesQuery),
+            getDocs(socialStatusesQuery),
+            getDocs(webStatusesQuery),
             getDocs(usersQuery),
             getDocs(brandsQuery),
         ]);
@@ -157,6 +161,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
             socialMediaPosts: allVisibleSocialPosts || [],
             webArticles: allVisibleWebArticles || [],
             statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
+            socialMediaStatuses: socialStatusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
+            webStatuses: webStatusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
             users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
         };

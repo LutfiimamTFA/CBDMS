@@ -153,6 +153,9 @@ export type SharedLink = {
     users: User[];
     brands: Brand[];
     socialMediaPosts?: SocialMediaPost[];
+    webArticles?: WebArticle[];
+    socialMediaStatuses?: WorkflowStatus[];
+    webStatuses?: WorkflowStatus[];
   };
   createdAt: any;
 };

@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { Task, WorkflowStatus, SharedLink, RevisionItem } from '@/lib/types';
+import type { Task, WorkflowStatus, SharedLink, RevisionItem, WorkItem } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from '../tasks/kanban-column';
@@ -14,52 +14,57 @@ import { Input } from '../ui/input';
 import { Loader2, Plus } from 'lucide-react';
 
 interface SharedKanbanBoardProps {
-  initialTasks: Task[];
+  items: WorkItem[];
   statuses: WorkflowStatus[];
   accessLevel: SharedLink['accessLevel'];
   linkId: string;
+  workstream: 'tasks' | 'socialMediaPosts' | 'webArticles';
+  session: SharedLink;
 }
 
 interface RevisionState {
   isOpen: boolean;
-  task: Task | null;
+  item: WorkItem | null;
   items: Omit<RevisionItem, 'id' | 'completed'>[];
   currentItemText: string;
 }
 
 export function SharedKanbanBoard({
-  initialTasks,
+  items: initialItems,
   statuses,
   accessLevel,
   linkId,
+  workstream,
+  session,
 }: SharedKanbanBoardProps) {
   const { toast } = useToast();
-  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const router = useRouter();
-  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
+  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
   const [isSaving, setIsSaving] = useState(false);
 
   const canDrag = accessLevel === 'status' || accessLevel === 'limited-edit';
+  const allUsers = session.snapshot.users;
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, itemId: string) => {
     if (!canDrag) return;
-    e.dataTransfer.setData('taskId', taskId);
-    setDraggingTaskId(taskId);
+    e.dataTransfer.setData('itemId', itemId);
+    setDraggingItemId(itemId);
   };
   
   const handleDragEnd = () => {
-    setDraggingTaskId(null);
+    setDraggingItemId(null);
   }
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag) return;
-    const taskId = e.dataTransfer.getData('taskId');
-    const task = initialTasks.find((t) => t.id === taskId);
+    const itemId = e.dataTransfer.getData('itemId');
+    const item = initialItems.find((t) => t.id === itemId);
+    const itemStatus = item?.statusInternal || item?.status;
 
-    if (task && task.status !== newStatus) {
-      // Intercept 'Revisi' status change to show dialog
+    if (item && itemStatus !== newStatus) {
       if (newStatus === 'Revisi') {
-          setRevisionState({ isOpen: true, task, items: [], currentItemText: '' });
+          setRevisionState({ isOpen: true, item, items: [], currentItemText: '' });
           return;
       }
       try {
@@ -68,19 +73,19 @@ export function SharedKanbanBoard({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             linkId,
-            taskId,
+            taskId: itemId, // The API expects taskId, but it works for any item with an id
             updates: { status: newStatus },
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to update task.');
+          throw new Error(errorData.message || 'Failed to update item.');
         }
         
         toast({
           title: 'Status Updated',
-          description: `Task moved to "${newStatus}".`,
+          description: `Item moved to "${newStatus}".`,
         });
       } catch (error: any) {
         toast({
@@ -93,7 +98,7 @@ export function SharedKanbanBoard({
   };
   
   const handleConfirmRejection = async () => {
-    if (!revisionState.task || revisionState.items.length === 0) {
+    if (!revisionState.item || revisionState.items.length === 0) {
         toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
         return;
     }
@@ -104,7 +109,7 @@ export function SharedKanbanBoard({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 linkId,
-                taskId: revisionState.task.id,
+                taskId: revisionState.item.id,
                 revisionItems: revisionState.items,
             }),
         });
@@ -112,12 +117,12 @@ export function SharedKanbanBoard({
             const errorData = await response.json();
             throw new Error(errorData.message || 'Failed to request revisions.');
         }
-        toast({ title: 'Revisions Requested', description: `Task "${revisionState.task.title}" has been moved to Revisi.` });
+        toast({ title: 'Revisions Requested', description: `Item "${revisionState.item.title}" has been moved to Revisi.` });
     } catch (error: any) {
         toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
     } finally {
         setIsSaving(false);
-        setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
+        setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' });
     }
   };
   
@@ -131,8 +136,11 @@ export function SharedKanbanBoard({
     }
   };
 
-  const handleCardClick = (taskId: string) => {
-    const path = `/share/${linkId}/tasks/${taskId}`;
+  const handleCardClick = (itemId: string) => {
+    let basePath = workstream;
+    if (workstream === 'socialMediaPosts') basePath = 'social-media/posts';
+    else if (workstream === 'webArticles') basePath = 'web/articles';
+    const path = `/share/${linkId}/${basePath}/${itemId}`;
     router.push(path);
   };
   
@@ -157,25 +165,27 @@ export function SharedKanbanBoard({
           <KanbanColumn
             key={status.id}
             status={status}
-            tasks={initialTasks.filter((task) => task.status === status.name)}
+            tasks={initialItems.filter((item) => (item.statusInternal || item.status) === status.name)}
             onDrop={handleDrop}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onCardClick={handleCardClick}
             canDrag={canDrag}
-            draggingTaskId={draggingTaskId}
+            draggingTaskId={draggingItemId}
+            workstream={workstream}
+            users={allUsers}
           />
         ))}
       </div>
       <ScrollBar orientation="horizontal" />
     </ScrollArea>
 
-    <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
+    <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>
         <DialogContent>
             <DialogHeader>
                 <DialogTitle>Create Revision Checklist</DialogTitle>
                 <DialogDescription>
-                  What needs to be fixed on: <span className="font-bold text-foreground">{revisionState.task?.title}</span>?
+                  What needs to be fixed on: <span className="font-bold text-foreground">{revisionState.item?.title}</span>?
                 </DialogDescription>
             </DialogHeader>
             <div className="py-4 space-y-4">
@@ -200,7 +210,7 @@ export function SharedKanbanBoard({
                 </div>
             </div>
             <DialogFooter>
-                <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
+                <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>Cancel</Button>
                 <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Request Revisions

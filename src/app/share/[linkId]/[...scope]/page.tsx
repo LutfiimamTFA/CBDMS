@@ -73,7 +73,11 @@ export default function ShareScopePage() {
 
   const snapshotData = session.snapshot;
   
-  const isWorkflowValid = snapshotData.statuses && snapshotData.statuses.length >= 2;
+  const isWorkflowValid = (
+    (snapshotData.statuses && snapshotData.statuses.length > 0) ||
+    (snapshotData.socialMediaStatuses && snapshotData.socialMediaStatuses.length > 0) ||
+    (snapshotData.webStatuses && snapshotData.webStatuses.length > 0)
+  );
   
   if (!isWorkflowValid) {
       return (
@@ -115,15 +119,17 @@ export default function ShareScopePage() {
 
     switch (`/${scope}`) {
         case '/dashboard':
-            return <SharedDashboardView {...viewProps} />;
+            return <SharedDashboardView {...viewProps} workstream="tasks" statuses={session.snapshot.statuses || []} />;
+        case '/social-media/board':
+            return <SharedDashboardView {...viewProps} workstream="socialMediaPosts" socialMediaPosts={session.snapshot.socialMediaPosts} statuses={session.snapshot.socialMediaStatuses || []} />;
+        case '/web/board':
+            return <SharedDashboardView {...viewProps} workstream="webArticles" webArticles={session.snapshot.webArticles} statuses={session.snapshot.webStatuses || []} />;
         case '/tasks':
             return <SharedTasksView {...viewProps} workstream="tasks" />;
         case '/tasks/schedule':
              return <SharedScheduleView {...viewProps} workstream="tasks" />;
         case '/social-media/posts':
             return <SharedTasksView {...viewProps} workstream="socialMediaPosts" />;
-        case '/social-media/calendar':
-            return <SharedSocialMediaView {...viewProps} />;
         case '/social-media/schedule':
              return <SharedScheduleView {...viewProps} workstream="socialMediaPosts" />;
         case '/social-media/analytics':
