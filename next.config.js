@@ -40,16 +40,6 @@ const nextConfig = {
       }
     ],
   },
-  webpack: (config, { dev, isServer }) => {
-    // In development mode, enable polling for file watching to prevent issues in some environments.
-    if (dev && !isServer) {
-      config.watchOptions = {
-        poll: 1000,
-        aggregateTimeout: 300,
-      };
-    }
-    return config;
-  },
 };
 
 module.exports = nextConfig;
