@@ -73,13 +73,17 @@ export default function LoginPage() {
     setIsSigningIn(true);
     try {
       await initiateEmailSignIn(auth, data.email, data.password, data.rememberMe);
+      toast({
+        title: "Login Berhasil",
+        description: "Selamat datang kembali! Anda akan diarahkan sekarang...",
+      });
       // After sign-in is initiated, the useEffect above will handle the redirect
       // when the `user` and `profile` states are updated by the auth listener.
     } catch (error: any) {
-      let description = 'Invalid credentials. Please check your email and password.';
+      let description = 'Kata sandi atau email salah. Mohon periksa kembali.';
       toast({
         variant: 'destructive',
-        title: 'Sign-in Failed',
+        title: 'Login Gagal',
         description,
       });
       setIsSigningIn(false);
