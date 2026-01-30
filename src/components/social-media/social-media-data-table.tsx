@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -103,7 +102,7 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       cell: ({ row }) => {
         const post = row.original;
         return (
-            <p className="font-medium line-clamp-2">{post.title}</p>
+            <p className="font-medium">{post.title}</p>
         );
       }
     },

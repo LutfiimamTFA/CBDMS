@@ -78,7 +78,7 @@ export function SocialPostCard({ post, allUsers }: SocialPostCardProps) {
         >
           <CardContent className="p-4 space-y-3">
              <div className="flex items-start justify-between">
-                <p className="font-semibold text-base line-clamp-2 pr-2">{post.title}</p>
+                <p className="font-semibold text-base pr-2">{post.title}</p>
                  <TooltipProvider>
                   <Tooltip>
                       <TooltipTrigger asChild>

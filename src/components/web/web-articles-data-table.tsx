@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -93,7 +94,7 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
       cell: ({ row }) => {
         const article = row.original;
         return (
-          <p className="font-medium line-clamp-2">{article.title}</p>
+          <p className="font-medium">{article.title}</p>
         );
       }
     },
