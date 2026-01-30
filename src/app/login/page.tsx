@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -10,7 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { ArrowUpRight, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import {
   initiateEmailSignIn,
 } from '@/firebase/non-blocking-login';
@@ -45,6 +46,7 @@ export default function LoginPage() {
   const { user, profile, isUserLoading } = useUserProfile();
   const { toast } = useToast();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   
   const signInForm = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
@@ -132,7 +134,18 @@ export default function LoginPage() {
                 render={({ field }) => (
                   <FormItem>
                     <Label htmlFor="password-signin">Password</Label>
-                    <Input id="password-signin" type="password" {...field} />
+                    <div className="relative">
+                      <Input id="password-signin" type={showPassword ? 'text' : 'password'} {...field} />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff /> : <Eye />}
+                      </Button>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}
