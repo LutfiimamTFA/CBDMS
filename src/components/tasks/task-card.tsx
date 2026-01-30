@@ -1,7 +1,7 @@
 'use client';
 import { useMemo } from 'react';
 import type { Task, User } from '@/lib/types';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor, formatLateness } from '@/lib/utils';
 import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History, Circle, CircleDashed, Eye, HelpCircle } from 'lucide-react';

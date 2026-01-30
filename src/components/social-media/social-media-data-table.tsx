@@ -97,7 +97,10 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
     {
       accessorKey: 'title',
       header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Title<ChevronsUpDown className="ml-2 h-4 w-4" /></Button>
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+          Title
+          <ChevronsUpDown className="ml-2 h-4 w-4" />
+        </Button>
       ),
       cell: ({ row }) => {
         const post = row.original;
@@ -109,7 +112,10 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
     {
       accessorKey: 'dueDate',
       header: ({ column }) => (
-        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>Due Date<ChevronsUpDown className="ml-2 h-4 w-4" /></Button>
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+          Due Date
+          <ChevronsUpDown className="ml-2 h-4 w-4" />
+        </Button>
       ),
       cell: ({ row }) => {
         const dueDate = row.getValue('dueDate') as string | undefined;

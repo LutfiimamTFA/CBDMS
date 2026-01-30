@@ -1,4 +1,3 @@
-
 'use client';
 import React from 'react';
 import type { SocialMediaPost, User } from '@/lib/types';
@@ -6,8 +5,8 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
 import { Instagram, FileText, Clapperboard, RefreshCcw, AlertTriangle, HelpCircle, CheckCircle, Clock, History, Calendar, UploadCloud } from 'lucide-react';
-import { format, parseISO, formatDistanceToNow } from 'date-fns';
-import { cn, priorityInfo } from '@/lib/utils';
+import { format, parseISO, formatDistanceToNow, endOfDay, isAfter } from 'date-fns';
+import { cn, priorityInfo, formatLateness } from '@/lib/utils';
 import { useState } from 'react';
 import { SocialMediaPostDetailsSheet } from './social-media-details-sheet';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -61,6 +60,17 @@ export function SocialPostCard({ post, allUsers }: SocialPostCardProps) {
   const PriorityIcon = priorityInfo[post.priority].icon;
   const priorityColor = priorityInfo[post.priority].color;
 
+  const completionStatus = React.useMemo(() => {
+    if (post.status !== 'Posted' || !post.postedAt || !post.scheduledAt) return null;
+    const completionDate = parseISO(post.postedAt);
+    const dueDate = endOfDay(parseISO(post.scheduledAt));
+    if (isAfter(completionDate, dueDate)) {
+        return { status: 'Late', duration: formatLateness(dueDate, completionDate) };
+    }
+    return { status: 'On Time', duration: null };
+  }, [post.status, post.postedAt, post.scheduledAt]);
+
+
   const handleOpenChange = (open: boolean) => {
     if (open) {
         setIsDialogOpen(true);
@@ -78,7 +88,7 @@ export function SocialPostCard({ post, allUsers }: SocialPostCardProps) {
         >
           <CardContent className="p-4 space-y-3">
              <div className="flex items-start justify-between">
-                <p className="font-semibold text-base pr-2">{post.title}</p>
+                <p className="font-semibold text-base pr-2 line-clamp-2">{post.title}</p>
                  <TooltipProvider>
                   <Tooltip>
                       <TooltipTrigger asChild>
@@ -137,20 +147,24 @@ export function SocialPostCard({ post, allUsers }: SocialPostCardProps) {
                 )}
             </div>
             <div className="flex items-center gap-2">
-                {post.dueDate && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <Badge variant="outline" className="flex items-center gap-1.5 text-xs font-medium">
-                                    <Calendar className="h-3 w-3" />
-                                    <span>{format(parseISO(post.dueDate), 'MMM d')}</span>
-                                </Badge>
-                            </TooltipTrigger>
-                            <TooltipContent><p>Internal Due: {format(parseISO(post.dueDate), 'PPP')}</p></TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                {completionStatus && (
+                    completionStatus.status === 'On Time' ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger>
+                                    <CheckCircle className="h-4 w-4 text-green-500" />
+                                </TooltipTrigger>
+                                <TooltipContent><p>Posted On Time</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        <Badge variant="destructive" className="font-normal gap-1.5">
+                            <AlertTriangle className="h-3 w-3" />
+                            {completionStatus.duration} late
+                        </Badge>
+                    )
                 )}
-                 {post.scheduledAt && (
+                {post.scheduledAt && !completionStatus && (
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger>
