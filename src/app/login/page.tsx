@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -29,13 +28,17 @@ import {
   FormField,
   FormItem,
   FormMessage,
+  FormLabel,
 } from '@/components/ui/form';
+import { Checkbox } from '@/components/ui/checkbox';
+
 
 const signInSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z
     .string()
     .min(6, { message: 'Password must be at least 6 characters.' }),
+  rememberMe: z.boolean().default(true),
 });
 
 type SignInFormValues = z.infer<typeof signInSchema>;
@@ -50,7 +53,7 @@ export default function LoginPage() {
   
   const signInForm = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: '', password: '', rememberMe: true },
   });
 
   // Effect to handle redirection after user state changes
@@ -69,7 +72,7 @@ export default function LoginPage() {
     if (!auth) return;
     setIsSigningIn(true);
     try {
-      await initiateEmailSignIn(auth, data.email, data.password);
+      await initiateEmailSignIn(auth, data.email, data.password, data.rememberMe);
       // After sign-in is initiated, the useEffect above will handle the redirect
       // when the `user` and `profile` states are updated by the auth listener.
     } catch (error: any) {
@@ -150,6 +153,26 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={signInForm.control}
+                name="rememberMe"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2">
+                    <FormControl>
+                      <Checkbox
+                        id="remember-me"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <Label htmlFor="remember-me" className="cursor-pointer font-normal">
+                      Remember me
+                    </Label>
+                  </FormItem>
+                )}
+              />
+
               <Button
                 type="submit"
                 className="w-full"
