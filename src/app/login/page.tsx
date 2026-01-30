@@ -15,7 +15,7 @@ import {
   initiateEmailSignIn,
 } from '@/firebase/non-blocking-login';
 import { useAuth, useUserProfile } from '@/firebase';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,10 +45,12 @@ type SignInFormValues = z.infer<typeof signInSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const auth = useAuth();
   const { user, profile, isUserLoading } = useUserProfile();
   const { toast } = useToast();
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [justLoggedIn, setJustLoggedIn] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   
   const signInForm = useForm<SignInFormValues>({
@@ -60,25 +62,36 @@ export default function LoginPage() {
   useEffect(() => {
     // If the profile is loaded and the user is authenticated
     if (!isUserLoading && user && profile) {
-      if (profile.role === 'Employee' || profile.role === 'PIC') {
-        router.replace('/my-work');
+      if (justLoggedIn) {
+        toast({
+          title: `Selamat Datang Kembali, ${profile.name}!`,
+          description: "Anda akan diarahkan sekarang...",
+        });
+        setJustLoggedIn(false); // Reset the flag
+      }
+
+      const nextUrl = searchParams.get('next');
+      
+      if (nextUrl) {
+          router.replace(nextUrl);
       } else {
-        router.replace('/dashboard');
+        if (profile.role === 'Employee' || profile.role === 'PIC') {
+          router.replace('/my-work');
+        } else {
+          router.replace('/dashboard');
+        }
       }
     }
-  }, [user, profile, isUserLoading, router]);
+  }, [user, profile, isUserLoading, router, justLoggedIn, toast, searchParams]);
 
   const onSignIn = async (data: SignInFormValues) => {
     if (!auth) return;
     setIsSigningIn(true);
     try {
       await initiateEmailSignIn(auth, data.email, data.password, data.rememberMe);
-      toast({
-        title: "Login Berhasil",
-        description: "Selamat datang kembali! Anda akan diarahkan sekarang...",
-      });
-      // After sign-in is initiated, the useEffect above will handle the redirect
-      // when the `user` and `profile` states are updated by the auth listener.
+      // The toast is now handled by the useEffect after profile is loaded.
+      // Set a flag to indicate a fresh login.
+      setJustLoggedIn(true);
     } catch (error: any) {
       let description = 'Kata sandi atau email salah. Mohon periksa kembali.';
       toast({
