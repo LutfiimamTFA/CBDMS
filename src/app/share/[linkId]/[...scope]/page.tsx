@@ -1,4 +1,3 @@
-
 'use client';
 
 import React from 'react';
@@ -126,6 +125,7 @@ export default function ShareScopePage() {
             return <SharedDashboardView {...viewProps} workstream="webArticles" webArticles={session.snapshot.webArticles} statuses={session.snapshot.webStatuses || []} />;
         case '/tasks':
             return <SharedTasksView {...viewProps} workstream="tasks" />;
+        case '/calendar':
         case '/tasks/schedule':
              return <SharedScheduleView {...viewProps} workstream="tasks" />;
         case '/social-media/posts':
