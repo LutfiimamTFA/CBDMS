@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -65,7 +66,7 @@ export default function LoginPage() {
       if (justLoggedIn) {
         toast({
           title: `Selamat Datang Kembali, ${profile.name}!`,
-          description: "Anda akan diarahkan sekarang...",
+          description: "Anda akan diarahkan ke dasbor Anda.",
         });
         setJustLoggedIn(false); // Reset the flag
       }
