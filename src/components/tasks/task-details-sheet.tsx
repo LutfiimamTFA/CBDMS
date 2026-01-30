@@ -1,3 +1,4 @@
+
 'use client';
 import {
   Sheet,
@@ -173,6 +174,42 @@ interface RevisionState {
   items: Omit<RevisionItem, 'id' | 'completed'>[];
   currentItemText: string;
 }
+
+const getFileIcon = (fileName: string): React.ReactElement => {
+    if (fileName.match(/\.(pdf)$/i)) {
+      return React.createElement(FileText, { className: "h-5 w-5 text-red-500" });
+    }
+    if (fileName.match(/\.(doc|docx)$/i)) {
+      return React.createElement(FileText, { className: "h-5 w-5 text-blue-500" });
+    }
+    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
+      return React.createElement(FileImage, { className: "h-5 w-5 text-green-500" });
+    }
+    return React.createElement(FileText, { className: "h-5 w-5 text-muted-foreground" });
+};
+
+const getInitials = (name?: string | null) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('');
+};
+
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES].join(',');
 
 export function TaskDetailsSheet({ 
   task: initialTask, 
@@ -912,20 +949,47 @@ export function TaskDetailsSheet({
     await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: newSubtasks });
   };
 
-  const getFileIcon = (fileName: string) => {
-    if (fileName.match(/\.(pdf)$/i)) return <FileText className="h-5 w-5 text-red-500" />;
-    if (fileName.match(/\.(doc|docx)$/i)) return <FileText className="h-5 w-5 text-blue-500" />;
-    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
-  };
-
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
       if (isSharedView || !event.target.files || !storage || !taskState?.id || !firestore || !currentUser) return;
+      
       setIsUploading(true);
+      
+      const files = Array.from(event.target.files);
+      const validatedFiles = files.filter(file => {
+          const isAllowedType = ALLOWED_FILE_TYPES.split(',').includes(file.type);
+      
+          if (!isAllowedType) {
+            toast({
+              variant: 'destructive',
+              title: 'Tipe File Tidak Diizinkan',
+              description: `Tipe file "${file.name}" tidak dapat diunggah.`,
+              duration: 10000,
+            });
+            return false;
+          }
+      
+          if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast({
+              variant: 'destructive',
+              title: 'Ukuran File Terlalu Besar',
+              description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_FILE_SIZE_MB} MB.`,
+              duration: 10000,
+            });
+            return false;
+          }
+      
+          return true;
+      });
+
+      if (validatedFiles.length === 0) {
+          setIsUploading(false);
+          if (event.target) event.target.value = '';
+          return;
+      }
+      
       try {
-          const files = Array.from(event.target.files);
           const currentCycle = getCurrentSubmissionCycle(taskState);
-          const uploadPromises = files.map(async (file) => {
+          const uploadPromises = validatedFiles.map(async (file) => {
               const attachmentId = `${Date.now()}-${file.name}`;
               const storageRef = ref(storage, `attachments/${taskState.id}/${attachmentId}`);
               await uploadBytes(storageRef, file);
@@ -933,15 +997,14 @@ export function TaskDetailsSheet({
               return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
           });
           const newFiles = await Promise.all(uploadPromises);
-          const currentFiles = fileType === 'attachment' ? (taskState.attachments || []) : (taskState.deliverables || []);
-          await updateDoc(doc(firestore, 'tasks', taskState.id), { [fileType === 'attachment' ? 'attachments' : 'deliverables']: [...currentFiles, ...newFiles] });
+          const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+          await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: [...(taskState[fieldToUpdate] || []), ...newFiles] });
           toast({ title: 'Upload Successful' });
       } catch (error) {
           toast({ variant: 'destructive', title: 'Upload Failed' });
       } finally {
           setIsUploading(false);
-          if (fileInputRef.current) fileInputRef.current.value = '';
-          if (deliverableFileInputRef.current) deliverableFileInputRef.current.value = '';
+          if (event.target) event.target.value = '';
       }
   };
 
@@ -1232,7 +1295,6 @@ export function TaskDetailsSheet({
       </div>
   );
 
-
   return (
     <>
       {isSharedView && <SharedViewLogic onDataLoaded={setSharedData} />}
@@ -1404,7 +1466,7 @@ export function TaskDetailsSheet({
                          <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
                               <ScrollArea className="max-h-48 pr-2">
                                   <div className="space-y-4">
-                                      {(taskState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm font-medium">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                      {(taskState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
                                       {(taskState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
                                   </div>
                               </ScrollArea>
@@ -1631,13 +1693,9 @@ export function TaskDetailsSheet({
       </AlertDialog>
        <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-w-2xl">
-            <DialogHeader>
-                <DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle>
-                <DialogDescription>A complete history of all changes made to this task.</DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                <div className="space-y-6 py-4">
-                    {initialTask.activities && initialTask.activities.length > 0 ? ( 
+            <DialogHeader><DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">
+                {initialTask.activities && initialTask.activities.length > 0 ? ( 
                         getUniqueActivities(initialTask.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( 
                             <div key={activity.id} className="flex items-start gap-4">
                                 <Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar>
@@ -1650,8 +1708,7 @@ export function TaskDetailsSheet({
                     ) : ( 
                         <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> 
                     )}
-                </div>
-            </ScrollArea>
+            </div></ScrollArea>
         </DialogContent>
        </Dialog>
         <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
