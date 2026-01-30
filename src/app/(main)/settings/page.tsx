@@ -48,6 +48,9 @@ const emailSchema = z.object({
   newEmail: z.string().email("Please enter a valid email address."),
 });
 
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
@@ -95,6 +98,16 @@ export default function SettingsPage() {
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || !user || !auth?.currentUser || !storage || !firestore) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        toast({
+            variant: 'destructive',
+            title: 'File Terlalu Besar',
+            description: `File "${file.name}" melebihi batas ukuran ${MAX_FILE_SIZE_MB} MB.`,
+        });
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+    }
 
     setIsUploadingPhoto(true);
     try {

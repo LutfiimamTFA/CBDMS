@@ -82,10 +82,8 @@ const postSchema = z.object({
 
 type PostFormValues = z.infer<typeof postSchema>;
 
-const MAX_IMAGE_SIZE_MB = 5;
-const MAX_DOC_SIZE_MB = 10;
-const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
-const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const ALLOWED_DOC_TYPES = [
@@ -347,34 +345,23 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
     const files = Array.from(event.target.files);
     
     const validatedFiles = files.filter(file => {
-      const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
-      const isDoc = ALLOWED_DOC_TYPES.includes(file.type);
+      const isAllowedType = ALLOWED_FILE_TYPES.split(',').includes(file.type);
   
-      if (!isImage && !isDoc) {
+      if (!isAllowedType) {
         toast({
           variant: 'destructive',
           title: 'Tipe File Tidak Diizinkan',
-          description: `File "${file.name}" tidak dapat diunggah. Hanya gambar dan dokumen yang diizinkan.`,
+          description: `Tipe file "${file.name}" tidak didukung.`,
           duration: 10000,
         });
         return false;
       }
   
-      if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+      if (file.size > MAX_FILE_SIZE_BYTES) {
         toast({
           variant: 'destructive',
-          title: 'Ukuran Gambar Terlalu Besar',
-          description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_IMAGE_SIZE_MB} MB. Coba kompres file atau gunakan Google Drive.`,
-          duration: 10000,
-        });
-        return false;
-      }
-  
-      if (isDoc && file.size > MAX_DOC_SIZE_BYTES) {
-        toast({
-          variant: 'destructive',
-          title: 'Ukuran Dokumen Terlalu Besar',
-          description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_DOC_SIZE_MB} MB. Gunakan Google Drive untuk file besar.`,
+          title: 'Ukuran File Terlalu Besar',
+          description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_FILE_SIZE_MB} MB.`,
           duration: 10000,
         });
         return false;
@@ -441,29 +428,6 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
   };
   
   const handleRemoveSubtask = (subtaskId: string) => { setSubtasks(subtasks.filter(st => st.id !== subtaskId)); };
-
-  const handleAddDependency = (postId: string, type: keyof Dependencies) => {
-    setDependencies(prev => {
-        const list = prev[type] || [];
-        if (!list.includes(postId)) {
-            return { ...prev, [type]: [...list, postId] };
-        }
-        return prev;
-    });
-  };
-
-  const handleRemoveDependency = (postId: string, type: keyof Dependencies) => {
-    setDependencies(prev => ({
-        ...prev,
-        [type]: (prev[type] || []).filter(id => id !== postId),
-    }));
-  };
-  
-  const getFileIcon = (fileName: string): React.ReactElement => {
-    if (fileName.match(/\.(pdf)$/i)) return <FileText className="h-5 w-5 text-red-500" />;
-    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
-  };
 
   const renderDependencyList = (ids: string[], type: keyof Dependencies) => (
     <div className="flex flex-wrap gap-2">
@@ -698,7 +662,7 @@ export function AddSocialMediaPostDialog({ children }: { children: React.ReactNo
                             <div className="flex items-start gap-2 pt-4 border-t">
                                 <Avatar className="h-9 w-9"><AvatarImage src={currentUserProfile?.avatarUrl} /><AvatarFallback>{getInitials(currentUserProfile?.name)}</AvatarFallback></Avatar>
                                 <div className="flex-1 relative">
-                                <RichTextEditor value={newComment} onChange={setNewComment} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                <RichTextEditor value={newComment} onChange={handleCommentChange} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
                                 {isMentioning && (
                                     <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto">
                                     <CardContent className="p-1">

@@ -75,10 +75,8 @@ const articleSchema = z.object({
 
 type ArticleFormValues = z.infer<typeof articleSchema>;
 
-const MAX_IMAGE_SIZE_MB = 5;
-const MAX_DOC_SIZE_MB = 10;
-const MAX_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_MB * 1024 * 1024;
-const MAX_DOC_SIZE_BYTES = MAX_DOC_SIZE_MB * 1024 * 1024;
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 const ALLOWED_DOC_TYPES = [
@@ -339,34 +337,23 @@ export function AddWebArticleDialog({ children }: { children: React.ReactNode })
     const files = Array.from(event.target.files);
     
     const validatedFiles = files.filter(file => {
-        const isImage = ALLOWED_IMAGE_TYPES.includes(file.type);
-        const isDoc = ALLOWED_DOC_TYPES.includes(file.type);
+        const isAllowedType = ALLOWED_FILE_TYPES.split(',').includes(file.type);
     
-        if (!isImage && !isDoc) {
+        if (!isAllowedType) {
           toast({
             variant: 'destructive',
             title: 'Tipe File Tidak Diizinkan',
-            description: `File "${file.name}" tidak dapat diunggah. Hanya gambar dan dokumen yang diizinkan.`,
+            description: `Tipe file "${file.name}" tidak didukung.`,
             duration: 10000,
           });
           return false;
         }
     
-        if (isImage && file.size > MAX_IMAGE_SIZE_BYTES) {
+        if (file.size > MAX_FILE_SIZE_BYTES) {
           toast({
             variant: 'destructive',
-            title: 'Ukuran Gambar Terlalu Besar',
-            description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_IMAGE_SIZE_MB} MB. Coba kompres file atau gunakan Google Drive.`,
-            duration: 10000,
-          });
-          return false;
-        }
-    
-        if (isDoc && file.size > MAX_DOC_SIZE_BYTES) {
-          toast({
-            variant: 'destructive',
-            title: 'Ukuran Dokumen Terlalu Besar',
-            description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_DOC_SIZE_MB} MB. Gunakan Google Drive untuk file besar.`,
+            title: 'Ukuran File Terlalu Besar',
+            description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_FILE_SIZE_MB} MB.`,
             duration: 10000,
           });
           return false;
