@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -36,15 +35,21 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { WebArticleDetailsSheet } from './web-article-details-sheet';
 import { DataTableFacetedFilter } from '../tasks/data-table-faceted-filter';
 import { priorityInfo } from '@/lib/utils';
-import { Building2, ChevronsUpDown, Circle, CircleDashed, CheckCircle2, Eye, HelpCircle, User as UserIcon, X as XIcon } from 'lucide-react';
+import { Building2, ChevronsUpDown, Circle, CircleDashed, CheckCircle2, Eye, HelpCircle, User as UserIcon, X as XIcon, MoreHorizontal, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+import { doc } from 'firebase/firestore';
+import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+
 
 interface WebArticlesDataTableProps {
     articles: WebArticle[];
@@ -57,8 +62,11 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const router = useRouter();
+  const { toast } = useToast();
   
   const [data, setData] = React.useState<WebArticle[]>(articles);
+  const [pendingDeleteArticle, setPendingDeleteArticle] = React.useState<WebArticle | null>(null);
+
   React.useEffect(() => { setData(articles || []); }, [articles]);
 
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'dueDate', desc: true }]);
@@ -80,6 +88,13 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
   const priorityOptions = Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label, icon: p.icon }));
   const brandOptions = React.useMemo(() => (brands || []).map(b => ({ value: b.id, label: b.name, icon: Building2 })), [brands]);
   const assigneeOptions = React.useMemo(() => (users || []).map(u => ({ value: u.id, label: u.name })), [users]);
+  
+  const handleDeleteArticle = () => {
+    if (!firestore || !pendingDeleteArticle) return;
+    deleteDocumentNonBlocking(doc(firestore, 'webArticles', pendingDeleteArticle.id));
+    toast({ title: "Article Deleted", description: `The article "${pendingDeleteArticle.title}" is being removed.` });
+    setPendingDeleteArticle(null);
+  };
 
 
   const columns: ColumnDef<WebArticle>[] = [
@@ -238,6 +253,45 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
       },
        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
+    {
+      id: "actions",
+      cell: ({ row }) => {
+        const article = row.original;
+        const canDelete = React.useMemo(() => {
+            if (!profile) return false;
+            if (profile.role === 'Super Admin' || profile.role === 'Manager') return true;
+            if ((profile.role === 'Employee' || profile.role === 'PIC') && article.createdBy?.id === profile.id) return true;
+            return false;
+        }, [profile, article.createdBy]);
+
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-8 w-8 p-0 opacity-50 focus:opacity-100 group-hover:opacity-100 transition-opacity">
+                <span className="sr-only">Open menu</span>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); router.push(`/web/articles/${article.id}`)}}>
+                View details
+              </DropdownMenuItem>
+              {canDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                    onClick={(e) => { e.stopPropagation(); setPendingDeleteArticle(article); }}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete Article
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
   ];
 
   const table = useReactTable({
@@ -259,6 +313,7 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
   const isFiltered = table.getState().columnFilters.length > 0;
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex flex-1 items-center space-x-2">
@@ -294,10 +349,10 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
                   key={row.id} 
                   data-state={row.getIsSelected() && 'selected'}
                   onClick={() => router.push(`/web/articles/${row.original.id}`)}
-                  className="cursor-pointer"
+                  className="cursor-pointer group"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                    <TableCell key={cell.id} onClick={(e) => cell.column.id === 'actions' && e.stopPropagation()}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                   ))}
                 </TableRow>
               ))
@@ -312,5 +367,25 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
         <Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>Next</Button>
       </div>
     </div>
+     <AlertDialog open={!!pendingDeleteArticle} onOpenChange={() => setPendingDeleteArticle(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure you want to delete this article?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the article: <strong className="text-foreground">{pendingDeleteArticle?.title}</strong>. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDeleteArticle}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Yes, Delete Article
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
