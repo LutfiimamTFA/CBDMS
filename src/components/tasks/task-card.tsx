@@ -68,7 +68,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
         <CardContent className="p-4 pl-6 space-y-3">
           <div className="flex items-start justify-between">
             <div className="font-medium cursor-pointer pr-2">
-              <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
+              <h3 className="font-headline text-base font-semibold leading-tight break-words">{task.title}</h3>
             </div>
             <div className="flex items-center gap-2">
               {task.isUnderRevision && (
@@ -113,7 +113,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
         )}
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center -space-x-2">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger className="flex items-center -space-x-2">
@@ -157,7 +157,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center flex-shrink-0 gap-2">
                 {completionStatus && (
                     completionStatus.status === 'On Time' ? (
                         <TooltipProvider>
@@ -196,9 +196,3 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       </Card>
   );
 }
-
-function formatHours(hours: number = 0) {
-    const h = Math.floor(hours);
-    const m = Math.floor((hours - h) * 60);
-    return `${h}h ${m}m`;
-};

@@ -88,7 +88,7 @@ export function SocialPostCard({ post, allUsers }: SocialPostCardProps) {
         >
           <CardContent className="p-4 space-y-3">
              <div className="flex items-start justify-between">
-                <p className="font-semibold text-base pr-2 line-clamp-2">{post.title}</p>
+                <p className="font-semibold text-base pr-2 break-words">{post.title}</p>
                  <TooltipProvider>
                   <Tooltip>
                       <TooltipTrigger asChild>
@@ -146,7 +146,7 @@ export function SocialPostCard({ post, allUsers }: SocialPostCardProps) {
                   </TooltipProvider>
                 )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center flex-shrink-0 gap-2">
                 {completionStatus && (
                     completionStatus.status === 'On Time' ? (
                         <TooltipProvider>
