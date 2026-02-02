@@ -1,4 +1,10 @@
 
+const withPWA = require("@ducanh2912/next-pwa")({
+  dest: "public",
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === "development",
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -31,7 +37,7 @@ const nextConfig = {
         hostname: 'i.pravatar.cc',
       },
       {
-        protocol: 'https' ,
+        protocol: 'https',
         hostname: 'storage.googleapis.com',
       },
       {
@@ -42,4 +48,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withPWA(nextConfig);
