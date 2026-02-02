@@ -23,6 +23,11 @@ export type Company = {
 export type CompanySettings = {
     id: string;
     emergencyAdminUserId?: string | null;
+    maintenanceSettings?: {
+        isEnabled: boolean;
+        message: string;
+        estimatedCompletion: string;
+    };
 }
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';

@@ -84,11 +84,29 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "CompanySettings",
       "type": "object",
-      "description": "Stores company-wide settings, including the designated emergency admin.",
+      "description": "Stores company-wide settings, including the designated emergency admin and maintenance mode status.",
       "properties": {
         "emergencyAdminUserId": {
           "type": ["string", "null"],
           "description": "The ID of the User (Manager) who is currently designated as the emergency Super Admin. Null if no one is designated."
+        },
+        "maintenanceSettings": {
+            "type": "object",
+            "description": "Settings for the application-wide maintenance mode.",
+            "properties": {
+                "isEnabled": {
+                    "type": "boolean",
+                    "description": "Whether maintenance mode is currently active."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "The message to display to users when maintenance mode is active."
+                },
+                "estimatedCompletion": {
+                    "type": "string",
+                    "description": "A string indicating the estimated time of completion (e.g., '2 hours', '10 PM WIB')."
+                }
+            }
         }
       }
     },
@@ -367,7 +385,11 @@
             "type": "object",
             "properties": {
                 "tasks": { "type": "array", "items": { "$ref": "#/backend/entities/Task" } },
+                "socialMediaPosts": { "type": "array", "items": { "$ref": "#/backend/entities/SocialMediaPost" } },
+                "webArticles": { "type": "array", "items": { "$ref": "#/backend/entities/WebArticle" } },
                 "statuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } },
+                "socialMediaStatuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } },
+                "webStatuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } },
                 "users": { "type": "array", "items": { "$ref": "#/backend/entities/User" } },
                 "brands": { "type": "array", "items": { "$ref": "#/backend/entities/Brand" } }
             },

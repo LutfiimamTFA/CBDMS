@@ -299,4 +299,14 @@ export const defaultNavItems: NavigationItem[] = [
     parentId: 'nav_settings',
     isEnabled: true,
   },
+  {
+    id: 'nav_settings_maintenance',
+    label: 'nav.maintenance',
+    path: '/admin/settings/maintenance',
+    icon: 'Wrench',
+    order: 27,
+    roles: ['Super Admin'],
+    parentId: 'nav_settings',
+    isEnabled: true,
+  },
 ];

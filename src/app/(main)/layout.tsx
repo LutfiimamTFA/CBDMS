@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -22,11 +23,11 @@ import {
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useCollection, useFirestore, useUserProfile, useAuth, initiateSignOut } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile, useAuth, initiateSignOut, useDoc } from '@/firebase';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import type { NavigationItem } from '@/lib/types';
-import { collection, query, orderBy } from 'firebase/firestore';
+import type { NavigationItem, CompanySettings } from '@/lib/types';
+import { collection, query, orderBy, doc } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
 import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
@@ -51,7 +52,7 @@ function MainAppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, profile, isLoading: isUserLoading } = useUserProfile();
+  const { user, profile, isLoading: isUserLoading, companyId } = useUserProfile();
   const auth = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -59,10 +60,27 @@ function MainAppLayout({
   const firestore = useFirestore();
   const [isReady, setIsReady] = useState(false);
 
+  const companySettingsDocRef = useMemo(() => {
+    if (!firestore || !companyId) return null;
+    return doc(firestore, 'companySettings', companyId);
+  }, [firestore, companyId]);
+
+  const { data: companySettings, isLoading: isSettingsLoading } = useDoc<CompanySettings>(companySettingsDocRef);
+
   useEffect(() => {
     // If the authentication state is still loading, do nothing yet.
-    if (isUserLoading) {
+    if (isUserLoading || isSettingsLoading) {
       return;
+    }
+    
+    if (companySettings?.maintenanceSettings?.isEnabled && profile?.role !== 'Super Admin' && pathname !== '/maintenance') {
+      router.replace('/maintenance');
+      return;
+    }
+    
+    if (profile?.role === 'Super Admin' && pathname === '/maintenance') {
+        router.replace('/admin/settings/maintenance');
+        return;
     }
 
     // If loading is finished and there's no user, redirect to login immediately.
@@ -96,7 +114,7 @@ function MainAppLayout({
         // If there's no user, and we are on a public page, the content is ready to be shown.
         setIsReady(true);
     }
-  }, [user, profile, isUserLoading, auth, router, pathname]);
+  }, [user, profile, isUserLoading, auth, router, pathname, companySettings, isSettingsLoading]);
   
   const handleLogout = async () => {
     if(auth) {
@@ -200,7 +218,7 @@ function MainAppLayout({
     return activeItem?.label || 'Dashboard';
   }, [pathname, finalNavItems]);
 
-  const isLoading = isUserLoading || isNavItemsLoading;
+  const isLoading = isUserLoading || isNavItemsLoading || isSettingsLoading;
   
   if (isLoading || !isReady) {
     return <BrandedLoader />;
