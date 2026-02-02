@@ -5,6 +5,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { I18nProvider } from '@/context/i18n-provider';
 import { FirebaseClientProvider } from '@/firebase';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { CompanyProvider } from '@/context/company-provider';
+import { PermissionsProvider } from '@/context/permissions-provider';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -16,10 +18,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     >
       <I18nProvider>
         <FirebaseClientProvider>
-          <TooltipProvider>
-            {children}
-            <Toaster />
-          </TooltipProvider>
+          <CompanyProvider>
+            <PermissionsProvider>
+              <TooltipProvider>
+                {children}
+                <Toaster />
+              </TooltipProvider>
+            </PermissionsProvider>
+          </CompanyProvider>
         </FirebaseClientProvider>
       </I18nProvider>
     </ThemeProvider>

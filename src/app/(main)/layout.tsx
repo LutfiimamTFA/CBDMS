@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -32,8 +31,6 @@ import { getIdTokenResult } from 'firebase/auth';
 import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
 import { SidebarInset } from '@/components/ui/sidebar';
-import { CompanyProvider } from '@/context/company-provider';
-import { PermissionsProvider } from '@/context/permissions-provider';
 import { BrandedLoader } from '@/components/branded-loader';
 
 const Icon = ({
@@ -259,11 +256,5 @@ function MainAppLayout({
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   // This component now solely acts as the provider wrapper for the main authenticated app section.
-  return (
-    <CompanyProvider>
-      <PermissionsProvider>
-        <MainAppLayout>{children}</MainAppLayout>
-      </PermissionsProvider>
-    </CompanyProvider>
-  );
+  return <MainAppLayout>{children}</MainAppLayout>;
 }
