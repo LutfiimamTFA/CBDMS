@@ -3,10 +3,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight, Loader2 } from "lucide-react";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import { format } from 'date-fns';
 import { useUserProfile } from "@/firebase";
 import { useRouter } from "next/navigation";
+import { BrandedLoader } from "@/components/branded-loader";
 
 export default function RootPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -40,11 +41,7 @@ export default function RootPage() {
   // continue showing the loader to prevent a flicker of the landing page
   // before the redirection happens.
   if (isLoading || user) {
-    return (
-      <div className="flex w-full items-center justify-center bg-background min-h-[100dvh] md:min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
+    return <BrandedLoader />;
   }
 
   // Render the landing page only if the user is confirmed to be not logged in.

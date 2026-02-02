@@ -33,6 +33,7 @@ import { useIdleTimer } from '@/hooks/use-idle-timer';
 import { SidebarInset } from '@/components/ui/sidebar';
 import { CompanyProvider } from '@/context/company-provider';
 import { PermissionsProvider } from '@/context/permissions-provider';
+import { BrandedLoader } from '@/components/branded-loader';
 
 const Icon = ({
   name,
@@ -202,11 +203,7 @@ function MainAppLayout({
   const isLoading = isUserLoading || isNavItemsLoading;
   
   if (isLoading || !isReady) {
-    return (
-      <div className="flex w-full items-center justify-center bg-background min-h-[100dvh] md:min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
+    return <BrandedLoader />;
   }
 
   return (
@@ -232,7 +229,7 @@ function MainAppLayout({
                 </Link>
             </SidebarMenuItem>
             </SidebarMenu>
-        </SidebarFooter>
+         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <Header title={headerTitle} navItems={finalNavItems} />
