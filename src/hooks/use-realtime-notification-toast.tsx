@@ -1,15 +1,40 @@
 
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, limit, type Timestamp } from 'firebase/firestore';
 import type { Notification } from '@/lib/types';
 import { useToast } from './use-toast';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { textToSpeech } from '@/ai/flows/text-to-speech';
 
 const LAST_SHOWN_ID_KEY = "lastShownNotifId";
+
+const createBeep = () => {
+    if (typeof window === 'undefined' || !window.AudioContext) return () => {};
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    return (frequency = 523.25, duration = 150, volume = 100) => {
+        if (!audioCtx) return;
+        try {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.value = frequency; // C5 note
+            oscillator.type = "sine";
+            gainNode.gain.value = volume * 0.005; // lower volume
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + duration / 1000);
+        } catch (e) {
+            console.error("Beep failed. User may need to interact with the page first.", e);
+        }
+    };
+};
+
+const beep = createBeep();
+
 
 export function useRealtimeNotificationToast() {
   const { user } = useUserProfile();
@@ -17,12 +42,12 @@ export function useRealtimeNotificationToast() {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Ref to track if the initial load is done to prevent showing old notifications on mount.
   const didInitRef = useRef(false);
-  // Ref to hold the ID of the last notification that triggered a toast.
   const lastShownIdRef = useRef<string | null>(
     typeof window !== 'undefined' ? localStorage.getItem(LAST_SHOWN_ID_KEY) : null
   );
+  const [isProcessingTTS, setIsProcessingTTS] = useState(false);
+
 
   const notificationsQuery = useMemo(() => {
     if (!user || !firestore) return null;
@@ -42,7 +67,6 @@ export function useRealtimeNotificationToast() {
     
     const latestNotification = notifications[0];
 
-    // On initial load, just set the state and don't show any toast.
     if (!didInitRef.current) {
         didInitRef.current = true;
         lastShownIdRef.current = latestNotification.id;
@@ -52,30 +76,52 @@ export function useRealtimeNotificationToast() {
         return;
     }
 
-    // From now on, only react to new notifications.
     if (latestNotification.id !== lastShownIdRef.current) {
+        // Play sound based on preference
+        const soundPreference = localStorage.getItem('notificationSound') as 'off' | 'simple' | 'tts' | null;
+
+        if (soundPreference === 'simple') {
+            beep();
+        } else if (soundPreference === 'tts' && !isProcessingTTS) {
+            setIsProcessingTTS(true);
+            const textToSay = latestNotification.title.replace(/\[.*?\]/g, '').trim();
+            textToSpeech(textToSay).then(response => {
+                if (response.media) {
+                    const audio = new Audio(response.media);
+                    audio.play().catch(e => console.log("TTS audio play failed. User interaction might be required.", e));
+                }
+            }).catch(e => {
+                console.error("TTS flow failed", e);
+            }).finally(() => {
+                setIsProcessingTTS(false);
+            });
+        }
+
         // Don't show toasts for actions the user performed themselves.
         if (latestNotification.createdBy.id !== user?.uid) {
             toast({
                 title: latestNotification.title,
                 description: latestNotification.message,
-                action: latestNotification.taskId ? (
-                  <Button variant="outline" size="sm" onClick={() => router.push(`/tasks/${latestNotification.taskId}`)}>
+                action: latestNotification.entityId ? (
+                  <Button variant="outline" size="sm" onClick={() => {
+                      let path = '/tasks'; // default
+                      if (latestNotification.entityType === 'socialPost') path = '/social-media/posts';
+                      if (latestNotification.entityType === 'webArticle') path = '/web/articles';
+                      router.push(`${path}/${latestNotification.entityId}`);
+                  }}>
                     Open
                   </Button>
                 ) : undefined,
             });
         }
         
-        // Update refs and localStorage to prevent showing this toast again.
         lastShownIdRef.current = latestNotification.id;
         if (typeof window !== 'undefined') {
             localStorage.setItem(LAST_SHOWN_ID_KEY, latestNotification.id);
         }
     }
 
-  }, [notifications, toast, router, user?.uid]);
+  }, [notifications, toast, router, user?.uid, isProcessingTTS]);
 
-  // This hook does not render anything.
   return null;
 }

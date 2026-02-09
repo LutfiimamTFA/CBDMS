@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -29,6 +29,8 @@ import { useToast } from '@/hooks/use-toast';
 import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { updateProfile, EmailAuthProvider, reauthenticateWithCredential, verifyBeforeUpdateEmail, updatePassword } from 'firebase/auth';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 const profileSchema = z.object({
   name: z.string().min(2, 'Name must be at least 2 characters.'),
@@ -55,6 +57,31 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordSchema>;
 type EmailFormValues = z.infer<typeof emailSchema>;
+type NotificationSound = 'off' | 'simple' | 'tts';
+
+
+const createBeep = () => {
+    if (typeof window === 'undefined') return () => {};
+    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    return (frequency = 523.25, duration = 150, volume = 100) => {
+        if (!audioCtx) return;
+        try {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            oscillator.frequency.value = frequency; // C5 note
+            oscillator.type = "sine";
+            gainNode.gain.value = volume * 0.005; // lower volume
+            oscillator.start(audioCtx.currentTime);
+            oscillator.stop(audioCtx.currentTime + duration / 1000);
+        } catch (e) {
+            console.error("Beep failed", e);
+        }
+    };
+};
+
+const beep = createBeep();
 
 
 export default function SettingsPage() {
@@ -68,8 +95,24 @@ export default function SettingsPage() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [notificationSound, setNotificationSound] = useState<NotificationSound>('off');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const savedPreference = localStorage.getItem('notificationSound') as NotificationSound | null;
+    if (savedPreference) {
+      setNotificationSound(savedPreference);
+    }
+  }, []);
+
+  const handleSoundChange = (value: NotificationSound) => {
+    setNotificationSound(value);
+    localStorage.setItem('notificationSound', value);
+    if (value === 'simple') {
+      beep();
+    }
+  };
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
@@ -334,6 +377,40 @@ export default function SettingsPage() {
                   </Button>
                 </form>
               </Form>
+            </CardContent>
+          </Card>
+          
+           <Card>
+            <CardHeader>
+              <CardTitle>Sound</CardTitle>
+              <CardDescription>
+                Manage your notification sound preferences.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={notificationSound} onValueChange={handleSoundChange} className="space-y-1">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="off" id="sound-off" />
+                    <Label htmlFor="sound-off" className="font-normal cursor-pointer">Off</Label>
+                  </div>
+                  <p className="pl-6 text-xs text-muted-foreground">You will not receive any sound notifications.</p>
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="simple" id="sound-simple" />
+                    <Label htmlFor="sound-simple" className="font-normal cursor-pointer">Simple</Label>
+                  </div>
+                   <p className="pl-6 text-xs text-muted-foreground">A simple tone for new notifications.</p>
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="tts" id="sound-tts" />
+                    <Label htmlFor="sound-tts" className="font-normal cursor-pointer">AI Voice Assistant</Label>
+                  </div>
+                  <p className="pl-6 text-xs text-muted-foreground">The AI will read out notification titles for you.</p>
+                </div>
+              </RadioGroup>
             </CardContent>
           </Card>
 
