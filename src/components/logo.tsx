@@ -1,7 +1,7 @@
 'use client';
 
 import { useCompany } from '@/context/company-provider';
-import { ArrowUpRight, Loader2 } from 'lucide-react';
+import { MoveUpRight, Loader2 } from 'lucide-react';
 
 export function Logo() {
   const { company, isLoading } = useCompany();
@@ -12,7 +12,7 @@ export function Logo() {
         {company?.logoUrl ? (
            <img src={company.logoUrl} alt="Company Logo" className="h-7 w-auto" />
         ) : (
-          <ArrowUpRight className="h-7 w-7 text-primary" />
+          <MoveUpRight className="h-7 w-7 text-primary" />
         )}
       </div>
       {isLoading ? (

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowRight, ArrowUpRight } from "lucide-react";
+import { ArrowRight, MoveUpRight } from "lucide-react";
 import { format } from 'date-fns';
 import { useUserProfile } from "@/firebase";
 import { useRouter } from "next/navigation";
@@ -50,7 +50,7 @@ export default function RootPage() {
       <div className="text-center space-y-8">
         <div className="flex justify-center">
             <div className="flex items-center gap-2">
-              <ArrowUpRight className="h-7 w-7 text-primary" />
+              <MoveUpRight className="h-7 w-7 text-primary" />
               <h1 className="font-headline text-xl font-bold truncate">CBDMS Workspace</h1>
             </div>
         </div>
