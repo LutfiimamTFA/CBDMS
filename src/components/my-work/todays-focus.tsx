@@ -152,7 +152,7 @@ export function TodaysFocus() {
     return (
         <div className="space-y-8">
             <h3 className="text-xl font-bold tracking-tight mb-4">Today's Focus</h3>
-            {renderSection("General Tasks", ClipboardList, todaysTasks, "No regular tasks need your focus today. Great job!")}
+            {renderSection("Project", ClipboardList, todaysTasks, "No regular tasks need your focus today. Great job!")}
             {renderSection("Social Media Posts", Share2, todaysSocialPosts, "No social media posts need your focus today.")}
             {renderSection("Web Articles", Globe, todaysWebArticles, "No web articles need your focus today.")}
         </div>
