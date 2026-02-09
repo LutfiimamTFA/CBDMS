@@ -7,7 +7,7 @@ import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem, 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
-import { Loader2, Plus, Check, ListChecks, Paperclip, UploadCloud, FileText, FileImage } from 'lucide-react';
+import { Loader2, Plus, Check, ListChecks, Paperclip, UploadCloud, FileText, FileImage, Archive, HelpCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
@@ -21,6 +21,8 @@ import { useRouter } from 'next/navigation';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Link from 'next/link';
+import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 
 
 const createActivity = (user: User, action: string): Activity => {
@@ -93,26 +95,27 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
     return true;
   }, [profile]);
 
-  const filteredTasks = useMemo(() => {
-    if (!tasks) return [];
+  const { filteredTasks, hiddenOldTasksCount } = useMemo(() => {
+    if (!tasks) return { filteredTasks: [], hiddenOldTasksCount: 0 };
+    
+    const sevenDaysAgo = subDays(startOfDay(new Date()), 7);
+    const visibleTasks: Task[] = [];
+    let hiddenCount = 0;
 
-    const now = new Date();
-    const thirtyDaysFromNow = addDays(now, 30);
-    const sevenDaysAgo = subDays(startOfDay(now), 7);
-
-    return tasks.filter(task => {
-      switch (task.status) {
-        case 'Done':
-          // Show if completed within the last 7 days
-          return task.actualCompletionDate && isAfter(new Date(task.actualCompletionDate), sevenDaysAgo);
-        case 'To Do':
-          // Show if due date is within 30 days or if there's no due date
-          return !task.dueDate || isBefore(new Date(task.dueDate), thirtyDaysFromNow);
-        default:
-          // Always show active tasks
-          return true;
-      }
-    });
+    for (const task of tasks) {
+        if (task.status === 'Done') {
+            // Only show 'Done' tasks completed in the last 7 days
+            if (task.actualCompletionDate && isAfter(new Date(task.actualCompletionDate), sevenDaysAgo)) {
+                visibleTasks.push(task);
+            } else {
+                hiddenCount++;
+            }
+        } else {
+            // Show all other tasks regardless of status or due date
+            visibleTasks.push(task);
+        }
+    }
+    return { filteredTasks: visibleTasks, hiddenOldTasksCount: hiddenCount };
   }, [tasks]);
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
@@ -352,174 +355,184 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
   return (
     <>
-    {/* Desktop View */}
-    <div className="hidden md:flex h-full w-full">
-      <ScrollArea className="w-full">
-        <div className="flex h-full gap-4 pb-4">
-            {statuses?.map((status) => (
-            <KanbanColumn
-                key={status.id}
-                status={status}
-                tasks={filteredTasks.filter((task) => task.status === status.name)}
-                onDrop={handleDrop}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onCardClick={handleCardClick}
-                canDrag={canDrag}
-                draggingTaskId={draggingTaskId}
-            />
-            ))}
-        </div>
-        <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-    </div>
+      {hiddenOldTasksCount > 0 && (
+          <Alert className="mb-4 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800">
+              <Archive className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <AlertTitle className="text-blue-800 dark:text-blue-300">Papan Dirapikan</AlertTitle>
+              <AlertDescription>
+                  {hiddenOldTasksCount} tugas yang sudah selesai lebih dari 7 hari telah diarsipkan dari tampilan ini.
+                  <Link href="/tasks" className="ml-2 font-semibold underline">Lihat Semua</Link>
+              </AlertDescription>
+          </Alert>
+      )}
+      {/* Desktop View */}
+      <div className="hidden md:flex h-full w-full">
+        <ScrollArea className="w-full">
+          <div className="flex h-full gap-4 pb-4">
+              {statuses?.map((status) => (
+              <KanbanColumn
+                  key={status.id}
+                  status={status}
+                  tasks={filteredTasks.filter((task) => task.status === status.name)}
+                  onDrop={handleDrop}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onCardClick={handleCardClick}
+                  canDrag={canDrag}
+                  draggingTaskId={draggingTaskId}
+              />
+              ))}
+          </div>
+          <ScrollBar orientation="horizontal" />
+          </ScrollArea>
+      </div>
 
-    {/* Mobile View */}
-    <div className="md:hidden flex flex-col h-full">
-        <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
-            <TabsList className="grid w-full grid-cols-3">
-                 {statuses?.map((status) => (
-                    <TabsTrigger key={status.id} value={status.name}>{status.name}</TabsTrigger>
-                ))}
-            </TabsList>
-            {statuses?.map((status) => (
-                <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
-                    <ScrollArea className="h-full">
-                        <div className="flex flex-col gap-3 p-1">
-                            {filteredTasks.filter((task) => task.status === status.name).map(task => (
-                                <TaskCard key={task.id} task={task} />
-                            ))}
-                        </div>
-                    </ScrollArea>
-                </TabsContent>
-            ))}
-        </Tabs>
-    </div>
-    
-    <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Create Revision Checklist</DialogTitle>
-                <DialogDescription>
-                  Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
-                </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-                <div className="space-y-4 px-6 py-4">
-                    {revisionState.task?.description && (
-                         <div className="space-y-2">
-                             <h4 className="font-semibold text-sm">Task Description</h4>
-                            <div className="text-xs text-muted-foreground pt-1 border-l-2 pl-2 italic prose prose-sm dark:prose-invert max-w-none">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                    {revisionState.task.description}
-                                </ReactMarkdown>
-                            </div>
-                        </div>
-                    )}
-                    
-                    <div className="space-y-2">
-                        <h4 className="font-semibold text-sm">Files for Review</h4>
-                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                            {revisionState.task?.deliverables && revisionState.task.deliverables.length > 0 ? (
-                                revisionState.task.deliverables.map(att => (
-                                    <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                            {getFileIcon(att.name)}
-                                            <span className="truncate" title={att.name}>{att.name}</span>
-                                        </a>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No files were submitted for this task.</p>
-                            )}
-                        </div>
-                    </div>
+      {/* Mobile View */}
+      <div className="md:hidden flex flex-col h-full">
+          <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
+              <TabsList className="grid w-full grid-cols-3">
+                  {statuses?.map((status) => (
+                      <TabsTrigger key={status.id} value={status.name}>{status.name}</TabsTrigger>
+                  ))}
+              </TabsList>
+              {statuses?.map((status) => (
+                  <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
+                      <ScrollArea className="h-full">
+                          <div className="flex flex-col gap-3 p-1">
+                              {filteredTasks.filter((task) => task.status === status.name).map(task => (
+                                  <TaskCard key={task.id} task={task} />
+                              ))}
+                          </div>
+                      </ScrollArea>
+                  </TabsContent>
+              ))}
+          </Tabs>
+      </div>
+      
+      <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Create Revision Checklist</DialogTitle>
+                  <DialogDescription>
+                    Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
+                  </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                  <div className="space-y-4 px-6 py-4">
+                      {revisionState.task?.description && (
+                          <div className="space-y-2">
+                              <h4 className="font-semibold text-sm">Task Description</h4>
+                              <div className="text-xs text-muted-foreground pt-1 border-l-2 pl-2 italic prose prose-sm dark:prose-invert max-w-none">
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                      {revisionState.task.description}
+                                  </ReactMarkdown>
+                              </div>
+                          </div>
+                      )}
+                      
+                      <div className="space-y-2">
+                          <h4 className="font-semibold text-sm">Files for Review</h4>
+                          <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                              {revisionState.task?.deliverables && revisionState.task.deliverables.length > 0 ? (
+                                  revisionState.task.deliverables.map(att => (
+                                      <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                          <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                              {getFileIcon(att.name)}
+                                              <span className="truncate" title={att.name}>{att.name}</span>
+                                          </a>
+                                      </div>
+                                  ))
+                              ) : (
+                                  <p className="text-sm text-muted-foreground">No files were submitted for this task.</p>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+                  <Separator/>
+                  <div className="p-6 space-y-4">
+                      <h4 className="font-semibold text-sm">Revision Points</h4>
+                      <div className="space-y-2">
+                          {revisionState.items.map((item, index) => (
+                              <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                  <span className="flex-1 text-sm">{item.text}</span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
+                              </div>
+                          ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <Input 
+                              value={revisionState.currentItemText}
+                              onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                              placeholder="e.g., Fix the logo placement"
+                              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
+                          />
+                          <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                              <Plus className="mr-2 h-4 w-4"/> Add
+                          </Button>
+                      </div>
+                  </div>
+              </ScrollArea>
+              <DialogFooter className="p-6 pt-4 border-t">
+                  <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
+                  <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
+                      {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Request Revisions
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+      
+      <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Final Review & Complete Task</DialogTitle>
+                  <DialogDescription>
+                      You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
+                  </DialogDescription>
+              </DialogHeader>
+              <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                <div className="py-4 space-y-6 px-6">
+                  <div className="space-y-3">
+                      <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                          {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
+                              finalReviewState.task.subtasks.map(subtask => ( 
+                                  <div key={subtask.id} className="flex items-center gap-3">
+                                      <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                      <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                  </div> 
+                              )) 
+                          ) : ( 
+                              <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
+                          )}
+                      </div>
+                  </div>
+                  <div className="space-y-3">
+                      <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                      <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                          {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
+                              finalReviewState.task.attachments.map(att => ( 
+                                  <div key={att.id} className="flex items-center gap-2 text-sm">
+                                      <span>-</span>
+                                      <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
+                                  </div>
+                              )) 
+                          ) : ( 
+                              <p className="text-sm text-muted-foreground">No attachments for this item.</p> 
+                          )}
+                      </div>
+                  </div>
                 </div>
-                <Separator/>
-                <div className="p-6 space-y-4">
-                     <h4 className="font-semibold text-sm">Revision Points</h4>
-                    <div className="space-y-2">
-                        {revisionState.items.map((item, index) => (
-                            <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
-                                <span className="flex-1 text-sm">{item.text}</span>
-                                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Input 
-                            value={revisionState.currentItemText}
-                            onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
-                            placeholder="e.g., Fix the logo placement"
-                            onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
-                        />
-                        <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
-                            <Plus className="mr-2 h-4 w-4"/> Add
-                        </Button>
-                    </div>
-                </div>
-            </ScrollArea>
-            <DialogFooter className="p-6 pt-4 border-t">
-                <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
-                <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
-                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Request Revisions
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
-    
-     <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
-        <DialogContent>
-            <DialogHeader>
-                <DialogTitle>Final Review & Complete Task</DialogTitle>
-                <DialogDescription>
-                    You are about to mark this task as "Done". Please review the items below to ensure everything is complete.
-                </DialogDescription>
-            </DialogHeader>
-            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-              <div className="py-4 space-y-6 px-6">
-                <div className="space-y-3">
-                    <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
-                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                        {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
-                             finalReviewState.task.subtasks.map(subtask => ( 
-                                <div key={subtask.id} className="flex items-center gap-3">
-                                    <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
-                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                </div> 
-                            )) 
-                        ) : ( 
-                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
-                        )}
-                    </div>
-                </div>
-                 <div className="space-y-3">
-                    <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
-                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                        {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
-                             finalReviewState.task.attachments.map(att => ( 
-                                <div key={att.id} className="flex items-center gap-2 text-sm">
-                                    <span>-</span>
-                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
-                                </div>
-                            )) 
-                        ) : ( 
-                            <p className="text-sm text-muted-foreground">No attachments for this item.</p> 
-                        )}
-                    </div>
-                </div>
-              </div>
-            </ScrollArea>
-            <DialogFooter className="p-6 pt-0">
-                <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
-                <Button variant="default" onClick={handleConfirmFinalReview}>
-                    <Check className="mr-2 h-4 w-4" />
-                    Confirm & Complete
-                </Button>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
+              </ScrollArea>
+              <DialogFooter className="p-6 pt-0">
+                  <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
+                  <Button variant="default" onClick={handleConfirmFinalReview}>
+                      <Check className="mr-2 h-4 w-4" />
+                      Confirm & Complete
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
     </>
   );
 }
