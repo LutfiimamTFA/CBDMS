@@ -47,7 +47,7 @@ export default function GuidePage() {
             <div className="mb-8 text-center">
               <BookOpen className="mx-auto h-12 w-12 text-primary" />
               <h1 className="mt-4 text-3xl font-bold tracking-tight">
-                Selamat Datang di WorkWise!
+                Selamat Datang di CBDMS Workspace!
               </h1>
               <div className="mt-2 text-lg text-muted-foreground flex items-center justify-center gap-2">
                 Ini adalah panduan yang disesuaikan untuk peran Anda sebagai <RoleBadge role={profile.role} />
