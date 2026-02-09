@@ -12,28 +12,24 @@ import { textToSpeech } from '@/ai/flows/text-to-speech';
 
 const LAST_SHOWN_ID_KEY = "lastShownNotifId";
 
-const createBeep = () => {
-    if (typeof window === 'undefined' || !window.AudioContext) return () => {};
-    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    return (frequency = 523.25, duration = 150, volume = 100) => {
+const beep = (frequency = 523.25, duration = 150, volume = 100) => {
+    if (typeof window === 'undefined' || !window.AudioContext) return;
+    try {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
         if (!audioCtx) return;
-        try {
-            const oscillator = audioCtx.createOscillator();
-            const gainNode = audioCtx.createGain();
-            oscillator.connect(gainNode);
-            gainNode.connect(audioCtx.destination);
-            oscillator.frequency.value = frequency; // C5 note
-            oscillator.type = "sine";
-            gainNode.gain.value = volume * 0.005; // lower volume
-            oscillator.start(audioCtx.currentTime);
-            oscillator.stop(audioCtx.currentTime + duration / 1000);
-        } catch (e) {
-            console.error("Beep failed. User may need to interact with the page first.", e);
-        }
-    };
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.value = frequency;
+        oscillator.type = "sine";
+        gainNode.gain.value = volume * 0.005;
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + duration / 1000);
+    } catch (e) {
+        console.error("Beep failed. User may need to interact with the page first.", e);
+    }
 };
-
-const beep = createBeep();
 
 
 export function useRealtimeNotificationToast() {
@@ -77,24 +73,27 @@ export function useRealtimeNotificationToast() {
     }
 
     if (latestNotification.id !== lastShownIdRef.current) {
-        // Play sound based on preference
+        const isNewAssignment = latestNotification.title.toLowerCase().includes('assigned');
         const soundPreference = localStorage.getItem('notificationSound') as 'off' | 'simple' | 'tts' | null;
 
-        if (soundPreference === 'simple') {
-            beep();
-        } else if (soundPreference === 'tts' && !isProcessingTTS) {
-            setIsProcessingTTS(true);
-            const textToSay = latestNotification.title.replace(/\[.*?\]/g, '').trim();
-            textToSpeech(textToSay).then(response => {
-                if (response.media) {
-                    const audio = new Audio(response.media);
-                    audio.play().catch(e => console.log("TTS audio play failed. User interaction might be required.", e));
-                }
-            }).catch(e => {
-                console.error("TTS flow failed", e);
-            }).finally(() => {
-                setIsProcessingTTS(false);
-            });
+        // Only play sound for new assignments
+        if (isNewAssignment && soundPreference && soundPreference !== 'off') {
+            if (soundPreference === 'simple') {
+                beep();
+            } else if (soundPreference === 'tts' && !isProcessingTTS) {
+                setIsProcessingTTS(true);
+                const textToSay = latestNotification.title.replace(/\[.*?\]/g, '').trim();
+                textToSpeech(textToSay).then(response => {
+                    if (response.media) {
+                        const audio = new Audio(response.media);
+                        audio.play().catch(e => console.log("TTS audio play failed. User interaction might be required.", e));
+                    }
+                }).catch(e => {
+                    console.error("TTS flow failed", e);
+                }).finally(() => {
+                    setIsProcessingTTS(false);
+                });
+            }
         }
 
         // Don't show toasts for actions the user performed themselves.
