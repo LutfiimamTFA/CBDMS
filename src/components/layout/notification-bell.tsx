@@ -125,16 +125,18 @@ export function NotificationBell() {
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    if (!notification.entityId) return;
+    // Fallback logic for backward compatibility
+    const entityId = notification.entityId || notification.taskId;
+    if (!entityId) return;
 
-    let path = '/tasks';
+    let path = '/tasks'; // Default for general tasks or legacy notifications
     if (notification.entityType === 'socialPost') {
         path = '/social-media/posts';
     } else if (notification.entityType === 'webArticle') {
         path = '/web/articles';
     }
     
-    router.push(`${path}/${notification.entityId}`);
+    router.push(`${path}/${entityId}`);
   };
 
   const renderNotificationGroup = (
@@ -149,13 +151,14 @@ export function NotificationBell() {
           {title}
         </DropdownMenuLabel>
         {notifs.map((notif) => {
-           const Icon = notif.workstream ? workstreamIcons[notif.workstream as keyof typeof workstreamIcons] : null;
+           // Default to 'tasks' icon if workstream is not defined, solving the "dark" icon issue
+           const Icon = notif.workstream ? workstreamIcons[notif.workstream as keyof typeof workstreamIcons] : workstreamIcons.tasks;
            return (
               <DropdownMenuItem
                 key={notif.id}
                 className="flex items-start gap-3"
                 onClick={() => handleNotificationClick(notif)}
-                disabled={!notif.entityId}
+                disabled={!notif.entityId && !notif.taskId}
               >
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={notif.createdBy.avatarUrl} />
@@ -165,7 +168,7 @@ export function NotificationBell() {
                 </Avatar>
                 <div className="flex-1">
                   <p className="text-sm font-semibold leading-tight flex items-center gap-1.5">
-                    {Icon && <Icon className="h-3.5 w-3.5" />}
+                    {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
                     {notif.title}
                   </p>
                   <p className="text-sm leading-tight mt-1">{notif.message}</p>
