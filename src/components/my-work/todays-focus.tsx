@@ -44,19 +44,12 @@ const getFocusItems = (items: WorkItem[] | null | undefined): WorkItem[] => {
 
     return items.filter(item => {
         const status = item.statusInternal || item.status;
-        if (status === 'Done' || status === 'Posted') return false;
-
-        const dateField = item.dueDate;
-        if (!dateField) {
-           return status === 'Doing';
+        // Only filter out items that are explicitly 'Done' or 'Posted'
+        if (status === 'Done' || status === 'Posted') {
+            return false;
         }
-
-        const isDueToday = isToday(parseISO(dateField));
-        const isOverdue = !isToday(parseISO(dateField)) && isPast(parseISO(dateField));
-        const isInProgress = status === 'Doing';
-        
-        return isDueToday || isOverdue || isInProgress;
-
+        // Show all other actionable tasks (To Do, Doing, Revisi, Preview, etc.)
+        return true;
     }).sort((a, b) => {
         const priorityOrder: Record<string, number> = { 'Urgent': 4, 'High': 3, 'Medium': 2, 'Low': 1, 'Default': 0 };
         if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
