@@ -1,10 +1,8 @@
-
 // src/lib/firebase-admin.ts
-import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getStorage, Storage } from 'firebase-admin/storage';
-import { serviceAccount } from '@/firebase/service-account';
 
 let adminApp: App;
 let adminAuth: Auth;
@@ -14,32 +12,9 @@ let adminStorage: ReturnType<Storage['bucket']>;
 // This ensures we initialize only once.
 if (!getApps().length) {
     try {
-        let storageBucketName: string | undefined;
-        if (process.env.FIREBASE_CONFIG) {
-            try {
-                const firebaseConfig = JSON.parse(process.env.FIREBASE_CONFIG);
-                storageBucketName = firebaseConfig.storageBucket;
-            } catch (e) {
-                console.error("Failed to parse FIREBASE_CONFIG:", e);
-            }
-        }
-
-        if (!storageBucketName) {
-          // Fallback for local development or if FIREBASE_CONFIG is not set
-          // This assumes a standard naming convention.
-          const projectId = serviceAccount.project_id;
-          if (projectId) {
-            storageBucketName = `${projectId}.appspot.com`;
-          } else {
-            throw new Error("Could not determine Storage Bucket name from service account.");
-          }
-        }
-
-        adminApp = initializeApp({
-            credential: cert(serviceAccount as any),
-            storageBucket: storageBucketName,
-        });
-
+        // In a Google Cloud environment (like Firebase App Hosting), 
+        // initializeApp() with no arguments will automatically find the credentials.
+        adminApp = initializeApp();
     } catch (e: any) {
         console.error("Firebase Admin SDK initialization failed:", e.message);
         // We throw the error to ensure build failures are obvious if configuration is truly broken.
@@ -52,6 +27,6 @@ if (!getApps().length) {
 // Export singleton instances of the services.
 adminAuth = getAuth(adminApp);
 adminDb = getFirestore(adminApp);
-adminStorage = getStorage(adminApp).bucket();
+adminStorage = getStorage(adminApp).bucket(); // Use default bucket associated with the project
 
 export { adminApp, adminAuth, adminDb, adminStorage };
