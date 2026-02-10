@@ -10,7 +10,7 @@ import { doc } from 'firebase/firestore';
 const defaultPermissions: PermissionSettings = {
   Manager: {
     canManageUsers: true,
-    canDeleteUsers: false,
+    canDeleteUsers: true,
     canCreateTasks: true,
     canDeleteTasks: true,
     canViewReports: true,
