@@ -1,26 +1,18 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Task, User } from '@/lib/types';
-import { Filter, Loader2, X, HelpCircle, Archive } from 'lucide-react';
+import type { Task, User, Brand } from '@/lib/types';
+import { Filter, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/context/i18n-provider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import Link from 'next/link';
+import { useSafeBrands } from '@/hooks/use-safe-brands';
 
 export default function DashboardPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
@@ -28,6 +20,7 @@ export default function DashboardPage() {
   const { t } = useI18n();
 
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Query untuk tugas
@@ -69,6 +62,11 @@ export default function DashboardPage() {
 
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
 
+  // Fetch brands for filtering
+  const { brands, isLoading: areBrandsLoading } = useSafeBrands();
+  const brandOptions = useMemo(() => (brands || []).map(b => ({ value: b.id, label: b.name })), [brands]);
+
+
   // Opsi untuk filter MultiSelect, disesuaikan untuk Manajer
   const userOptions = useMemo(() => {
     if (!allUsers || !profile) return [];
@@ -93,23 +91,33 @@ export default function DashboardPage() {
   // Logika untuk memfilter tugas
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
-    if (selectedUsers.length === 0) return tasks;
+    let filtered = tasks;
 
-    return tasks.filter(task =>
-      task.assigneeIds.some(assigneeId => selectedUsers.includes(assigneeId))
-    );
-  }, [tasks, selectedUsers]);
+    if (profile?.role === 'Super Admin' && selectedBrands.length > 0) {
+      filtered = filtered.filter(task => task.brandId && selectedBrands.includes(task.brandId));
+    } else if (profile?.role === 'Manager' && selectedUsers.length > 0) {
+      filtered = filtered.filter(task =>
+        task.assigneeIds.some(assigneeId => selectedUsers.includes(assigneeId))
+      );
+    }
+    
+    return filtered;
+  }, [tasks, selectedUsers, selectedBrands, profile]);
+
 
   const resetFilters = () => {
     setSelectedUsers([]);
+    setSelectedBrands([]);
   };
 
-  const isLoading = isProfileLoading || isTasksLoading || areUsersLoading;
-  const isManagerOrAdmin = profile?.role === 'Manager' || profile?.role === 'Super Admin';
+  const isLoading = isProfileLoading || isTasksLoading || areUsersLoading || areBrandsLoading;
+  const isSuperAdmin = profile?.role === 'Super Admin';
+  const isManager = profile?.role === 'Manager';
+
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <main className="flex-1 overflow-hidden p-4 md:p-6">
+      <main className="flex-1 p-4 md:p-6 overflow-auto">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
@@ -124,7 +132,38 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              {isManagerOrAdmin && (
+              {isSuperAdmin && (
+                <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 border-dashed">
+                      <Filter className="mr-2 h-4 w-4" />
+                      Filter by Brand
+                      {selectedBrands.length > 0 && <Badge variant="secondary" className="ml-2">{selectedBrands.length}</Badge>}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className='p-4 border rounded-lg bg-card'>
+                     <div className='flex flex-col lg:flex-row gap-4 items-start'>
+                        <div className='flex-1 w-full space-y-2'>
+                           <Label htmlFor='brand-filter'>Brands</Label>
+                           <MultiSelect
+                              id="brand-filter"
+                              options={brandOptions}
+                              onValueChange={setSelectedBrands}
+                              defaultValue={selectedBrands}
+                              placeholder="Select brands..."
+                           />
+                        </div>
+                        {selectedBrands.length > 0 && (
+                          <Button variant="ghost" size="sm" onClick={resetFilters} className="mt-auto">
+                              <X className="mr-2 h-4 w-4"/>Reset
+                          </Button>
+                        )}
+                     </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {isManager && (
                 <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
                   <CollapsibleTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8 border-dashed">

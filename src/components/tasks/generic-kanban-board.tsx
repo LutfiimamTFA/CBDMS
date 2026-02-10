@@ -16,7 +16,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import Link from 'next/link';
 import { isAfter, subDays } from 'date-fns';
 
@@ -31,6 +30,9 @@ const createActivity = (user: User, action: string) => {
 };
 
 interface GenericKanbanBoardProps {
+  items: WorkItem[];
+  users: User[];
+  isLoading: boolean;
   itemType: 'tasks' | 'socialMediaPosts' | 'webArticles';
   statusCollection: 'statuses' | 'socialMediaStatuses' | 'webStatuses';
 }
@@ -42,7 +44,7 @@ interface RevisionState {
   currentItemText: string;
 }
 
-export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanbanBoardProps) {
+export function GenericKanbanBoard({ items: allItems, users, isLoading: areItemsLoading, itemType, statusCollection }: GenericKanbanBoardProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const { toast } = useToast();
@@ -58,38 +60,20 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
   
   const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
   
-  const itemsQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
-    let q = query(collection(firestore, itemType), where('companyId', '==', profile.companyId));
-
-    if (profile.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
-        q = query(q, where('brandId', 'in', profile.brandIds));
-    } else if (profile.role === 'Employee' || profile.role === 'PIC') {
-        q = query(q, where('assigneeIds', 'array-contains', profile.id));
-    } else if (profile.role !== 'Super Admin') {
-        // Fallback for roles that shouldn't see anything if not configured.
-        q = query(q, where('__name__', '==', 'no-items-for-this-role'));
-    }
-    
-    return q;
-  }, [firestore, profile, itemType]);
-  
-  const { data: allItems, isLoading: areItemsLoading } = useCollection<WorkItem>(itemsQuery);
-
   const { visibleItems, hiddenOldItemsCount } = useMemo(() => {
     if (!allItems) return { visibleItems: [], hiddenOldItemsCount: 0 };
     
     const sevenDaysAgo = subDays(new Date(), 7);
     const visibleItems: WorkItem[] = [];
-    let hiddenOldItemsCount = 0;
+    let hiddenCount = 0;
 
     for (const item of allItems) {
         const status = item.statusInternal || item.status;
-        if (status === 'Done') {
+        if (status === 'Done' || status === 'Posted') {
             if (item.actualCompletionDate && isAfter(new Date(item.actualCompletionDate), sevenDaysAgo)) {
                 visibleItems.push(item);
             } else {
-                hiddenOldItemsCount++;
+                hiddenCount++;
             }
         } else {
             visibleItems.push(item);
@@ -137,7 +121,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
       const updates: Partial<WorkItem> = {
         status: newStatus,
         statusInternal: newStatus,
-        lastActivity: createActivity(profile, `moved item from "${item.statusInternal}" to "${newStatus}"`),
+        lastActivity: createActivity(profile, `moved item from "${item.statusInternal || item.status}" to "${newStatus}"`),
         updatedAt: serverTimestamp() as any,
       };
       updates.activities = [...(item.activities || []), updates.lastActivity!];
@@ -209,40 +193,17 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
 
   return (
     <>
-      <main className="flex-1 overflow-hidden p-4 md:p-6 h-full flex flex-col">
+      <div className="flex-1 overflow-hidden h-full flex flex-col">
         {hiddenOldItemsCount > 0 && (
-            <Alert className="mb-4 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800">
+            <Alert className="mb-4 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 mx-4 md:mx-6">
                 <Archive className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 <AlertTitle className="text-blue-800 dark:text-blue-300">Papan Dirapikan</AlertTitle>
                 <AlertDescription>
-                    {hiddenOldItemsCount} tugas yang sudah selesai lebih dari 7 hari telah diarsipkan dari tampilan ini.
+                    {hiddenOldItemsCount} item yang sudah selesai lebih dari 7 hari telah diarsipkan dari tampilan ini.
                     <Link href={listPagePath} className="ml-2 font-semibold underline">Lihat Semua</Link>
                 </AlertDescription>
             </Alert>
         )}
-        <Accordion type="single" collapsible className="w-full mb-4">
-          <AccordionItem value="item-1" className="border-b-0">
-            <AccordionTrigger className="p-3 bg-secondary/50 rounded-md hover:no-underline">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <HelpCircle className="h-4 w-4" />
-                Panduan Papan Kanban
-              </div>
-            </AccordionTrigger>
-            <AccordionContent className="pt-2">
-              <Alert>
-                <Archive className="h-4 w-4" />
-                <AlertTitle>Fungsi Papan Kanban</AlertTitle>
-                <AlertDescription>
-                  <ul className="list-disc pl-5 mt-2 text-xs space-y-1">
-                    <li>Gunakan papan ini untuk memantau progres pekerjaan secara visual.</li>
-                    <li>Seret kartu dari satu kolom ke kolom lain untuk mengubah statusnya.</li>
-                    <li>Klik pada kartu untuk melihat detail lengkap, berkolaborasi di komentar, dan mengelola file.</li>
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
         
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
@@ -251,7 +212,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
         ) : (
           <>
             {/* Desktop View */}
-            <div className="hidden md:flex h-full w-full">
+            <div className="hidden md:flex h-full w-full px-4 md:px-6">
               <ScrollArea className="w-full">
                 <div className="flex h-full gap-4 pb-4">
                   {statuses?.map((status) => (
@@ -265,6 +226,8 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
                       onCardClick={handleCardClick}
                       canDrag={true}
                       draggingTaskId={draggingItemId}
+                      workstream={itemType}
+                      users={users}
                     />
                   ))}
                 </div>
@@ -273,7 +236,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
             </div>
 
             {/* Mobile View */}
-            <div className="md:hidden flex flex-col h-full">
+            <div className="md:hidden flex flex-col h-full px-4 md:px-6">
               <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
                 <TabsList className="grid w-full grid-cols-3">
                   {statuses?.map((status) => (
@@ -295,7 +258,7 @@ export function GenericKanbanBoard({ itemType, statusCollection }: GenericKanban
             </div>
           </>
         )}
-      </main>
+      </div>
       
       <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>
         <DialogContent>
