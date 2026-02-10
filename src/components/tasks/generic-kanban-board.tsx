@@ -1,12 +1,12 @@
 
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import type { WorkItem, WorkflowStatus, User, RevisionItem, RevisionCycle, Notification } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, writeBatch, where, deleteField, serverTimestamp } from 'firebase/firestore';
-import { Loader2, Plus, XCircle, HelpCircle, Archive, History, Link as LinkIcon } from 'lucide-react';
+import { Loader2, Plus, XCircle, HelpCircle, Archive, History, Link as LinkIcon, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from './kanban-column';
 import { useRouter } from 'next/navigation';
@@ -15,9 +15,10 @@ import { TaskCard } from './task-card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import { isAfter, subDays } from 'date-fns';
 import { Alert, AlertTitle, AlertDescription } from '../ui/alert';
 import Link from 'next/link';
-import { isAfter, subDays } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 
 const createActivity = (user: User, action: string) => {
@@ -35,6 +36,8 @@ interface GenericKanbanBoardProps {
   isLoading: boolean;
   itemType: 'tasks' | 'socialMediaPosts' | 'webArticles';
   statusCollection: 'statuses' | 'socialMediaStatuses' | 'webStatuses';
+  mode: 'view' | 'edit';
+  onModeChange: (mode: 'view' | 'edit') => void;
 }
 
 interface RevisionState {
@@ -44,7 +47,7 @@ interface RevisionState {
   currentItemText: string;
 }
 
-export function GenericKanbanBoard({ items: allItems, users, isLoading: areItemsLoading, itemType, statusCollection }: GenericKanbanBoardProps) {
+export function GenericKanbanBoard({ items: allItems, users, isLoading: areItemsLoading, itemType, statusCollection, mode, onModeChange }: GenericKanbanBoardProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const { toast } = useToast();
@@ -79,7 +82,7 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
             visibleItems.push(item);
         }
     }
-    return { visibleItems, hiddenOldItemsCount };
+    return { visibleItems, hiddenOldItemsCount: hiddenCount };
   }, [allItems]);
 
   const listPagePath = useMemo(() => {
@@ -91,9 +94,16 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
             return '/tasks';
     }
   }, [itemType]);
+  
+  const canDrag = useMemo(() => {
+    if (!profile) return false;
+    if (profile.role === 'Super Admin') return mode === 'edit';
+    return true;
+  }, [profile, mode]);
 
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, itemId: string) => {
+    if (!canDrag) return;
     e.dataTransfer.setData('itemId', itemId);
     setDraggingItemId(itemId);
   };
@@ -105,6 +115,15 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     const itemId = e.dataTransfer.getData('itemId');
     if (!itemId || !firestore || !profile) return;
+    
+    if (!canDrag) {
+      toast({
+        variant: 'destructive',
+        title: "Mode Lihat Saja (View-Only)",
+        description: "Aktifkan Mode Edit untuk mengubah status tugas.",
+      });
+      return;
+    }
     
     const item = allItems?.find(i => i.id === itemId);
     if (!item || (item.statusInternal || item.status) === newStatus) return;
@@ -193,7 +212,7 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
 
   return (
     <>
-      <div className="flex-1 overflow-hidden h-full flex flex-col">
+      <div className={cn("flex-1 overflow-hidden h-full flex flex-col transition-all duration-300", mode === 'edit' && "ring-2 ring-yellow-500 ring-inset rounded-lg")}>
         {hiddenOldItemsCount > 0 && (
             <Alert className="mb-4 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 mx-4 md:mx-6">
                 <Archive className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -224,7 +243,7 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
                       onDragStart={handleDragStart}
                       onDragEnd={handleDragEnd}
                       onCardClick={handleCardClick}
-                      canDrag={true}
+                      canDrag={canDrag}
                       draggingTaskId={draggingItemId}
                       workstream={itemType}
                       users={users}
