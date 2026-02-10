@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -28,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { SocialMediaPost, User, Brand, WorkflowStatus } from '@/lib/types';
 import { format, parseISO } from 'date-fns';
-import { MoreHorizontal, Trash2, CheckCircle, Clock, HelpCircle, RefreshCcw, AlertTriangle, Instagram, Building2, User as UserIcon, X as XIcon, ChevronsUpDown, ArrowUpAZ, ArrowDownZA } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle, Clock, HelpCircle, RefreshCcw, AlertTriangle, Instagram, Building2, User as UserIcon, X as XIcon, ChevronsUpDown, ArrowUpAZ, ArrowDownZA, Edit } from 'lucide-react';
 import { DataTableViewOptions } from '../tasks/data-table-view-options';
 import { DataTableFacetedFilter } from '../tasks/data-table-faceted-filter';
 import { useToast } from '@/hooks/use-toast';
@@ -49,6 +48,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
 
 const statusConfig: Record<string, { icon: React.ElementType, label: string, color: string }> = {
     'To Do': { icon: HelpCircle, label: 'To Do', color: 'bg-gray-400 border-gray-400 text-white' },
@@ -83,6 +84,9 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
   const [pendingDeletePost, setPendingDeletePost] = React.useState<SocialMediaPost | null>(null);
 
   React.useEffect(() => { setData(posts || []); }, [posts]);
+  
+  const [editMode, setEditMode] = React.useState(false);
+  const isSuperAdmin = profile?.role === 'Super Admin';
 
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'dueDate', desc: false }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -104,7 +108,7 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
     setPendingDeletePost(null);
   };
   
-  const columns: ColumnDef<SocialMediaPost>[] = [
+  const columns: ColumnDef<SocialMediaPost>[] = React.useMemo(() => [
     {
       accessorKey: 'title',
       header: ({ column }) => (
@@ -226,6 +230,11 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
       id: "actions",
       cell: ({ row }) => {
         const post = row.original;
+
+        if (isSuperAdmin && !editMode) {
+          return null;
+        }
+
         const canDelete = React.useMemo(() => {
             if (!profile) return false;
             if (profile.role === 'Super Admin' || profile.role === 'Manager') return true;
@@ -261,7 +270,7 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
         );
       },
     },
-  ];
+  ], [profile, editMode, isSuperAdmin, router, handleDeletePost, brandMap, statuses, users, priorityOptions, statusOptions]);
 
   const table = useReactTable({
     data,
@@ -298,9 +307,17 @@ export function SocialMediaDataTable({ posts, users, brands, brandMap, statuses 
                   {table.getColumn("assigneeIds") && <DataTableFacetedFilter column={table.getColumn("assigneeIds")} title="Assignees" options={assigneeOptions} />}
                   {isFiltered && ( <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-8 px-2 lg:px-3">Reset <XIcon className="ml-2 h-4 w-4" /></Button>)}
               </div>
-              <DataTableViewOptions table={table} />
+              <div className="flex items-center gap-2">
+                {isSuperAdmin && (
+                    <div className="flex items-center space-x-2">
+                        <Switch id="edit-mode-switch" checked={editMode} onCheckedChange={setEditMode}/>
+                        <Label htmlFor="edit-mode-switch">Edit Mode</Label>
+                    </div>
+                )}
+                <DataTableViewOptions table={table} />
+              </div>
           </div>
-          <div className="rounded-md border">
+          <div className={cn("rounded-md border", isSuperAdmin && editMode && "ring-2 ring-yellow-500 ring-inset")}>
               <Table>
                   <TableHeader>
                       {table.getHeaderGroups().map((headerGroup) => (

@@ -1,6 +1,4 @@
 'use client';
-
-import * as React from 'react';
 import {
   ColumnDef,
   flexRender,
@@ -35,7 +33,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { WebArticleDetailsSheet } from './web-article-details-sheet';
 import { DataTableFacetedFilter } from '../tasks/data-table-faceted-filter';
 import { priorityInfo } from '@/lib/utils';
-import { Building2, ChevronsUpDown, Circle, CircleDashed, CheckCircle2, Eye, HelpCircle, User as UserIcon, X as XIcon, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Building2, ChevronsUpDown, Circle, CircleDashed, CheckCircle2, Eye, HelpCircle, User as UserIcon, X as XIcon, MoreHorizontal, Trash2, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
@@ -49,7 +47,9 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '../ui/tooltip';
-
+import * as React from 'react';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
 
 interface WebArticlesDataTableProps {
     articles: WebArticle[];
@@ -68,6 +68,9 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
   const [pendingDeleteArticle, setPendingDeleteArticle] = React.useState<WebArticle | null>(null);
 
   React.useEffect(() => { setData(articles || []); }, [articles]);
+
+  const [editMode, setEditMode] = React.useState(false);
+  const isSuperAdmin = profile?.role === 'Super Admin';
 
   const [sorting, setSorting] = React.useState<SortingState>([{ id: 'dueDate', desc: true }]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
@@ -97,7 +100,7 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
   };
 
 
-  const columns: ColumnDef<WebArticle>[] = [
+  const columns: ColumnDef<WebArticle>[] = React.useMemo(() => [
     {
       accessorKey: 'title',
       header: ({ column }) => (
@@ -257,6 +260,11 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
       id: "actions",
       cell: ({ row }) => {
         const article = row.original;
+
+        if (isSuperAdmin && !editMode) {
+          return null;
+        }
+
         const canDelete = React.useMemo(() => {
             if (!profile) return false;
             if (profile.role === 'Super Admin' || profile.role === 'Manager') return true;
@@ -292,7 +300,7 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
         );
       },
     },
-  ];
+  ], [profile, editMode, isSuperAdmin, router, handleDeleteArticle, brands, users, statuses, priorityOptions, statusOptions]);
 
   const table = useReactTable({
     data,
@@ -329,9 +337,17 @@ export function WebArticlesDataTable({ articles, statuses, users, brands }: WebA
           {table.getColumn("assigneeIds") && <DataTableFacetedFilter column={table.getColumn("assigneeIds")} title="Assignees" options={assigneeOptions} />}
           {isFiltered && ( <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-8 px-2 lg:px-3">Reset <XIcon className="ml-2 h-4 w-4" /></Button>)}
         </div>
-        <DataTableViewOptions table={table} />
+        <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <div className="flex items-center space-x-2">
+              <Switch id="edit-mode-switch-web" checked={editMode} onCheckedChange={setEditMode} />
+              <Label htmlFor="edit-mode-switch-web">Edit Mode</Label>
+            </div>
+          )}
+          <DataTableViewOptions table={table} />
+        </div>
       </div>
-      <div className="rounded-md border">
+      <div className={cn("rounded-md border", isSuperAdmin && editMode && "ring-2 ring-yellow-500 ring-inset")}>
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
