@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -36,8 +35,6 @@ interface GenericKanbanBoardProps {
   isLoading: boolean;
   itemType: 'tasks' | 'socialMediaPosts' | 'webArticles';
   statusCollection: 'statuses' | 'socialMediaStatuses' | 'webStatuses';
-  mode: 'view' | 'edit';
-  onModeChange: (mode: 'view' | 'edit') => void;
 }
 
 interface RevisionState {
@@ -47,7 +44,7 @@ interface RevisionState {
   currentItemText: string;
 }
 
-export function GenericKanbanBoard({ items: allItems, users, isLoading: areItemsLoading, itemType, statusCollection, mode, onModeChange }: GenericKanbanBoardProps) {
+export function GenericKanbanBoard({ items: allItems, users, isLoading: areItemsLoading, itemType, statusCollection }: GenericKanbanBoardProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
   const { toast } = useToast();
@@ -56,6 +53,9 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
   const [isSaving, setIsSaving] = useState(false);
+
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const isSuperAdmin = profile?.role === 'Super Admin';
 
   const statusesQuery = useMemo(() => 
     firestore ? query(collection(firestore, statusCollection), orderBy('order')) : null, 
@@ -97,9 +97,9 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
   
   const canDrag = useMemo(() => {
     if (!profile) return false;
-    if (profile.role === 'Super Admin') return mode === 'edit';
+    if (isSuperAdmin) return mode === 'edit';
     return true;
-  }, [profile, mode]);
+  }, [profile, isSuperAdmin, mode]);
 
 
   const handleDragStart = (e: React.DragEvent<HTMLDivElement>, itemId: string) => {
@@ -212,7 +212,15 @@ export function GenericKanbanBoard({ items: allItems, users, isLoading: areItems
 
   return (
     <>
-      <div className={cn("flex-1 overflow-hidden h-full flex flex-col transition-all duration-300", mode === 'edit' && "ring-2 ring-yellow-500 ring-inset rounded-lg")}>
+      {isSuperAdmin && (
+        <div className="px-4 md:px-6 mb-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => setMode(m => m === 'view' ? 'edit' : 'view')}>
+                <Edit className="mr-2 h-4 w-4" />
+                {mode === 'view' ? 'Activate Edit Mode' : 'Deactivate Edit Mode'}
+            </Button>
+        </div>
+      )}
+      <div className={cn("flex-1 overflow-hidden h-full flex flex-col transition-all duration-300", isSuperAdmin && mode === 'edit' && "ring-2 ring-yellow-500 ring-inset rounded-lg")}>
         {hiddenOldItemsCount > 0 && (
             <Alert className="mb-4 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800 mx-4 md:mx-6">
                 <Archive className="h-4 w-4 text-blue-600 dark:text-blue-400" />

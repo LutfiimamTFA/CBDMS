@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
@@ -7,7 +6,7 @@ import type { Task, WorkflowStatus, Activity, User, Notification, RevisionItem, 
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, orderBy, doc, updateDoc, serverTimestamp, writeBatch, where, deleteField } from 'firebase/firestore';
-import { Loader2, Plus, Check, ListChecks, Paperclip, UploadCloud, FileText, FileImage, Archive, HelpCircle } from 'lucide-react';
+import { Loader2, Plus, Check, ListChecks, Paperclip, UploadCloud, FileText, FileImage, Archive, HelpCircle, Edit } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { usePermissions } from '@/context/permissions-provider';
 import { KanbanColumn } from './kanban-column';
@@ -23,6 +22,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import Link from 'next/link';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
+import { cn } from '@/lib/utils';
 
 
 const createActivity = (user: User, action: string): Activity => {
@@ -74,6 +74,8 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
   const [isSaving, setIsSaving] = useState(false);
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const isSuperAdmin = profile?.role === 'Super Admin';
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -92,8 +94,9 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
     
   const canDrag = useMemo(() => {
     if (!profile) return false;
+    if (isSuperAdmin) return mode === 'edit';
     return true;
-  }, [profile]);
+  }, [profile, isSuperAdmin, mode]);
 
   const { filteredTasks, hiddenOldTasksCount } = useMemo(() => {
     if (!tasks) return { filteredTasks: [], hiddenOldTasksCount: 0 };
@@ -225,7 +228,14 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
-    if (!canDrag) return;
+    if (!canDrag) {
+       toast({
+        variant: "destructive",
+        title: "Mode Lihat Saja (View-Only)",
+        description: "Aktifkan Mode Edit untuk mengubah status tugas.",
+      });
+      return;
+    }
     const taskId = e.dataTransfer.getData('taskId');
     const task = tasks.find(t => t.id === taskId);
 
@@ -355,6 +365,14 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
 
   return (
     <>
+      {isSuperAdmin && (
+        <div className="mb-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => setMode(m => m === 'view' ? 'edit' : 'view')}>
+                <Edit className="mr-2 h-4 w-4" />
+                {mode === 'view' ? 'Activate Edit Mode' : 'Deactivate Edit Mode'}
+            </Button>
+        </div>
+      )}
       {hiddenOldTasksCount > 0 && (
           <Alert className="mb-4 bg-blue-50 dark:bg-blue-950/50 border-blue-200 dark:border-blue-800">
               <Archive className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -365,48 +383,50 @@ export function KanbanBoard({ tasks: initialTasks }: KanbanBoardProps) {
               </AlertDescription>
           </Alert>
       )}
-      {/* Desktop View */}
-      <div className="hidden md:flex h-full w-full">
-        <ScrollArea className="w-full">
-          <div className="flex h-full gap-4 pb-4">
-              {statuses?.map((status) => (
-              <KanbanColumn
-                  key={status.id}
-                  status={status}
-                  tasks={filteredTasks.filter((task) => task.status === status.name)}
-                  onDrop={handleDrop}
-                  onDragStart={handleDragStart}
-                  onDragEnd={handleDragEnd}
-                  onCardClick={handleCardClick}
-                  canDrag={canDrag}
-                  draggingTaskId={draggingTaskId}
-              />
-              ))}
-          </div>
-          <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-      </div>
+      <div className={cn(isSuperAdmin && mode === 'edit' && 'ring-2 ring-yellow-500 ring-inset rounded-lg')}>
+        {/* Desktop View */}
+        <div className="hidden md:flex h-full w-full">
+          <ScrollArea className="w-full">
+            <div className="flex h-full gap-4 pb-4">
+                {statuses?.map((status) => (
+                <KanbanColumn
+                    key={status.id}
+                    status={status}
+                    tasks={filteredTasks.filter((task) => task.status === status.name)}
+                    onDrop={handleDrop}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onCardClick={handleCardClick}
+                    canDrag={canDrag}
+                    draggingTaskId={draggingTaskId}
+                />
+                ))}
+            </div>
+            <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+        </div>
 
-      {/* Mobile View */}
-      <div className="md:hidden flex flex-col h-full">
-          <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
-              <TabsList className="grid w-full grid-cols-3">
-                  {statuses?.map((status) => (
-                      <TabsTrigger key={status.id} value={status.name}>{status.name}</TabsTrigger>
-                  ))}
-              </TabsList>
-              {statuses?.map((status) => (
-                  <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
-                      <ScrollArea className="h-full">
-                          <div className="flex flex-col gap-3 p-1">
-                              {filteredTasks.filter((task) => task.status === status.name).map(task => (
-                                  <TaskCard key={task.id} task={task} />
-                              ))}
-                          </div>
-                      </ScrollArea>
-                  </TabsContent>
-              ))}
-          </Tabs>
+        {/* Mobile View */}
+        <div className="md:hidden flex flex-col h-full">
+            <Tabs defaultValue={statuses?.[0]?.name} className="flex flex-col h-full">
+                <TabsList className="grid w-full grid-cols-3">
+                    {statuses?.map((status) => (
+                        <TabsTrigger key={status.id} value={status.name}>{status.name}</TabsTrigger>
+                    ))}
+                </TabsList>
+                {statuses?.map((status) => (
+                    <TabsContent key={status.id} value={status.name} className="flex-1 min-h-0">
+                        <ScrollArea className="h-full">
+                            <div className="flex flex-col gap-3 p-1">
+                                {filteredTasks.filter((task) => task.status === status.name).map(task => (
+                                    <TaskCard key={task.id} task={task} />
+                                ))}
+                            </div>
+                        </ScrollArea>
+                    </TabsContent>
+                ))}
+            </Tabs>
+        </div>
       </div>
       
       <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
