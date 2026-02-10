@@ -178,13 +178,20 @@ export default function NavigationSettingsPage() {
     
     let itemsClone = [...navItems];
     const draggedItemData = itemsClone.find(item => item.id === draggedItem.current!);
-    if (!draggedItemData) return;
+    const dropTargetData = itemsClone.find(item => item.id === dragOverItem.current!);
+    
+    if (!draggedItemData || !dropTargetData) return;
 
-    const dragIndex = itemsClone.findIndex(item => item.id === draggedItem.current!);
+    // If the drop target is a folder, the dragged item becomes its child.
+    // Otherwise, it adopts the same parent as the drop target (which could be null for root level).
+    const newParentId = dropTargetData.path === '' ? dropTargetData.id : dropTargetData.parentId;
+    const updatedDraggedItem = { ...draggedItemData, parentId: newParentId };
+
+    const dragIndex = itemsClone.findIndex(item => item.id === draggedItemData.id);
     itemsClone.splice(dragIndex, 1);
 
-    const dropIndex = itemsClone.findIndex(item => item.id === dragOverItem.current!);
-    itemsClone.splice(dropIndex, 0, draggedItemData);
+    const dropIndex = itemsClone.findIndex(item => item.id === dropTargetData.id);
+    itemsClone.splice(dropIndex, 0, updatedDraggedItem);
     
     const reorderedItems = itemsClone.map((item, index) => ({ ...item, order: index }));
     
