@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -25,6 +26,9 @@ import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from '@/components/ui/chart';
 import { Pie, PieChart, Cell } from 'recharts';
+import { useSafeBrands } from '@/hooks/use-safe-brands';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
 // --- Generic Chart Components ---
 const StatusPieChart = ({ items, statuses, title }: { items: WorkItem[], statuses: WorkflowStatus[], title: string }) => {
@@ -105,6 +109,9 @@ export default function AdminDashboardPage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedBrand, setSelectedBrand] = useState('all');
+
+  const { brands: availableBrands, isLoading: areBrandsLoading } = useSafeBrands();
 
   // --- Data Fetching ---
   const managerBrandFilter = useMemo(() => {
@@ -118,24 +125,27 @@ export default function AdminDashboardPage() {
     if (!firestore || !companyId || !profile) return null;
     const constraints = [where('companyId', '==', companyId)];
     if (managerBrandFilter) constraints.push(managerBrandFilter);
+    if (selectedBrand !== 'all') constraints.push(where('brandId', '==', selectedBrand));
     return query(collection(firestore, 'tasks'), ...constraints);
-  }, [firestore, companyId, profile, managerBrandFilter]);
+  }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
   const { data: tasks, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
   
   const socialMediaPostsQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
     const constraints = [where('companyId', '==', companyId)];
     if (managerBrandFilter) constraints.push(managerBrandFilter);
+    if (selectedBrand !== 'all') constraints.push(where('brandId', '==', selectedBrand));
     return query(collection(firestore, 'socialMediaPosts'), ...constraints);
-  }, [firestore, companyId, profile, managerBrandFilter]);
+  }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
   const { data: socialMediaPosts, isLoading: areSocialPostsLoading } = useCollection<SocialMediaPost>(socialMediaPostsQuery);
 
   const webArticlesQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
     const constraints = [where('companyId', '==', companyId)];
     if (managerBrandFilter) constraints.push(managerBrandFilter);
+    if (selectedBrand !== 'all') constraints.push(where('brandId', '==', selectedBrand));
     return query(collection(firestore, 'webArticles'), ...constraints);
-  }, [firestore, companyId, profile, managerBrandFilter]);
+  }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
   const { data: webArticles, isLoading: areWebArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
   
   const { data: allCompanyUsers, isLoading: isAllUsersLoading } = useCollection<User>(
@@ -147,7 +157,7 @@ export default function AdminDashboardPage() {
   const { data: webStatuses, isLoading: areWebStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => firestore ? query(collection(firestore, 'webStatuses'), orderBy('order')) : null, [firestore]));
 
   // --- Loading State ---
-  const isLoading = isProfileLoading || areTasksLoading || areSocialPostsLoading || areWebArticlesLoading || isAllUsersLoading || areTaskStatusesLoading || areSocialStatusesLoading || areWebStatusesLoading;
+  const isLoading = isProfileLoading || areTasksLoading || areSocialPostsLoading || areWebArticlesLoading || isAllUsersLoading || areTaskStatusesLoading || areSocialStatusesLoading || areWebStatusesLoading || areBrandsLoading;
 
   const usersForWorkload = useMemo(() => {
     if (profile?.role === 'Manager') {
@@ -206,6 +216,17 @@ export default function AdminDashboardPage() {
     }
   }, [activeTab, tasks, socialMediaPosts, webArticles, taskStatuses, socialStatuses, webStatuses]);
   
+  const getSubtitle = () => {
+    if (selectedBrand !== 'all') {
+        const brandName = availableBrands?.find(b => b.id === selectedBrand)?.name;
+        return `in ${brandName || 'selected brand'}`;
+    }
+    if (profile?.role === 'Manager') {
+        return 'in your managed brands';
+    }
+    return 'across all projects';
+  }
+
   const TotalUsersIcon = Users;
   const TotalIcon = cardIcons.total;
   const CompletedIcon = cardIcons.completed;
@@ -226,12 +247,28 @@ export default function AdminDashboardPage() {
           </div>
         ) : (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-             <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="tasks">Project Tasks</TabsTrigger>
-                <TabsTrigger value="social">Social Media</TabsTrigger>
-                <TabsTrigger value="web">Web Content</TabsTrigger>
-            </TabsList>
+             <div className="flex justify-between items-center flex-wrap gap-4">
+                <TabsList>
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="tasks">Project Tasks</TabsTrigger>
+                    <TabsTrigger value="social">Social Media</TabsTrigger>
+                    <TabsTrigger value="web">Web Content</TabsTrigger>
+                </TabsList>
+                <div className="w-[200px]">
+                    <Label htmlFor="brand-filter" className="text-xs font-medium">Filter by Brand</Label>
+                    <Select value={selectedBrand} onValueChange={setSelectedBrand} disabled={areBrandsLoading}>
+                    <SelectTrigger id="brand-filter" className="h-9 mt-1">
+                        <SelectValue placeholder="Select Brand" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Brands</SelectItem>
+                        {availableBrands?.map(brand => (
+                        <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                    </Select>
+                </div>
+             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -252,7 +289,7 @@ export default function AdminDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{total}</div>
-                   <p className="text-xs text-muted-foreground">{profile?.role === 'Manager' ? 'in your managed brands' : 'across all projects'}</p>
+                   <p className="text-xs text-muted-foreground">{getSubtitle()}</p>
                 </CardContent>
               </Card>
               <Card>
