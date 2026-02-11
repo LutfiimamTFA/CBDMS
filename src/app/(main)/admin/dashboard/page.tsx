@@ -177,12 +177,35 @@ export default function AdminDashboardPage() {
   // --- Loading State ---
   const isLoading = isProfileLoading || areTasksLoading || areSocialPostsLoading || areWebArticlesLoading || isAllUsersLoading || areTaskStatusesLoading || areSocialStatusesLoading || areWebStatusesLoading || areBrandsLoading;
 
-  const usersForWorkload = useMemo(() => {
-    if (profile?.role === 'Manager') {
-        return allCompanyUsers?.filter(u => u.managerId === profile.id) || [];
+  // `displayedUsers` will power the "Total Users" card. It reflects the current filter context.
+  const displayedUsers = useMemo(() => {
+    if (!allCompanyUsers) return [];
+    
+    // If a brand is selected, show users active in that brand's work items.
+    if (selectedBrand !== 'all') {
+      const userIds = new Set<string>();
+      const items = [...(tasks || []), ...(socialMediaPosts || []), ...(webArticles || [])];
+      items.forEach(item => item.assigneeIds.forEach(id => userIds.add(id)));
+      return allCompanyUsers.filter(user => userIds.has(user.id));
     }
-    return allCompanyUsers || [];
-  }, [allCompanyUsers, profile]);
+
+    // If no brand is selected, logic depends on role.
+    if (profile?.role === 'Manager') {
+      // Manager sees their team members (direct reports).
+      return allCompanyUsers.filter(u => u.managerId === profile.id || u.id === profile.id);
+    }
+    
+    // Super Admin sees everyone.
+    return allCompanyUsers;
+  }, [selectedBrand, tasks, socialMediaPosts, webArticles, allCompanyUsers, profile]);
+
+  // `usersForWorkload` will power the TeamWorkloadChart. It should only contain staff who perform tasks.
+  const usersForWorkload = useMemo(() => {
+      // Start with the users filtered by brand or team.
+      let users = displayedUsers;
+      // Further filter to only include roles that perform tasks.
+      return users.filter(u => u.role === 'Employee' || u.role === 'PIC');
+  }, [displayedUsers]);
 
 
   // --- Memoized Data for Display ---
@@ -294,9 +317,14 @@ export default function AdminDashboardPage() {
                   <TotalUsersIcon className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{allCompanyUsers?.length || 0}</div>
+                  <div className="text-2xl font-bold">{displayedUsers?.length || 0}</div>
                   <p className="text-xs text-muted-foreground">
-                    {profile?.role === 'Manager' ? `(${usersForWorkload?.length || 0} in your team)` : 'registered in the system'}
+                    {selectedBrand !== 'all' 
+                        ? 'active in this brand' 
+                        : profile?.role === 'Manager' 
+                        ? `in your team` 
+                        : 'registered in the system'
+                    }
                   </p>
                 </CardContent>
               </Card>
