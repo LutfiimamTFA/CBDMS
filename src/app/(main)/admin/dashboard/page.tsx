@@ -123,27 +123,45 @@ export default function AdminDashboardPage() {
 
   const tasksQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
-    const constraints = [where('companyId', '==', companyId)];
-    if (managerBrandFilter) constraints.push(managerBrandFilter);
-    if (selectedBrand !== 'all') constraints.push(where('brandId', '==', selectedBrand));
+    let constraints = [where('companyId', '==', companyId)];
+    
+    if (selectedBrand !== 'all') {
+        constraints.push(where('brandId', '==', selectedBrand));
+    } 
+    else if (managerBrandFilter) {
+        constraints.push(managerBrandFilter);
+    }
+    
     return query(collection(firestore, 'tasks'), ...constraints);
   }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
   const { data: tasks, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
   
   const socialMediaPostsQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
-    const constraints = [where('companyId', '==', companyId)];
-    if (managerBrandFilter) constraints.push(managerBrandFilter);
-    if (selectedBrand !== 'all') constraints.push(where('brandId', '==', selectedBrand));
+    let constraints = [where('companyId', '==', companyId)];
+    
+    if (selectedBrand !== 'all') {
+        constraints.push(where('brandId', '==', selectedBrand));
+    } 
+    else if (managerBrandFilter) {
+        constraints.push(managerBrandFilter);
+    }
+
     return query(collection(firestore, 'socialMediaPosts'), ...constraints);
   }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
   const { data: socialMediaPosts, isLoading: areSocialPostsLoading } = useCollection<SocialMediaPost>(socialMediaPostsQuery);
 
   const webArticlesQuery = useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
-    const constraints = [where('companyId', '==', companyId)];
-    if (managerBrandFilter) constraints.push(managerBrandFilter);
-    if (selectedBrand !== 'all') constraints.push(where('brandId', '==', selectedBrand));
+    let constraints = [where('companyId', '==', companyId)];
+
+    if (selectedBrand !== 'all') {
+        constraints.push(where('brandId', '==', selectedBrand));
+    } 
+    else if (managerBrandFilter) {
+        constraints.push(managerBrandFilter);
+    }
+
     return query(collection(firestore, 'webArticles'), ...constraints);
   }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
   const { data: webArticles, isLoading: areWebArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
