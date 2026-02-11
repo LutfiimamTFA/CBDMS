@@ -277,10 +277,21 @@ export default function AdminDashboardPage() {
     <div className="flex h-svh flex-col bg-background">
       <main className="flex-1 overflow-auto p-4 md:p-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold tracking-tight">System Overview</h2>
-          <p className="text-muted-foreground">
-            A quick look at the current state of your application.
-          </p>
+            <div className="flex items-center gap-4">
+                <div>
+                    <h2 className="text-2xl font-bold tracking-tight">System Overview</h2>
+                    <p className="text-muted-foreground">
+                        A quick look at the current state of your application.
+                    </p>
+                </div>
+                <div className="flex items-center gap-2 text-green-500">
+                    <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                    <span className="font-semibold">Live</span>
+                </div>
+            </div>
         </div>
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
