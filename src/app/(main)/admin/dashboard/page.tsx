@@ -113,17 +113,30 @@ export default function AdminDashboardPage() {
     }
     return null;
   }, [profile]);
-  
-  const baseWorkItemQuery = (collectionName: string) => {
-    if (!firestore || !companyId || !profile) return null;
-    let constraints = [where('companyId', '==', companyId)];
-    if (managerBrandFilter) constraints.push(managerBrandFilter);
-    return query(collection(firestore, collectionName), ...constraints);
-  }
 
-  const { data: tasks, isLoading: areTasksLoading } = useCollection<Task>(baseWorkItemQuery('tasks'));
-  const { data: socialMediaPosts, isLoading: areSocialPostsLoading } = useCollection<SocialMediaPost>(baseWorkItemQuery('socialMediaPosts'));
-  const { data: webArticles, isLoading: areWebArticlesLoading } = useCollection<WebArticle>(baseWorkItemQuery('webArticles'));
+  const tasksQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    const constraints = [where('companyId', '==', companyId)];
+    if (managerBrandFilter) constraints.push(managerBrandFilter);
+    return query(collection(firestore, 'tasks'), ...constraints);
+  }, [firestore, companyId, profile, managerBrandFilter]);
+  const { data: tasks, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
+  
+  const socialMediaPostsQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    const constraints = [where('companyId', '==', companyId)];
+    if (managerBrandFilter) constraints.push(managerBrandFilter);
+    return query(collection(firestore, 'socialMediaPosts'), ...constraints);
+  }, [firestore, companyId, profile, managerBrandFilter]);
+  const { data: socialMediaPosts, isLoading: areSocialPostsLoading } = useCollection<SocialMediaPost>(socialMediaPostsQuery);
+
+  const webArticlesQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    const constraints = [where('companyId', '==', companyId)];
+    if (managerBrandFilter) constraints.push(managerBrandFilter);
+    return query(collection(firestore, 'webArticles'), ...constraints);
+  }, [firestore, companyId, profile, managerBrandFilter]);
+  const { data: webArticles, isLoading: areWebArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
   
   const { data: allCompanyUsers, isLoading: isAllUsersLoading } = useCollection<User>(
       useMemo(() => (firestore && companyId ? query(collection(firestore, 'users'), where('companyId', '==', companyId)) : null), [firestore, companyId])
