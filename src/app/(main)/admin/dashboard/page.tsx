@@ -20,7 +20,7 @@ import {
   Globe,
   FileText
 } from 'lucide-react';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, orderBy } from 'firebase/firestore';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from '@/components/ui/chart';
