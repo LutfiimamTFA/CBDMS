@@ -11,9 +11,9 @@ import {
   ColumnFiltersState,
   getFilteredRowModel,
   VisibilityState,
+  getPaginationRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
-  getPaginationRowModel,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -30,7 +30,7 @@ import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { format, parseISO, isAfter, endOfDay } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2, ArrowUpDown, ChevronsUpDown, ArrowUpAZ, ArrowDownZA, Edit } from 'lucide-react';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Eye, AlertCircle, FileText, Share2, ArrowUpDown, ChevronsUpDown, ArrowUpAZ, ArrowDownZA, Edit, Building2, Calendar as CalendarIcon, History, HelpCircle } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
 import { DataTableViewOptions } from './data-table-view-options';
@@ -580,9 +580,9 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
+    getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
-    getPaginationRowModel: getPaginationRowModel(),
     onRowSelectionChange: setRowSelection,
     initialState: {
         pagination: { pageSize: 10 },
