@@ -11,7 +11,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+<<<<<<< HEAD
 import { ArrowUpRight, Loader2, Eye, EyeOff } from 'lucide-react';
+=======
+<<<<<<< HEAD
+import { ArrowUpRight, Loader2 } from 'lucide-react';
+=======
+import { Briefcase, Loader2, Eye, EyeOff } from 'lucide-react';
+>>>>>>> 6a9268c65419b3d8e263cc1f1e1a79ed24c55919
+>>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
 import {
   initiateEmailSignIn,
 } from '@/firebase/non-blocking-login';
@@ -32,7 +40,10 @@ import {
   FormLabel,
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
+<<<<<<< HEAD
 
+=======
+>>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
 
 const signInSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -51,7 +62,10 @@ export default function LoginPage() {
   const { user, profile, isUserLoading } = useUserProfile();
   const { toast } = useToast();
   const [isSigningIn, setIsSigningIn] = useState(false);
+<<<<<<< HEAD
   const [justLoggedIn, setJustLoggedIn] = useState(false);
+=======
+>>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
   const [showPassword, setShowPassword] = useState(false);
   
   const signInForm = useForm<SignInFormValues>({
@@ -156,6 +170,7 @@ export default function LoginPage() {
                   <FormItem>
                     <Label htmlFor="password-signin">Password</Label>
                     <div className="relative">
+<<<<<<< HEAD
                       <Input id="password-signin" type={showPassword ? 'text' : 'password'} {...field} />
                       <Button
                         type="button"
@@ -166,11 +181,26 @@ export default function LoginPage() {
                       >
                         {showPassword ? <EyeOff /> : <Eye />}
                       </Button>
+=======
+                      <Input
+                        id="password-signin"
+                        type={showPassword ? 'text' : 'password'}
+                        {...field}
+                      />
+                       <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+>>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
                     </div>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+<<<<<<< HEAD
 
               <FormField
                 control={signInForm.control}
@@ -191,6 +221,17 @@ export default function LoginPage() {
                 )}
               />
 
+=======
+              <div className="flex items-center space-x-2">
+                <Checkbox id="remember-me" />
+                <label
+                  htmlFor="remember-me"
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Remember me
+                </label>
+              </div>
+>>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
               <Button
                 type="submit"
                 className="w-full"
