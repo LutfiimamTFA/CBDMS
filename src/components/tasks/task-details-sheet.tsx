@@ -9,7 +9,7 @@ import {
   SheetFooter,
   SheetTitle,
 } from '@/components/ui/sheet';
-import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem } from '@/lib/types';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle, SharedTask } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import {
@@ -31,26 +31,24 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { priorityInfo } from '@/lib/utils';
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, Tag as TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks } from 'lucide-react';
+import { priorityInfo, formatLateness } from '@/lib/utils';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileImage, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks, RotateCcw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Separator } from '../ui/separator';
 import { useI18n } from '@/context/i18n-provider';
 import { Progress } from '../ui/progress';
-import { format, formatDistanceToNow, parseISO, isAfter } from 'date-fns';
+import { format, formatDistanceToNow, parseISO, isAfter, endOfDay } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
 import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2 } from 'lucide-react';
 import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
 import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { tags as allTags } from '@/lib/data';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -58,7 +56,19 @@ import { Badge } from '../ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 import { Label } from '@/components/ui/label';
-import { Calendar } from '../ui/calendar';
+import { ShareTaskDialog } from '../share/share-task-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
+import { Card, CardContent } from '../ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useSharedSession } from '@/context/shared-session-provider';
+import { tags as allTags } from '@/lib/data';
+import { RichTextEditor } from '../ui/rich-text-editor';
+import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { usePermissions } from '@/context/permissions-provider';
+
 
 const taskDetailsSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -98,17 +108,54 @@ interface FinalReviewState {
   task: Task | null;
 }
 
+interface EndOfDayState {
+  isOpen: boolean;
+}
+
+type BlockingReason = {
+  blocked: boolean;
+  title: string;
+  reasons: string[];
+  suggestion?: string;
+};
+
+const getCurrentSubmissionCycle = (task: Task | null): number => {
+    if (!task) return 1;
+    const historyLength = task.revisionHistory?.length ?? 0;
+
+    if (historyLength > 0) {
+        return historyLength + 1;
+    }
+    
+    if (task.status === 'Revisi' && (task.revisionItems?.length ?? 0) > 0) {
+        return 2; 
+    }
+
+    return 1;
+};
+
 interface TaskDetailsSheetProps {
   task: Task;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  accessLevel?: SharedLink['accessLevel'] | null;
-  creatorRole?: SharedLink['creatorRole'] | null;
 }
+
+function SharedViewLogic({ onDataLoaded }: { onDataLoaded: (data: any) => void }) {
+    const { session, isLoading, error } = useSharedSession();
+
+    useEffect(() => {
+        if (!isLoading) {
+            onDataLoaded({ session, error });
+        }
+    }, [session, isLoading, error, onDataLoaded]);
+
+    return null;
+}
+
 
 const createActivity = (user: User, action: string): Activity => {
     return {
-      id: `act-${crypto.randomUUID()}`,
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
       action: action,
       timestamp: new Date().toISOString() as any,
@@ -122,22 +169,74 @@ const formatDate = (date: any): string => {
     return format(dateObj, 'PP, p');
 };
   
+interface RevisionState {
+  isOpen: boolean;
+  task: Task | null;
+  items: Omit<RevisionItem, 'id' | 'completed'>[];
+  currentItemText: string;
+}
+
+const getFileIcon = (fileName: string): React.ReactElement => {
+    if (fileName.match(/\.(pdf)$/i)) {
+      return React.createElement(FileText, { className: "h-5 w-5 text-red-500" });
+    }
+    if (fileName.match(/\.(doc|docx)$/i)) {
+      return React.createElement(FileText, { className: "h-5 w-5 text-blue-500" });
+    }
+    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) {
+      return React.createElement(FileImage, { className: "h-5 w-5 text-green-500" });
+    }
+    return React.createElement(FileText, { className: "h-5 w-5 text-muted-foreground" });
+};
+
+const getInitials = (name?: string | null) => {
+    if (!name) return 'U';
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('');
+};
+
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES].join(',');
 
 export function TaskDetailsSheet({ 
   task: initialTask, 
   open,
   onOpenChange,
-  accessLevel = null,
-  creatorRole = null
 }: TaskDetailsSheetProps) {
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
   const params = useParams();
+
+  const isSharedView = !!params.linkId;
+
+  const [sharedData, setSharedData] = useState<any>({ session: null, error: null });
+  const { session, error: sharedError } = sharedData;
+  const linkId = isSharedView ? (params.linkId as string) : null;
+  const sharedTaskConfig = null;
   
-  const form = useForm<TaskDetailsFormValues>({
-    resolver: zodResolver(taskDetailsSchema),
-  });
+  const accessLevel = useMemo(() => {
+    if (isSharedView) {
+      if (sharedTaskConfig) return sharedTaskConfig.allowedActions.includes('changeStatus') ? 'status' : 'view';
+      if (session) return session.accessLevel;
+    }
+    return 'full';
+  }, [isSharedView, session, sharedTaskConfig]);
+
 
   const [isUploading, setIsUploading] = React.useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -151,55 +250,80 @@ export function TaskDetailsSheet({
   
   const [currentAssignees, setCurrentAssignees] = useState<User[]>([]);
   const [currentTags, setCurrentTags] = useState<Tag[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
   
-  const [subtasks, setSubtasks] = useState<Subtask[]>([]);
   const [newSubtask, setNewSubtask] = useState('');
   const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<User | null>(null);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   
-  const [isRejectionDialogOpen, setRejectionDialogOpen] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState('');
-  
-  const [revisionItems, setRevisionItems] = useState<RevisionItem[]>([]);
   const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
   const [gdriveLink, setGdriveLink] = useState('');
   const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+  const [isMentioning, setIsMentioning] = React.useState(false);
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
 
   const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, task: null });
+  const [endOfDayState, setEndOfDayState] = useState<EndOfDayState>({ isOpen: false });
+  const [blockingAlert, setBlockingAlert] = useState<{ isOpen: boolean, title: string, reasons: string[], suggestion?: string }>({ isOpen: false, title: '', reasons: [], suggestion: '' });
+  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, task: null, items: [], currentItemText: '' });
+
+
+  const [taskState, setTaskState] = useState(initialTask);
+  useEffect(() => { setTaskState(initialTask) }, [initialTask]);
 
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const deliverableFileInputRef = React.useRef<HTMLInputElement>(null);
   const commentFileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [aiValidation, setAiValidation] = useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
+  
+  const form = useForm<TaskDetailsFormValues>({
+    resolver: zodResolver(taskDetailsSchema),
+  });
 
   const firestore = useFirestore();
   const storage = useStorage();
   
   const { user: authUser, profile: currentUser } = useUserProfile();
+  const { permissions, isLoading: arePermsLoading } = !isSharedView ? usePermissions() : { permissions: null, isLoading: false };
+
+
+  const allTasksQuery = useMemo(() => {
+    if (isSharedView || !firestore || !currentUser) return null;
+    return query(collection(firestore, 'tasks'), where('companyId', '==', currentUser.companyId));
+  }, [firestore, currentUser, isSharedView]);
+  const { data: allTasks, isLoading: areAllTasksLoading } = useCollection<Task>(allTasksQuery);
   
- const usersQuery = useMemo(() => {
+  const usersQuery = useMemo(() => {
+    if (isSharedView) return null;
     if (!firestore || !currentUser) return null;
     let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
     
     if (currentUser.role === 'Employee' && currentUser.managerId) {
-      q = query(q, where('managerId', '==', currentUser.managerId));
+      // This is a simplification. A more robust query might use an 'in' clause 
+      // if we fetch manager's direct reports IDs first. For now, fetching all and filtering client-side is acceptable.
+      // The query is broad, but filtering happens in useMemo hooks.
     }
     return q;
-  }, [firestore, currentUser]);
-
+  }, [firestore, currentUser, isSharedView]);
   const { data: allUsers } = useCollection<User>(usersQuery);
   
-  const statusesQuery = useMemo(() => 
-    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: allStatuses } = useCollection<WorkflowStatus>(statusesQuery);
+  const { data: allStatusesData } = useCollection<WorkflowStatus>(useMemo(() => 
+    !isSharedView && firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    [firestore, isSharedView]
+  ));
+  
+  const statuses = useMemo(() => {
+    if (isSharedView && session) return session.snapshot.statuses || [];
+    if (isSharedView && sharedTaskConfig) return sharedTaskConfig.snapshot.statuses || [];
+    return allStatusesData || [];
+  }, [isSharedView, session, sharedTaskConfig, allStatusesData]);
 
   const brandsQuery = useMemo(() => {
-    if (!firestore || !currentUser) return null;
+    if (isSharedView || !firestore || !currentUser) return null;
     if (currentUser.role === 'Super Admin') {
         return query(collection(firestore, 'brands'), orderBy('name'));
     }
@@ -208,10 +332,11 @@ export function TaskDetailsSheet({
         return query(collection(firestore, 'brands'), where('__name__', 'in', currentUser.brandIds), orderBy('name'));
     }
     return query(collection(firestore, 'brands'), orderBy('name'));
-  }, [firestore, currentUser]);
+  }, [firestore, currentUser, isSharedView]);
   const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
 
  const groupedUsers = useMemo(() => {
+    if (isSharedView) return { managers: [], employees: [], clients: [] };
     if (!allUsers || !currentUser) return { managers: [], employees: [], clients: [] };
     
     const self = allUsers.find(u => u.id === currentUser.id);
@@ -229,119 +354,286 @@ export function TaskDetailsSheet({
     }
     
     if (currentUser.role === 'Employee') {
-      // Employee should only see their team
-      const manager = allUsers.find(u => u.id === currentUser.managerId);
       const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
-      
-      const teamWithManager = [...myTeam];
-      if (manager && !teamWithManager.some(u => u.id === manager.id)) {
-          teamWithManager.push(manager);
-      }
-
-      return { managers: manager ? [manager] : [], employees: teamWithManager, clients: [] };
+      return { managers: [], employees: myTeam, clients: [] };
     }
 
     return { managers: [], employees: [], clients: [] };
 
-  }, [allUsers, currentUser]);
+  }, [allUsers, currentUser, isSharedView]);
 
-  const isSharedView = !!accessLevel;
+  const dependencyOptions = useMemo(() => {
+    if (isSharedView || !allTasks || !currentUser) return [];
+    
+    let relevantTasks = allTasks.filter(task => task.id !== taskState.id);
+
+    if (currentUser.role === 'Manager') {
+        relevantTasks = relevantTasks.filter(task => currentUser.brandIds?.includes(task.brandId));
+    } else if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
+        const userBrandIds = new Set(
+            allTasks.filter(t => t.assigneeIds.includes(currentUser.id)).map(t => t.brandId)
+        );
+        relevantTasks = relevantTasks.filter(task => userBrandIds.has(task.brandId));
+    }
+    
+    return relevantTasks;
+  }, [allTasks, currentUser, taskState, isSharedView]);
   
-  const isCreator = currentUser?.id === initialTask.createdBy.id;
-  const isManagerOfBrand = currentUser?.role === 'Manager' && initialTask.brandId && currentUser.brandIds?.includes(initialTask.brandId);
-  const isAssignee = !!currentUser && initialTask.assigneeIds.includes(currentUser.id);
-  const isManagerOrAdmin = currentUser?.role === 'Manager' || currentUser?.role === 'Super Admin';
+  const groupedDependencyOptions = useMemo(() => {
+      const grouped: Record<string, Task[]> = {};
+      dependencyOptions.forEach(task => {
+          const brandName = brands?.find(b => b.id === task.brandId)?.name || 'Unbranded';
+          if (!grouped[brandName]) {
+              grouped[brandName] = [];
+          }
+          grouped[brandName].push(task);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  }, [dependencyOptions, brands]);
 
-  const canEditContent = isSharedView 
-    ? false
-    : (currentUser && (
-        currentUser.role === 'Super Admin' || 
-        isManagerOfBrand ||
-        (isCreator && (currentUser.role === 'Employee' || currentUser.role === 'PIC'))
-      ));
+
+  const isCreator = currentUser?.id === taskState.createdBy.id;
+  const isManagerOfBrand = currentUser?.role === 'Manager' && taskState.brandId && currentUser.brandIds?.includes(taskState.brandId);
+  const isAssignee = !!currentUser && taskState.assigneeIds.includes(currentUser.id);
+  const isManagerOrAdmin = !isSharedView && currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin');
+  const isEmployeeOrPIC = !isSharedView && currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC');
+
+  const creatorIsEmployee = useMemo(() => {
+    if (isSharedView) return session?.creatorRole === 'Employee' || session?.creatorRole === 'PIC';
+    return false;
+  }, [isSharedView, session]);
+  
+  const taskIsFromManager = useMemo(() => {
+    if (isSharedView) return taskState.createdBy.id !== session?.creatorId;
+    return false;
+  }, [isSharedView, taskState.createdBy.id, session?.creatorId]);
+
+
+  const canEditContent = useMemo(() => {
+    if (isSharedView) return false;
+    if (!currentUser) return false;
+    // An employee cannot edit a task once it's in review
+    if (isEmployeeOrPIC && taskState.status === 'Preview') return false;
+    // Otherwise, standard edit permissions apply
+    return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
+  }, [isSharedView, currentUser, isEmployeeOrPIC, taskState.status, isManagerOfBrand, isCreator]);
       
   const canChangePriority = useMemo(() => {
       if (isSharedView) {
         if (accessLevel !== 'limited-edit') return false;
-        // Check if creator has rights
-        const creatorIsManagerOrAdmin = creatorRole === 'Manager' || creatorRole === 'Super Admin';
-        const creatorIsTaskOwner = initialTask.createdBy.id === params.linkId; // Simplified check
-        return creatorIsManagerOrAdmin || creatorIsTaskOwner;
+        return !(creatorIsEmployee && taskIsFromManager);
       }
       if (!currentUser) return false;
       return currentUser.role === 'Super Admin' || currentUser.role === 'Manager';
-  }, [currentUser, isSharedView, accessLevel, creatorRole, initialTask.createdBy.id, params.linkId]);
+  }, [currentUser, isSharedView, accessLevel, creatorIsEmployee, taskIsFromManager]);
   
   const canEditDueDate = useMemo(() => {
     if (isSharedView) {
-        if (accessLevel !== 'limited-edit') return false;
-        const creatorIsManagerOrAdmin = creatorRole === 'Manager' || creatorRole === 'Super Admin';
-        // For shared tasks created by employees/pics, they can also edit the due date
-        return creatorIsManagerOrAdmin || ['Employee', 'PIC'].includes(creatorRole || '');
+      if (accessLevel !== 'limited-edit') return false;
+      return !(creatorIsEmployee && taskIsFromManager);
     }
-    // For non-shared view, if user is creator, they can edit due date.
-    return canEditContent || isCreator;
-  }, [isSharedView, accessLevel, creatorRole, canEditContent, isCreator]);
+    return canEditContent;
+  }, [isSharedView, accessLevel, canEditContent, creatorIsEmployee, taskIsFromManager]);
 
-  const canComment = !isSharedView && !!currentUser;
+  const canComment = useMemo(() => {
+    if (isSharedView) return accessLevel !== 'view';
+    return !!currentUser;
+  }, [isSharedView, accessLevel, currentUser]);
   
   const currentFormStatus = form.watch('status');
-
+  
   const canChangeStatus = useMemo(() => {
-    if (isSharedView) {
-      if (accessLevel === 'view') return false;
-      if (accessLevel === 'status' && (creatorRole === 'Employee' || creatorRole === 'PIC')) {
-        return !['Done', 'Revisi'].includes(currentFormStatus);
-      }
-      return true;
-    }
+    if (isSharedView) return accessLevel === 'status' || accessLevel === 'limited-edit';
     if (!currentUser) return false;
-    return isManagerOrAdmin || isAssignee;
-  }, [isSharedView, accessLevel, creatorRole, currentFormStatus, currentUser, isManagerOrAdmin, isAssignee]);
-
+    return true; 
+  }, [isSharedView, accessLevel, currentUser]);
+  
   const canAssignUsers = isSharedView ? false : canEditContent;
   
   const canManageSubtasks = useMemo(() => {
-    if (isSharedView) return accessLevel === 'limited-edit';
+    if (isSharedView) return false;
+    if (!currentUser) return false;
+    return isAssignee || isManagerOrAdmin;
+  }, [isSharedView, currentUser, isAssignee, isManagerOrAdmin]);
+
+  const canCompleteSubtask = (subtask: Subtask): boolean => {
+    if (isSharedView) return false;
     if (!currentUser) return false;
 
-    const isAllowedStatus = ['To Do', 'Doing', 'Revisi'].includes(currentFormStatus);
+    // The person assigned to the subtask can complete it.
+    if (subtask.assignee?.id === currentUser.id) return true;
+
+    // The person who created the main task can complete any subtask.
+    if (isCreator) return true;
+
+    // Any manager or admin can complete any subtask.
+    if (isManagerOrAdmin) return true;
     
-    return (isAssignee || isManagerOrAdmin) && isAllowedStatus;
-  }, [isSharedView, accessLevel, currentUser, isAssignee, isManagerOrAdmin, currentFormStatus]);
+    return false;
+  };
   
   const showTimeTracker = useMemo(() => {
       if (isSharedView) return false;
       if (!isAssignee) return false;
-      return ['To Do', 'Doing', 'Revisi'].includes(form.getValues('status'));
-  }, [isAssignee, isSharedView, form.watch('status')]);
+      return !['Preview', 'Revisi', 'Done'].includes(form.getValues('status'));
+  }, [isAssignee, isSharedView, form]);
+  
+  const canDeleteTask = useMemo(() => {
+    if (isSharedView) return false;
+    if (!currentUser || arePermsLoading) return false;
+    if (currentUser.role === 'Super Admin') return true;
+    if (currentUser.role === 'Manager' && permissions) {
+        return permissions.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(taskState.brandId);
+    }
+    if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
+        return taskState.createdBy?.id === currentUser.id;
+    }
+    return false;
+  }, [currentUser, permissions, arePermsLoading, taskState, isSharedView]);
+
+  const canUploadDeliverables = useMemo(() => {
+    if (isSharedView) {
+        if (accessLevel === 'view') return false;
+    }
+    if (!currentUser) return false;
+    // An employee cannot upload a deliverable if it is already waiting for review
+    if (isEmployeeOrPIC && taskState.status === 'Preview') return false;
+    return isAssignee || isManagerOrAdmin;
+  }, [isSharedView, accessLevel, isAssignee, isManagerOrAdmin, isEmployeeOrPIC, taskState.status, currentUser]);
+
+
+  const handlePauseSession = useCallback(async (actionSource: 'auto-pause' | 'manual' = 'manual') => {
+      if (!firestore || !currentUser || !taskState.currentSessionStartTime || !isRunning) return;
+
+      const taskRef = doc(firestore, "tasks", taskState.id);
+      
+      const startTime = parseISO(taskState.currentSessionStartTime).getTime();
+      const now = Date.now();
+      const sessionDurationInSeconds = (now - startTime) / 1000;
+      const newTimeTrackedInHours = (taskState.timeTracked || 0) + (sessionDurationInSeconds / 3600);
+      
+      const actionText = actionSource === 'auto-pause'
+          ? `session auto-paused at end of day`
+          : `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`;
+      
+      const newActivity: Activity = createActivity(currentUser, actionText);
+      
+      try {
+          await updateDoc(taskRef, {
+              timeTracked: newTimeTrackedInHours,
+              currentSessionStartTime: deleteField(),
+              lastActivity: newActivity,
+              activities: [...(taskState.activities || []), newActivity]
+          });
+          setIsRunning(false);
+          setElapsedTime(0);
+          if (actionSource === 'manual') {
+              toast({ title: 'Session Paused', description: 'Your work has been logged.' });
+          }
+      } catch (error) {
+          console.error("Failed to pause session:", error);
+          if (actionSource === 'manual') {
+              toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
+          }
+      }
+  }, [firestore, currentUser, taskState, toast, isRunning]);
+
+
+  const handleStartSession = useCallback(async (actionSource: 'auto-start' | 'manual' = 'manual') => {
+      if (isSharedView || !firestore || !currentUser || isRunning) return;
+
+      const taskRef = doc(firestore, "tasks", taskState.id);
+      const activitiesToAdd: Activity[] = [];
+      const updates: Partial<Task> = { currentSessionStartTime: new Date().toISOString() };
+
+      if (taskState.status === 'To Do') {
+          updates.status = 'Doing';
+          activitiesToAdd.push(createActivity(currentUser, 'changed status from "To Do" to "Doing"'));
+      }
+      
+      const actionText = actionSource === 'auto-start' 
+          ? 'session auto-started on task open' 
+          : 'started a work session';
+      activitiesToAdd.push(createActivity(currentUser, actionText));
+      
+      updates.activities = [...(taskState.activities || []), ...activitiesToAdd];
+      updates.lastActivity = activitiesToAdd[activitiesToAdd.length - 1];
+      if (!taskState.actualStartDate) updates.actualStartDate = new Date().toISOString();
+      
+      await updateDoc(taskRef, updates);
+      setIsRunning(true);
+      if (actionSource === 'manual') {
+          toast({ title: 'Session Started' });
+      }
+  }, [firestore, currentUser, taskState, toast, isRunning, isSharedView]);
+
 
   useEffect(() => {
-    if (initialTask && open) {
+      if (open && isAssignee && taskState.status === 'To Do' && !isSharedView) {
+          handleStartSession('auto-start');
+      }
+  }, [open, isAssignee, taskState.status, handleStartSession, isSharedView]);
+
+
+  useEffect(() => {
+    if (isSharedView) return;
+
+    const checkTime = () => {
+        const now = new Date();
+        const hours = now.getHours();
+        const minutes = now.getMinutes();
+
+        if (hours === 12 && minutes === 0 && isRunning) {
+            handlePauseSession('auto-pause');
+        }
+        
+        if (hours === 13 && minutes === 0 && !isRunning && taskState.status === 'Doing') {
+            const lastActivity = taskState.activities?.[taskState.activities.length - 1];
+            if (lastActivity?.action.includes('auto-paused')) {
+                handleStartSession('auto-start');
+            }
+        }
+
+        if (hours === 17 && minutes === 0 && isRunning) {
+            setEndOfDayState({ isOpen: true });
+        }
+    };
+
+    const timer = setInterval(checkTime, 60 * 1000);
+    return () => clearInterval(timer);
+  }, [isRunning, handlePauseSession, handleStartSession, isSharedView, taskState]);
+
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (isRunning) {
+      interval = setInterval(() => setElapsedTime(prevTime => prevTime + 1), 1000);
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [isRunning]);
+  
+  
+  useEffect(() => {
+    if (taskState && open) {
         form.reset({
-            title: initialTask.title,
-            brandId: initialTask.brandId,
-            description: initialTask.description || '',
-            status: initialTask.status,
-            priority: initialTask.priority,
-            assigneeIds: initialTask.assignees?.map(a => a.id) || [],
-            timeEstimate: initialTask.timeEstimate,
-            dueDate: initialTask.dueDate ? format(parseISO(initialTask.dueDate), 'yyyy-MM-dd') : undefined,
+            title: taskState.title,
+            brandId: taskState.brandId,
+            description: taskState.description || '',
+            status: taskState.status,
+            priority: taskState.priority,
+            assigneeIds: taskState.assignees?.map(a => a.id) || [],
+            timeEstimate: taskState.timeEstimate,
+            dueDate: taskState.dueDate ? format(parseISO(taskState.dueDate), 'yyyy-MM-dd') : undefined,
         });
         
-        setSubtasks(initialTask.subtasks || []);
-        setCurrentAssignees(initialTask.assignees || []);
-        setCurrentTags(initialTask.tags || []);
-        setAttachments(initialTask.attachments || []);
-        
-        setRevisionItems(initialTask.revisionItems || []);
-        
+        setCurrentAssignees(taskState.assignees || []);
+        setCurrentTags(taskState.tags || []);
         setNewComment('');
         setCommentAttachment(null);
         setNewSubtaskAssignee(null);
 
-        if (initialTask.currentSessionStartTime) {
-            const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
+        if (taskState.currentSessionStartTime && !isSharedView) {
+            const startTime = parseISO(taskState.currentSessionStartTime).getTime();
             const now = Date.now();
             setElapsedTime(Math.floor((now - startTime) / 1000));
             setIsRunning(true);
@@ -350,119 +642,116 @@ export function TaskDetailsSheet({
             setIsRunning(false);
         }
     }
-  }, [initialTask, form, open]);
+  }, [taskState, form, open, isSharedView]);
 
+  const getBlockingReasonsForStatusChange = (targetStatus: string, currentTask: Task): BlockingReason => {
+    const reasons: string[] = [];
+    const baseResult = { blocked: false, title: '', reasons: [], suggestion: '' };
 
-  const handlePauseSession = useCallback(async () => {
-    if (!firestore || !currentUser || !initialTask.currentSessionStartTime) return;
-    
-    const taskRef = doc(firestore, "tasks", initialTask.id);
-    
-    const startTime = parseISO(initialTask.currentSessionStartTime).getTime();
-    const now = Date.now();
-    const sessionDurationInSeconds = (now - startTime) / 1000;
-    const newTimeTrackedInHours = (initialTask.timeTracked || 0) + (sessionDurationInSeconds / 3600);
-    
-    const newActivity: Activity = createActivity(currentUser, `paused a work session after ${formatStopwatch(Math.round(sessionDurationInSeconds))}`);
-    
-    try {
-        await updateDoc(taskRef, {
-            timeTracked: newTimeTrackedInHours,
-            currentSessionStartTime: deleteField(),
-            lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity]
-        });
-        setIsRunning(false);
-        setElapsedTime(0);
-        toast({ title: 'Session Paused', description: 'Your work has been logged.' });
-    } catch (error) {
-        console.error("Failed to pause session:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not log your work.' });
+    if (targetStatus === 'Preview') {
+        const allSubtasksCompleted = (currentTask.subtasks || []).every(st => st.completed);
+        if (!allSubtasksCompleted) reasons.push("Selesaikan semua subtasks dulu.");
+
+        const isInRevision = currentTask.status === 'Revisi' || (currentTask.revisionItems && currentTask.revisionItems.length > 0);
+        if (isInRevision) {
+            const allRevisionsCompleted = (currentTask.revisionItems || []).every(item => item.completed);
+            if (!allRevisionsCompleted) reasons.push("Checklist revisi belum selesai.");
+        }
+
+        const currentCycle = getCurrentSubmissionCycle(currentTask);
+        const hasDeliverableForCycle = (currentTask.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+        if (!hasDeliverableForCycle) reasons.push("Upload minimal 1 file BARU di Deliverables untuk submission cycle ini.");
+
+        if (reasons.length > 0) {
+            return { blocked: true, title: "Belum Siap untuk Direview", reasons, suggestion: "Mohon lengkapi item di atas sebelum mengirimkan tugas untuk review." };
+        }
     }
-  }, [firestore, currentUser, initialTask, toast]);
+    
+    if (isEmployeeOrPIC && targetStatus === 'Done') {
+        return { blocked: true, title: "Aksi Tidak Diizinkan", reasons: ["Hanya Manager yang bisa menyelesaikan tugas."], suggestion: "Ubah status ke 'Preview' agar bisa direview oleh Manager." };
+    }
+
+    return baseResult;
+  };
 
 
   const handleStatusChange = async (newStatus: string) => {
-    if ((!firestore || !currentUser) && !isSharedView) return;
-    
     const oldStatus = form.getValues('status');
     if (oldStatus === newStatus) return;
 
-    // Pause timer if running and not in shared view
+    if (!isSharedView) {
+      const block = getBlockingReasonsForStatusChange(newStatus, taskState);
+      if (block.blocked) {
+          setBlockingAlert({ isOpen: true, ...block });
+          return;
+      }
+    }
+    
+    form.setValue('status', newStatus);
+
     if (isRunning && !isSharedView) {
         await handlePauseSession();
     }
     
-    form.setValue('status', newStatus); // Optimistic UI update
-
-    if(isSharedView) {
-        // Shared view logic
-        const linkId = params.linkId;
+    if (isSharedView) {
         try {
             const response = await fetch('/api/share/update-task', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                linkId,
-                taskId: initialTask.id,
-                updates: { status: newStatus },
-              }),
+              body: JSON.stringify({ linkId, taskId: taskState.id, updates: { status: newStatus } }),
             });
-            if (!response.ok) throw new Error('Failed to update status');
-
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.message || 'Failed to update status');
+            }
+            const data = await response.json();
+            if (data.updatedTask) {
+              setTaskState(data.updatedTask);
+            }
             toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
-        } catch (error) {
-            form.setValue('status', oldStatus); // Revert
-            toast({ variant: 'destructive', title: 'Update Failed' });
+        } catch (error: any) {
+            form.setValue('status', oldStatus);
+            toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
         }
         return;
     }
     
-    // Logged-in user logic
-    const newActivity = createActivity(currentUser!, `changed status from "${oldStatus}" to "${newStatus}"`);
-    const updatedActivities = [...(initialTask.activities || []), newActivity];
-
-    const taskRef = doc(firestore, 'tasks', initialTask.id);
+    if (!firestore || !currentUser) {
+        form.setValue('status', oldStatus);
+        return;
+    }
+    
+    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    const taskRef = doc(firestore, 'tasks', taskState.id);
     
     try {
         const batch = writeBatch(firestore);
-        
-        const updates: Partial<Task> = {
-            status: newStatus,
-            activities: updatedActivities,
-            lastActivity: newActivity,
-            updatedAt: serverTimestamp() as Timestamp,
-        };
-        
+        const updates: Partial<Task> = { status: newStatus, activities: [...(taskState.activities || []), newActivity], lastActivity: newActivity, updatedAt: serverTimestamp() as any };
         if (oldStatus === 'Revisi' && newStatus === 'Doing') updates.isUnderRevision = true;
-        if (newStatus !== 'Doing' && initialTask.isUnderRevision) updates.isUnderRevision = deleteField() as any;
-        if (oldStatus === 'To Do' && newStatus !== 'To Do' && !initialTask.actualStartDate) updates.actualStartDate = new Date().toISOString();
+        if (newStatus !== 'Doing' && taskState.isUnderRevision) updates.isUnderRevision = deleteField() as any;
+        if (oldStatus === 'To Do' && newStatus !== 'To Do' && !taskState.actualStartDate) updates.actualStartDate = new Date().toISOString();
         if (newStatus === 'Done' && oldStatus !== 'Done') updates.actualCompletionDate = new Date().toISOString();
         if (newStatus !== 'Done' && oldStatus === 'Done') updates.actualCompletionDate = deleteField() as any;
 
-        const notificationTitle = `Status Changed: ${initialTask.title}`;
-        const notificationMessage = `${currentUser!.name} changed status to ${newStatus}.`;
+        const notificationTitle = `Status Changed: ${taskState.title}`;
+        const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
         
         const notifiedUserIds = new Set<string>();
-        initialTask.assigneeIds.forEach(id => { if (id !== currentUser!.id) notifiedUserIds.add(id); });
-        if (initialTask.createdBy.id !== currentUser!.id) notifiedUserIds.add(initialTask.createdBy.id);
+        taskState.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
+        if (taskState.createdBy.id !== currentUser.id) notifiedUserIds.add(taskState.createdBy.id);
 
         notifiedUserIds.forEach(userId => {
             const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-            const newNotification: Omit<Notification, 'id'> = {
-                userId, title: notificationTitle, message: notificationMessage, taskId: initialTask.id, isRead: false,
-                createdAt: serverTimestamp() as any, createdBy: newActivity.user,
-            };
-            batch.set(notifRef, newNotification);
+            batch.set(notifRef, { userId, title: notificationTitle, message: notificationMessage, taskId: taskState.id, isRead: false, createdAt: serverTimestamp() as any, createdBy: newActivity.user });
         });
         
         batch.update(taskRef, updates);
         await batch.commit();
 
         toast({ title: 'Status Updated', description: `Task status changed to ${newStatus}.` });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Failed to update status:', error);
-        form.setValue('status', oldStatus); 
+        form.setValue('status', oldStatus);
         toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task status.' });
     }
   };
@@ -478,49 +767,45 @@ export function TaskDetailsSheet({
         return;
     }
     
-    form.setValue('priority', newPriority); // Optimistic UI
+    form.setValue('priority', newPriority);
 
     const applyChange = async (priority: Priority) => {
+      const updates = { priority };
       if (isSharedView) {
-        const linkId = params.linkId;
-        try {
-          const response = await fetch('/api/share/update-task', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { priority } }),
-          });
-          if (!response.ok) throw new Error('Failed to update priority');
-          
-
-          toast({ title: 'Priority Updated' });
-        } catch (error) {
-          form.setValue('priority', currentPriority);
-          toast({ variant: 'destructive', title: 'Update Failed' });
-        }
+          try {
+              const response = await fetch('/api/share/update-task', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ linkId, taskId: taskState.id, updates })
+              });
+              if (!response.ok) throw new Error('Failed to update priority.');
+              toast({ title: 'Priority Updated', description: `Task priority set to ${priority}.` });
+          } catch (error) {
+              console.error('Failed to update priority:', error);
+              form.setValue('priority', currentPriority); 
+              toast({ variant: 'destructive', title: 'Update Failed' });
+          }
       } else {
         if (!firestore || !currentUser) return;
-        const taskRef = doc(firestore, 'tasks', initialTask.id);
+        const taskRef = doc(firestore, 'tasks', taskState.id);
         const newActivity = createActivity(currentUser, `set priority from "${currentPriority}" to "${priority}"`);
         try {
             await updateDoc(taskRef, {
-                priority: priority,
-                activities: [...(initialTask.activities || []), newActivity],
+                ...updates,
+                activities: [...(taskState.activities || []), newActivity],
                 lastActivity: newActivity,
                 updatedAt: serverTimestamp(),
             });
             toast({ title: 'Priority Updated', description: `Task priority set to ${priority}.` });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to update priority:', error);
             form.setValue('priority', currentPriority); 
             toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not update task priority.' });
         }
       }
     };
-
-    if (isSharedView) {
-      await applyChange(newPriority);
-      return;
-    }
+    
+    if (isSharedView) { await applyChange(newPriority); return; }
     
     const priorityValues: Record<Priority, number> = { 'Low': 0, 'Medium': 1, 'High': 2, 'Urgent': 3 };
     if (priorityValues[newPriority] <= priorityValues[currentPriority]) {
@@ -531,478 +816,307 @@ export function TaskDetailsSheet({
     setAiValidation({ ...aiValidation, isChecking: true });
     try {
         const result = await validatePriorityChange({
-            title: form.getValues('title'),
-            description: form.getValues('description'),
-            currentPriority,
-            requestedPriority: newPriority,
+            title: form.getValues('title'), description: form.getValues('description'), currentPriority, requestedPriority: newPriority,
         });
 
         if (result.isApproved) {
             await applyChange(newPriority);
             toast({ title: 'AI Agrees!', description: result.reason });
         } else {
-            setAiValidation({
-                isOpen: true, isChecking: false, reason: result.reason,
-                onConfirm: async () => {
-                    await applyChange(newPriority); 
-                    setAiValidation({ ...aiValidation, isOpen: false });
-                }
-            });
+            setAiValidation({ isOpen: true, isChecking: false, reason: result.reason, onConfirm: async () => { await applyChange(newPriority); setAiValidation({ ...aiValidation, isOpen: false }); } });
         }
     } catch (e) {
         console.error(e);
         toast({ variant: 'destructive', title: 'AI Validation Failed', description: 'Applying directly.' });
         await applyChange(newPriority);
     } finally {
-        if (aiValidation.isChecking) {
-             setAiValidation(prev => ({ ...prev, isChecking: false }));
-        }
+        if (aiValidation.isChecking) { setAiValidation(prev => ({ ...prev, isChecking: false })); }
     }
   };
 
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    if (isRunning) {
-      interval = setInterval(() => {
-        setElapsedTime(prevTime => prevTime + 1);
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isRunning]);
-  
+  const handleMentionSelect = (user: User) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
+  };
   
   const handlePostComment = async () => {
-    if ((!newComment.trim() && !commentAttachment) || !currentUser || !firestore || !storage) return;
+    if (!newComment.trim()) return;
 
-    setIsUploadingCommentAttachment(true);
-    
-    try {
-        const batch = writeBatch(firestore);
-        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-
-        let attachmentData;
-        if (commentAttachment) {
-            const attachmentId = `${Date.now()}-${commentAttachment.name}`;
-            const storageRef = ref(storage, `attachments/${initialTask.id}/comments/${attachmentId}`);
-            await uploadBytes(storageRef, commentAttachment);
-            const url = await getDownloadURL(storageRef);
-            attachmentData = {
-                name: commentAttachment.name,
-                url: url,
-            };
-        }
-
-        const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
-
-        const comment: Comment = {
-          id: `c-${crypto.randomUUID()}`,
-          user: currentUser,
-          text: newComment,
-          timestamp: new Date().toISOString(),
-          replies: [],
-          ...(attachmentData && { attachment: attachmentData }),
-        };
-        
-        const newComments = [...(initialTask.comments || []), comment];
-        
-        batch.update(taskDocRef, { 
-            comments: newComments,
-            lastActivity: newActivity,
-            activities: [...(initialTask.activities || []), newActivity]
+    if (isSharedView) {
+      if (!linkId) return;
+      setIsUploadingCommentAttachment(true);
+      try {
+        const response = await fetch('/api/share/update-task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ linkId, taskId: taskState.id, newComment: { text: newComment } }),
         });
-
-        const notificationTitle = `New Comment: ${initialTask.title}`;
-        const notificationMessage = `${currentUser.name} commented on "${initialTask.title.substring(0, 30)}..."`;
-
-        const notifiedUserIds = new Set<string>();
-
-        initialTask.assigneeIds.forEach(assigneeId => {
-            if (assigneeId !== currentUser.id) {
-                notifiedUserIds.add(assigneeId);
-            }
-        });
-        
-        if (initialTask.createdBy.id !== currentUser.id) {
-            notifiedUserIds.add(initialTask.createdBy.id);
-        }
-
-        const mentionedUsers = newComment.match(/@(\w+)/g)?.map(m => m.substring(1)) || [];
-        if (allUsers && mentionedUsers.length > 0) {
-            allUsers.forEach(user => {
-                if (mentionedUsers.includes(user.name.split(' ')[0]) && user.id !== currentUser.id) {
-                    notifiedUserIds.add(user.id);
-                }
-            });
-        }
-        
-        notifiedUserIds.forEach(userId => {
-            const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
-            const newNotification: Omit<Notification, 'id'> = {
-                userId,
-                title: notificationTitle,
-                message: notificationMessage,
-                taskId: initialTask.id,
-                isRead: false,
-                createdAt: serverTimestamp() as any,
-                createdBy: newActivity.user,
-            };
-            batch.set(notifRef, newNotification);
-        });
-
-        await batch.commit();
-
+        if (!response.ok) { throw new Error((await response.json()).message || 'Failed to post comment.'); }
+        const data = await response.json();
+        if (data.updatedTask) { setTaskState(data.updatedTask); }
+        toast({ title: 'Success', description: 'Your comment has been posted.' });
         setNewComment('');
-        setCommentAttachment(null);
-    } catch (error) {
-        console.error("Failed to post comment or upload attachment:", error);
-        toast({
-            variant: "destructive",
-            title: "Comment Failed",
-            description: "Could not post your comment. Please try again.",
-        });
-    } finally {
+      } catch (error: any) {
+        toast({ variant: "destructive", title: "Comment Failed", description: error.message });
+      } finally {
         setIsUploadingCommentAttachment(false);
+      }
+      return;
+    }
+
+    if (!firestore || !currentUser) return;
+    setIsUploadingCommentAttachment(true);
+    try {
+      const newCommentData: Comment = {
+        id: crypto.randomUUID(),
+        user: {
+          id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '',
+          email: currentUser.email, role: currentUser.role, companyId: currentUser.companyId, createdAt: currentUser.createdAt
+        },
+        text: newComment,
+        timestamp: new Date().toISOString(),
+        replies: [],
+      };
+
+      const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
+      const updates = {
+        comments: [...(taskState.comments || []), newCommentData],
+        activities: [...(taskState.activities || []), newActivity],
+        lastActivity: newActivity,
+      };
+
+      await updateDoc(doc(firestore, 'tasks', taskState.id), updates);
+      toast({ title: 'Comment Posted' });
+      setNewComment('');
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Comment Failed', description: error.message });
+    } finally {
+      setIsUploadingCommentAttachment(false);
     }
   };
 
   const handleCommentFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setCommentAttachment(file);
+    if (file) setCommentAttachment(file);
+  };
+  
+  const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    setNewComment(text);
+    if (!isSharedView && allUsers) {
+      const mentionMatch = text.match(/@(\w*)$/);
+      if (mentionMatch) {
+        setIsMentioning(true);
+        setMentionSuggestions(allUsers.filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+      } else {
+        setIsMentioning(false);
+      }
     }
   };
 
 
   const handleToggleSubtask = async (subtaskId: string) => {
-    if (!firestore) return;
-    const newSubtasks = subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
-    setSubtasks(newSubtasks);
-    
-    const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-    try {
-        await updateDoc(taskDocRef, { subtasks: newSubtasks });
-    } catch (error) {
-        console.error("Failed to update subtask:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not save subtask status.' });
-        setSubtasks(subtasks);
-    }
+    if (isSharedView || !firestore) return;
+    const newSubtasks = taskState.subtasks?.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st) || [];
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: newSubtasks });
   };
   
   const handleToggleRevisionItem = async (itemId: string) => {
-    if ((isSharedView && accessLevel !== 'limited-edit') || (!isSharedView && !isAssignee)) return;
-    if (isSharedView && !firestore) return;
-
-    const newItems = revisionItems.map(item =>
-        item.id === itemId ? { ...item, completed: !item.completed } : item
-    );
-    setRevisionItems(newItems);
-    
-    if(isSharedView) {
-        const linkId = params.linkId;
-        try {
-            await fetch('/api/share/update-task', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ linkId, taskId: initialTask.id, updates: { revisionItems: newItems } }),
-            });
-        } catch(e) {
-            setRevisionItems(initialTask.revisionItems || []);
-            toast({ variant: 'destructive', title: 'Update Failed' });
-        }
-    } else {
-        const taskDocRef = doc(firestore, 'tasks', initialTask.id);
-        try {
-            await updateDoc(taskDocRef, { revisionItems: newItems });
-        } catch (e) {
-            console.error("Failed to update revision item", e);
-            setRevisionItems(initialTask.revisionItems || []); // Revert on failure
-            toast({ variant: 'destructive', title: 'Update Failed' });
-        }
-    }
-};
+    if (isSharedView || !isAssignee || !firestore) return;
+    const newItems = taskState.revisionItems?.map(item => item.id === itemId ? { ...item, completed: !item.completed } : item);
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { revisionItems: newItems });
+  };
 
 
-  const handleAddSubtask = () => {
-    if (!newSubtask.trim()) return;
-    
-    let assignedUser: User | null = newSubtaskAssignee;
-    if (!assignedUser && currentAssignees.length === 1) {
-        assignedUser = currentAssignees[0];
-    } else if (!assignedUser && !isManagerOrAdmin && currentUser) {
-        assignedUser = currentUser;
-    }
-
-
-    const subtask: Subtask = {
-      id: `st-${crypto.randomUUID()}`,
-      title: newSubtask,
-      completed: false,
-      ...(assignedUser && { assignee: { id: assignedUser.id, name: assignedUser.name, avatarUrl: assignedUser.avatarUrl || '' } }),
-    };
-    setSubtasks([...subtasks, subtask]);
-    setNewSubtask('');
-    setNewSubtaskAssignee(null);
+  const handleAddSubtask = async () => {
+    if (!newSubtask.trim() || isSharedView || !firestore) return;
+    let assignedUser = newSubtaskAssignee || (currentAssignees.length === 1 ? currentAssignees[0] : (!isManagerOrAdmin && currentUser ? currentUser : null));
+    const subtask: Subtask = { id: `st-${Date.now()}`, title: newSubtask, completed: false, ...(assignedUser && { assignee: { id: assignedUser.id, name: assignedUser.name, avatarUrl: assignedUser.avatarUrl || '' } }) };
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: [...(taskState.subtasks || []), subtask] });
+    setNewSubtask(''); setNewSubtaskAssignee(null);
   };
   
-  const handleRemoveSubtask = (subtaskId: string) => {
-    setSubtasks(subtasks.filter(st => st.id !== subtaskId));
+  const handleRemoveSubtask = async (subtaskId: string) => {
+    if (isSharedView || !firestore) return;
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: taskState.subtasks?.filter(st => st.id !== subtaskId) });
   }
   
-  const handleAssignSubtask = (subtaskId: string, user: User | null) => {
-    const newSubtasks = subtasks.map(st => {
-      if (st.id === subtaskId) {
-        return { 
-          ...st, 
-          assignee: user ? { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' } : undefined 
-        };
+  const handleAssignSubtask = async (subtaskId: string, user: User | null) => {
+    if (isSharedView || !firestore) return;
+    const newSubtasks = taskState.subtasks?.map(st => st.id === subtaskId ? { ...st, assignee: user ? { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' } : undefined } : st);
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { subtasks: newSubtasks });
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
+      if (isSharedView || !event.target.files || !storage || !taskState?.id || !firestore || !currentUser) return;
+      
+      setIsUploading(true);
+      
+      const files = Array.from(event.target.files);
+      const validatedFiles = files.filter(file => {
+          const isAllowedType = ALLOWED_FILE_TYPES.split(',').includes(file.type);
+      
+          if (!isAllowedType) {
+            toast({
+              variant: 'destructive',
+              title: 'Tipe File Tidak Diizinkan',
+              description: `Tipe file "${file.name}" tidak dapat diunggah.`,
+              duration: 10000,
+            });
+            return false;
+          }
+      
+          if (file.size > MAX_FILE_SIZE_BYTES) {
+            toast({
+              variant: 'destructive',
+              title: 'Ukuran File Terlalu Besar',
+              description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_FILE_SIZE_MB} MB.`,
+              duration: 10000,
+            });
+            return false;
+          }
+      
+          return true;
+      });
+
+      if (validatedFiles.length === 0) {
+          setIsUploading(false);
+          if (event.target) event.target.value = '';
+          return;
       }
-      return st;
-    });
-    setSubtasks(newSubtasks);
+      
+      try {
+          const currentCycle = getCurrentSubmissionCycle(taskState);
+          const uploadPromises = validatedFiles.map(async (file) => {
+              const attachmentId = `${Date.now()}-${file.name}`;
+              const storageRef = ref(storage, `attachments/${taskState.id}/${attachmentId}`);
+              await uploadBytes(storageRef, file);
+              const url = await getDownloadURL(storageRef);
+              return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
+          });
+          const newFiles = await Promise.all(uploadPromises);
+          const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+          await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: [...(taskState[fieldToUpdate] || []), ...newFiles] });
+          toast({ title: 'Upload Successful' });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Upload Failed' });
+      } finally {
+          setIsUploading(false);
+          if (event.target) event.target.value = '';
+      }
   };
 
-  const getFileIcon = (fileName: string) => {
-    if (fileName.match(/\.(pdf)$/i)) return <FileText className="h-5 w-5 text-red-500" />;
-    if (fileName.match(/\.(doc|docx)$/i)) return <FileText className="h-5 w-5 text-blue-500" />;
-    if (fileName.match(/\.(jpg|jpeg|png|gif)$/i)) return <FileImage className="h-5 w-5 text-green-500" />;
-    return <FileText className="h-5 w-5 text-muted-foreground" />;
+  const handleConfirmGdriveLink = async (fileType: 'attachment' | 'deliverable') => {
+      if (!gdriveLink || !gdriveName) {
+          toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
+          return;
+      }
+      if (isSharedView || !firestore || !currentUser) return;
+      
+      const currentCycle = getCurrentSubmissionCycle(taskState);
+      const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+      await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: [...(taskState[fieldToUpdate] || []), newFile] });
+      setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
   };
 
-const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || !storage || !initialTask?.id) return;
 
-    setIsUploading(true);
-    const files = Array.from(event.target.files);
-
-    try {
-        const uploadPromises = files.map(async (file) => {
-            const attachmentId = `${Date.now()}-${file.name}`;
-            const storageRef = ref(storage, `attachments/${initialTask.id}/${attachmentId}`);
-            await uploadBytes(storageRef, file);
-            const url = await getDownloadURL(storageRef);
-            return {
-                id: attachmentId,
-                name: file.name,
-                type: 'local' as const,
-                url: url,
-            };
-        });
-
-        const newAttachments = await Promise.all(uploadPromises);
-        setAttachments(prev => [...prev, ...newAttachments]);
-        toast({ title: 'Upload Successful', description: `${files.length} file(s) have been attached.` });
-
-    } catch (error) {
-        console.error("File upload failed:", error);
-        toast({ variant: 'destructive', title: 'Upload Failed', description: 'Could not upload files. Please try again.' });
-    } finally {
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-};
-
-  const handleConfirmGdriveLink = () => {
-    if (gdriveLink && gdriveName) {
-      const newAttachment: Attachment = {
-        id: `gdrive-${Date.now()}`,
-        name: gdriveName,
-        type: 'gdrive',
-        url: gdriveLink,
-      };
-      setAttachments(prev => [...prev, newAttachment]);
-      setIsGdriveDialogOpen(false);
-      setGdriveLink('');
-      setGdriveName('');
-    } else {
-        toast({ variant: 'destructive', title: 'Missing Info', description: 'Please provide both a link and a name.' });
+  const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
+      if (isSharedView || !firestore) return;
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+      await updateDoc(doc(firestore, 'tasks', taskState.id), { [fieldToUpdate]: taskState[fieldToUpdate]?.filter(att => att.id !== id) });
+  };
+  
+  const handleAddDependency = async (taskId: string, type: 'waitingOnTaskIds' | 'blockingTaskIds' | 'linkedTaskIds') => {
+    if (isSharedView || !firestore) return;
+    const currentDeps = taskState[type] || [];
+    if (!currentDeps.includes(taskId)) {
+        await updateDoc(doc(firestore, 'tasks', taskState.id), { [type]: [...currentDeps, taskId] });
     }
   };
-
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(att => att.id !== id));
+  
+  const handleRemoveDependency = async (taskId: string, type: 'waitingOnTaskIds' | 'blockingTaskIds' | 'linkedTaskIds') => {
+    if (isSharedView || !firestore) return;
+    const currentDeps = taskState[type] || [];
+    await updateDoc(doc(firestore, 'tasks', taskState.id), { [type]: currentDeps.filter(id => id !== taskId) });
   };
 
 
   const subtaskProgress = useMemo(() => {
-    if (subtasks.length === 0) return 0;
-    const completedCount = subtasks.filter(st => st.completed).length;
-    return (completedCount / subtasks.length) * 100;
-  }, [subtasks]);
-
+    if (!taskState.subtasks || taskState.subtasks.length === 0) return 0;
+    return (taskState.subtasks.filter(st => st.completed).length / taskState.subtasks.length) * 100;
+  }, [taskState.subtasks]);
 
   const onSubmit = async (data: TaskDetailsFormValues) => {
-    if ((!firestore || !currentUser) && !isSharedView) return;
+    if (isSharedView || !firestore || !currentUser) return;
     setIsSaving(true);
-    
     const updates: Partial<Task> = {
-        title: data.title,
-        description: data.description,
-        dueDate: data.dueDate,
-        brandId: data.brandId,
-        assigneeIds: currentAssignees.map(a => a.id),
-        tags: currentTags,
-        subtasks: subtasks,
-        attachments: attachments,
+      title: data.title,
+      description: data.description,
+      dueDate: data.dueDate,
+      brandId: data.brandId,
+      assigneeIds: currentAssignees.map((a) => a.id),
+      assignees: currentAssignees,
+      tags: currentTags,
+      timeEstimate: data.timeEstimate,
     };
-    
-    if (isSharedView) {
-        // Shared view save
-        const linkId = params.linkId;
-        try {
-            const response = await fetch('/api/share/update-task', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ linkId, taskId: initialTask.id, updates }),
-            });
-            if (!response.ok) throw new Error('Failed to save changes');
-            toast({ title: 'Task Updated' });
-        } catch (error) {
-            toast({ variant: 'destructive', title: 'Save Failed' });
-        } finally {
-            setIsSaving(false);
-        }
 
-    } else {
-        // Logged-in user save
-        const batch = writeBatch(firestore!);
-        const taskDocRef = doc(firestore!, 'tasks', initialTask.id);
-    
-        const getChangedFields = (oldTask: Task, newData: TaskDetailsFormValues): string | null => {
-            const changes: string[] = [];
-            const oldDueDate = oldTask.dueDate ? format(parseISO(oldTask.dueDate), 'MMM d, yyyy') : 'no due date';
-            const newDueDate = newData.dueDate ? format(parseISO(newData.dueDate), 'MMM d, yyyy') : 'no due date';
+    const taskDocRef = doc(firestore, 'tasks', taskState.id);
+    const actionDescription = 'updated task details';
+    const newActivity: Activity = createActivity(currentUser, actionDescription);
 
-            if (oldTask.title !== newData.title) changes.push(`renamed the task to "${newData.title}"`);
-            if (oldTask.description !== (newData.description || '')) changes.push('updated the description');
-            if (oldDueDate !== newDueDate) changes.push(`changed the due date from ${oldDueDate} to ${newDueDate}`);
-            
-            return changes.length > 0 ? changes.join(', ') : null;
-        };
-
-        const actionDescription = getChangedFields(initialTask, data);
-        
-        let activityData: Partial<Task> = {};
-        if (actionDescription) {
-            const newActivity: Activity = createActivity(currentUser!, actionDescription);
-            activityData = {
-                activities: [...(initialTask.activities || []), newActivity],
-                lastActivity: newActivity,
-            };
-        }
-        
-        const updatedTaskData: Partial<Task> = { ...updates, ...activityData, updatedAt: serverTimestamp() as any, };
-        
-        Object.keys(updatedTaskData).forEach(key => {
-          const typedKey = key as keyof typeof updatedTaskData;
-          if (updatedTaskData[typedKey] === undefined) {
-            delete (updatedTaskData as any)[typedKey];
-          }
-        });
-
-        batch.update(taskDocRef, updatedTaskData);
-
-        try {
-            await batch.commit();
-            toast({
-                title: 'Task Updated',
-                description: `"${data.title}" has been saved.`,
-            });
-        } catch (error) {
-            console.error('Failed to update task:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Update Failed',
-                description: 'Could not save task changes.',
-            });
-        } finally {
-            setIsSaving(false);
-        }
+    try {
+      await updateDoc(taskDocRef, {
+        ...updates,
+        lastActivity: newActivity,
+        activities: [...(taskState.activities || []), newActivity],
+        updatedAt: serverTimestamp(),
+      });
+      toast({ title: 'Task Updated' });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'Update Failed' });
+    } finally {
+      setIsSaving(false);
     }
   };
   
-  const timeEstimateValue = form.watch('timeEstimate') ?? initialTask.timeEstimate ?? 0;
-  
-  const timeTracked = useMemo(() => initialTask.timeTracked || 0, [initialTask.timeTracked]);
-
-  const timeTrackingProgress = timeEstimateValue > 0
-    ? (timeTracked / timeEstimateValue) * 100
-    : 0;
+  const timeEstimateValue = form.watch('timeEstimate') ?? taskState.timeEstimate ?? 0;
+  const timeTracked = useMemo(() => taskState.timeTracked || 0, [taskState.timeTracked]);
+  const timeTrackingProgress = timeEstimateValue > 0 ? (timeTracked / timeEstimateValue) * 100 : 0;
     
   const handleSelectUser = (user: User) => {
-    if (!currentAssignees.find((u) => u.id === user.id)) {
-      const newSelectedUsers = [...currentAssignees, user];
-      setCurrentAssignees(newSelectedUsers);
-    }
+    if (!currentAssignees.find((u) => u.id === user.id)) setCurrentAssignees([...currentAssignees, user]);
   };
-
-  const handleRemoveUser = (userId: string) => {
-    setCurrentAssignees(currentAssignees.filter((u) => u.id !== userId));
-  };
-  
-  const handleSelectTag = (tag: Tag) => {
-    if (!currentTags.find(t => t.label === tag.label)) {
-        setCurrentTags([...currentTags, tag]);
-    }
-  }
-
-  const handleRemoveTag = (tagLabel: string) => {
-    setCurrentTags(currentTags.filter(t => t.label !== tagLabel));
-  }
-
-  const copyTaskLink = () => {
-    const link = `${window.location.origin}/tasks/${initialTask.id}`;
-    navigator.clipboard.writeText(link);
-    toast({
-        title: "Link Copied!",
-        description: "Task link has been copied to your clipboard.",
-    });
-  }
+  const handleRemoveUser = (userId: string) => setCurrentAssignees(currentAssignees.filter((u) => u.id !== userId));
+  const handleSelectTag = (tag: Tag) => { if (!currentTags.find(t => t.label === tag.label)) setCurrentTags([...currentTags, tag]); }
+  const handleRemoveTag = (tagLabel: string) => setCurrentTags(currentTags.filter(t => t.label !== tagLabel));
 
   const priorityValue = form.watch('priority');
   const brandId = form.watch('brandId');
-  const brand = useMemo(() => brands?.find(b => b.id === brandId), [brands, brandId]);
+  const brand = useMemo(() => {
+    if (isSharedView && session) return session.snapshot.brands.find(b => b.id === taskState.brandId);
+    return brands?.find(b => b.id === brandId);
+  }, [brands, brandId, isSharedView, session, taskState.brandId]);
   
-  const handleStartSession = async () => {
-    if (!firestore || !currentUser) return;
-    
-    const taskRef = doc(firestore, "tasks", initialTask.id);
-    
-    const activitiesToAdd: Activity[] = [];
-    const updates: Partial<Task> = {
-        currentSessionStartTime: new Date().toISOString(),
-    };
-
-    if (initialTask.status === 'To Do') {
-        updates.status = 'Doing';
-        activitiesToAdd.push(createActivity(currentUser, 'changed status from "To Do" to "Doing"'));
-    }
-
-    activitiesToAdd.push(createActivity(currentUser, 'started a work session'));
-    updates.activities = [...(initialTask.activities || []), ...activitiesToAdd];
-    updates.lastActivity = activitiesToAdd[activitiesToAdd.length - 1];
-
-    if (!initialTask.actualStartDate) {
-        updates.actualStartDate = new Date().toISOString();
-    }
-    
-    try {
-        await updateDoc(taskRef, updates);
-        setIsRunning(true);
-        toast({ title: 'Session Started', description: 'Your work session is now being tracked.' });
-    } catch (error) {
-        console.error("Failed to start session:", error);
-        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not start the session.' });
-    }
-  }
+ const canSubmit = useMemo(() => {
+    if (!taskState || isSharedView) return false;
+    const reasons = getBlockingReasonsForStatusChange('Preview', taskState);
+    return !reasons.blocked;
+  }, [taskState, isSharedView]);
   
-  const allSubtasksCompleted = useMemo(() => subtasks.every(st => st.completed), [subtasks]);
-  const allRevisionsCompleted = useMemo(() => revisionItems.length === 0 || revisionItems.every(item => item.completed), [revisionItems]);
-  const canSubmit = allSubtasksCompleted && allRevisionsCompleted;
+  const handleDelete = () => {
+    if (!firestore || !taskState || !canDeleteTask) return;
+    deleteDocumentNonBlocking(doc(firestore, 'tasks', taskState.id));
+    toast({ title: "Task Deleted", description: "The task is being removed." });
+    onOpenChange(false);
+    setDeleteConfirmOpen(false);
+  };
   
   const handleFinalReviewAndComplete = async () => {
+    if (!isManagerOrAdmin || !taskState) return;
     await handleStatusChange('Done');
     setFinalReviewState({ isOpen: false, task: null });
   };
@@ -1012,78 +1126,21 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     await handleStatusChange('Preview');
   };
   
-  const handleRequestRevisions = () => {
-      setRejectionDialogOpen(true);
+  const handleRecallSubmission = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Doing');
+    toast({ title: "Submission Recalled", description: "You can continue working on the task." });
   };
   
-  const handleConfirmRejection = async () => {
-      if (!rejectionReason.trim() || !currentUser || !firestore) return;
-      
-      setRejectionDialogOpen(false);
-      setIsSaving(true);
-
-      const oldStatus = form.getValues('status');
-      const newStatus = 'Revisi';
-      const taskRef = doc(firestore, 'tasks', initialTask.id);
-      
-      try {
-          const batch = writeBatch(firestore);
-
-          const newComment: Comment = {
-              id: `c-${crypto.randomUUID()}`,
-              user: currentUser,
-              text: `**Revision Request:** ${rejectionReason}`,
-              timestamp: new Date().toISOString(),
-              replies: [],
-          };
-          const newComments = [...(initialTask.comments || []), newComment];
-          
-          const newActivity = createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`);
-          const updatedActivities = [...(initialTask.activities || []), newActivity];
-
-          batch.update(taskRef, {
-              status: newStatus,
-              comments: newComments,
-              activities: updatedActivities,
-              lastActivity: newActivity,
-              updatedAt: serverTimestamp(),
-          });
-
-           const notificationMessage = `${currentUser.name} requested revisions on "${initialTask.title.substring(0, 30)}...". See comments for details.`;
-           initialTask.assigneeIds.forEach(assigneeId => {
-                if (assigneeId !== currentUser.id) {
-                     const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
-                     const newNotification: Omit<Notification, 'id'> = {
-                        userId: assigneeId,
-                        title: 'Revisions Required',
-                        message: notificationMessage,
-                        taskId: initialTask.id,
-                        isRead: false,
-                        createdAt: serverTimestamp() as any,
-                        createdBy: newActivity.user,
-                    };
-                    batch.set(notifRef, newNotification);
-                }
-           });
-           
-           await batch.commit();
-
-           form.setValue('status', newStatus);
-           setRejectionReason('');
-           toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
-      } catch (error) {
-          console.error("Failed to request revisions:", error);
-          toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision.' });
-      } finally {
-          setIsSaving(false);
-      }
-  };
-
   const completionStatus = useMemo(() => {
-    if (initialTask.status !== 'Done' || !initialTask.actualCompletionDate || !initialTask.dueDate) return null;
-    const isLate = isAfter(parseISO(initialTask.actualCompletionDate), parseISO(initialTask.dueDate));
-    return isLate ? 'Late' : 'On Time';
-  }, [initialTask.status, initialTask.actualCompletionDate, initialTask.dueDate]);
+    if (taskState.status !== 'Done' || !taskState.actualCompletionDate || !taskState.dueDate) return null;
+    const completionDate = parseISO(taskState.actualCompletionDate);
+    const dueDate = endOfDay(parseISO(taskState.dueDate));
+    if (isAfter(completionDate, dueDate)) {
+        return { status: 'Late', duration: formatLateness(dueDate, completionDate) };
+    }
+    return { status: 'On Time', duration: null };
+  }, [taskState.status, taskState.actualCompletionDate, taskState.dueDate]);
   
   const getUniqueActivities = (activities: Activity[]): Activity[] => {
     if (!activities) return [];
@@ -1096,34 +1153,24 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   const handleReopenTask = async () => {
-    if (!currentUser) return;
-    await handleStatusChange('Doing');
+    if (!currentUser || !isManagerOrAdmin) return;
+    await handleStatusChange('Revisi');
   }
 
  const subtaskAssigneeOptions = useMemo(() => {
+    if (isSharedView) return {};
     if (!allUsers || !currentUser) return {};
-
     const createGroup = (title: string, users: User[]) => users.length > 0 ? { [title]: users } : {};
-
     const mainAssignees = currentAssignees;
-
     if (currentUser.role === 'Super Admin') {
         const otherUsers = allUsers.filter(u => u.role !== 'Client' && !mainAssignees.some(a => a.id === u.id));
-        return {
-            ...createGroup("Task Assignees", mainAssignees),
-            ...createGroup("Other Members", otherUsers),
-        };
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("Other Members", otherUsers) };
     }
-    
     if (currentUser.role === 'Manager') {
         const myTeam = allUsers.filter(u => u.managerId === currentUser.id);
         const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
-        return {
-            ...createGroup("Task Assignees", mainAssignees),
-            ...createGroup("My Team", otherMembers),
-        };
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("My Team", otherMembers) };
     }
-    
     if (currentUser.role === 'Employee') {
         const manager = allUsers.find(u => u.id === currentUser.managerId);
         const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
@@ -1140,546 +1187,493 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             ...createGroup("My Team", otherTeamMembers),
         };
     }
-
     return {};
-}, [currentAssignees, allUsers, currentUser]);
+}, [currentAssignees, allUsers, currentUser, isSharedView]);
+
+  const canShareTask = !isSharedView && currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC' || currentUser.role === 'Client');
+  
+  const groupedDeliverables = useMemo(() => {
+    const groups: Record<number, Attachment[]> = {};
+    (taskState.deliverables || []).forEach(d => {
+        const cycle = d.forRevisionCycle ?? 1;
+        if (!groups[cycle]) groups[cycle] = [];
+        groups[cycle].push(d);
+    });
+    return groups;
+  }, [taskState.deliverables]);
+
+  const handleAddRevisionItem = () => {
+    if (revisionState.currentItemText.trim()) {
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
+    }
+  };
+
+ const handleConfirmRejection = async () => {
+    if (!revisionState.task || revisionState.items.length === 0 || !firestore || !currentUser) {
+        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
+        return;
+    }
+    setIsSaving(true);
+    const task = revisionState.task;
+    const taskRef = doc(firestore, 'tasks', task.id);
+    const newStatus = 'Revisi';
+    
+    const newRevisionItems: RevisionItem[] = revisionState.items.map(item => ({ id: crypto.randomUUID(), text: item.text, completed: false }));
+    
+    const newRevisionCycle: RevisionCycle = {
+        cycleNumber: (task.revisionHistory?.length ?? 0) + 1,
+        requestedAt: new Date().toISOString() as any,
+        requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        items: newRevisionItems,
+    };
+    
+    const taskUpdateData: any = {
+        status: newStatus,
+        revisionItems: newRevisionItems,
+        revisionHistory: [...(task.revisionHistory || []), newRevisionCycle],
+        lastActivity: createActivity(currentUser, `requested revisions and moved task to "${newStatus}"`),
+        updatedAt: serverTimestamp() as any,
+        actualCompletionDate: deleteField(),
+    };
+    taskUpdateData['activities'] = [...(task.activities || []), taskUpdateData.lastActivity];
+    
+    try {
+        await updateDoc(taskRef, taskUpdateData);
+        toast({ title: 'Revisions Requested', description: 'The task has been sent for revision.' });
+        
+        const notificationBatch = writeBatch(firestore);
+        const notificationMessage = `${currentUser.name} requested revisions on "${task.title.substring(0, 30)}...".`;
+        
+        task.assigneeIds.forEach(assigneeId => {
+            if (assigneeId !== currentUser.id) {
+                const notifRef = doc(collection(firestore, `users/${assigneeId}/notifications`));
+                notificationBatch.set(notifRef, {
+                    userId: assigneeId,
+                    title: 'Revisions Required',
+                    message: notificationMessage,
+                    taskId: task.id,
+                    isRead: false,
+                    createdAt: serverTimestamp(),
+                    createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+                });
+            }
+        });
+        
+        await notificationBatch.commit().catch(notifError => {
+            console.error('[requestRevisions] Notification failed but task was updated:', notifError);
+            toast({ variant: 'destructive', title: 'Task Updated, Notif Failed', description: 'The task was sent for revision, but notifications could not be sent.' });
+        });
+
+    } catch (error: any) {
+        console.error('[requestRevisions] Critical task update failed:', error);
+        setTaskState(task); // Revert UI
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send task for revision. Please try again.' });
+    } finally {
+        setIsSaving(false);
+        setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' });
+    }
+  };
+  
+  const renderDependencyList = (ids: string[], type: 'waitingOnTaskIds' | 'blockingTaskIds' | 'linkedTaskIds') => (
+      <div className="flex flex-wrap gap-2">
+          {(ids || []).map(id => {
+              const task = allTasks?.find(t => t.id === id);
+              return task ? (
+                  <Badge key={id} variant="secondary">
+                      {task.title}
+                      {canEditContent && (
+                        <button onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5">
+                            <X className="h-3 w-3" />
+                        </button>
+                      )}
+                  </Badge>
+              ) : null;
+          })}
+      </div>
+  );
 
   return (
     <>
+      {isSharedView && <SharedViewLogic onDataLoaded={setSharedData} />}
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="w-full sm:max-w-4xl grid grid-rows-[auto_1fr_auto] p-0">
-          <SheetHeader className="p-4 border-b">
-             <SheetTitle className='sr-only'>Task Details for {initialTask.title}</SheetTitle>
+        <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-full">
+          <SheetHeader className="p-4 border-b flex-shrink-0">
+             <SheetTitle className='sr-only'>Task Details for {taskState.title}</SheetTitle>
              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    {initialTask.createdBy && (
+                    {taskState.createdBy && (
                         <div className='flex items-center gap-2'>
-                           <Avatar className="h-6 w-6"><AvatarImage src={initialTask.createdBy.avatarUrl} /><AvatarFallback>{initialTask.createdBy.name.charAt(0)}</AvatarFallback></Avatar>
-                           <span>Created by {initialTask.createdBy.name}</span>
+                           <Avatar className="h-6 w-6"><AvatarImage src={taskState.createdBy.avatarUrl} /><AvatarFallback>{taskState.createdBy.name.charAt(0)}</AvatarFallback></Avatar>
+                           <span>Created by {taskState.createdBy.name}</span>
                         </div>
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    {!isSharedView && <Button variant="ghost" size="sm" onClick={() => setIsHistoryOpen(true)}><History className="h-4 w-4 mr-2"/> View History</Button>}
-                    <MoreHorizontal className="h-5 w-5 text-muted-foreground" />
+                  <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                          {!isSharedView && (
+                              <ShareTaskDialog task={taskState}>
+                                  <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                      <Share2 className="mr-2 h-4 w-4"/>
+                                      Share Task
+                                  </DropdownMenuItem>
+                              </ShareTaskDialog>
+                          )}
+                           {!isSharedView && (
+                              <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}>
+                                  <History className="mr-2 h-4 w-4"/>
+                                  View History
+                              </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          {canDeleteTask && (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => setDeleteConfirmOpen(true)}>
+                                <Trash2 className="mr-2 h-4 w-4"/>
+                                Delete Task
+                            </DropdownMenuItem>
+                          )}
+                      </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
              </div>
           </SheetHeader>
-          
+          <div className="flex-1 flex min-h-0">
           <Form {...form}>
-            <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)} className="grid grid-cols-3 h-full overflow-hidden">
-                <ScrollArea className="col-span-2 h-full">
-                    <div className="p-6 space-y-6">
-                        
-                        {showTimeTracker && (
-                          <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
-                              <div className="flex items-center justify-between">
-                                  <div className="space-y-1">
-                                      <h3 className="font-semibold">Time Tracker</h3>
-                                      <p className="text-sm text-muted-foreground">
-                                          Total Logged: <span className="font-medium text-foreground">{formatHours(timeTracked)}</span>
-                                      </p>
-                                  </div>
-                                  { isRunning ? (
-                                      <Button variant="destructive" onClick={handlePauseSession}>
-                                          <PauseCircle className="mr-2"/> Stop Session
-                                      </Button>
-                                  ) : (
-                                      <Button onClick={handleStartSession}>
-                                          <PlayCircle className="mr-2"/> Start Session
-                                      </Button>
-                                  )}
-                              </div>
-                              {isRunning && (
-                                <div className="p-3 rounded-md bg-background border border-primary/20">
-                                  <div className="flex items-center justify-between">
-                                      <span className="text-sm font-medium text-primary">Current Session</span>
-                                      <span className="font-mono text-lg text-primary">{formatStopwatch(elapsedTime)}</span>
-                                  </div>
+            <form id="task-details-form" onSubmit={form.handleSubmit(onSubmit)}>
+              <ScrollArea className="h-full" style={{height: 'calc(100vh - 128px)'}}>
+                <div className="grid md:grid-cols-3">
+                  <div className="md:col-span-2 p-6 space-y-6">
+                      {showTimeTracker && (
+                        <div className="p-4 rounded-lg bg-secondary/50 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="space-y-1">
+                                    <h3 className="font-semibold">Time Tracker</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Total Logged: <span className="font-medium text-foreground">{formatHours(timeTracked)}</span>
+                                    </p>
                                 </div>
-                              )}
-                          </div>
-                        )}
-                        
-                        <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
-
-                        {revisionItems && revisionItems.length > 0 && (
-                            <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
-                                <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
-                                <div className="space-y-2">
-                                    {revisionItems.map(item => (
-                                        <div key={item.id} className="flex items-center gap-3">
-                                            <Checkbox
-                                                id={`rev-${item.id}`}
-                                                checked={item.completed}
-                                                onCheckedChange={() => handleToggleRevisionItem(item.id)}
-                                                disabled={!isAssignee && !(isSharedView && accessLevel === 'limited-edit')}
-                                            />
-                                            <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>
-                                                {item.text}
-                                            </label>
+                                {isRunning ? (
+                                    <div className="p-3 rounded-md bg-background border border-primary/20 flex items-center gap-4">
+                                        <div className="flex items-center gap-2">
+                                          <span className="relative flex h-3 w-3">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                                          </span>
+                                          <span className="text-sm font-medium text-primary">Session Running</span>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                          <h3 className="font-semibold text-sm">Description</h3>
-                          <FormField control={form.control} name="description" render={({ field }) => ( <Textarea {...field} readOnly={!canEditContent} placeholder="Add a more detailed description..." className="min-h-24 border-dashed"/> )}/>
-                        </div>
-
-                        <div className="space-y-4">
-                          <h3 className="font-semibold flex items-center gap-2 text-sm"><Paperclip className='h-4 w-4'/> Attachments ({attachments.length})</h3>
-                           {attachments.length > 0 && (
-                            <div className="space-y-2">
-                              {attachments.map((att) => (
-                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
-                                  <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
-                                    {getFileIcon(att.name)}
-                                    <span className="truncate" title={att.name}>{att.name}</span>
-                                  </a>
-                                  {canEditContent && (
-                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveAttachment(att.id)}>
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {canEditContent && (
-                            <div className="grid grid-cols-2 gap-4">
-                              <input type="file" ref={fileInputRef} onChange={handleFileChange} multiple className="hidden" />
-                              <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload from Local</Button>
-                              <Button type="button" variant="outline" onClick={() => setIsGdriveDialogOpen(true)}><svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>Link from Google Drive</Button>
-                            </div>
-                          )}
-                        </div>
-                        
-                        <Accordion type="single" collapsible defaultValue="subtasks">
-                          <AccordionItem value="subtasks">
-                            <AccordionTrigger className="font-semibold text-sm">Subtasks</AccordionTrigger>
-                            <AccordionContent className="mt-4 space-y-4">
-                                <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{subtasks.filter(st => st.completed).length}/{subtasks.length}</span></div><Progress value={subtaskProgress} /></div>
-                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                    {subtasks.map((subtask) => (
-                                        <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors">
-                                            <Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canManageSubtasks} />
-                                            <label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
-                                            
-                                            <Popover>
-                                              <PopoverTrigger asChild disabled={!canManageSubtasks}>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
-                                                  {subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}
-                                                </Button>
-                                              </PopoverTrigger>
-                                              <PopoverContent className="w-60 p-1">
-                                                  <ScrollArea className="max-h-60">
-                                                      <div className="space-y-1">
-                                                          <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>
-                                                          {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
-                                                            users.length > 0 && (
-                                                              <React.Fragment key={group}>
-                                                                  <Separator />
-                                                                  <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
-                                                                  {users.map(user => (
-                                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}>
-                                                                      <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                                      <span className="truncate">{user.name}</span>
-                                                                    </Button>
-                                                                  ))}
-                                                              </React.Fragment>
-                                                            )
-                                                          ))}
-                                                      </div>
-                                                  </ScrollArea>
-                                              </PopoverContent>
-                                            </Popover>
-
-                                            {canManageSubtasks && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}
-                                        </div>
-                                    ))}
-                                </div>
-                                {canManageSubtasks && (
-                                  <div className="flex items-center gap-2">
-                                    <Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} />
-                                    <Popover>
-                                      <PopoverTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="text-muted-foreground">
-                                          {newSubtaskAssignee ? (
-                                            <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar>
-                                          ) : (
-                                            <UserPlus className="h-4 w-4" />
-                                          )}
-                                        </Button>
-                                      </PopoverTrigger>
-                                      <PopoverContent className="w-60 p-1">
-                                        <ScrollArea className="max-h-60">
-                                            <div className="space-y-1">
-                                                <Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>
-                                                 {Object.entries(subtaskAssigneeOptions).map(([group, users]) => (
-                                                    users.length > 0 && (
-                                                        <React.Fragment key={group}>
-                                                            <Separator />
-                                                            <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>
-                                                            {users.map(user => (
-                                                                <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}>
-                                                                    <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                                    <span className="truncate">{user.name}</span>
-                                                                </Button>
-                                                            ))}
-                                                        </React.Fragment>
-                                                    )
-                                                ))}
-                                            </div>
-                                        </ScrollArea>
-                                      </PopoverContent>
-                                    </Popover>
-                                    <Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button>
-                                  </div>
-                                )}
-                            </AccordionContent>
-                          </AccordionItem>
-                        </Accordion>
-                        
-                        <div className="space-y-4">
-                           <h3 className="font-semibold text-sm">Comments</h3>
-                            {(initialTask.comments || []).map(comment => (
-                                <div key={comment.id} className="flex gap-3">
-                                    <Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl} /><AvatarFallback>{comment.user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2"><span className="font-semibold text-sm">{comment.user.name}</span><span className="text-xs text-muted-foreground">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></div>
-                                        <div className="text-sm bg-secondary p-3 rounded-lg mt-1 space-y-2">
-                                          <p>{comment.text}</p>
-                                          {comment.attachment && (
-                                            <a href={comment.attachment.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary hover:underline">
-                                              <Paperclip className="h-4 w-4" />
-                                              <span>{comment.attachment.name}</span>
-                                            </a>
-                                          )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            {canComment && (
-                                <div className="flex gap-3 pt-4 border-t">
-                                    <Avatar className="h-8 w-8"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{currentUser?.name?.charAt(0)}</AvatarFallback></Avatar>
-                                    <div className="flex-1 relative">
-                                        <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Write a comment... use @ to mention" className="pr-24" />
-                                        {commentAttachment && (
-                                          <div className="mt-2 flex items-center gap-2 text-sm bg-secondary p-2 rounded-md">
-                                            <Paperclip className="h-4 w-4 text-muted-foreground" />
-                                            <span className="truncate">{commentAttachment.name}</span>
-                                            <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto" onClick={() => setCommentAttachment(null)}>
-                                              <X className="h-4 w-4" />
-                                            </Button>
-                                          </div>
-                                        )}
-                                        <div className="absolute top-2 right-2 flex items-center gap-1">
-                                            <input type="file" ref={commentFileInputRef} onChange={handleCommentFileSelect} className="hidden"/>
-                                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => commentFileInputRef.current?.click()} disabled={isUploadingCommentAttachment}>
-                                                <Paperclip className="h-4 w-4"/>
-                                            </Button>
-                                            <Button type="button" size="sm" onClick={handlePostComment} disabled={(!newComment.trim() && !commentAttachment) || isUploadingCommentAttachment}>
-                                                {isUploadingCommentAttachment ? <Loader2 className="h-4 w-4 animate-spin"/> : <Send className="h-4 w-4"/>}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </ScrollArea>
-
-                <ScrollArea className="col-span-1 h-full border-l">
-                  <div className="p-6 space-y-6">
-                    {(isAssignee && !isManagerOrAdmin && !isSharedView && (initialTask.status === 'Doing' || initialTask.status === 'Revisi')) && (
-                         <div className="space-y-2">
-                           <Button className="w-full" onClick={handleSubmitForReview} disabled={!canSubmit || isSaving}>
-                               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                               Submit for Review
-                           </Button>
-                           {!canSubmit && (
-                               <p className="text-xs text-center text-destructive">Selesaikan semua subtugas dan poin revisi untuk melanjutkan.</p>
-                           )}
-                         </div>
-                    )}
-                    
-                    {isManagerOrAdmin && initialTask.status === 'Preview' && (
-                        <div className="space-y-2">
-                           <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: initialTask })} disabled={isSaving}>
-                              <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
-                           </Button>
-                           <Button variant="outline" className="w-full" onClick={handleRequestRevisions} disabled={isSaving}>
-                              <RefreshCcw className="mr-2 h-4 w-4" />Request Revisions
-                           </Button>
-                        </div>
-                    )}
-
-                    {(isAssignee || isCreator) && initialTask.status === 'Done' && !isSharedView && (
-                         <Button className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>
-                            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                             <RefreshCcw className="mr-2 h-4 w-4" />
-                            Reopen Task
-                        </Button>
-                    )}
-                    <div className='space-y-4 p-4 rounded-lg border'>
-                      <h3 className='font-semibold text-sm'>Task Details</h3>
-                      <Separator/>
-                        <FormField control={form.control} name="brandId" render={({ field }) => (
-                            <FormItem className="grid grid-cols-3 items-center gap-2">
-                              <FormLabel className="text-muted-foreground">Brand</FormLabel>
-                              <div className="col-span-2">
-                                { !canEditContent ? (
-                                    <div className="flex items-center gap-2 text-sm font-medium">
-                                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                                        {brand?.name || 'N/A'}
+                                        <span className="font-mono text-lg text-primary">{formatStopwatch(elapsedTime)}</span>
                                     </div>
                                 ) : (
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a brand" />
-                                    </SelectTrigger>
-                                  </FormControl>
-                                  <SelectContent>
-                                    {areBrandsLoading ? (
-                                      <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div>
-                                    ) : (
-                                      brands?.map((brand) => (
-                                        <SelectItem key={brand.id} value={brand.id}>
-                                          <div className="flex items-center gap-2">
-                                            <Building2 className="h-4 w-4" />
-                                            {brand.name}
-                                          </div>
-                                        </SelectItem>
-                                      ))
-                                    )}
-                                  </SelectContent>
-                                </Select>
+                                    <Button type="button" onClick={() => handleStartSession('manual')}><PlayCircle className="mr-2"/> Start Session</Button>
                                 )}
-                              </div>
-                            </FormItem>
-                          )}/>
-                        <FormItem className="grid grid-cols-3 items-center gap-2">
-                            <FormLabel className="text-muted-foreground">Status</FormLabel>
-                            <div className="col-span-2">
-                               {canChangeStatus ? (
-                                   <FormField control={form.control} name="status" render={({ field }) => (
-                                     <Select onValueChange={(value) => handleStatusChange(value)} value={field.value}>
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue placeholder="Select status" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          {(allStatuses || []).map(status => (
-                                            <SelectItem key={status.id} value={status.name}>{status.name}</SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                   )}/>
-                               ) : (
-                                   <FormField control={form.control} name="status" render={({ field }) => {
-                                     const statusDetails = allStatuses?.find(s => s.name === field.value);
-                                      return (
-                                         <Badge variant="outline" style={{
-                                              backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent',
-                                              borderColor: statusDetails?.color,
-                                              color: statusDetails?.color,
-                                              borderWidth: '1.5px'
-                                          }}>
-                                              {field.value}
-                                          </Badge>
-                                      );
-                                   }}/>
-                               )}
                             </div>
-                        </FormItem>
-                       <FormField control={form.control} name="priority" render={({ field }) => {
-                          const priority = priorityInfo[field.value];
-                          return (
-                           <FormItem className="grid grid-cols-3 items-center gap-2">
-                              <FormLabel className="text-muted-foreground">Priority</FormLabel>
-                              <div className="col-span-2 flex items-center gap-2">
-                                  { !canChangePriority ? (
-                                    <div className="flex items-center gap-2 text-sm font-medium">
-                                      <priority.icon className={`h-4 w-4 ${priority.color}`} />
-                                      {priority.label}
+                        </div>
+                      )}
+                      
+                      <FormField control={form.control} name="title" render={({ field }) => ( <Input {...field} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/> )}/>
+
+                      {taskState.revisionItems && taskState.revisionItems.length > 0 && (
+                          <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                              <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
+                              <div className="space-y-2">
+                                  {taskState.revisionItems.map(item => (
+                                      <div key={item.id} className="flex items-center gap-3">
+                                          <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee || isSharedView} />
+                                          <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                      )}
+
+                      <div className="space-y-2">
+                         <Accordion type="single" collapsible defaultValue={!taskState.description ? "description" : undefined}>
+                            <AccordionItem value="description" className="border-none">
+                                <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
+                                    {taskState.description ? 'View/Edit Description' : 'Add Description'}
+                                </AccordionTrigger>
+                                <AccordionContent className="pt-2">
+                                    <FormField
+                                        control={form.control}
+                                        name="description"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormControl>
+                                                    <RichTextEditor
+                                                        value={field.value || ''}
+                                                        onChange={field.onChange}
+                                                        placeholder="Add a more detailed description..."
+                                                        readOnly={!canEditContent}
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </AccordionContent>
+                            </AccordionItem>
+                        </Accordion>
+                      </div>
+
+                       <div className="space-y-4 rounded-lg border p-4">
+                            <h3 className="font-semibold text-base">Files</h3>
+                            <Separator />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                <div>
+                                    <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                                    <div className="space-y-2">
+                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canUploadDeliverables && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button> )}</div> ))}</div> ))}
+                                        {(taskState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
                                     </div>
+                                    {canUploadDeliverables && (
+                                        <div className="flex gap-2 mt-2">
+                                            <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" />
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}><LinkIcon className="mr-2 h-4 w-4" /> Link Deliverable</Button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                    <div className="space-y-2">
+                                    {(taskState.attachments || []).map((att) => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a>{canEditContent && ( <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button> )}</div> ))}
+                                    {(taskState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                    </div>
+                                    {canEditContent && (
+                                        <div className="flex gap-2 mt-2">
+                                            <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" />
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button>
+                                            <Button type="button" size="sm" variant="outline" className="flex-1" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                      
+                      <Tabs defaultValue="comments" className="w-full">
+                        <TabsList className="grid w-full grid-cols-4">
+                          <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                          <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                          <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                          <TabsTrigger value="revisions"><History className="mr-2"/>Revisions</TabsTrigger>
+                        </TabsList>
+                         <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                              <ScrollArea className="max-h-48 pr-2">
+                                  <div className="space-y-4">
+                                      {(taskState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><p className="text-sm">{comment.text}</p></div></div> ))}
+                                      {(taskState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                  </div>
+                              </ScrollArea>
+                              {canComment && (
+                                  <div className="space-y-2 pt-4 border-t">
+                                      <div className="flex-1 relative">
+                                          <Textarea placeholder="Write a comment... (use '@' to mention)" value={newComment} onChange={handleCommentChange} />
+                                          {isMentioning && ( <Card className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto"><CardContent className="p-1">{mentionSuggestions.map(user => ( <Button key={user.id} variant="ghost" className="w-full justify-start gap-2" onClick={() => handleMentionSelect(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>{user.name}</Button> ))}</CardContent></Card> )}
+                                      </div>
+                                       <div className="flex justify-between items-center">
+                                          <div className="flex-1">
+                                          </div>
+                                          <Button type="button" onClick={() => handlePostComment()} disabled={!newComment.trim() || isUploadingCommentAttachment}>
+                                                {isUploadingCommentAttachment ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Send className="mr-2 h-4 w-4"/>}
+                                                Post Comment
+                                          </Button>
+                                       </div>
+                                  </div>
+                              )}
+                        </TabsContent>
+                        <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                              <div className="space-y-2"><div className="flex justify-between text-xs text-muted-foreground"><span>Progress</span><span>{(taskState.subtasks || []).filter(st => st.completed).length}/{(taskState.subtasks || []).length}</span></div><Progress value={subtaskProgress} /></div>
+                              <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                  {(taskState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} disabled={!canCompleteSubtask(subtask)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild disabled={!canManageSubtasks}><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{subtask.assignee.name.charAt(0)}</AvatarFallback></Avatar> : <UserPlus className="h-4 w-4" />}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => handleAssignSubtask(subtask.id, null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleAssignSubtask(subtask.id, user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover>{canManageSubtasks && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button>}</div> ))}
+                              </div>
+                              {canManageSubtasks && ( <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="text-muted-foreground">{newSubtaskAssignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={newSubtaskAssignee.avatarUrl} /><AvatarFallback>{newSubtaskAssignee.name.charAt(0)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1"><Button variant="ghost" size="sm" className="w-full justify-start" onClick={() => setNewSubtaskAssignee(null)}>Unassigned</Button>{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div> )}
+                        </TabsContent>
+                        <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                          <div className="space-y-3">
+                              <h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4>
+                              <p className="text-xs text-muted-foreground">Tugas-tugas ini harus selesai sebelum tugas ini bisa dimulai.</p>
+                              {renderDependencyList(taskState.waitingOnTaskIds, 'waitingOnTaskIds')}
+                              {canEditContent && (
+                                <Popover>
+                                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                                    <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'waitingOnTaskIds')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                                </Popover>
+                              )}
+                          </div>
+                          <Separator/>
+                          <div className="space-y-3">
+                              <h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4>
+                              <p className="text-xs text-muted-foreground">Tugas ini menghalangi penyelesaian tugas-tugas berikut.</p>
+                              {renderDependencyList(taskState.blockingTaskIds, 'blockingTaskIds')}
+                              {canEditContent && (
+                                <Popover>
+                                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                                    <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'blockingTaskIds')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                                </Popover>
+                              )}
+                          </div>
+                          <Separator/>
+                          <div className="space-y-3">
+                              <h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Tasks</h4>
+                              <p className="text-xs text-muted-foreground">Tugas-tugas yang berhubungan tapi tidak saling memblokir.</p>
+                              {renderDependencyList(taskState.linkedTaskIds, 'linkedTaskIds')}
+                              {canEditContent && (
+                                <Popover>
+                                    <PopoverTrigger asChild><Button variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger>
+                                    <PopoverContent className="w-80"><Command><CommandInput placeholder="Search tasks..." /><CommandList><CommandEmpty>No tasks found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, tasks]) => (<CommandGroup key={brandName} heading={brandName}>{tasks.map(task => (<CommandItem key={task.id} onSelect={() => handleAddDependency(task.id, 'linkedTaskIds')}>{task.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent>
+                                </Popover>
+                              )}
+                          </div>
+                        </TabsContent>
+                        <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
+                            {(taskState.revisionHistory && taskState.revisionHistory.length > 0) ? (
+                                <Accordion type="single" collapsible>
+                                    {taskState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                        <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
+                                            <AccordionTrigger>
+                                                <div className="flex flex-col items-start text-left">
+                                                    <span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span>
+                                                    <span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent>
+                                                <ul className="list-disc pl-5 space-y-1">
+                                                    {cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}
+                                                </ul>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    ))}
+                                </Accordion>
+                            ) : (
+                                <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this task.</p> 
+                            )}
+                        </TabsContent>
+                      </Tabs>
+                  </div>
+                  <div className="md:col-span-1 p-6 space-y-6">
+                      {(isAssignee && !isManagerOrAdmin && !isSharedView && taskState.status !== 'Done') && (
+                        <div className="space-y-2">
+                           {taskState.status === 'Preview' ? (
+                                <Button type="button" className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                    <RotateCcw className="mr-2 h-4 w-4" />
+                                    Recall Submission
+                                </Button>
+                           ) : (
+                                <Button
+                                    type="button"
+                                    className="w-full"
+                                    onClick={handleSubmitForReview}
+                                    disabled={!canSubmit || isSaving || taskState.status === 'Preview'}
+                                >
+                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                    Submit for Review
+                                </Button>
+                           )}
+                           {!canSubmit && taskState.status !== 'Preview' && taskState.status !== 'Done' && (
+                                <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
+                           )}
+                        </div>
+                      )}
+                  
+                  {isManagerOrAdmin && taskState.status === 'Preview' && !isSharedView && ( 
+                     <div className="flex flex-col w-full gap-2">
+                        <Button type="button" className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, task: taskState })} disabled={isSaving}>
+                            <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                        </Button>
+                         <Button type="button" variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, task: taskState, items: [], currentItemText: '' })} disabled={isSaving}>
+                            <XCircle className="mr-2 h-4 w-4"/> Request Revisions
+                        </Button>
+                    </div>
+                  )}
+
+                  {isManagerOrAdmin && taskState.status === 'Done' && !isSharedView && ( <Button type="button" className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Task</Button> )}
+
+                  <div className='space-y-4 p-4 rounded-lg border'>
+                    <h3 className='font-semibold text-sm'>Task Details</h3>
+                    <Separator/>
+                      <FormField control={form.control} name="brandId" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Brand</FormLabel><div className="col-span-2">{ !canEditContent ? ( <div className="flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brand?.name || 'N/A'}</div> ) : ( <Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{areBrandsLoading ? ( <div className="flex items-center justify-center p-2"><Loader2 className="h-4 w-4 animate-spin" /></div> ) : ( brands?.map((brand) => ( <SelectItem key={brand.id} value={brand.id}><div className="flex items-center gap-2"><Building2 className="h-4 w-4" />{brand.name}</div></SelectItem> )) )}</SelectContent></Select> )}</div></FormItem> )}/>
+                      <FormItem className="grid grid-cols-3 items-center gap-2">
+                          <FormLabel className="text-muted-foreground">Status</FormLabel>
+                          <div className="col-span-2">
+                            <FormField control={form.control} name="status" render={({ field }) => { return ( <Select onValueChange={(value) => handleStatusChange(value)} value={field.value} disabled={!canChangeStatus}><FormControl><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger></FormControl><SelectContent>{(statuses || []).map(status => ( <SelectItem key={status.id} value={status.name} disabled={!canChangeStatus || (creatorIsEmployee && (status.name === 'Done' || status.name === 'Revisi')) || (isEmployeeOrPIC && (status.name === 'Done' || status.name === 'Revisi')) }>{status.name}</SelectItem> ))}</SelectContent></Select> ) }}/>
+                          </div>
+                      </FormItem>
+                    <FormField control={form.control} name="priority" render={({ field }) => { const priority = priorityInfo[field.value]; return ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Priority</FormLabel><div className="col-span-2 flex items-center gap-2">{ !canChangePriority ? ( <div className="flex items-center gap-2 text-sm font-medium"><priority.icon className={`h-4 w-4 ${priority.color}`} />{priority.label}</div> ) : ( <><Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent></Select>{aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}</> )}</div></FormItem> ) }}/>
+                      <FormField control={form.control} name="dueDate" render={({ field }) => ( <FormItem className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Due Date</FormLabel><div className="col-span-2">{!canEditDueDate ? ( <div className="text-sm font-medium">{field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}</div> ) : ( <Input type="date" {...field} value={field.value || ''} /> )}</div></FormItem> )}/>
+                      {completionStatus && ( <div className="grid grid-cols-3 items-center gap-2"><FormLabel className="text-muted-foreground">Completed</FormLabel><div className="col-span-2 flex items-center gap-2"><span className="text-sm font-medium">{format(parseISO(taskState.actualCompletionDate!), 'MMM d, yyyy')}</span>{completionStatus.status === 'On Time' ? (<Badge variant="secondary" className='bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'>On Time</Badge>) : (<Badge variant="destructive">{completionStatus.duration} late</Badge>)}</div></div> )}
+                  </div>
+
+                  <div className='space-y-4 p-4 rounded-lg border'>
+                    <h3 className='font-semibold text-sm'>People</h3>
+                    <Separator/>
+                    <FormItem>
+                        <FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
+                        {currentAssignees.map((user) => ( <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div>{canAssignUsers && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}</div> ))}
+                        {canAssignUsers && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{groupedUsers.managers.length > 0 && ( <><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>{groupedUsers.managers.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}<Separator/></> )}{groupedUsers.employees.length > 0 && ( <><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>{groupedUsers.employees.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</> )}</div></ScrollArea></PopoverContent></Popover> )}
+                    </FormItem>
+                  </div>
+
+                  <div className='space-y-4 p-4 rounded-lg border'>
+                    <h3 className='font-semibold text-sm'>Categorization</h3>
+                    <Separator/>
+                    <FormItem>
+                        <FormLabel className="text-muted-foreground text-sm">Tags</FormLabel>
+                        <div className="flex flex-wrap gap-2">
+                            {currentTags.map((tag) => ( <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>{tag.label}{canEditContent && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}</div> ))}
+                            {canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger><PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent></Popover> )}
+                        </div>
+                    </FormItem>
+                  </div>
+                  
+                  <div className='space-y-4 p-4 rounded-lg border'>
+                    <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                    <Separator/>
+                    <FormField
+                      control={form.control}
+                      name="timeEstimate"
+                      render={({ field }) => (
+                          <FormItem className="grid grid-cols-3 items-center gap-2">
+                              <FormLabel className="text-muted-foreground text-sm">Estimasi (hari)</FormLabel>
+                              <div className="col-span-2">
+                                  {!canEditContent ? (
+                                      <div className="text-sm font-medium">{timeEstimateValue ? (timeEstimateValue / 8) : 0} hari ({timeEstimateValue || 0} jam)</div>
                                   ) : (
-                                  <>
-                                    <Select onValueChange={(v: Priority) => handlePriorityChange(v)} value={field.value}>
-                                        <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                        <SelectContent>{Object.values(priorityInfo).map(p => (<SelectItem key={p.value} value={p.value}><div className="flex items-center gap-2"><p.icon className={`h-4 w-4 ${p.color}`} />{p.label}</div></SelectItem>))}</SelectContent>
-                                    </Select>
-                                    {aiValidation.isChecking && <Loader2 className="h-5 w-5 animate-spin" />}
-                                  </>
+                                      <div className='flex items-center gap-2'>
+                                          <Input 
+                                              type="number" 
+                                              step="0.1"
+                                              value={field.value !== undefined ? field.value / 8 : ''} 
+                                              onChange={(e) => {
+                                                  const days = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                                  const hours = days !== undefined ? days * 8 : undefined;
+                                                  field.onChange(hours);
+                                              }} 
+                                              placeholder="e.g. 1.5" 
+                                          />
+                                          <span className="text-sm text-muted-foreground whitespace-nowrap">({field.value || 0} jam)</span>
+                                      </div>
                                   )}
                               </div>
-                           </FormItem>
-                          )
-                       }}/>
-                        <FormField control={form.control} name="dueDate" render={({ field }) => (
-                            <FormItem className="grid grid-cols-3 items-center gap-2">
-                               <FormLabel className="text-muted-foreground">Due Date</FormLabel>
-                               <div className="col-span-2">
-                                 {!canEditDueDate ? (
-                                     <div className="text-sm font-medium">
-                                         {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : 'No due date'}
-                                     </div>
-                                 ) : (
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button variant="ghost" className="w-full justify-start p-0 font-normal">
-                                        {field.value ? format(parseISO(field.value), 'MMM d, yyyy') : <span className='text-muted-foreground'>Set date</span>}
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                      <Calendar
-                                        mode="single"
-                                        selected={field.value ? parseISO(field.value) : undefined}
-                                        onSelect={(date) => form.setValue('dueDate', date?.toISOString())}
-                                        initialFocus
-                                      />
-                                    </PopoverContent>
-                                  </Popover>
-                                 )}
-                               </div>
-                            </FormItem>
-                        )}/>
-                        {initialTask.actualCompletionDate && (
-                             <div className="grid grid-cols-3 items-center gap-2">
-                               <FormLabel className="text-muted-foreground">Completed</FormLabel>
-                               <div className="col-span-2 flex items-center gap-2">
-                                 <span className="text-sm font-medium">
-                                    {format(parseISO(initialTask.actualCompletionDate), 'MMM d, yyyy')}
-                                 </span>
-                                 {completionStatus && (
-                                    <Badge variant={completionStatus === 'Late' ? 'destructive' : 'secondary'} className={completionStatus === 'On Time' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : ''}>
-                                        {completionStatus}
-                                    </Badge>
-                                 )}
-                               </div>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className='space-y-4 p-4 rounded-lg border'>
-                      <h3 className='font-semibold text-sm'>People</h3>
-                      <Separator/>
-                      <FormItem>
-                          <FormLabel className="text-muted-foreground text-sm">Assignees</FormLabel>
-                           {currentAssignees.map((user) => (
-                              <div key={user.id} className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-3">
-                                      <Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{user.name?.charAt(0)}</AvatarFallback></Avatar>
-                                      <p className="text-sm font-medium">{user.name}</p>
-                                  </div>
-                                  {canAssignUsers && <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveUser(user.id)}><X className="h-4"/></Button>}
-                              </div>
-                           ))}
-                          {canAssignUsers && (
-                              <Popover>
-                                  <PopoverTrigger asChild>
-                                      <Button type="button" variant="outline" className="w-full mt-2"><Plus className="mr-2"/> Add Assignee</Button>
-                                  </PopoverTrigger>
-                                  <PopoverContent className="w-60 p-1">
-                                      <ScrollArea className="max-h-60">
-                                          <div className="space-y-1">
-                                            {groupedUsers.managers.length > 0 && (
-                                                <>
-                                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Managers</div>
-                                                    {groupedUsers.managers.map(user => (
-                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
-                                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                        <span className="truncate">{user.name}</span>
-                                                    </Button>
-                                                    ))}
-                                                    <Separator/>
-                                                </>
-                                            )}
-                                            {groupedUsers.employees.length > 0 && (
-                                                <>
-                                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">Employees</div>
-                                                    {groupedUsers.employees.map(user => (
-                                                    <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => handleSelectUser(user)}>
-                                                        <Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{user.name.charAt(0)}</AvatarFallback></Avatar>
-                                                        <span className="truncate">{user.name}</span>
-                                                    </Button>
-                                                    ))}
-                                                </>
-                                            )}
-                                          </div>
-                                      </ScrollArea>
-                                  </PopoverContent>
-                              </Popover>
-                          )}
-                      </FormItem>
-                    </div>
-
-                    <div className='space-y-4 p-4 rounded-lg border'>
-                      <h3 className='font-semibold text-sm'>Categorization</h3>
-                      <Separator/>
-                      <FormItem>
-                          <FormLabel className="text-muted-foreground text-sm">Tags</FormLabel>
-                           <div className="flex flex-wrap gap-2">
-                              {currentTags.map((tag) => (
-                                  <div key={tag.label} className={`flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ${tag.color}`}>
-                                      {tag.label}
-                                      {canEditContent && <button type="button" onClick={() => handleRemoveTag(tag.label)}><X className="h-3 w-3"/></button>}
-                                  </div>
-                              ))}
-                              {canEditContent && (
-                                   <Popover>
-                                      <PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-6 rounded-full">+ Add</Button></PopoverTrigger>
-                                      <PopoverContent className="w-auto p-1"><div className="flex flex-col gap-1">{Object.values(allTags).map(tag => (<Button key={tag.label} variant="ghost" size="sm" className="justify-start" onClick={() => handleSelectTag(tag)}><div className="flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${tag.color.split(' ')[0]}`}></div>{tag.label}</div></Button>))}</div></PopoverContent>
-                                  </Popover>
-                              )}
-                           </div>
-                      </FormItem>
-                    </div>
-
-                    <div className='space-y-4 p-4 rounded-lg border'>
-                      <div className="flex justify-between items-center">
-                        <h3 className='font-semibold text-sm'>Time Management</h3>
-                      </div>
-                      <Separator/>
-                       <FormField control={form.control} name="timeEstimate" render={({ field }) => (
-                         <FormItem className="grid grid-cols-3 items-center gap-2">
-                            <FormLabel className="text-muted-foreground text-sm">Estimate</FormLabel>
-                            <div className="col-span-2">
-                              {!canEditContent ? (
-                                <div className="text-sm font-medium">{timeEstimateValue} hours</div>
-                              ) : (
-                                <Input type="number" {...field} value={field.value ?? ''} onChange={(e) => field.onChange(e.target.value === '' ? undefined : +e.target.value)} placeholder="Hours" />
-                              )}
-                            </div>
-                         </FormItem>
-                       )}/>
-                       
-                       <div className="space-y-2">
-                          <div className="grid grid-cols-3 items-center gap-2">
-                              <span className="text-sm text-muted-foreground">Total Logged</span>
-                              <span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span>
-                          </div>
-                          <Progress value={timeTrackingProgress} />
-                       </div>
-
-                    </div>
-
+                          </FormItem>
+                      )}
+                    />
+                    <div className="space-y-2"><div className="grid grid-cols-3 items-center gap-2"><span className="text-sm text-muted-foreground">Total Logged</span><span className="col-span-2 text-sm font-medium">{formatHours(timeTracked)}</span></div><div className="col-span-3"><Progress value={timeTrackingProgress} /></div></div>
                   </div>
-                </ScrollArea>
-              </form>
-          </Form>
-          <SheetFooter className="p-4 border-t flex justify-end items-center w-full">
-              {canEditContent && (
-                <Button type="submit" form="task-details-form" disabled={isSaving}>
-                  {isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}
-                  Save Changes
-                </Button>
-              )}
+                </div>
+                </div>
+              </ScrollArea>
+             </form>
+           </Form>
+        </div>
+          <SheetFooter className="p-4 border-t flex-shrink-0">
+              {canEditContent && ( <Button type="submit" form="task-details-form" disabled={isSaving}>{isSaving && <Loader2 className='h-4 w-4 mr-2 animate-spin' />}Save Changes</Button> )}
           </SheetFooter>
         </SheetContent>
       </Sheet>
@@ -1687,11 +1681,7 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         <AlertDialogContent>
             <AlertDialogHeader>
                 <AlertDialogTitle>AI Priority Guard</AlertDialogTitle>
-                <AlertDialogDescription>
-                    {aiValidation.reason}
-                    <br/><br/>
-                    Do you still want to set this task as Urgent?
-                </AlertDialogDescription>
+                <AlertDialogDescription>{aiValidation.reason}<br/><br/>Do you still want to set this task as Urgent?</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel onClick={() => setAiValidation(prev => ({ ...prev, isOpen: false }))}>Cancel</AlertDialogCancel>
@@ -1702,75 +1692,26 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+       <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle>
-            <DialogDescription>
-              A complete history of all changes made to this task.
-            </DialogDescription>
-          </DialogHeader>
-          <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-            <div className="space-y-6 py-4">
-              {initialTask.activities && initialTask.activities.length > 0 ? (
-                getUniqueActivities(initialTask.activities)
-                  .slice()
-                  .sort((a, b) => {
-                    const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0;
-                    const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0;
-                    return dateB - dateA;
-                  })
-                  .map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-4">
-                      <Avatar className="h-9 w-9">
-                        <AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} />
-                        <AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="text-sm">
-                          <span className="font-semibold">{activity.user.name}</span> {activity.action}.
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {formatDate(activity.timestamp)}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                  
-              ) : (
-                <p className="text-center text-muted-foreground py-8">
-                  No activities recorded for this task yet.
-                </p>
-              )}
-            </div>
-          </ScrollArea>
+            <DialogHeader><DialogTitle>Task Activity Log: {initialTask?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this task.</DialogDescription></DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">
+                {initialTask.activities && initialTask.activities.length > 0 ? ( 
+                        getUniqueActivities(initialTask.activities).slice().sort((a, b) => { const dateA = a.timestamp ? (a.timestamp.toDate ? a.timestamp.toDate() : new Date(a.timestamp)).getTime() : 0; const dateB = b.timestamp ? (b.timestamp.toDate ? b.timestamp.toDate() : new Date(b.timestamp)).getTime() : 0; return dateB - dateA; }).map((activity) => ( 
+                            <div key={activity.id} className="flex items-start gap-4">
+                                <Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar>
+                                <div>
+                                    <p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p>
+                                </div>
+                            </div> 
+                        )) 
+                    ) : ( 
+                        <p className="text-center text-muted-foreground py-8">No activities recorded for this task yet.</p> 
+                    )}
+            </div></ScrollArea>
         </DialogContent>
-      </Dialog>
-      <Dialog open={isRejectionDialogOpen} onOpenChange={setRejectionDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Reason for Revision</DialogTitle>
-            <DialogDescription>
-              Please provide feedback for the assignee on why this task needs revisions. This will be added as a comment.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Textarea
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="e.g., The final design is missing the client's new logo."
-              rows={4}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setRejectionDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || !rejectionReason.trim()}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Request Revisions
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+       </Dialog>
         <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
             <DialogContent>
                 <DialogHeader>
@@ -1791,56 +1732,180 @@ const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleConfirmGdriveLink}>Add Link</Button>
+                    <Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
         
+        <AlertDialog open={endOfDayState.isOpen} onOpenChange={(open) => !open && setEndOfDayState({ isOpen: false })}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Jam Kerja Telah Usai</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Waktu kerja normal untuk hari ini telah berakhir. Apa yang ingin Anda lakukan untuk tugas ini?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogAction onClick={() => { handlePauseSession('auto-pause'); setEndOfDayState({ isOpen: false }); }}>
+                        Jeda & Lanjutkan Besok
+                    </AlertDialogAction>
+                    <AlertDialogCancel onClick={() => setEndOfDayState({ isOpen: false })}>
+                        Lanjutkan Lembur
+                    </AlertDialogCancel>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {blockingAlert.suggestion}
+                    </AlertDialogDescription>
+                      {blockingAlert.reasons.length > 0 && (
+                          <div className="pt-2">
+                               <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                                  {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                              </ul>
+                          </div>
+                      )}
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, blocked: false, title: '', reasons: [] })}>OK</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+        <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Hapus tugas ini?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Anda akan menghapus tugas: <strong className="text-foreground">{taskState.title}</strong>
+                        <br/><br/>
+                        {(['Doing', 'Preview', 'Revisi'].includes(taskState.status)) && (
+                            <span className="text-destructive font-semibold">PERINGATAN: Tugas ini sedang berjalan. </span>
+                        )}
+                        Tindakan ini tidak dapat dibatalkan.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Batal</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                        Ya, Hapus Tugas
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+         <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Create Revision Checklist</DialogTitle>
+                    <DialogDescription>
+                    Revisions for task: <span className="font-bold text-foreground">{revisionState.task?.title}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                    <div className="py-4 space-y-6 px-6">
+                        <div className="space-y-2">
+                            <h4 className="font-semibold text-sm">Files for Review</h4>
+                             <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                                {revisionState.task?.deliverables && revisionState.task.deliverables.length > 0 ? (
+                                    revisionState.task.deliverables.map(att => (
+                                        <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                {getFileIcon(att.name)}
+                                                <span className="truncate" title={att.name}>{att.name}</span>
+                                            </a>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-muted-foreground">No files were submitted for this task.</p>
+                                )}
+                            </div>
+                        </div>
+                        <Separator/>
+                        <div className="space-y-4">
+                            <h4 className="font-semibold text-sm">Revision Points</h4>
+                            <div className="space-y-2">
+                                {revisionState.items.map((item, index) => (
+                                    <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                        <span className="flex-1 text-sm">{item.text}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Input 
+                                    value={revisionState.currentItemText}
+                                    onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                                    placeholder="e.g., Fix the logo placement"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleAddRevisionItem();
+                                      }
+                                    }}
+                                />
+                                <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                                    <Plus className="mr-2 h-4 w-4"/> Add
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </ScrollArea>
+                <DialogFooter className="p-6 pt-4 border-t">
+                    <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, task: null, items: [], currentItemText: '' })}>Cancel</Button>
+                    <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
+                        {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Request Revisions
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
         <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, task: null })}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Final Review</DialogTitle>
+                    <DialogTitle>Final Review & Complete Task</DialogTitle>
                     <DialogDescription>
-                        You are about to mark this task as "Done". Please review the sub-tasks and attachments to ensure everything is complete.
+                        Anda akan menyelesaikan tugas: <strong className="text-foreground">{finalReviewState.task?.title}</strong>. Mohon periksa item di bawah ini sebelum melanjutkan.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="py-4 space-y-6">
-                    <h3 className="font-semibold text-base">{finalReviewState.task?.title}</h3>
-                    <Separator />
+                <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                  <div className="py-4 space-y-6 px-6">
                     <div className="space-y-3">
                         <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
-                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
                             {finalReviewState.task?.subtasks && finalReviewState.task.subtasks.length > 0 ? (
-                                finalReviewState.task.subtasks.map(subtask => (
+                                 finalReviewState.task.subtasks.map(subtask => ( 
                                     <div key={subtask.id} className="flex items-center gap-3">
-                                        <Checkbox id={`final-review-sheet-${subtask.id}`} checked={subtask.completed} disabled />
-                                        <label htmlFor={`final-review-sheet-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>
-                                            {subtask.title}
-                                        </label>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p>
+                                        <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                        <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                    </div> 
+                                )) 
+                            ) : ( 
+                                <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
                             )}
                         </div>
                     </div>
-                    <div className="space-y-3">
-                        <h4 className="font-medium text-sm flex items-center gap-2"><Paperclip className="h-4 w-4" />Attachments</h4>
-                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
-                            {finalReviewState.task?.attachments && finalReviewState.task.attachments.length > 0 ? (
-                                finalReviewState.task.attachments.map(att => (
+                     <div className="space-y-3">
+                        <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables</h4>
+                         <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {finalReviewState.task?.deliverables && finalReviewState.task.deliverables.length > 0 ? (
+                                 finalReviewState.task.deliverables.map(att => ( 
                                     <div key={att.id} className="flex items-center gap-2 text-sm">
                                         <span>-</span>
                                         <a href={att.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate">{att.name}</a>
                                     </div>
-                                ))
-                            ) : (
-                                <p className="text-sm text-muted-foreground">No attachments for this item.</p>
+                                )) 
+                            ) : ( 
+                                <p className="text-sm text-muted-foreground">No deliverables for this item.</p> 
                             )}
                         </div>
                     </div>
-                </div>
-                <DialogFooter>
+                  </div>
+                </ScrollArea>
+                <DialogFooter className="p-6 pt-0">
                     <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, task: null })}>Cancel</Button>
                     <Button variant="default" onClick={handleFinalReviewAndComplete}>
                         <Check className="mr-2 h-4 w-4" />

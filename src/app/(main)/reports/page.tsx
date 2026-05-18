@@ -4,8 +4,8 @@
 import { useMemo, useState } from 'react';
 import { useUserProfile, useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Task, User } from '@/lib/types';
-import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp, Timer, Ban } from 'lucide-react';
+import type { Task, User, SocialMediaPost, WebArticle, WorkItem } from '@/lib/types';
+import { Loader2, CheckCircle2, CircleDashed, Clock, Users, ClipboardList, TrendingUp, Timer, Ban, Share2, Globe } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoursByPriorityChart } from '@/components/reports/hours-by-priority-chart';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { formatDuration } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
 import { notFound } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 
 
 // --- Komponen untuk Laporan Personal (Hanya untuk Karyawan) ---
@@ -134,64 +135,128 @@ function PersonalReport({ tasks, isLoading }: { tasks: Task[] | null; isLoading:
   );
 }
 
+function PunctualitySummary({ onTime, total }: { onTime: number; total: number }) {
+    if (total === 0) {
+        return (
+            <Card>
+                <CardContent className="p-6 text-center text-muted-foreground">
+                    No completed items with due dates in this period to analyze punctuality.
+                </CardContent>
+            </Card>
+        );
+    }
+    
+    const late = total - onTime;
+    
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Work Punctuality</CardTitle>
+                <CardDescription>Summary of on-time vs. late completions for items with a due date.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-green-100 dark:bg-green-900/50 rounded-lg text-center">
+                        <p className="text-3xl font-bold text-green-700 dark:text-green-300">{onTime}</p>
+                        <p className="text-sm font-medium text-green-600 dark:text-green-400">On Time</p>
+                    </div>
+                    <div className="p-4 bg-red-100 dark:bg-red-900/50 rounded-lg text-center">
+                        <p className="text-3xl font-bold text-red-700 dark:text-red-300">{late}</p>
+                        <p className="text-sm font-medium text-red-600 dark:text-red-400">Late</p>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 // --- Komponen untuk Dasbor Analisis (Super Admin & Manajer) ---
-function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTasks: Task[] | null; allUsers: User[] | null; isLoading: boolean; role: 'Super Admin' | 'Manager' }) {
+function TeamAnalysisDashboard({
+  allTasks,
+  allUsers,
+  allSocialMediaPosts,
+  allWebArticles,
+  isLoading,
+  role,
+}: {
+  allTasks: Task[] | null;
+  allUsers: User[] | null;
+  allSocialMediaPosts: SocialMediaPost[] | null;
+  allWebArticles: WebArticle[] | null;
+  isLoading: boolean;
+  role: 'Super Admin' | 'Manager';
+}) {
   const { t } = useI18n();
   const [selectedUserId, setSelectedUserId] = useState('all');
   const [selectedPeriod, setSelectedPeriod] = useState('all');
-  
-  const title = role === 'Super Admin' ? t('reports.admin.title') : 'Laporan Kinerja Tim';
-  const description = role === 'Super Admin' ? t('reports.admin.description') : 'Analisis data operasional untuk tim yang Anda pimpin.';
 
-  const filteredTasks = useMemo(() => {
-    if (!allTasks) return [];
-
+  const { filteredTasks, filteredSocialPosts, filteredWebArticles } = useMemo(() => {
     let periodDate: Date | null = null;
     if (selectedPeriod !== 'all') {
       periodDate = subDays(new Date(), parseInt(selectedPeriod, 10));
     }
 
-    return allTasks.filter(task => {
-      const isUserMatch = selectedUserId === 'all' || task.assigneeIds.includes(selectedUserId);
-      const isPeriodMatch = !periodDate || (task.createdAt?.toDate && isAfter(task.createdAt.toDate(), periodDate));
+    const filterByUserAndDate = (item: WorkItem) => {
+      const isUserMatch = selectedUserId === 'all' || item.assigneeIds.includes(selectedUserId);
+      const isPeriodMatch = !periodDate || (item.createdAt?.toDate && isAfter(item.createdAt.toDate(), periodDate));
       return isUserMatch && isPeriodMatch;
-    });
-  }, [allTasks, selectedUserId, selectedPeriod]);
-  
-  const filteredUsers = useMemo(() => {
-    if (selectedUserId === 'all') return allUsers;
-    return allUsers?.filter(u => u.id === selectedUserId) || [];
-  }, [allUsers, selectedUserId]);
+    };
 
-  const totalHoursTracked = filteredTasks.reduce((acc, t) => acc + (t.timeTracked || 0), 0);
+    return {
+      filteredTasks: (allTasks || []).filter(filterByUserAndDate),
+      filteredSocialPosts: (allSocialMediaPosts || []).filter(filterByUserAndDate),
+      filteredWebArticles: (allWebArticles || []).filter(filterByUserAndDate),
+    };
+  }, [allTasks, allSocialMediaPosts, allWebArticles, selectedUserId, selectedPeriod]);
+
+  const {
+    completedTasks,
+    completedSocialPosts,
+    completedWebArticles,
+    allCompletedItems,
+  } = useMemo(() => {
+    const tasks = filteredTasks.filter(t => t.status === 'Done');
+    const social = filteredSocialPosts.filter(p => p.status === 'Posted' || p.statusInternal === 'Done');
+    const web = filteredWebArticles.filter(a => a.statusInternal === 'Done');
+    return {
+      completedTasks: tasks,
+      completedSocialPosts: social,
+      completedWebArticles: web,
+      allCompletedItems: [...tasks, ...social, ...web],
+    };
+  }, [filteredTasks, filteredSocialPosts, filteredWebArticles]);
+  
 
   const onTimeCompletionRate = useMemo(() => {
-    const completed = filteredTasks.filter(t => t.status === 'Done' && t.actualCompletionDate && t.dueDate);
-    if (completed.length === 0) return { rate: 0, onTime: 0, total: 0 };
+    const relevantTasks = allCompletedItems.filter(t => t.actualCompletionDate && t.dueDate);
+    if (relevantTasks.length === 0) return { rate: 0, onTime: 0, total: 0 };
     
-    const onTime = completed.filter(t => !isAfter(parseISO(t.actualCompletionDate!), parseISO(t.dueDate!))).length;
+    const onTime = relevantTasks.filter(t => !isAfter(parseISO(t.actualCompletionDate!), parseISO(t.dueDate!))).length;
     return {
-      rate: Math.round((onTime / completed.length) * 100),
+      rate: Math.round((onTime / relevantTasks.length) * 100),
       onTime,
-      total: completed.length
+      total: relevantTasks.length
     };
-  }, [filteredTasks]);
+  }, [allCompletedItems]);
+  
+  const { onTime, total } = onTimeCompletionRate;
 
   const averageCompletionTime = useMemo(() => {
-    const completed = filteredTasks.filter(t => t.status === 'Done' && t.actualCompletionDate && t.actualStartDate);
-    if (completed.length === 0) return "N/A";
+    const relevantTasks = allCompletedItems.filter(t => t.actualCompletionDate && t.actualStartDate);
+    if (relevantTasks.length === 0) return "N/A";
     
-    const totalDuration = completed.reduce((acc, task) => {
+    const totalDuration = relevantTasks.reduce((acc, task) => {
         const start = parseISO(task.actualStartDate!);
         const end = parseISO(task.actualCompletionDate!);
         return acc + (end.getTime() - start.getTime());
     }, 0);
     
-    const avgDurationMs = totalDuration / completed.length;
+    const avgDurationMs = totalDuration / relevantTasks.length;
     const duration = intervalToDuration({ start: 0, end: avgDurationMs });
     return formatDuration(duration);
+  }, [allCompletedItems]);
 
-  }, [filteredTasks]);
+  const totalHoursTracked = filteredTasks.reduce((acc, t) => acc + (t.timeTracked || 0), 0);
 
   if (isLoading) {
     return (
@@ -201,57 +266,71 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
     );
   }
 
-  const totalTasks = filteredTasks.length || 0;
-  const completedTasks = filteredTasks?.filter((t) => t.status === 'Done').length || 0;
-  const inProgressTasks = filteredTasks?.filter((t) => t.status === 'Doing').length || 0;
-
   return (
     <>
-       <div className="mb-6 p-4 border rounded-lg bg-card">
+      <div className="mb-6 p-4 border rounded-lg bg-card">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <Label htmlFor="user-filter">{t('reports.filter.employee')}</Label>
-                 <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger id="user-filter">
-                        <SelectValue placeholder={t('reports.filter.employee.placeholder')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">{t('reports.filter.employee.all')}</SelectItem>
-                        {allUsers?.map(user => (
-                            <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-            <div>
-                 <Label htmlFor="period-filter">{t('reports.filter.period')}</Label>
-                 <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
-                    <SelectTrigger id="period-filter">
-                        <SelectValue placeholder={t('reports.filter.period.placeholder')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">{t('reports.filter.period.all')}</SelectItem>
-                        <SelectItem value="7">{t('reports.filter.period.7')}</SelectItem>
-                        <SelectItem value="30">{t('reports.filter.period.30')}</SelectItem>
-                        <SelectItem value="180">{t('reports.filter.period.180')}</SelectItem>
-                        <SelectItem value="365">{t('reports.filter.period.365')}</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
+          <div>
+            <Label htmlFor="user-filter">{t('reports.filter.employee')}</Label>
+            <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+              <SelectTrigger id="user-filter">
+                <SelectValue placeholder={t('reports.filter.employee.placeholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('reports.filter.employee.all')}</SelectItem>
+                {allUsers?.map(user => (
+                  <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="period-filter">{t('reports.filter.period')}</Label>
+            <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
+              <SelectTrigger id="period-filter">
+                <SelectValue placeholder={t('reports.filter.period.placeholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('reports.filter.period.all')}</SelectItem>
+                <SelectItem value="7">{t('reports.filter.period.7')}</SelectItem>
+                <SelectItem value="30">{t('reports.filter.period.30')}</SelectItem>
+                <SelectItem value="180">{t('reports.filter.period.180')}</SelectItem>
+                <SelectItem value="365">{t('reports.filter.period.365')}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('reports.metric.onTimeRate')}</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Tasks Completed</CardTitle>
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{onTimeCompletionRate.rate}%</div>
-            <p className="text-xs text-muted-foreground">
-              {onTimeCompletionRate.onTime} {t('reports.metric.onTimeRate.sub.onTime')} {onTimeCompletionRate.total}
-            </p>
+            <div className="text-2xl font-bold">{completedTasks.length}</div>
+            <p className="text-xs text-muted-foreground">General tasks</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Social Posts</CardTitle>
+            <Share2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{completedSocialPosts.length}</div>
+            <p className="text-xs text-muted-foreground">Completed / Posted</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Web Articles</CardTitle>
+            <Globe className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{completedWebArticles.length}</div>
+            <p className="text-xs text-muted-foreground">Finished articles</p>
           </CardContent>
         </Card>
         <Card>
@@ -266,77 +345,17 @@ function TeamAnalysisDashboard({ allTasks, allUsers, isLoading, role }: { allTas
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('reports.metric.totalTasks')}</CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalTasks}</div>
-            <p className="text-xs text-muted-foreground">{t('reports.metric.totalTasks.sub')}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('reports.metric.completedTasks')}</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{completedTasks}</div>
-            <p className="text-xs text-muted-foreground">{t('reports.metric.fromTotal', { total: totalTasks })}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('reports.metric.activeTasks')}</CardTitle>
-            <CircleDashed className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{inProgressTasks}</div>
-            <p className="text-xs text-muted-foreground">{t('reports.metric.activeTasks.sub')}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('reports.metric.totalHours')}</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalHoursTracked.toFixed(2)}h</div>
-            <p className="text-xs text-muted-foreground">{t('reports.metric.totalHours.sub.admin')}</p>
+            <p className="text-xs text-muted-foreground">Tracked on general tasks</p>
           </CardContent>
         </Card>
       </div>
       <div className="mt-6">
-        <h3 className="text-xl font-bold tracking-tight">{t('reports.admin.section.team.title')}</h3>
-        <p className="text-muted-foreground">{t('reports.admin.section.team.description')}</p>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-4">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>{t('reports.chart.teamWorkload.title')}</CardTitle>
-              <CardDescription>{t('reports.chart.teamWorkload.description')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TeamWorkloadChart tasks={filteredTasks || []} users={filteredUsers || []} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('reports.chart.taskStatus.title')}</CardTitle>
-              <CardDescription>{t('reports.chart.taskStatus.description')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TaskStatusChart tasks={filteredTasks || []} />
-            </CardContent>
-          </Card>
-          <Card className="lg:col-span-3">
-             <CardHeader>
-                <CardTitle>{t('reports.chart.hoursByPriority.title')}</CardTitle>
-                <CardDescription>{t('reports.chart.hoursByPriority.description.admin')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <HoursByPriorityChart tasks={filteredTasks || []} />
-            </CardContent>
-          </Card>
-        </div>
+        <PunctualitySummary onTime={onTime} total={total} />
       </div>
     </>
   );
@@ -348,47 +367,75 @@ export default function ReportsPage() {
   const firestore = useFirestore();
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
 
-  // --- Data Fetching Logic ---
-  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(useMemo(() => {
-    if (!firestore || !companyId || isProfileLoading) return null;
+  const tasksQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
     
-    // Super Admin: Fetch all tasks for the company
-    if (profile?.role === 'Super Admin') {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-    }
-    // Employee: Fetch only tasks assigned to them
-    if (profile?.role === 'Employee') {
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
-    }
-    // Manager: Fetch tasks of all their direct reports + their own
-    if (profile?.role === 'Manager') {
-      // Note: This requires a separate query for users first, so we handle it below
-      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-    }
-    return null;
-  }, [firestore, companyId, profile, isProfileLoading]));
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
 
-  const { data: users, isLoading: isUsersLoading } = useCollection<User>(useMemo(() => {
-    if (!firestore || !companyId || isProfileLoading) return null;
+    if (profile.role === 'Employee' || profile.role === 'PIC') {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    }
+    
+    return q;
+  }, [firestore, companyId, profile]);
 
-    if (profile?.role === 'Super Admin') {
-        return query(collection(firestore, 'users'), where('companyId', '==', companyId));
+  const socialMediaPostsQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    let q = query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', companyId));
+    if (profile.role === 'Employee' || profile.role === 'PIC') {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
-    if (profile?.role === 'Manager') {
-        return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+    return q;
+  }, [firestore, companyId, profile]);
+
+  const webArticlesQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    let q = query(collection(firestore, 'webArticles'), where('companyId', '==', companyId));
+    if (profile.role === 'Employee' || profile.role === 'PIC') {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
     }
-    return null; // Employees don't need to fetch other users for their report
-  }, [firestore, companyId, profile, isProfileLoading]));
-  
+    return q;
+  }, [firestore, companyId, profile]);
+
+  const usersQuery = useMemo(() => {
+    if (!firestore || !companyId || !profile || profile.role === 'Employee') return null;
+
+    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
+    
+    if (profile.role === 'Manager') {
+        q = query(q, where('managerId', '==', profile.id));
+    }
+    return q;
+  }, [firestore, companyId, profile]);
+
+  const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: socialMediaPosts, isLoading: areSocialPostsLoading } = useCollection<SocialMediaPost>(socialMediaPostsQuery);
+  const { data: webArticles, isLoading: areWebArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
+  const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
+
   const teamTasks = useMemo(() => {
     if (!profile || profile.role !== 'Manager' || !tasks || !users) return tasks;
     const teamMemberIds = users.map(u => u.id);
-    // Include manager's own tasks as well
-    teamMemberIds.push(profile.id);
+    teamMemberIds.push(profile.id); // Include manager's own tasks
     return tasks.filter(task => task.assigneeIds.some(id => teamMemberIds.includes(id)));
   }, [tasks, users, profile]);
 
-  const isLoading = isProfileLoading || isTasksLoading || isUsersLoading;
+  const teamSocialMediaPosts = useMemo(() => {
+    if (!profile || profile.role !== 'Manager' || !socialMediaPosts || !users) return socialMediaPosts;
+    const teamMemberIds = users.map(u => u.id);
+    teamMemberIds.push(profile.id);
+    return socialMediaPosts.filter(post => post.assigneeIds.some(id => teamMemberIds.includes(id)));
+  }, [socialMediaPosts, users, profile]);
+
+  const teamWebArticles = useMemo(() => {
+    if (!profile || profile.role !== 'Manager' || !webArticles || !users) return webArticles;
+    const teamMemberIds = users.map(u => u.id);
+    teamMemberIds.push(profile.id);
+    return webArticles.filter(article => article.assigneeIds.some(id => teamMemberIds.includes(id)));
+  }, [webArticles, users, profile]);
+
+
+  const isLoading = isProfileLoading || isTasksLoading || isUsersLoading || areSocialPostsLoading || areWebArticlesLoading;
 
   const renderContent = () => {
     if (isLoading) {
@@ -401,10 +448,11 @@ export default function ReportsPage() {
 
     switch (profile?.role) {
       case 'Super Admin':
-        return <TeamAnalysisDashboard allTasks={tasks} allUsers={users} isLoading={isLoading} role="Super Admin" />;
+        return <TeamAnalysisDashboard allTasks={tasks} allUsers={users} allSocialMediaPosts={socialMediaPosts} allWebArticles={webArticles} isLoading={isLoading} role="Super Admin" />;
       case 'Manager':
-        return <TeamAnalysisDashboard allTasks={teamTasks} allUsers={users} isLoading={isLoading} role="Manager" />;
+        return <TeamAnalysisDashboard allTasks={teamTasks} allUsers={users} allSocialMediaPosts={teamSocialMediaPosts} allWebArticles={teamWebArticles} isLoading={isLoading} role="Manager" />;
       case 'Employee':
+      case 'PIC':
         return <PersonalReport tasks={tasks} isLoading={isLoading} />;
       default:
         return (

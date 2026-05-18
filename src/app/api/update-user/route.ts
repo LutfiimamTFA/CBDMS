@@ -1,33 +1,17 @@
 
-
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
-
-// Function to safely initialize Firebase Admin
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 
 export async function POST(request: Request) {
   try {
-    const app = initializeAdminApp();
     const { uid, name, email, role, managerId, brandIds } = await request.json();
 
     if (!uid || !name || !role || !email) {
       return NextResponse.json({ message: 'Missing required fields (uid, name, email, role).' }, { status: 400 });
     }
 
-    const auth = getAuth(app);
-    const firestore = getFirestore(app);
+    const auth = adminAuth;
+    const firestore = adminDb;
     
     const userDataToUpdate: any = {
       name,

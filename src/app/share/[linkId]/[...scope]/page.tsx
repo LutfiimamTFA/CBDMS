@@ -14,7 +14,7 @@ import { SharedScheduleView } from '@/components/share/shared-schedule-view';
 import { SharedSocialMediaView } from '@/components/share/shared-social-media-view';
 import { SidebarInset } from '@/components/ui/sidebar';
 import { SharedHeader } from '@/components/share/shared-header';
-import { TaskDetailsSheet } from '@/components/tasks/task-details-sheet';
+import { SharedReportsView } from '@/components/share/shared-reports-view';
 
 const AccessDeniedPlaceholder = ({ pageName }: { pageName: string }) => (
     <div className="flex h-full items-center justify-center p-8 w-full">
@@ -72,8 +72,11 @@ export default function ShareScopePage() {
 
   const snapshotData = session.snapshot;
   
-  // Runtime validation to prevent rendering a broken UI if the snapshot is incomplete
-  const isWorkflowValid = snapshotData.statuses && snapshotData.statuses.length >= 2;
+  const isWorkflowValid = (
+    (snapshotData.statuses && snapshotData.statuses.length > 0) ||
+    (snapshotData.socialMediaStatuses && snapshotData.socialMediaStatuses.length > 0) ||
+    (snapshotData.webStatuses && snapshotData.webStatuses.length > 0)
+  );
   
   if (!isWorkflowValid) {
       return (
@@ -92,7 +95,7 @@ export default function ShareScopePage() {
   
   const navItemForScope = (session.navItems || []).find(item => {
     const itemPath = item.path.startsWith('/') ? item.path.substring(1) : item.path;
-    return itemPath === scope.split('/')[0]; // Compare with base path
+    return itemPath === scope;
   });
   
   const isPageAllowed = navItemForScope && session.allowedNavItems.includes(navItemForScope.id);
@@ -101,10 +104,11 @@ export default function ShareScopePage() {
     session,
     isLoading,
     tasks: snapshotData.tasks || [],
+    socialMediaPosts: snapshotData.socialMediaPosts || [],
+    webArticles: snapshotData.webArticles || [],
     statuses: snapshotData.statuses || [],
     brands: snapshotData.brands || [],
     users: snapshotData.users || [],
-    socialMediaPosts: snapshotData.socialMediaPosts || [],
   };
 
   const renderContent = () => {
@@ -112,18 +116,28 @@ export default function ShareScopePage() {
         return <AccessDeniedPlaceholder pageName={navItemForScope?.label || scope} />;
     }
 
-    // Always render the base page content, the sheet will overlay it if taskId exists
-    switch (`/${scope.split('/')[0]}`) {
+    switch (`/${scope}`) {
         case '/dashboard':
-            return <SharedDashboardView {...viewProps} />;
+            return <SharedDashboardView {...viewProps} workstream="tasks" statuses={session.snapshot.statuses || []} />;
+        case '/social-media/board':
+            return <SharedDashboardView {...viewProps} workstream="socialMediaPosts" socialMediaPosts={session.snapshot.socialMediaPosts} statuses={session.snapshot.socialMediaStatuses || []} />;
+        case '/web/board':
+            return <SharedDashboardView {...viewProps} workstream="webArticles" webArticles={session.snapshot.webArticles} statuses={session.snapshot.webStatuses || []} />;
         case '/tasks':
-            return <SharedTasksView {...viewProps} />;
+            return <SharedTasksView {...viewProps} workstream="tasks" />;
         case '/calendar':
-            return <SharedCalendarView {...viewProps} />;
-        case '/schedule':
-             return <SharedScheduleView {...viewProps} />;
-        case '/social-media':
-            return <SharedSocialMediaView {...viewProps} isAnalyticsView={scope.includes('analytics')} />;
+        case '/tasks/schedule':
+             return <SharedScheduleView {...viewProps} workstream="tasks" />;
+        case '/social-media/posts':
+            return <SharedTasksView {...viewProps} workstream="socialMediaPosts" />;
+        case '/social-media/schedule':
+             return <SharedScheduleView {...viewProps} workstream="socialMediaPosts" />;
+        case '/social-media/analytics':
+             return <SharedReportsView {...viewProps} posts={snapshotData.socialMediaPosts || []} />;
+        case '/web/articles':
+             return <SharedTasksView {...viewProps} workstream="webArticles" />;
+        case '/web/schedule':
+             return <SharedScheduleView {...viewProps} workstream="webArticles" />;
         default:
             return <AccessDeniedPlaceholder pageName={scope} />;
     }

@@ -1,3 +1,4 @@
+
 'use client';
 import { TasksDataTable } from '@/components/tasks/tasks-data-table';
 import { useI18n } from '@/context/i18n-provider';
@@ -5,11 +6,14 @@ import React, { useMemo, useState } from 'react';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import type { Task, WorkflowStatus, Brand, User } from '@/lib/types';
-import { Loader2, Plus } from 'lucide-react';
+import { Loader2, Plus, ChevronDown } from 'lucide-react';
 import { usePermissions } from '@/context/permissions-provider';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AddTaskDialog } from '@/components/tasks/add-task-dialog';
 import { Button } from '@/components/ui/button';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import { parseISO } from 'date-fns';
 
 export default function TasksPage() {
   const { t } = useI18n();
@@ -22,36 +26,35 @@ export default function TasksPage() {
   const tasksQuery = React.useMemo(() => {
     if (!firestore || !companyId || !profile) return null;
 
-    if (profile.role === 'Super Admin') {
-      return query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
-    }
-    
-    if (profile.role === 'Manager') {
-      if (!profile.brandIds || profile.brandIds.length === 0) {
-        return null;
-      }
-      return query(
-        collection(firestore, 'tasks'), 
-        where('companyId', '==', companyId),
-        where('brandId', 'in', profile.brandIds)
-      );
-    }
-    
-    if (profile.role === 'Employee' || profile.role === 'PIC') {
-      return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
+    if (profile.role === 'Manager' && (!profile.brandIds || profile.brandIds.length === 0)) {
+        return query(collection(firestore, 'tasks'), where('__name__', '==', 'dummy-id-to-get-empty-result'));
     }
 
-    return null;
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', companyId));
+
+    if (profile.role === 'Manager') {
+      q = query(q, where('brandId', 'in', profile.brandIds));
+    } else if (profile.role === 'Employee' || profile.role === 'PIC') {
+      q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    }
+    
+    return q;
   }, [firestore, companyId, profile]);
 
-  const { data: allVisibleTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const teamUsersQuery = React.useMemo(() => {
+    if (!firestore || !profile || profile.role !== 'Manager') return null;
+    return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
+  }, [firestore, profile]);
   
-  const statusesQuery = React.useMemo(() => 
-    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
-  
+  const usersQuery = React.useMemo(() => {
+    if (!firestore || !companyId || !profile) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
+    if (profile.role === 'Manager') {
+      q = query(q, where('managerId', '==', profile.id));
+    }
+    return q;
+  }, [firestore, companyId, profile]);
+
   const brandsQuery = React.useMemo(() => {
     if (!firestore || !profile) return null;
     let q = query(collection(firestore, 'brands'), orderBy('name'));
@@ -60,25 +63,18 @@ export default function TasksPage() {
     }
     return q;
   }, [firestore, profile]);
-  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   
-  const teamUsersQuery = React.useMemo(() => {
-    if (!firestore || !profile || profile.role !== 'Manager') return null;
-    return query(collection(firestore, 'users'), where('managerId', '==', profile.id));
-  }, [firestore, profile]);
+  const statusesQuery = React.useMemo(() => 
+    firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null,
+    [firestore]
+  );
+  
+  const { data: allVisibleTasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
+  const { data: statuses, isLoading: areStatusesLoading } = useCollection<WorkflowStatus>(statusesQuery);
+  const { data: brands, isLoading: areBrandsLoading } = useCollection<Brand>(brandsQuery);
   const { data: teamUsers, isLoading: isTeamUsersLoading } = useCollection<User>(teamUsersQuery);
-
-  const usersQuery = React.useMemo(() => {
-    if (!firestore || !companyId) return null;
-    let q = query(collection(firestore, 'users'), where('companyId', '==', companyId));
-    if (profile?.role === 'Manager') {
-      // For managers, we fetch their own team to display in the assignee filter.
-      // This is simpler than fetching all users and filtering on the client.
-      q = query(q, where('managerId', '==', profile.id));
-    }
-    return q;
-  }, [firestore, companyId, profile]);
   const { data: users, isLoading: isUsersLoading } = useCollection<User>(usersQuery);
+
 
   // Client-side filtering based on the active tab
   const filteredTasks = useMemo(() => {
@@ -98,6 +94,50 @@ export default function TasksPage() {
         return allVisibleTasks;
     }
   }, [allVisibleTasks, activeTab, profile, teamUsers]);
+  
+  const { activeTasks, doneTasks } = useMemo(() => {
+    const active: Task[] = [];
+    const done: Task[] = [];
+
+    filteredTasks.forEach(task => {
+        if (task.status === 'Done') {
+            done.push(task);
+        } else {
+            active.push(task);
+        }
+    });
+
+    const priorityOrder: Record<string, number> = { 'Urgent': 4, 'High': 3, 'Medium': 2, 'Low': 1, 'Default': 0 };
+
+    active.sort((a, b) => {
+        const priorityA = priorityOrder[a.priority] || 0;
+        const priorityB = priorityOrder[b.priority] || 0;
+
+        if (priorityA !== priorityB) {
+            return priorityB - priorityA;
+        }
+
+        const dateA = a.dueDate ? parseISO(a.dueDate).getTime() : Infinity;
+        const dateB = b.dueDate ? parseISO(b.dueDate).getTime() : Infinity;
+        
+        if (dateA !== dateB) {
+            return dateA - dateB;
+        }
+        
+        // As a final tie-breaker, sort by creation date
+        const createdAtA = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const createdAtB = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return createdAtA - createdAtB;
+    });
+
+    done.sort((a,b) => {
+        const dateA = a.actualCompletionDate ? parseISO(a.actualCompletionDate).getTime() : 0;
+        const dateB = b.actualCompletionDate ? parseISO(b.actualCompletionDate).getTime() : 0;
+        return dateB - dateA;
+    });
+
+    return { activeTasks: active, doneTasks: done };
+}, [filteredTasks]);
 
 
   const isLoading = isTasksLoading || isProfileLoading || arePermsLoading || areStatusesLoading || areBrandsLoading || isUsersLoading || (profile?.role === 'Manager' && isTeamUsersLoading);
@@ -140,13 +180,33 @@ export default function TasksPage() {
             <Loader2 className="h-8 w-8 animate-spin" />
           </div>
         ) : (
-          <div className="mt-4">
+          <div className="space-y-4">
               <TasksDataTable 
-              tasks={filteredTasks || []}
+              tasks={activeTasks || []}
               statuses={statuses || []}
               brands={brands || []}
               users={users || []}
             />
+            {doneTasks.length > 0 && (
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="done-tasks">
+                  <AccordionTrigger className="text-base font-semibold text-muted-foreground hover:no-underline rounded-lg bg-secondary/50 px-4">
+                      <div className="flex items-center gap-2">
+                        <span>Completed Tasks</span>
+                        <Badge variant="outline">{doneTasks.length}</Badge>
+                      </div>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-4">
+                      <TasksDataTable 
+                        tasks={doneTasks || []}
+                        statuses={statuses || []}
+                        brands={brands || []}
+                        users={users || []}
+                      />
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            )}
           </div>
         )}
       </main>

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -28,9 +27,10 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
   // "Share View" is available on shareable paths for any logged-in user.
   // The dialog itself will handle role-based permissions.
   const shareableViews = ['/tasks', '/dashboard', '/calendar', '/schedule', '/social-media'];
-  const isPathShareable = shareableViews.some(p => pathname.startsWith(p));
   
-  const canShowShareButton = !isSharedView && profile && isPathShareable;
+  // Allow sharing if the user is authenticated and not a client.
+  const canCreateShareView = profile && profile.role !== 'Client';
+  const showShareButton = !isSharedView && canCreateShareView && shareableViews.some(p => pathname.startsWith(p));
 
 
   return (
@@ -46,8 +46,8 @@ export function Header({ title, actions, isSharedView = false, navItems = [] }: 
         <div className="flex items-center gap-2">
             {!isSharedView ? (
               <>
-                {canShowShareButton && (
-                  <ShareViewDialog navItems={navItems}>
+                {showShareButton && (
+                  <ShareViewDialog>
                     <Button variant="outline" size="sm">
                       <Share2 className="mr-2" /> Share View
                     </Button>

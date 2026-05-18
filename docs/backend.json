@@ -84,11 +84,29 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "CompanySettings",
       "type": "object",
-      "description": "Stores company-wide settings, including the designated emergency admin.",
+      "description": "Stores company-wide settings, including the designated emergency admin and maintenance mode status.",
       "properties": {
         "emergencyAdminUserId": {
           "type": ["string", "null"],
           "description": "The ID of the User (Manager) who is currently designated as the emergency Super Admin. Null if no one is designated."
+        },
+        "maintenanceSettings": {
+            "type": "object",
+            "description": "Settings for the application-wide maintenance mode.",
+            "properties": {
+                "isEnabled": {
+                    "type": "boolean",
+                    "description": "Whether maintenance mode is currently active."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "The message to display to users when maintenance mode is active."
+                },
+                "estimatedCompletion": {
+                    "type": "string",
+                    "description": "A string indicating the estimated time of completion (e.g., '2 hours', '10 PM WIB')."
+                }
+            }
         }
       }
     },
@@ -120,107 +138,124 @@
       "type": "object",
       "description": "Represents a task within the WorkWise application.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Task entity."
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "assigneeIds": { "type": "array", "items": { "type": "string" } },
+        "startDate": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "actualStartDate": { "type": "string", "format": "date-time" },
+        "actualCompletionDate": { "type": "string", "format": "date-time" },
+        "currentSessionStartTime": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string" },
+        "timeEstimate": { "type": "number" },
+        "waitingOnTaskIds": { "type": "array", "items": { "type": "string" }, "description": "Tasks that must be completed before this task can start." },
+        "blockingTaskIds": { "type": "array", "items": { "type": "string" }, "description": "Tasks that are blocked by this task." },
+        "linkedTaskIds": { "type": "array", "items": { "type": "string" }, "description": "Tasks that are related but not dependent." },
+        "lastActivity": { "$ref": "#/backend/entities/Activity" },
+        "companyId": { "type": "string" },
+        "revisionItems": {
+            "type": "array",
+            "description": "A checklist of items that need to be revised for the current revision cycle.",
+            "items": { "$ref": "#/backend/entities/RevisionItem" }
         },
-        "brandId": {
-          "type": "string",
-          "description": "Reference to the Brand this task belongs to."
+        "revisionHistory": {
+            "type": "array",
+            "description": "A log of all past revision cycles for this task.",
+            "items": { "$ref": "#/backend/entities/RevisionCycle" }
         },
-        "title": {
-          "type": "string",
-          "description": "The title of the task."
-        },
-        "description": {
-          "type": "string",
-          "description": "A detailed description of the task."
-        },
-        "status": {
-          "type": "string",
-          "description": "The current status of the task. References the name of a document in the /statuses collection."
-        },
-        "assigneeIds": {
-          "type": "array",
-          "description": "References to Users assigned to this task. (Relationship: Task N:N User)",
-          "items": {
-            "type": "string"
-          }
-        },
-        "startDate": {
-          "type": "string",
-          "description": "The planned start date of the task.",
-          "format": "date-time"
-        },
-        "dueDate": {
-          "type": "string",
-          "description": "The planned due date or deadline of the task.",
-          "format": "date-time"
-        },
-        "actualStartDate": {
-          "type": "string",
-          "description": "The actual timestamp when a user first started working on the task.",
-          "format": "date-time"
-        },
-        "actualCompletionDate": {
-            "type": "string",
-            "description": "The actual timestamp when a user marked the task as complete.",
-            "format": "date-time"
-        },
-        "currentSessionStartTime": {
-            "type": "string",
-            "description": "Timestamp for when the current active work session started.",
-            "format": "date-time"
-        },
-        "priority": {
-          "type": "string",
-          "description": "The priority level of the task (e.g., Urgent, High, Normal, Low)."
-        },
-        "timeEstimate": {
-          "type": "number",
-          "description": "The estimated time in hours to complete the task."
-        },
-        "taskDependencyIds": {
-          "type": "array",
-          "description": "References to other Tasks that this Task depends on. (Relationship: Task 1:N Task)",
-          "items": {
-            "type": "string"
-          }
-        },
-        "lastActivity": {
-          "type": "object",
-          "description": "A summary of the last activity that occurred on this task for quick auditing in table views.",
-          "properties": {
-            "user": {
-              "type": "object",
-              "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" },
-                "avatarUrl": { "type": "string" }
-              },
-              "required": ["id", "name"]
-            },
-            "timestamp": { "type": "string", "format": "date-time" },
-            "action": { "type": "string" }
-          },
-          "required": ["user", "timestamp", "action"]
-        },
-        "companyId": {
-            "type": "string",
-            "description": "The ID of the company this task belongs to, for client visibility."
+        "deliverables": {
+            "type": "array",
+            "description": "A list of submitted files or links for this task, with historical versions.",
+            "items": { "$ref": "#/backend/entities/Attachment" }
         }
       },
-      "required": [
-        "id",
-        "brandId",
-        "title",
-        "description",
-        "status",
-        "assigneeIds",
-        "priority",
-        "timeEstimate",
-        "lastActivity"
-      ]
+      "required": ["id", "brandId", "title", "status", "assigneeIds", "priority", "companyId"]
+    },
+    "WebArticle": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WebArticle",
+      "type": "object",
+      "description": "Represents a web article, which is a specialized type of task.",
+      "properties": {
+        "id": { "type": "string" },
+        "brandId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string", "description": "The main content of the article in HTML format." },
+        "description": { "type": "string" },
+        "statusInternal": { "type": "string" },
+        "assigneeIds": { "type": "array", "items": { "type": "string" } },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "priority": { "type": "string" },
+        "companyId": { "type": "string" },
+        "lastActivity": { "$ref": "#/backend/entities/Activity" },
+        "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
+        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } },
+        "attachments": {
+            "type": "array",
+            "description": "A list of supporting files or links for this article.",
+            "items": { "$ref": "#/backend/entities/Attachment" }
+        },
+        "deliverables": {
+            "type": "array",
+            "description": "A list of submitted files or links for this article, with historical versions.",
+            "items": { "$ref": "#/backend/entities/Attachment" }
+        },
+        "actualStartDate": { "type": "string", "format": "date-time" },
+        "actualCompletionDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "brandId", "title", "statusInternal", "assigneeIds", "priority", "companyId"]
+    },
+    "RevisionItem": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "RevisionItem",
+        "type": "object",
+        "description": "A single checklist item for a revision request.",
+        "properties": {
+            "id": { "type": "string" },
+            "text": { "type": "string" },
+            "completed": { "type": "boolean" }
+        },
+        "required": ["id", "text", "completed"]
+    },
+    "RevisionCycle": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "RevisionCycle",
+        "type": "object",
+        "description": "Represents one full cycle of revision feedback.",
+        "properties": {
+            "cycleNumber": { "type": "number" },
+            "requestedAt": { "type": "string", "format": "date-time" },
+            "requestedBy": {
+                "type": "object",
+                "properties": {
+                    "id": { "type": "string" },
+                    "name": { "type": "string" },
+                    "avatarUrl": { "type": "string" }
+                },
+                "required": ["id", "name"]
+            },
+            "items": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } }
+        },
+        "required": ["cycleNumber", "requestedAt", "requestedBy", "items"]
+    },
+    "Attachment": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Attachment",
+        "type": "object",
+        "description": "Represents a file attached to a task or submitted as a deliverable.",
+        "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "type": { "type": "string", "enum": ["local", "gdrive"] },
+            "url": { "type": "string", "format": "uri" },
+            "submittedAt": { "type": "string", "format": "date-time" },
+            "submittedBy": { "$ref": "#/backend/entities/User" },
+            "forRevisionCycle": { "type": "number" }
+        },
+        "required": ["id", "name", "type", "url"]
     },
     "TimeTracking": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -228,41 +263,14 @@
       "type": "object",
       "description": "Represents the time tracked for a specific task by a user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the TimeTracking entity."
-        },
-        "taskId": {
-          "type": "string",
-          "description": "Reference to the Task being tracked. (Relationship: Task 1:N TimeTracking)"
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the User who is tracking time. (Relationship: User 1:N TimeTracking)"
-        },
-        "startTime": {
-          "type": "string",
-          "description": "The start time of the time tracking session.",
-          "format": "date-time"
-        },
-        "endTime": {
-          "type": "string",
-          "description": "The end time of the time tracking session.",
-          "format": "date-time"
-        },
-        "duration": {
-          "type": "number",
-          "description": "The total duration of the time tracking session in hours."
-        }
+        "id": { "type": "string" },
+        "taskId": { "type": "string" },
+        "userId": { "type": "string" },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" },
+        "duration": { "type": "number" }
       },
-      "required": [
-        "id",
-        "taskId",
-        "userId",
-        "startTime",
-        "endTime",
-        "duration"
-      ]
+      "required": ["id", "taskId", "userId", "startTime", "endTime", "duration"]
     },
     "RecurringTaskTemplate": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -271,24 +279,20 @@
       "description": "A template for creating tasks on a recurring schedule.",
       "properties": {
         "id": { "type": "string" },
-        "title": { "type": "string", "description": "The title for the tasks created by this template." },
-        "description": { "type": "string", "description": "Default description for generated tasks." },
-        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly"], "description": "How often the task should be created." },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "frequency": { "type": "string", "enum": ["daily", "weekly", "monthly"] },
         "daysOfWeek": {
           "type": "array",
-          "items": {
-            "type": "string",
-            "enum": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
-          },
-          "description": "For weekly tasks, which days to create them on."
+          "items": { "type": "string", "enum": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] }
         },
-        "dayOfMonth": { "type": "number", "description": "For monthly tasks, which day of the month to create it on." },
-        "isMandatory": { "type": "boolean", "description": "If true, users must acknowledge the creation of tasks from this template." },
+        "dayOfMonth": { "type": "number" },
+        "isMandatory": { "type": "boolean" },
         "defaultAssigneeIds": { "type": "array", "items": { "type": "string" } },
         "defaultPriority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
         "defaultBrandId": { "type": "string" },
         "companyId": { "type": "string" },
-        "lastGeneratedAt": { "type": "string", "format": "date-time", "description": "The timestamp when a task was last generated from this template." },
+        "lastGeneratedAt": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "title", "frequency", "defaultAssigneeIds", "companyId", "createdAt"]
@@ -297,35 +301,10 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "NavigationItem",
       "type": "object",
-      "description": "Represents a configurable item in the main sidebar navigation.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the navigation item (e.g., 'nav_dashboard')."
-        },
-        "label": {
-          "type": "string",
-          "description": "The text label displayed for the menu item."
-        },
-        "path": {
-          "type": "string",
-          "description": "The URL path the menu item links to (e.g., '/dashboard')."
-        },
-        "icon": {
-          "type": "string",
-          "description": "The name of the lucide-react icon to display."
-        },
-        "order": {
-          "type": "number",
-          "description": "The display order of the menu item in the sidebar."
-        },
-        "roles": {
-          "type": "array",
-          "description": "An array of user roles that can see this navigation item.",
-          "items": {
-            "type": "string"
-          }
-        }
+        "id": { "type": "string" }, "label": { "type": "string" }, "path": { "type": "string" },
+        "icon": { "type": "string" }, "order": { "type": "number" },
+        "roles": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["id", "label", "path", "icon", "order", "roles"]
     },
@@ -333,23 +312,12 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Notification",
       "type": "object",
-      "description": "Represents a notification for a user.",
       "properties": {
-        "id": { "type": "string", "description": "Unique ID for the notification." },
-        "userId": { "type": "string", "description": "The ID of the user receiving the notification." },
-        "title": { "type": "string", "description": "The title of the notification." },
-        "message": { "type": "string", "description": "The content of the notification message." },
-        "taskId": { "type": "string", "description": "The ID of the task related to this notification." },
-        "isRead": { "type": "boolean", "description": "Flag indicating if the notification has been read." },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the notification was created." },
+        "id": { "type": "string" }, "userId": { "type": "string" }, "title": { "type": "string" },
+        "message": { "type": "string" }, "taskId": { "type": "string" }, "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
         "createdBy": {
-          "type": "object",
-          "description": "User who triggered the notification.",
-          "properties": {
-            "id": { "type": "string" },
-            "name": { "type": "string" },
-            "avatarUrl": { "type": "string" }
-          },
+          "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "avatarUrl": { "type": "string" } },
           "required": ["id", "name"]
         }
       },
@@ -357,51 +325,23 @@
     },
     "WorkflowStatus": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "WorkflowStatus",
-      "type": "object",
-      "description": "Represents a customizable status column in the Kanban board.",
+      "title": "WorkflowStatus", "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the status."
-        },
-        "name": {
-          "type": "string",
-          "description": "The display name of the status (e.g., 'In Review')."
-        },
-        "order": {
-          "type": "number",
-          "description": "The display order of the column in the Kanban board."
-        },
-        "color": {
-          "type": "string",
-          "description": "A hex color code for the status indicator (e.g., '#3b82f6')."
-        },
-        "companyId": {
-          "type": "string",
-          "description": "The ID of the company this status belongs to."
-        }
+        "id": { "type": "string" }, "name": { "type": "string" }, "order": { "type": "number" },
+        "color": { "type": "string" }, "companyId": { "type": "string" }
       },
       "required": ["id", "name", "order", "color", "companyId"]
     },
      "Activity": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Activity",
-      "type": "object",
-      "description": "Represents a single activity or event that occurred on a task.",
+      "title": "Activity", "type": "object",
       "properties": {
         "id": { "type": "string" },
         "user": {
-          "type": "object",
-          "properties": {
-            "id": { "type": "string" },
-            "name": { "type": "string" },
-            "avatarUrl": { "type": "string" }
-          },
+          "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "avatarUrl": { "type": "string" } },
           "required": ["id", "name"]
         },
-        "action": { "type": "string", "description": "A human-readable description of the action taken. E.g., 'changed status from To Do to In Progress'." },
-        "timestamp": { "type": "string", "format": "date-time" }
+        "action": { "type": "string" }, "timestamp": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "user", "action", "timestamp"]
     },
@@ -409,55 +349,73 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "SocialMediaPost",
       "type": "object",
-      "description": "Represents a social media post to be scheduled and published.",
+      "description": "Represents a social media post, which is a specialized type of task.",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the social media post." },
-        "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"], "description": "The target social media platform." },
-        "caption": { "type": "string", "description": "The text content or caption for the post." },
-        "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video to be posted." },
-        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "The current status of the post." },
-        "scheduledAt": { "type": "string", "format": "date-time", "description": "The specific date and time the post is scheduled to be published." },
-        "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was successfully published." },
-        "createdBy": { "type": "string", "description": "The ID of the user who created the post." },
-        "companyId": { "type": "string", "description": "The ID of the company this post belongs to." },
-        "objectPosition": { "type": "number", "description": "CSS object-position percentage for the media (0-100)." }
+        "id": { "type": "string" },
+        "title": { "type": "string", "description": "Internal title for the post." },
+        "brandId": { "type": "string" },
+        "platform": { "type": "string", "enum": ["Instagram", "Facebook", "Twitter", "LinkedIn"] },
+        "postType": { "type": "string", "enum": ["Upload", "Branding"], "description": "Category of the social media work."},
+        "caption": { "type": "string", "description": "The text content of the post." },
+        "mediaUrl": { "type": "string", "format": "uri", "description": "URL of the image or video for the post." },
+        "status": { "type": "string", "enum": ["Draft", "Needs Approval", "Scheduled", "Posted", "Error"], "description": "Workflow status of the post." },
+        "statusInternal": { "type": "string" },
+        "assigneeIds": { "type": "array", "items": { "type": "string" } },
+        "priority": { "type": "string", "enum": ["Urgent", "High", "Medium", "Low"] },
+        "scheduledAt": { "type": "string", "format": "date-time", "description": "The date and time the post is scheduled to be published." },
+        "postedAt": { "type": "string", "format": "date-time", "description": "The actual timestamp when the post was published." },
+        "createdBy": { "type": "string" },
+        "companyId": { "type": "string" },
+        "revisionItems": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionItem" } },
+        "revisionHistory": { "type": "array", "items": { "$ref": "#/backend/entities/RevisionCycle" } }
       },
-      "required": ["id", "platform", "caption", "status", "scheduledAt", "createdBy", "companyId"]
+      "required": ["id", "title", "platform", "caption", "status", "statusInternal", "scheduledAt", "createdBy", "companyId", "brandId", "assigneeIds", "priority"]
     },
     "SharedLink": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "SharedLink",
-      "type": "object",
-      "description": "A secure, shareable link that contains a snapshot of data.",
+      "title": "SharedLink", "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "name": { "type": "string", "description": "A user-friendly name for the link." },
-        "companyId": { "type": "string" },
-        "creatorRole": { "type": "string" },
-        "allowedNavItems": { "type": "array", "items": { "type": "string" } },
+        "id": { "type": "string" }, "name": { "type": "string" }, "companyId": { "type": "string" },
+        "creatorRole": { "type": "string" }, "allowedNavItems": { "type": "array", "items": { "type": "string" } },
         "navItems": { "type": "array", "items": { "$ref": "#/backend/entities/NavigationItem" } },
-        "brandIds": { "type": "array", "items": { "type": "string" } },
-        "password": { "type": "string" },
+        "brandIds": { "type": "array", "items": { "type": "string" } }, "password": { "type": "string" },
         "expiresAt": { "type": "string", "format": "date-time" },
-        "accessLevel": {
-          "type": "string",
-          "enum": ["view", "status", "limited-edit"]
-        },
+        "accessLevel": { "type": "string", "enum": ["view", "status", "limited-edit"] },
         "snapshot": {
             "type": "object",
-            "description": "A complete snapshot of all data needed for the shared view.",
             "properties": {
                 "tasks": { "type": "array", "items": { "$ref": "#/backend/entities/Task" } },
+                "socialMediaPosts": { "type": "array", "items": { "$ref": "#/backend/entities/SocialMediaPost" } },
+                "webArticles": { "type": "array", "items": { "$ref": "#/backend/entities/WebArticle" } },
                 "statuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } },
+                "socialMediaStatuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } },
+                "webStatuses": { "type": "array", "items": { "$ref": "#/backend/entities/WorkflowStatus" } },
                 "users": { "type": "array", "items": { "$ref": "#/backend/entities/User" } },
                 "brands": { "type": "array", "items": { "$ref": "#/backend/entities/Brand" } }
             },
             "required": ["tasks", "statuses", "users", "brands"]
         },
-        "createdBy": { "type": "string" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdBy": { "type": "string" }, "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name", "companyId", "creatorRole", "allowedNavItems", "navItems", "accessLevel", "snapshot", "createdBy", "createdAt"]
+    },
+    "SocialMediaConnection": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "SocialMediaConnection",
+        "type": "object",
+        "description": "Stores credentials for a social media platform connection.",
+        "properties": {
+            "id": { "type": "string" },
+            "platform": { "type": "string", "enum": ["instagram"] },
+            "userId": { "type": "string", "description": "The Firebase UID of the user who initiated the connection." },
+            "companyId": { "type": "string" },
+            "instagramUserId": { "type": "string", "description": "The User ID from the Instagram Graph API." },
+            "instagramUsername": { "type": "string" },
+            "accessToken": { "type": "string", "description": "The long-lived access token." },
+            "expiresAt": { "type": "string", "format": "date-time" },
+            "connectedAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "platform", "userId", "companyId", "instagramUserId", "accessToken", "expiresAt"]
     }
   },
   "auth": {
@@ -467,175 +425,22 @@
   },
   "firestore": {
     "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profiles, including their role and company.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-          "path": "/companies/{companyId}",
-          "definition": {
-              "entityName": "Company",
-              "schema": { "$ref": "#/backend/entities/Company" },
-              "description": "Stores company-wide information like name and logo.",
-              "params": [
-                  { "name": "companyId", "description": "The unique identifier for the company." }
-              ]
-          }
-      },
-       {
-          "path": "/companySettings/{companyId}",
-          "definition": {
-              "entityName": "CompanySettings",
-              "schema": { "$ref": "#/backend/entities/CompanySettings" },
-              "description": "Stores company-wide settings, like the emergency admin.",
-              "params": [
-                  { "name": "companyId", "description": "The unique identifier for the company." }
-              ]
-          }
-      },
-      {
-        "path": "/brands/{brandId}",
-        "definition": {
-          "entityName": "Brand",
-          "schema": {
-            "$ref": "#/backend/entities/Brand"
-          },
-          "description": "Stores company brands or divisions.",
-          "params": [
-            {
-              "name": "brandId",
-              "description": "The unique identifier for the brand."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/tasks/{taskId}",
-        "definition": {
-          "entityName": "Task",
-          "schema": {
-            "$ref": "#/backend/entities/Task"
-          },
-          "description": "A global collection of tasks. Access is controlled by roles and companyId.",
-          "params": [
-            {
-              "name": "taskId",
-              "description": "The unique identifier for the task."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/tasks/{taskId}/timeTracking/{timeTrackingId}",
-        "definition": {
-          "entityName": "TimeTracking",
-          "schema": {
-            "$ref": "#/backend/entities/TimeTracking"
-          },
-          "description": "Stores time tracking entries for a specific task.",
-          "params": [
-            {
-              "name": "taskId",
-              "description": "The unique identifier for the task."
-            },
-            {
-              "name": "timeTrackingId",
-              "description": "The unique identifier for the time tracking entry."
-            }
-          ]
-        }
-      },
-       {
-        "path": "/tasks/{taskId}/activities/{activityId}",
-        "definition": {
-          "entityName": "Activity",
-          "schema": { "$ref": "#/backend/entities/Activity" },
-          "description": "Subcollection to store the activity log for a single task.",
-           "params": [
-            { "name": "taskId", "description": "The ID of the task." },
-            { "name": "activityId", "description": "The ID of the activity log entry." }
-          ]
-        }
-      },
-      {
-        "path": "/navigationItems/{navItemId}",
-        "definition": {
-          "entityName": "NavigationItem",
-          "schema": {
-            "$ref": "#/backend/entities/NavigationItem"
-          },
-          "description": "Stores the configuration for dynamic sidebar navigation items.",
-          "params": [
-            {
-              "name": "navItemId",
-              "description": "The unique identifier for the navigation item."
-            }
-          ]
-        }
-      },
-       {
-        "path": "/users/{userId}/notifications/{notificationId}",
-        "definition": {
-          "entityName": "Notification",
-          "schema": { "$ref": "#/backend/entities/Notification" },
-          "description": "Subcollection to store notifications for each user.",
-           "params": [
-            { "name": "userId", "description": "The ID of the user." },
-            { "name": "notificationId", "description": "The ID of the notification." }
-          ]
-        }
-      },
-      {
-        "path": "/statuses/{statusId}",
-        "definition": {
-          "entityName": "WorkflowStatus",
-          "schema": { "$ref": "#/backend/entities/WorkflowStatus" },
-          "description": "Stores the customizable columns for the Kanban workflow.",
-          "params": [
-            { "name": "statusId", "description": "The unique ID for the workflow status." }
-          ]
-        }
-      },
-      {
-        "path": "/api/run-scheduler",
-        "definition": {
-          "description": "An API endpoint that, when called, runs all scheduled jobs like generating recurring tasks and posting social media content."
-        }
-      },
-      {
-        "path": "/socialMediaPosts/{postId}",
-        "definition": {
-          "entityName": "SocialMediaPost",
-          "schema": { "$ref": "#/backend/entities/SocialMediaPost" },
-          "description": "Stores scheduled social media posts.",
-          "params": [
-            { "name": "postId", "description": "The unique identifier for the social media post." }
-          ]
-        }
-      },
-      {
-        "path": "/sharedLinks/{linkId}",
-        "definition": {
-          "entityName": "SharedLink",
-          "schema": { "$ref": "#/backend/entities/SharedLink" },
-          "description": "Stores secure, shareable links that provide a customized application experience.",
-          "params": [
-            { "name": "linkId", "description": "The unique identifier for the shared link." }
-          ]
-        }
-      }
+      { "path": "/users/{userId}", "definition": { "entityName": "User", "schema": { "$ref": "#/backend/entities/User" } } },
+      { "path": "/companies/{companyId}", "definition": { "entityName": "Company", "schema": { "$ref": "#/backend/entities/Company" } } },
+      { "path": "/companySettings/{companyId}", "definition": { "entityName": "CompanySettings", "schema": { "$ref": "#/backend/entities/CompanySettings" } } },
+      { "path": "/brands/{brandId}", "definition": { "entityName": "Brand", "schema": { "$ref": "#/backend/entities/Brand" } } },
+      { "path": "/tasks/{taskId}", "definition": { "entityName": "Task", "schema": { "$ref": "#/backend/entities/Task" } } },
+      { "path": "/tasks/{taskId}/timeTracking/{timeTrackingId}", "definition": { "entityName": "TimeTracking", "schema": { "$ref": "#/backend/entities/TimeTracking" } } },
+      { "path": "/tasks/{taskId}/activities/{activityId}", "definition": { "entityName": "Activity", "schema": { "$ref": "#/backend/entities/Activity" } } },
+      { "path": "/navigationItems/{navItemId}", "definition": { "entityName": "NavigationItem", "schema": { "$ref": "#/backend/entities/NavigationItem" } } },
+      { "path": "/users/{userId}/notifications/{notificationId}", "definition": { "entityName": "Notification", "schema": { "$ref": "#/backend/entities/Notification" } } },
+      { "path": "/statuses/{statusId}", "definition": { "entityName": "WorkflowStatus", "schema": { "$ref": "#/backend/entities/WorkflowStatus" } } },
+      { "path": "/socialMediaPosts/{postId}", "definition": { "entityName": "SocialMediaPost", "schema": { "$ref": "#/backend/entities/SocialMediaPost" } } },
+      { "path": "/webArticles/{articleId}", "definition": { "entityName": "WebArticle", "schema": { "$ref": "#/backend/entities/WebArticle" } } },
+      { "path": "/sharedLinks/{linkId}", "definition": { "entityName": "SharedLink", "schema": { "$ref": "#/backend/entities/SharedLink" } } },
+      { "path": "/socialMediaConnections/{connectionId}", "definition": { "entityName": "SocialMediaConnection", "schema": { "$ref": "#/backend/entities/SocialMediaConnection" } } },
+      { "path": "/api/instagram/publish", "definition": { "description": "An API endpoint to publish a post to Instagram." } },
+      { "path": "/api/run-scheduler", "definition": { "description": "An API endpoint that runs scheduled jobs like posting social media content." } }
     ]
   }
 }

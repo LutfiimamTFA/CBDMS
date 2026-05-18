@@ -3,7 +3,7 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { TaskCard } from './task-card';
-import type { Task, User, WorkflowStatus, SharedLink } from '@/lib/types';
+import type { Task, User, WorkflowStatus, WorkItem, SocialMediaPost } from '@/lib/types';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import {
@@ -14,16 +14,19 @@ import {
 } from '../ui/tooltip';
 import { cn } from '@/lib/utils';
 import { Eye, RefreshCcw } from 'lucide-react';
+import { SocialPostCard } from '../social-media/social-post-card';
 
 interface KanbanColumnProps {
   status: WorkflowStatus;
-  tasks: Task[];
+  tasks: WorkItem[];
   onDrop: (e: React.DragEvent<HTMLDivElement>, status: string) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, taskId: string) => void;
   onDragEnd: () => void;
   onCardClick: (taskId: string) => void;
   canDrag: boolean;
   draggingTaskId: string | null;
+  workstream?: 'tasks' | 'socialMediaPosts' | 'webArticles';
+  users?: User[];
 }
 
 const getDragAfterElement = (container: HTMLElement, y: number): HTMLElement | null => {
@@ -53,6 +56,8 @@ export function KanbanColumn({
   onCardClick,
   canDrag,
   draggingTaskId,
+  workstream = 'tasks',
+  users = [],
 }: KanbanColumnProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const columnRef = useRef<HTMLDivElement>(null);
@@ -61,14 +66,17 @@ export function KanbanColumn({
   const uniqueAssignees = useMemo(() => {
     const assignees = new Map<string, User>();
     tasks.forEach((task) => {
-      task.assignees?.forEach((assignee) => {
-        if (assignee && !assignees.has(assignee.id)) {
-          assignees.set(assignee.id, assignee);
-        }
-      });
+        const assigneeIds = task.assigneeIds || [];
+        const taskAssignees = users.filter(u => assigneeIds.includes(u.id));
+
+        taskAssignees.forEach((assignee) => {
+            if (assignee && !assignees.has(assignee.id)) {
+            assignees.set(assignee.id, assignee);
+            }
+        });
     });
     return Array.from(assignees.values());
-  }, [tasks]);
+  }, [tasks, users]);
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     if (!canDrag) return;
@@ -104,7 +112,7 @@ export function KanbanColumn({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       className={cn(
-        "flex h-full w-80 shrink-0 flex-col rounded-lg bg-secondary/50 transition-colors",
+        "flex h-full w-full md:w-80 shrink-0 flex-col rounded-lg bg-secondary/50 transition-colors",
         isDragOver && canDrag && "border-2 border-dashed border-primary bg-primary/10"
       )}
     >
@@ -122,7 +130,7 @@ export function KanbanColumn({
             {tasks.length}
           </span>
         </div>
-        <div className="flex -space-x-2">
+        <div className="hidden md:flex -space-x-2">
           <TooltipProvider>
             {uniqueAssignees.slice(0, 3).map((assignee) => (
               <Tooltip key={assignee.id}>
@@ -184,10 +192,14 @@ export function KanbanColumn({
                       )}
                       data-dragging={isDragging}
                     >
-                      <TaskCard 
-                          task={task} 
-                          draggable={canDrag}
-                      />
+                      {workstream === 'socialMediaPosts' ? (
+                          <SocialPostCard post={task as SocialMediaPost} allUsers={users} />
+                      ) : (
+                          <TaskCard 
+                              task={task as Task} 
+                              draggable={canDrag}
+                          />
+                      )}
                     </div>
                 </React.Fragment>
             );

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useMemo } from 'react';
@@ -14,7 +15,7 @@ import { Separator } from '@/components/ui/separator';
 const defaultPermissions: PermissionSettings = {
   Manager: {
     canManageUsers: true,
-    canDeleteUsers: false,
+    canDeleteUsers: true,
     canCreateTasks: true,
     canDeleteTasks: true,
     canViewReports: true,

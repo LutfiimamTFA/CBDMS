@@ -69,7 +69,7 @@ export default function ForcePasswordChangePage() {
       if (auth) {
         await initiateSignOut(auth);
       }
-      router.push('/login');
+      router.push('/');
 
     } catch (error: any) {
       console.error("API call to set-password failed:", error);

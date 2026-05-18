@@ -1,12 +1,11 @@
-
 'use client';
 import { useMemo, useState } from 'react';
 import type { Task, User } from '@/lib/types';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { priorityInfo, cn, getBrandColor } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History, MoreHorizontal, Share2 } from 'lucide-react';
-import { format, parseISO, isAfter, formatDistanceToNow } from 'date-fns';
+import { priorityInfo, cn, getBrandColor, formatLateness } from '@/lib/utils';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History, Circle, CircleDashed, Eye, HelpCircle } from 'lucide-react';
+import { format, parseISO, isAfter, formatDistanceToNow, endOfDay } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRouter } from 'next/navigation';
 import { useUserProfile } from '@/firebase';
@@ -20,6 +19,15 @@ interface TaskCardProps {
   draggable?: boolean;
 }
 
+const statusConfig: Record<string, { color: string; icon: React.ElementType, label: string }> = {
+  'To Do': { color: 'bg-gray-400 border-gray-400 text-white', icon: Circle, label: 'To Do' },
+  'Doing': { color: 'bg-blue-500 border-blue-500 text-white', icon: CircleDashed, label: 'Doing' },
+  'Preview': { color: 'bg-purple-500 border-purple-500 text-white', icon: Eye, label: 'Preview' },
+  'Revisi': { color: 'bg-orange-500 border-orange-500 text-white', icon: RefreshCcw, label: 'Revisi' },
+  'Done': { color: 'bg-green-500 border-green-500 text-white', icon: CheckCircle2, label: 'Done' },
+};
+
+
 export function TaskCard({ task, draggable = false }: TaskCardProps) {
   const router = useRouter();
   const { profile: currentUser } = useUserProfile();
@@ -30,14 +38,19 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
 
   const completionStatus = useMemo(() => {
     if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
-    const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
-    return isLate ? 'Late' : 'On Time';
+    const completionDate = parseISO(task.actualCompletionDate);
+    const dueDate = endOfDay(parseISO(task.dueDate));
+    if (isAfter(completionDate, dueDate)) {
+        return { status: 'Late', duration: formatLateness(dueDate, completionDate) };
+    }
+    return { status: 'On Time', duration: null };
   }, [task.status, task.actualCompletionDate, task.dueDate]);
 
   const brandColor = getBrandColor(task.brandId);
 
   const assignees = task.assignees || [];
-  const creatorId = task.createdBy.id;
+  const creatorId = task.createdBy?.id;
+  const statusStyling = statusConfig[task.status] || { color: 'bg-gray-400', icon: HelpCircle, label: task.status };
 
   const lastActivityText = useMemo(() => {
       if (!task.lastActivity) return null;
@@ -53,7 +66,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       <>
       <Card
         className={cn(
-          "transition-shadow duration-200 hover:shadow-lg w-full relative group/card",
+          "transition-shadow duration-200 hover:shadow-xl w-full relative",
           draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
         )}
       >
@@ -61,8 +74,8 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
         
         <CardContent className="p-4 pl-6 space-y-3" onClick={() => router.push(`/tasks/${task.id}`)}>
           <div className="flex items-start justify-between">
-            <div className="font-medium cursor-pointer pr-8">
-              <h3 className="font-headline text-base font-semibold leading-tight">{task.title}</h3>
+            <div className="font-medium cursor-pointer pr-2">
+              <h3 className="font-headline text-base font-semibold leading-tight break-words">{task.title}</h3>
             </div>
             <div className="flex items-center gap-2">
               {task.isUnderRevision && (
@@ -124,7 +137,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
         )}
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center -space-x-2">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger className="flex items-center -space-x-2">
@@ -168,34 +181,39 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                 </Tooltip>
               </TooltipProvider>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center flex-shrink-0 gap-2">
                 {completionStatus && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                {completionStatus === 'On Time' ? (
+                    completionStatus.status === 'On Time' ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger>
                                     <CheckCircle2 className="h-4 w-4 text-green-500" />
-                                ) : (
-                                    <AlertCircle className="h-4 w-4 text-destructive" />
-                                )}
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Completed {completionStatus}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Completed On Time</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        <Badge variant="destructive" className="font-normal gap-1.5">
+                            <AlertCircle className="h-3 w-3" />
+                            {completionStatus.duration} late
+                        </Badge>
+                    )
                 )}
                 {task.subtasks && task.subtasks.length > 0 && (
                     <span className="flex items-center gap-1">
                         <ListTodo className="h-3.5 w-3.5" /> {task.subtasks.filter(st => st.completed).length}/{task.subtasks.length}
                     </span>
                 )}
-                {task.dueDate && (
-                    <span className="flex items-center gap-1">
+                {task.dueDate && !completionStatus && (
+                    <Badge variant="outline" className="flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         {format(parseISO(task.dueDate), 'MMM d')}
                     </span>
                 )}
+                <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs font-medium', statusStyling.color)}>
+                    <statusStyling.icon className="h-3 w-3" />
+                    <span>{statusStyling.label}</span>
+                </Badge>
             </div>
         </div>
         </CardContent>

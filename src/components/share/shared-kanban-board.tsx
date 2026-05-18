@@ -2,82 +2,92 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import type { Task, WorkflowStatus, SharedLink } from '@/lib/types';
+import type { Task, WorkflowStatus, SharedLink, RevisionItem, WorkItem } from '@/lib/types';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { KanbanColumn } from '../tasks/kanban-column';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '../ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Loader2, Plus } from 'lucide-react';
 
 interface SharedKanbanBoardProps {
-  initialTasks: Task[];
+  items: WorkItem[];
   statuses: WorkflowStatus[];
   accessLevel: SharedLink['accessLevel'];
   linkId: string;
-  creatorRole: SharedLink['creatorRole'];
+  workstream: 'tasks' | 'socialMediaPosts' | 'webArticles';
+  session: SharedLink;
+}
+
+interface RevisionState {
+  isOpen: boolean;
+  item: WorkItem | null;
+  items: Omit<RevisionItem, 'id' | 'completed'>[];
+  currentItemText: string;
 }
 
 export function SharedKanbanBoard({
-  initialTasks,
+  items: initialItems,
   statuses,
   accessLevel,
   linkId,
-  creatorRole,
+  workstream,
+  session,
 }: SharedKanbanBoardProps) {
   const { toast } = useToast();
-  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const router = useRouter();
+  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
+  const [isSaving, setIsSaving] = useState(false);
 
   const isEmployeeLink = creatorRole === 'Employee' || creatorRole === 'PIC';
 
   const canDrag = accessLevel === 'status' || accessLevel === 'limited-edit';
+  const allUsers = session.snapshot.users;
 
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, taskId: string) => {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, itemId: string) => {
     if (!canDrag) return;
-    e.dataTransfer.setData('taskId', taskId);
-    setDraggingTaskId(taskId);
+    e.dataTransfer.setData('itemId', itemId);
+    setDraggingItemId(itemId);
   };
   
   const handleDragEnd = () => {
-    setDraggingTaskId(null);
+    setDraggingItemId(null);
   }
 
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     if (!canDrag) return;
+    const itemId = e.dataTransfer.getData('itemId');
+    const item = initialItems.find((t) => t.id === itemId);
+    const itemStatus = item?.statusInternal || item?.status;
 
-    // Prevent Employee-created links from moving to restricted statuses
-    if (isEmployeeLink && (newStatus === 'Revisi' || newStatus === 'Done')) {
-        toast({
-            variant: "destructive",
-            title: "Action Not Allowed",
-            description: "Tasks cannot be moved to 'Done' or 'Revisi' via this link.",
-        });
-        return;
-    }
-
-    const taskId = e.dataTransfer.getData('taskId');
-    const task = initialTasks.find((t) => t.id === taskId);
-
-    if (task && task.status !== newStatus) {
+    if (item && itemStatus !== newStatus) {
+      if (newStatus === 'Revisi') {
+          setRevisionState({ isOpen: true, item, items: [], currentItemText: '' });
+          return;
+      }
       try {
         const response = await fetch('/api/share/update-task', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             linkId,
-            taskId,
+            taskId: itemId, // The API expects taskId, but it works for any item with an id
             updates: { status: newStatus },
           }),
         });
 
         if (!response.ok) {
           const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to update task.');
+          throw new Error(errorData.message || 'Failed to update item.');
         }
-
+        
         toast({
           title: 'Status Updated',
-          description: `Task moved to "${newStatus}".`,
+          description: `Item moved to "${newStatus}".`,
         });
       } catch (error: any) {
         toast({
@@ -89,8 +99,50 @@ export function SharedKanbanBoard({
     }
   };
   
-  const handleCardClick = (taskId: string) => {
-    const path = `/share/${linkId}/tasks/${taskId}`;
+  const handleConfirmRejection = async () => {
+    if (!revisionState.item || revisionState.items.length === 0) {
+        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
+        return;
+    }
+    setIsSaving(true);
+    try {
+        const response = await fetch('/api/share/update-task', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                linkId,
+                taskId: revisionState.item.id,
+                revisionItems: revisionState.items,
+            }),
+        });
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Failed to request revisions.');
+        }
+        toast({ title: 'Revisions Requested', description: `Item "${revisionState.item.title}" has been moved to Revisi.` });
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Update Failed', description: error.message });
+    } finally {
+        setIsSaving(false);
+        setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' });
+    }
+  };
+  
+  const handleAddRevisionItem = () => {
+    if (revisionState.currentItemText.trim()) {
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
+    }
+  };
+
+  const handleCardClick = (itemId: string) => {
+    let basePath = workstream;
+    if (workstream === 'socialMediaPosts') basePath = 'social-media/posts';
+    else if (workstream === 'webArticles') basePath = 'web/articles';
+    const path = `/share/${linkId}/${basePath}/${itemId}`;
     router.push(path);
   };
   
@@ -108,28 +160,66 @@ export function SharedKanbanBoard({
   }
 
   return (
+    <>
     <ScrollArea className="h-full w-full">
       <div className="flex h-full gap-4 pb-4">
-        {statuses.map((status) => {
-          const isRestrictedColumn = isEmployeeLink && (status.name === 'Done' || status.name === 'Revisi');
-          const isDraggableColumn = canDrag && !isRestrictedColumn;
-
-          return (
-            <KanbanColumn
-              key={status.id}
-              status={status}
-              tasks={initialTasks.filter((task) => task.status === status.name)}
-              onDrop={handleDrop}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onCardClick={handleCardClick}
-              canDrag={isDraggableColumn} // Pass the calculated draggable status
-              draggingTaskId={draggingTaskId}
-            />
-          );
-        })}
+        {statuses.map((status) => (
+          <KanbanColumn
+            key={status.id}
+            status={status}
+            tasks={initialItems.filter((item) => (item.statusInternal || item.status) === status.name)}
+            onDrop={handleDrop}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onCardClick={handleCardClick}
+            canDrag={canDrag}
+            draggingTaskId={draggingItemId}
+            workstream={workstream}
+            users={allUsers}
+          />
+        ))}
       </div>
       <ScrollBar orientation="horizontal" />
     </ScrollArea>
+
+    <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Create Revision Checklist</DialogTitle>
+                <DialogDescription>
+                  What needs to be fixed on: <span className="font-bold text-foreground">{revisionState.item?.title}</span>?
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+                <div className="space-y-2">
+                    {revisionState.items.map((item, index) => (
+                        <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                            <span className="flex-1 text-sm">{item.text}</span>
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}>X</Button>
+                        </div>
+                    ))}
+                </div>
+                 <div className="flex items-center gap-2">
+                    <Input 
+                        value={revisionState.currentItemText}
+                        onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                        placeholder="e.g., Fix the logo placement"
+                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddRevisionItem())}
+                    />
+                    <Button onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                        <Plus className="mr-2 h-4 w-4"/> Add
+                    </Button>
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>Cancel</Button>
+                <Button variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Request Revisions
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    </>
   );
 }

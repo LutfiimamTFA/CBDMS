@@ -1,23 +1,11 @@
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
+import { adminDb } from '@/lib/firebase-admin';
 import type { SharedLink, WorkflowStatus } from '@/lib/types';
-
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
 
 export async function POST(request: Request) {
   try {
-    const app = initializeAdminApp();
-    const db = getFirestore(app);
+    const db = adminDb;
 
     const { linkId } = await request.json();
 
@@ -39,7 +27,7 @@ export async function POST(request: Request) {
         
         // Fetch all statuses for the company associated with the link.
         // This is the correct source of truth for the complete workflow.
-        const statusesQuery = db.collection('statuses').where('companyId', '==', sharedLink.companyId);
+        const statusesQuery = db.collection('statuses').orderBy('order');
         const statusesSnap = await statusesQuery.get();
 
         if (statusesSnap.empty) {

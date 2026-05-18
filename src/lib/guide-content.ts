@@ -1,3 +1,4 @@
+
 // @/lib/guide-content.ts
 
 export type GuideTopic = {
@@ -17,210 +18,152 @@ export const guideContent: GuideContent = {
   super_admin: [
     {
       id: 'admin_users',
-      title: 'Mengelola Tim & Pengguna',
+      title: 'Bagaimana cara saya mengelola tim dan pengguna?',
       content: `
-        Sebagai Super Admin, Anda memiliki kontrol penuh atas semua akun pengguna.
-        <br/><br/>
-        - **Undang Pengguna Baru:** Gunakan tombol "Add User" di halaman Users untuk membuat akun baru. Anda bisa menentukan peran (Manager, Employee, Client) dan password awal saat pembuatan.
-        <br/>
-        - **Edit & Hapus Pengguna:** Dari daftar pengguna, Anda bisa mengedit detail seperti nama dan peran, atau menghapus pengguna secara permanen.
+Sebagai Super Admin, Anda memiliki kontrol penuh atas semua akun pengguna di halaman **Admin > Users**.
+
+*   **Undang Pengguna Baru:** Gunakan tombol "Add User" untuk membuat akun baru. Anda bisa menentukan peran (Manager, Employee, Client) dan password awal saat pembuatan.
+*   **Edit & Hapus Pengguna:** Dari daftar pengguna, Anda bisa mengedit detail seperti nama dan peran, atau menghapus pengguna secara permanen.
+*   **Akses Darurat:** Anda bisa memberikan status "Emergency Admin" kepada seorang Manajer jika diperlukan.
       `,
     },
     {
       id: 'admin_settings',
-      title: 'Menyesuaikan Aplikasi (Settings)',
+      title: 'Bagaimana cara saya menyesuaikan pengaturan aplikasi?',
       content: `
-        Menu 'Settings' adalah kokpit Anda untuk mengkonfigurasi aplikasi agar sesuai dengan kebutuhan perusahaan.
-        <br/><br/>
-        - **Company:** Ubah nama dan logo perusahaan Anda di sini. Ini akan muncul di seluruh aplikasi.
-        <br/>
-        - **Brands:** Kelola daftar merek atau klien yang akan ditandai pada setiap tugas.
-        <br/>
-        - **Workflow:** Tambah, edit, atau hapus kolom status di Papan Kanban. Sesuaikan alur kerja tim Anda.
-        <br/>
-        - **Roles & Permissions:** Atur izin secara detail. Tentukan apa yang bisa dan tidak bisa dilakukan oleh setiap peran.
-        <br/>
-        - **Navigation:** Kontrol menu sidebar mana yang terlihat untuk setiap peran untuk menyederhanakan antarmuka.
+Menu **Admin > Settings** adalah pusat kendali Anda untuk menyesuaikan aplikasi.
+
+*   **Company:** Ubah nama dan logo perusahaan Anda.
+*   **Brands:** Kelola daftar merek atau klien yang akan ditandai pada setiap tugas.
+*   **Workflow:** Sesuaikan alur kerja (kolom status) untuk setiap modul (Tasks, Social Media, Web) di Papan Kanban.
+*   **Roles & Permissions:** Atur izin secara detail untuk setiap peran.
+*   **Navigation:** Atur menu sidebar mana yang bisa dilihat oleh setiap peran.
+*   **Recurring Tasks:** Buat template untuk tugas yang dibuat secara otomatis.
       `,
     },
     {
       id: 'admin_data',
-      title: 'Keamanan & Manajemen Data',
+      title: 'Bagaimana saya mengelola keamanan dan backup data?',
       content: `
-        Jaga keamanan dan portabilitas data perusahaan Anda.
-        <br/><br/>
-        - **Export Data:** Gunakan fitur ini untuk membuat backup data Anda dalam format JSON atau CSV.
-        <br/>
-        - **Danger Zone:** Tombol "Reset Application Data" akan menghapus semua data transaksional (tugas, proyek, dll.) tetapi akan MEMPERTAHANKAN semua akun pengguna. Gunakan dengan hati-hati.
-      `,
-    },
-    {
-      id: 'manager_project_management',
-      title: 'Manajemen Proyek & Tugas',
-      content: `
-        Sebagai Manajer, fokus Anda adalah memastikan proyek berjalan lancar.
-        <br/><br/>
-        - **Papan Kanban:** Gunakan papan ini untuk memantau progres tim secara visual. Seret (drag) kartu tugas untuk mengubah statusnya.
-        <br/>
-        - **Daftar Tugas:** Gunakan filter berlapis (berdasarkan judul, merek, status, prioritas) untuk menemukan tugas spesifik dengan cepat.
-        <br/>
-        - **Kalender Tim:** Ini adalah 'pandangan mata elang' Anda. Lihat timeline semua proyek, identifikasi jadwal yang padat, dan geser tugas untuk menjadwal ulang.
-      `,
-    },
-    {
-      id: 'manager_team_management',
-      title: 'Mengelola Tim Anda',
-      content: `
-        Berdayakan tim Anda untuk mencapai hasil terbaik.
-        <br/><br/>
-        - **Mendelegasikan Tugas:** Saat membuat atau mengedit tugas, Anda bisa menugaskannya ke satu atau lebih karyawan.
-        <br/>
-        - **Ceklis Harian:** Buka halaman 'Daily Checklist' dan gunakan filter nama untuk memantau penyelesaian tugas rutin harian anggota tim Anda.
-      `,
-    },
-    {
-      id: 'manager_automation',
-      title: 'Otomatisasi & Efisiensi',
-      content: `
-        Hemat waktu dengan fitur otomatisasi kami.
-        <br/><br/>
-        - **Template Tugas Berulang:** Buka 'Settings > Recurring Tasks' untuk membuat template tugas yang akan dibuat secara otomatis (harian, mingguan, dll.). Ini sangat berguna untuk laporan, rapat rutin, atau tugas-tugas administrasi lainnya.
+Jaga keamanan dan portabilitas data perusahaan Anda melalui halaman **Admin > Data**.
+
+*   **Export Data:** Gunakan fitur ini untuk membuat backup data Anda dalam format JSON atau CSV.
+*   **Import Data:** Proses restore data dilakukan secara manual melalui konsol Firebase untuk keamanan maksimal.
+*   **Danger Zone:** Tombol "Reset Application Data" akan menghapus **semua data transaksional** (tugas, proyek, dll.) tetapi akan **MEMPERTAHANKAN semua akun pengguna**. Gunakan dengan sangat hati-hati.
       `,
     },
     {
       id: 'manager_reports',
-      title: 'Analisis & Laporan',
+      title: 'Bagaimana cara melihat laporan dan analisis kinerja?',
       content: `
-        Gunakan data untuk membuat keputusan yang lebih baik.
-        <br/><br/>
-        - **Halaman Laporan:** Analisis performa tim, lihat tingkat penyelesaian tepat waktu, dan identifikasi di mana sebagian besar waktu kerja dihabiskan melalui grafik interaktif.
-      `,
-    },
-     {
-      id: 'manager_social_media',
-      title: 'Alur Kerja Media Sosial',
-      content: `
-        Kelola konten untuk klien atau merek Anda secara profesional.
-        <br/><br/>
-        - **Review Konten:** Di halaman 'Social Media', Anda akan melihat postingan yang menunggu persetujuan.
-        - **Approval:** Buka setiap postingan untuk me-review, lalu gunakan tombol "Approve & Schedule" untuk menjadwalkan atau "Reject" untuk mengembalikannya ke drafter.
+Gunakan data untuk membuat keputusan yang lebih baik di halaman **Reports**.
+
+*   **Analisis Tim:** Lihat metrik kunci seperti jumlah tugas selesai, rata-rata waktu penyelesaian, dan tingkat ketepatan waktu.
+*   **Filter Data:** Gunakan filter berdasarkan karyawan dan periode waktu untuk mendapatkan wawasan yang lebih spesifik.
       `,
     },
   ],
   manager: [
     {
       id: 'manager_project_management',
-      title: 'Manajemen Proyek & Tugas',
+      title: 'Bagaimana cara terbaik untuk mengelola proyek tim saya?',
       content: `
-        Sebagai Manajer, fokus Anda adalah memastikan proyek berjalan lancar.
-        <br/><br/>
-        - **Papan Kanban:** Gunakan papan ini untuk memantau progres tim secara visual. Seret (drag) kartu tugas untuk mengubah statusnya.
-        <br/>
-        - **Daftar Tugas:** Gunakan filter berlapis (berdasarkan judul, merek, status, prioritas) untuk menemukan tugas spesifik dengan cepat.
-        <br/>
-        - **Kalender Tim:** Ini adalah 'pandangan mata elang' Anda. Lihat timeline semua proyek, identifikasi jadwal yang padat, dan geser tugas untuk menjadwal ulang.
+Sebagai Manajer, fokus Anda adalah memastikan proyek berjalan lancar.
+
+*   **Papan Kanban:** Buka halaman **Dashboard**. Gunakan papan ini untuk memantau progres tim secara visual. Seret kartu tugas untuk mengubah statusnya.
+*   **Daftar Tugas:** Buka **Tasks > Task List**. Gunakan filter berlapis (berdasarkan judul, merek, status, prioritas) untuk menemukan tugas spesifik dengan cepat.
+*   **Jadwal Tim:** Buka **Tasks > Schedule**. Lihat timeline semua proyek, identifikasi jadwal yang padat, dan geser tugas untuk menjadwal ulang.
       `,
     },
     {
       id: 'manager_team_management',
-      title: 'Mengelola Tim Anda',
+      title: 'Bagaimana cara mendelegasikan tugas dan memantau tim?',
       content: `
-        Berdayakan tim Anda untuk mencapai hasil terbaik.
-        <br/><br/>
-        - **Mendelegasikan Tugas:** Saat membuat atau mengedit tugas, Anda bisa menugaskannya ke satu atau lebih karyawan.
-        <br/>
-        - **Ceklis Harian:** Buka halaman 'Daily Checklist' dan gunakan filter nama untuk memantau penyelesaian tugas rutin harian anggota tim Anda.
+Berdayakan tim Anda untuk mencapai hasil terbaik.
+
+*   **Mendelegasikan Tugas:** Saat membuat atau mengedit tugas, Anda bisa menugaskannya ke satu atau lebih karyawan di dalam tim Anda.
+*   **Ceklis Harian:** Buka halaman **Daily Checklist** dan gunakan filter nama untuk memantau penyelesaian tugas rutin harian anggota tim Anda.
+*   **Laporan Kinerja:** Halaman **Reports** memberikan gambaran umum tentang produktivitas tim Anda.
       `,
     },
     {
-      id: 'manager_automation',
-      title: 'Otomatisasi & Efisiensi',
+      id: 'manager_social_media',
+      title: 'Bagaimana saya menyetujui atau menolak konten?',
       content: `
-        Hemat waktu dengan fitur otomatisasi kami.
-        <br/><br/>
-        - **Template Tugas Berulang:** Buka 'Settings > Recurring Tasks' untuk membuat template tugas yang akan dibuat secara otomatis (harian, mingguan, dll.). Ini sangat berguna untuk laporan, rapat rutin, atau tugas-tugas administrasi lainnya.
-      `,
-    },
-    {
-      id: 'manager_reports',
-      title: 'Analisis & Laporan',
-      content: `
-        Gunakan data untuk membuat keputusan yang lebih baik.
-        <br/><br/>
-        - **Halaman Laporan:** Analisis performa tim, lihat tingkat penyelesaian tepat waktu, dan identifikasi di mana sebagian besar waktu kerja dihabiskan melalui grafik interaktif.
+Kelola konten untuk klien atau merek Anda secara profesional di modul **Social Media**.
+
+*   **Review Konten:** Buka detail postingan yang berstatus "Preview". Di sini Anda bisa melihat pratinjau, detail, dan file yang diunggah oleh tim.
+*   **Approval & Revisi:**
+    *   Klik **Approve & Complete** jika konten sudah final.
+    *   Klik **Request Revisions** jika ada yang perlu diperbaiki. Anda akan diminta membuat daftar poin revisi untuk tim.
       `,
     },
      {
-      id: 'manager_social_media',
-      title: 'Alur Kerja Media Sosial',
+      id: 'manager_automation',
+      title: 'Bagaimana cara membuat tugas rutin secara otomatis?',
       content: `
-        Kelola konten untuk klien atau merek Anda secara profesional.
-        <br/><br/>
-        - **Review Konten:** Di halaman 'Social Media', Anda akan melihat postingan yang menunggu persetujuan.
-        - **Approval:** Buka setiap postingan untuk me-review, lalu gunakan tombol "Approve & Schedule" untuk menjadwalkan atau "Reject" untuk mengembalikannya ke drafter.
+Hemat waktu dengan fitur otomatisasi di **Admin > Settings > Recurring Tasks**.
+
+*   **Buat Template:** Tentukan judul, deskripsi, frekuensi (harian, mingguan), dan siapa yang akan ditugaskan.
+*   **Tugas Otomatis:** Sistem akan secara otomatis membuat tugas berdasarkan template ini pada jadwal yang telah ditentukan. Ini sangat berguna untuk laporan, rapat rutin, atau tugas-tugas administrasi lainnya.
       `,
     },
   ],
   employee: [
     {
       id: 'employee_my_work',
-      title: 'Pusat Kerja Anda ("My Work")',
+      title: 'Di mana saya bisa melihat semua pekerjaan saya?',
       content: `
-        Halaman 'My Work' adalah pusat komando produktivitas harian Anda.
-        <br/><br/>
-        - **Fokus Hari Ini:** Tab ini secara otomatis menampilkan tugas yang paling relevan untuk Anda kerjakan hari ini (tugas yang jatuh tempo, lewat jatuh tempo, atau sedang berjalan).
-        <br/>
-        - **Semua Tugas Saya:** Gunakan tab ini untuk melihat daftar lengkap semua tugas yang ditugaskan kepada Anda, tidak peduli statusnya.
-        <br/>
-        - **Ceklis Harian:** Laporkan penyelesaian tugas rutin Anda dengan cepat di bagian 'Daily Checklist'.
+Halaman **My Work** adalah pusat komando produktivitas harian Anda.
+
+*   **Today's Focus:** Bagian ini secara otomatis menampilkan tugas yang paling relevan untuk Anda: tugas yang jatuh tempo hari ini, sudah lewat jatuh tempo, atau yang sedang Anda kerjakan.
+*   **Daily Checklist:** Di sisi kanan, laporkan penyelesaian tugas-tugas rutin harian Anda dengan cepat.
+*   **Action Items:** Lihat mention dan sub-tugas yang ditugaskan langsung kepada Anda.
       `,
     },
     {
       id: 'employee_doing_tasks',
-      title: 'Mengerjakan Tugas',
+      title: 'Bagaimana cara saya mengerjakan tugas dan berkolaborasi?',
       content: `
-        Fokus pada eksekusi dan kolaborasi yang efektif.
-        <br/><br/>
-        - **Ubah Status:** Di Papan Kanban, cukup seret tugas Anda ke kolom yang sesuai untuk memperbarui statusnya.
-        <br/>
-        - **Time Tracker:** Di detail tugas, gunakan tombol 'Start/Stop Session' untuk melacak waktu kerja Anda secara akurat.
-        <br/>
-        - **Kolaborasi:** Gunakan fitur komentar untuk berdiskusi. Gunakan '@' diikuti nama (misal: @Budi) untuk me-mention rekan setim dan memastikan mereka mendapat notifikasi.
+Fokus pada eksekusi dan kolaborasi yang efektif di dalam detail setiap tugas.
+
+*   **Ubah Status:** Cukup seret kartu tugas Anda di papan Kanban atau ubah melalui menu dropdown di detail tugas.
+*   **Time Tracker:** Gunakan tombol 'Start/Stop Session' untuk melacak waktu kerja Anda secara akurat.
+*   **Sub-tugas:** Pecah pekerjaan besar menjadi langkah-langkah kecil dengan membuat sub-tugas.
+*   **Kolaborasi:** Gunakan fitur **Comments** untuk berdiskusi. Gunakan \`@\` diikuti nama (misal: \`@Budi\`) untuk me-mention rekan setim dan memastikan mereka mendapat notifikasi.
       `,
     },
      {
-      id: 'employee_social_media',
-      title: 'Mengirim Konten',
+      id: 'employee_submission',
+      title: 'Bagaimana cara saya mengirimkan pekerjaan untuk direview?',
       content: `
-        Jika peran Anda melibatkan pembuatan konten.
-        <br/><br/>
-        - **Buat Postingan:** Buka halaman 'Social Media' dan gunakan tombol "Create Post".
-        - **Isi Detail:** Tulis caption, unggah gambar/video, dan atur jadwal tayang yang diinginkan.
-        - **Kirim untuk Persetujuan:** Setelah selesai, klik "Submit for Approval". Manajer Anda akan menerima notifikasi untuk me-reviewnya.
+Setelah pekerjaan selesai, ikuti langkah-langkah ini di dalam detail tugas/konten:
+
+1.  **Lengkapi Checklist:** Pastikan semua *sub-tugas* dan *poin revisi* (jika ada) sudah Anda centang.
+2.  **Unggah Hasil Akhir:** Upload file hasil kerja Anda di bagian **Deliverables**. Ini penting sebagai bukti pekerjaan.
+3.  **Kirim untuk Review:** Klik tombol **Submit for Review**. Status tugas akan berubah menjadi "Preview" dan Manajer Anda akan menerima notifikasi.
       `,
     },
   ],
   client: [
     {
       id: 'client_monitoring',
-      title: 'Memantau Progres Proyek',
+      title: 'Bagaimana cara saya memantau progres proyek?',
       content: `
-        Sebagai Klien, Anda memiliki akses transparan untuk melihat kemajuan pekerjaan.
-        <br/><br/>
-        - **Melihat Tugas:** Anda dapat melihat tugas-tugas yang relevan dengan proyek Anda di Papan Kanban atau Daftar Tugas.
-        <br/>
-        - **Memberikan Feedback:** Buka detail tugas untuk melihat informasi lengkap dan gunakan kolom komentar untuk memberikan feedback atau mengajukan pertanyaan langsung kepada tim.
+Sebagai Klien, Anda memiliki akses transparan untuk melihat kemajuan pekerjaan melalui *share link* yang Anda terima.
+
+*   **Melihat Tugas:** Anda dapat melihat tugas-tugas yang relevan dengan proyek Anda di Papan Kanban atau Daftar Tugas, sesuai dengan apa yang dibagikan kepada Anda.
+*   **Memberikan Feedback:** Buka detail tugas untuk melihat informasi lengkap dan gunakan kolom komentar untuk memberikan feedback atau mengajukan pertanyaan langsung kepada tim.
       `,
     },
     {
       id: 'client_approval',
-      title: 'Proses Persetujuan Konten',
+      title: 'Bagaimana cara saya memberikan persetujuan (approval)?',
       content: `
-        Berikan persetujuan untuk konten media sosial dengan mudah.
-        <br/><br/>
-        - **Kalender Konten:** Buka halaman 'Social Media' untuk melihat jadwal konten yang telah disiapkan untuk Anda.
-        <br/>
-        - **Review & Approve:** Klik pada setiap postingan untuk melihat pratinjau. Jika Anda adalah approver yang ditunjuk, Anda akan melihat tombol untuk menyetujui ("Approve") konten tersebut.
+Jika Anda memiliki hak akses untuk mengubah status:
+
+*   **Review & Approve:** Buka detail tugas atau konten yang berstatus "Preview".
+*   **Ubah Status:** Jika pekerjaan sudah sesuai, ubah statusnya menjadi "Done". Jika ada revisi, ubah statusnya menjadi "Revisi" dan berikan catatan di kolom komentar.
       `,
     },
   ],

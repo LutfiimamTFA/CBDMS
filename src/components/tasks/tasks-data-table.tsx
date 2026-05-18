@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -12,9 +11,9 @@ import {
   ColumnFiltersState,
   getFilteredRowModel,
   VisibilityState,
+  getPaginationRowModel,
   getFacetedRowModel,
   getFacetedUniqueValues,
-  getPaginationRowModel,
 } from '@tanstack/react-table';
 import {
   Table,
@@ -30,8 +29,8 @@ import type { Task, Priority, User, Notification, WorkflowStatus, Brand, Activit
 import { priorityInfo } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
-import { format, parseISO, isAfter } from 'date-fns';
-import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Building2, History, Eye, AlertCircle, FileText, Share2, Calendar } from 'lucide-react';
+import { format, parseISO, isAfter, endOfDay } from 'date-fns';
+import { MoreHorizontal, Plus, Trash2, X as XIcon, Link as LinkIcon, Loader2, CheckCircle2, Circle, CircleDashed, Eye, AlertCircle, FileText, Share2, ArrowUpDown, ChevronsUpDown, ArrowUpAZ, ArrowDownZA, Edit, Building2, Calendar as CalendarIcon, History, HelpCircle } from 'lucide-react';
 import { AddTaskDialog } from './add-task-dialog';
 import { DataTableFacetedFilter } from './data-table-faceted-filter';
 import { DataTableViewOptions } from './data-table-view-options';
@@ -56,9 +55,12 @@ import { Badge } from '../ui/badge';
 import { usePermissions } from '@/context/permissions-provider';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ShareTaskDialog } from '../share/share-task-dialog';
+import { cn } from '@/lib/utils';
+import { Switch } from '../ui/switch';
+import { Label } from '../ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar as CalendarComponent } from '../ui/calendar';
-import { ShareTaskDialog } from './share-task-dialog';
+import { Calendar } from '../ui/calendar';
 
 type AIValidationState = {
   isOpen: boolean;
@@ -95,38 +97,40 @@ const formatDate = (date: any): string => {
 export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTableProps) {
   const firestore = useFirestore();
   const { profile } = useUserProfile();
-  
   const { permissions, isLoading: arePermsLoading } = usePermissions();
-  
   const router = useRouter();
   
   const [data, setData] = React.useState<Task[]>(tasks);
+  const [pendingDeleteTask, setPendingDeleteTask] = React.useState<Task | null>(null);
+
   React.useEffect(() => {
     setData(tasks || []);
   }, [tasks]);
 
-  const [sorting, setSorting] = React.useState<SortingState>([
-    {
-      id: 'priority',
-      desc: true,
-    },
-  ]);
+  const [sorting, setSorting] = React.useState<SortingState>([ { id: 'dueDate', desc: false } ]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
-    lastActivity: false,
-  });
-  const [rowSelection, setRowSelection] = React.useState({})
+  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({ lastActivity: false });
+  const [rowSelection, setRowSelection] = React.useState({});
   const { toast } = useToast();
   
   const [aiValidation, setAiValidation] = React.useState<AIValidationState>({ isOpen: false, isChecking: false, reason: '', onConfirm: () => {} });
   const [pendingPriorityChange, setPendingPriorityChange] = React.useState<{ taskId: string, newPriority: Priority } | null>(null);
   
   const [historyTask, setHistoryTask] = React.useState<Task | null>(null);
-  const [shareTask, setShareTask] = React.useState<Task | null>(null);
+  
+  const [editMode, setEditMode] = React.useState(false);
+  const isSuperAdmin = profile?.role === 'Super Admin';
 
   const canChangePriority = React.useMemo(() => {
       if (!profile) return false;
       return profile.role === 'Super Admin' || profile.role === 'Manager';
+  }, [profile]);
+  
+  const canEditDueDate = React.useMemo(() => {
+      if (!profile) return false;
+      if (profile.role === 'Super Admin') return true;
+      if (profile.role === 'Manager') return true;
+      return false;
   }, [profile]);
 
   const statusOptions = React.useMemo(() => {
@@ -135,7 +139,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         if (statusName === 'Doing') return CircleDashed;
         if (statusName === 'Preview') return Eye;
         if (statusName === 'Done') return CheckCircle2;
-        return Circle;
+        return HelpCircle;
     };
 
     return (statuses || []).map(s => ({
@@ -145,23 +149,9 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     }));
   }, [statuses]);
 
-  const priorityOptions = Object.values(priorityInfo).map(p => ({
-      value: p.value,
-      label: p.label,
-      icon: p.icon
-  }));
-  
-  const brandOptions = React.useMemo(() => {
-    return (brands || []).map((brand) => ({
-      value: brand.id,
-      label: brand.name,
-      icon: Building2,
-    }));
-  }, [brands]);
-
-  const assigneeOptions = React.useMemo(() => {
-    return (users || []).map(u => ({ value: u.id, label: u.name }));
-  }, [users]);
+  const priorityOptions = Object.values(priorityInfo).map(p => ({ value: p.value, label: p.label, icon: p.icon }));
+  const brandOptions = React.useMemo(() => (brands || []).map((brand) => ({ value: brand.id, label: brand.name, icon: Building2 })), [brands]);
+  const assigneeOptions = React.useMemo(() => (users || []).map(u => ({ value: u.id, label: u.name })), [users]);
 
 
   const createActivity = (user: User, action: string): Activity => {
@@ -177,6 +167,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
       if (!firestore) return;
       const taskRef = doc(firestore, 'tasks', taskId);
       deleteDocumentNonBlocking(taskRef);
+      toast({ title: "Task Deleted", description: "The task is being removed from the system."});
   };
   
   const handlePriorityChange = async (taskId: string, newPriority: Priority) => {
@@ -238,18 +229,58 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         setPendingPriorityChange(null);
     }
   };
+  
+  const handleStatusChange = (taskId: string, newStatus: string) => {
+      if (!firestore || !profile) return;
+      const task = data.find(t => t.id === taskId);
+      if (!task) return;
+      
+      const taskRef = doc(firestore, 'tasks', taskId);
+      const newActivity = createActivity(profile, `changed status from "${task.status}" to "${newStatus}"`);
+      const updatedActivities = [...(task.activities || []), newActivity];
 
-  const columns: ColumnDef<Task>[] = [
+      updateDocumentNonBlocking(taskRef, {
+          status: newStatus,
+          activities: updatedActivities,
+          lastActivity: newActivity,
+          updatedAt: serverTimestamp(),
+      });
+  };
+  
+  const handleDueDateChange = (taskId: string, date: Date | undefined) => {
+      if (!firestore || !profile) return;
+      const task = data.find(t => t.id === taskId);
+      if (!task) return;
+
+      const taskRef = doc(firestore, 'tasks', taskId);
+      const actionText = date ? `set due date to ${format(date, 'MMM d, yyyy')}` : 'removed due date';
+      const newActivity = createActivity(profile, actionText);
+      const updatedActivities = [...(task.activities || []), newActivity];
+
+      updateDocumentNonBlocking(taskRef, {
+          dueDate: date ? date.toISOString() : null,
+          activities: updatedActivities,
+          lastActivity: newActivity,
+          updatedAt: serverTimestamp(),
+      });
+  }
+
+  const columns: ColumnDef<Task>[] = React.useMemo(() => [
     {
       accessorKey: 'title',
-      header: 'Title',
+      header: ({ column }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+          Title
+          <ChevronsUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       cell: ({ row }) => {
         const task = row.original;
-        const hasDescription = task.description && task.description.trim() !== '';
+        const hasDescription = typeof task.description === 'string' && task.description.trim() !== '';
         
         const completionStatus = React.useMemo(() => {
             if (task.status !== 'Done' || !task.actualCompletionDate || !task.dueDate) return null;
-            const isLate = isAfter(parseISO(task.actualCompletionDate), parseISO(task.dueDate));
+            const isLate = isAfter(parseISO(task.actualCompletionDate), endOfDay(parseISO(task.dueDate)));
             return isLate ? 'Late' : 'On Time';
         }, [task.status, task.actualCompletionDate, task.dueDate]);
 
@@ -289,12 +320,48 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
       }
     },
     {
+      accessorKey: 'dueDate',
+      header: ({ column }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Due Date
+            <ChevronsUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const dueDate = row.getValue('dueDate') as string | undefined;
+        const isViewOnly = isSuperAdmin && !editMode;
+
+        if (isViewOnly || !canEditDueDate) {
+            return <div className="font-medium">{dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span className="text-muted-foreground">-</span>}</div>;
+        }
+
+        return (
+            <Popover>
+                <PopoverTrigger asChild>
+                    <Button variant={"ghost"} className="w-[150px] justify-start text-left font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span>Set date</span>}
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                    <Calendar
+                        mode="single"
+                        selected={dueDate ? parseISO(dueDate) : undefined}
+                        onSelect={(date) => handleDueDateChange(row.original.id, date)}
+                        initialFocus
+                    />
+                </PopoverContent>
+            </Popover>
+        )
+      }
+    },
+    {
       accessorKey: 'brandId',
       header: 'Brand',
       cell: ({ row }) => {
         const brandId = row.getValue('brandId') as string;
         const brand = brands?.find(b => b.id === brandId);
-        return brand ? <Badge variant="outline" className="font-normal bg-secondary/50"><Building2 className='mr-2 h-4 w-4'/>{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
+        return brand ? <Badge variant="outline" className="font-normal">{brand.name}</Badge> : <div className="text-muted-foreground">-</div>;
       },
       filterFn: (row, id, value) => {
         return value.includes(row.getValue(id))
@@ -302,17 +369,22 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     },
      {
       accessorKey: 'priority',
-      header: 'Priority',
+      header: ({ column }) => (
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            Priority
+            <ChevronsUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
       sortingFn: prioritySortingFn,
       cell: ({ row }) => {
         const task = row.original;
         const currentPriority = row.getValue('priority') as Priority;
         const isChecking = aiValidation.isChecking && pendingPriorityChange?.taskId === task.id;
-        
         const priority = priorityInfo[currentPriority];
+        const isViewOnly = isSuperAdmin && !editMode;
         if (!priority) return null;
 
-        if (!canChangePriority) {
+        if (isViewOnly || !canChangePriority) {
             return (
               <Badge variant="outline" className='font-normal'>
                   <priority.icon className={`h-4 w-4 mr-2 ${priority.color}`} />
@@ -440,20 +512,37 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
       cell: ({ row }) => {
         const statusName = row.getValue('status') as string;
         const statusDetails = statuses?.find(s => s.name === statusName);
-        
         const Icon = statusOptions.find(s => s.value === statusName)?.icon || Circle;
+        const isViewOnly = isSuperAdmin && !editMode;
+
+        if (isViewOnly) {
+           return (
+              <Badge variant="outline" className="font-medium" style={{ backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent', borderColor: statusDetails?.color, color: statusDetails?.color }}>
+                  <div className="flex items-center gap-2">
+                      <Icon className="h-3 w-3" />
+                      <span>{statusName}</span>
+                  </div>
+              </Badge>
+            );
+        }
 
         return (
-          <Badge variant="outline" className="font-medium" style={{
-              backgroundColor: statusDetails ? `${statusDetails.color}20` : 'transparent',
-              borderColor: statusDetails?.color,
-              color: statusDetails?.color
-          }}>
-              <div className="flex items-center gap-2">
-                  <Icon className="h-3 w-3" />
-                  <span>{statusName}</span>
-              </div>
-          </Badge>
+            <Select 
+                value={statusName} 
+                onValueChange={(newStatus) => handleStatusChange(row.original.id, newStatus)}
+            >
+                <SelectTrigger className="w-[140px] border-none bg-transparent focus:ring-0">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-3 w-3" style={{ color: statusDetails?.color }} />
+                      <span>{statusName}</span>
+                    </div>
+                </SelectTrigger>
+                <SelectContent>
+                    {(statuses || []).map(status => (
+                        <SelectItem key={status.id} value={status.name}>{status.name}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         );
       },
       filterFn: (row, id, value) => {
@@ -466,15 +555,20 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         const task = row.original;
         
         const canDelete = React.useMemo(() => {
-            if (!profile || !permissions) return false;
+            if (!profile || arePermsLoading) return false;
             if (profile.role === 'Super Admin') return true;
-            if (profile.role === 'Manager') {
+            if (profile.role === 'Manager' && permissions) {
                 return permissions.Manager.canDeleteTasks && (profile.brandIds || []).includes(task.brandId);
             }
+            if (profile.role === 'Employee' || profile.role === 'PIC') {
+              return task.createdBy?.id === profile.id;
+            }
             return false;
-        }, [profile, permissions, task]);
-        
-        const isCreatorEmployeeOrPIC = ['Employee', 'PIC', 'Client'].includes(task.createdBy.role);
+        }, [profile, permissions, arePermsLoading, task]);
+
+        if (isSuperAdmin && !editMode) {
+          return null;
+        }
 
         return (
           <DropdownMenu>
@@ -486,25 +580,18 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); router.push(`/tasks/${task.id}`)}}>
+              <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); router.push(`/tasks/${task.id}`)}}>
                 View details
               </DropdownMenuItem>
               <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setHistoryTask(task)}}>
                   <History className="mr-2 h-4 w-4" />
                   View History
               </DropdownMenuItem>
-              {isCreatorEmployeeOrPIC && (
-                <ShareTaskDialog task={task} open={shareTask?.id === task.id} onOpenChange={(open) => setShareTask(open ? task : null)}>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                      <Share2 className="mr-2 h-4 w-4"/> Share Task
-                    </DropdownMenuItem>
-                </ShareTaskDialog>
-              )}
               <DropdownMenuSeparator />
               {canDelete && (
                 <DropdownMenuItem
                     className='text-destructive focus:text-destructive focus:bg-destructive/10'
-                    onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id)}}
+                    onClick={(e) => { e.stopPropagation(); setPendingDeleteTask(task)}}
                 >
                     <Trash2 className='mr-2 h-4 w-4' />
                     Delete Task
@@ -515,7 +602,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         )
       },
     },
-  ];
+  ], [data, statuses, brands, users, canChangePriority, canEditDueDate, isSuperAdmin, editMode, aiValidation.isChecking, pendingPriorityChange]);
 
   const table = useReactTable({
     data,
@@ -526,88 +613,54 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
+    getPaginationRowModel: getPaginationRowModel(),
     getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
-    getPaginationRowModel: getPaginationRowModel(),
     onRowSelectionChange: setRowSelection,
     initialState: {
-        pagination: {
-            pageSize: 10,
-        },
-        sorting: [{
-            id: 'priority',
-            desc: true
-        }]
+        pagination: { pageSize: 10 },
+        sorting: [{ id: 'dueDate', desc: false }]
     },
     state: { sorting, columnFilters, columnVisibility, rowSelection },
   });
 
   const isFiltered = table.getState().columnFilters.length > 0;
-  const filteredBrandIds = table.getState().columnFilters.find(f => f.id === 'brandId')?.value as string[] || [];
-
+  
   return (
     <>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex flex-1 items-center space-x-2">
+            <div className="flex flex-1 items-center space-x-2">
             <Input
-              placeholder="Filter tasks by title..."
-              value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
-              onChange={(event) =>
-                table.getColumn('title')?.setFilterValue(event.target.value)
-              }
-              className="h-8 w-[150px] lg:w-[250px]"
+                placeholder="Filter tasks by title..."
+                value={(table.getColumn('title')?.getFilterValue() as string) ?? ''}
+                onChange={(event) => table.getColumn('title')?.setFilterValue(event.target.value)}
+                className="h-8 w-[150px] lg:w-[250px]"
             />
-             <DataTableFacetedFilter
-              column={table.getColumn("brandId")}
-              title="Brand"
-              options={brandOptions}
-            />
-            <DataTableFacetedFilter
-              column={table.getColumn("status")}
-              title="Status"
-              options={statusOptions}
-            />
-            <DataTableFacetedFilter
-              column={table.getColumn("priority")}
-              title="Priority"
-              options={priorityOptions}
-            />
-             {assigneeOptions.length > 0 && <DataTableFacetedFilter
-              column={table.getColumn("assigneeIds")}
-              title="Assignees"
-              options={assigneeOptions}
-            />}
-            {isFiltered && (
-              <Button
-                variant="ghost"
-                onClick={() => table.resetColumnFilters()}
-                className="h-8 px-2 lg:px-3"
-              >
-                Reset
-                <XIcon className="ml-2 h-4 w-4" />
-              </Button>
-            )}
-          </div>
-          <DataTableViewOptions table={table} />
+            {table.getColumn("brandId") && <DataTableFacetedFilter column={table.getColumn("brandId")} title="Brand" options={brandOptions} />}
+            {table.getColumn("status") && <DataTableFacetedFilter column={table.getColumn("status")} title="Status" options={statusOptions} />}
+            {table.getColumn("priority") && <DataTableFacetedFilter column={table.getColumn("priority")} title="Priority" options={priorityOptions} />}
+            {table.getColumn("assigneeIds") && <DataTableFacetedFilter column={table.getColumn("assigneeIds")} title="Assignees" options={assigneeOptions} />}
+            {isFiltered && ( <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-8 px-2 lg:px-3">Reset <XIcon className="ml-2 h-4 w-4" /></Button>)}
+            </div>
+            <div className="flex items-center gap-2">
+                {isSuperAdmin && (
+                    <div className="flex items-center space-x-2">
+                        <Switch id="edit-mode-switch" checked={editMode} onCheckedChange={setEditMode}/>
+                        <Label htmlFor="edit-mode-switch">Edit Mode</Label>
+                    </div>
+                )}
+                <DataTableViewOptions table={table} />
+            </div>
         </div>
-        <div className="rounded-md border">
+        <div className={cn("rounded-md border", isSuperAdmin && editMode && "ring-2 ring-yellow-500 ring-inset")}>
           <Table>
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (
                 <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    return (
-                      <TableHead key={header.id}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </TableHead>
-                    );
-                  })}
+                  {headerGroup.headers.map((header) => (
+                    <TableHead key={header.id}>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</TableHead>
+                  ))}
                 </TableRow>
               ))}
             </TableHeader>
@@ -625,24 +678,12 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id} onClick={(e) => cell.column.id === 'actions' && e.stopPropagation()}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
+                      <TableCell key={cell.id} onClick={(e) => cell.column.id === 'actions' && e.stopPropagation()}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
                     ))}
                   </TableRow>
                 ))
               ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center"
-                  >
-                    No results found.
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={columns.length} className="h-24 text-center">No results found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -760,6 +801,36 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
           </ScrollArea>
         </DialogContent>
       </Dialog>
+      
+      <AlertDialog open={!!pendingDeleteTask} onOpenChange={() => setPendingDeleteTask(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus tugas ini?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Anda akan menghapus tugas: <strong className="text-foreground">{pendingDeleteTask?.title}</strong>
+              <br/><br/>
+              {(pendingDeleteTask?.status && ['Doing','Preview','Revisi'].includes(pendingDeleteTask?.status)) && (
+                <span className="text-destructive font-semibold">PERINGATAN: Tugas ini sedang berjalan. </span>
+              )}
+              Tindakan ini tidak dapat dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (pendingDeleteTask) {
+                  handleDeleteTask(pendingDeleteTask.id);
+                  setPendingDeleteTask(null);
+                }
+              }}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Ya, Hapus Tugas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

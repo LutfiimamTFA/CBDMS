@@ -18,8 +18,8 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
-import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo } from 'lucide-react';
+import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost, WebArticle } from '@/lib/types';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo, ChevronDown } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
@@ -29,14 +29,33 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
-import { Badge } from '../ui/badge';
-import { priorityInfo } from '@/lib/utils';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+
+const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
+  const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
+  if (!LucideIconComponent) return null;
+  return <LucideIconComponent {...props} />;
+};
+
+
+// Define which nav items are shareable
+const isShareable = (item: NavigationItem) => {
+    const shareablePaths = ['/dashboard', '/tasks', '/tasks/schedule', '/social-media/board', '/social-media/posts', '/social-media/schedule', '/social-media/analytics', '/web/board', '/web/articles', '/web/schedule'];
+    return shareablePaths.includes(item.path);
+};
+
+
+interface ShareViewDialogProps {
+  children?: React.ReactNode;
+}
 
 const removeUndefined = (obj: any): any => {
-    if (obj === undefined) return null;
-    if (Array.isArray(obj)) return obj.map(removeUndefined);
-    if (obj !== null && typeof obj === 'object' && !(obj instanceof Date) && !(typeof obj.toDate === 'function')) {
+    if (obj === undefined) {
+        return null;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(removeUndefined);
+    } else if (obj !== null && typeof obj === 'object' && !(obj instanceof Date) && !(typeof obj.toDate === 'function')) {
         return Object.keys(obj).reduce((acc, key) => {
             const value = obj[key];
             if (value !== undefined) {
@@ -68,7 +87,39 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
   const [password, setPassword] = useState('');
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
   const [accessLevel, setAccessLevel] = useState<SharedLink['accessLevel']>('view');
-  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+
+  const userTasksQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    let q = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
+    if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
+    else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    return q;
+  }, [firestore, profile]);
+
+  const socialPostsQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    let q = query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId));
+    if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
+    else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    return q;
+  }, [firestore, profile]);
+
+  const webArticlesQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    let q = query(collection(firestore, 'webArticles'), where('companyId', '==', profile.companyId));
+    if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
+    else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
+    return q;
+  }, [firestore, profile]);
+
+  const { data: allVisibleTasks, isLoading: tasksLoading } = useCollection<Task>(userTasksQuery);
+  const { data: allVisibleSocialPosts, isLoading: socialPostsLoading } = useCollection<SocialMediaPost>(socialPostsQuery);
+  const { data: allVisibleWebArticles, isLoading: webArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
+
+  const userNavItems = useMemo(() => {
+    if (!profile) return [];
+    return defaultNavItems.filter(item => item.roles.includes(profile.role));
+  }, [profile]);
   
   const isEmployeeOrPIC = useMemo(() => profile?.role === 'Employee' || profile?.role === 'PIC', [profile]);
   const isManagerOrAdmin = useMemo(() => profile?.role === 'Manager' || profile?.role === 'Super Admin', [profile]);
@@ -94,35 +145,32 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
 
   useEffect(() => {
     if (isOpen) {
-      setIsLoading(false);
-      setGeneratedLink(null);
-      setUsePassword(false);
-      setPassword('');
-      setLinkName('');
-      setExpiresAt(undefined);
-      setAccessLevel('view');
-      setSelectedTaskIds([]);
+      const dashboardItem = shareableNavItems.find(item => item.id === 'nav_dashboard');
+      setSelectedNavIds(dashboardItem ? [dashboardItem.id] : []);
     }
-  }, [isOpen]);
+  }, [isOpen, shareableNavItems]);
+
+  const isEmployeeRole = profile?.role === 'Employee' || profile?.role === 'PIC';
 
   const handleCreateLink = async () => {
-    if (!firestore || !profile || selectedTaskIds.length === 0) {
-        toast({ variant: 'destructive', title: 'No Tasks Selected', description: 'Please select at least one task to share.' });
-        return;
-    }
-    
+    if (!firestore || !profile) return;
+
     setIsLoading(true);
     setGeneratedLink(null);
 
     try {
-        const selectedTasks = delegatedTasks?.filter(task => selectedTaskIds.includes(task.id)) || [];
-        const statusesQuery = query(collection(firestore, 'statuses'), where('companyId', '==', profile.companyId), orderBy('order'));
+        const statusesQuery = query(collection(firestore, 'statuses'), orderBy('order'));
+        const socialStatusesQuery = query(collection(firestore, 'socialMediaStatuses'), orderBy('order'));
+        const webStatusesQuery = query(collection(firestore, 'webStatuses'), orderBy('order'));
+        const usersQuery = query(collection(firestore, 'users'), where('companyId', '==', profile.companyId));
+        const brandsQuery = query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId));
         
-        const [statusesSnap, usersSnap, brandsSnap, socialPostsSnap] = await Promise.all([
+        const [statusesSnap, socialStatusesSnap, webStatusesSnap, usersSnap, brandsSnap] = await Promise.all([
             getDocs(statusesQuery),
-            getDocs(query(collection(firestore, 'users'), where('companyId', '==', profile.companyId))),
-            getDocs(query(collection(firestore, 'brands'), where('companyId', '==', profile.companyId))),
-            getDocs(query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId)))
+            getDocs(socialStatusesQuery),
+            getDocs(webStatusesQuery),
+            getDocs(usersQuery),
+            getDocs(brandsQuery),
         ]);
 
         if (statusesSnap.empty) {
@@ -130,11 +178,14 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
         }
 
         const snapshot = {
-            tasks: selectedTasks,
+            tasks: allVisibleTasks || [],
+            socialMediaPosts: allVisibleSocialPosts || [],
+            webArticles: allVisibleWebArticles || [],
             statuses: statusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
+            socialMediaStatuses: socialStatusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
+            webStatuses: webStatusesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as WorkflowStatus)),
             users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
-            socialMediaPosts: socialPostsSnap.docs.map(doc => ({ id: doc.id, ...doc.data()} as SocialMediaPost)),
         };
         
         // For a link sharing specific tasks, the only relevant nav item is the task list
@@ -143,12 +194,13 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
         const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
           name: linkName || 'Shared Tasks',
           companyId: profile.companyId,
+          creatorId: profile.id,
+          creatorName: profile.name,
           creatorRole: profile.role,
-          allowedNavItems: allowedNavItems.map(item => item.id), 
-          navItems: navItems.map(item => ({...item, label: t(item.label as any)})),
+          allowedNavItems: selectedNavIds, 
+          navItems: userNavItems.map(item => ({...item, label: t(item.label as any) || item.label})),
           accessLevel: accessLevel,
           snapshot,
-          createdBy: profile.id,
           password: usePassword ? password : undefined,
           expiresAt: expiresAt || undefined,
         };
@@ -177,6 +229,20 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
     toast({ title: 'Link copied to clipboard!' });
   };
   
+  React.useEffect(() => {
+    if (isOpen) {
+      setIsLoading(false);
+      setGeneratedLink(null);
+      setUsePassword(false);
+      setPassword('');
+      setLinkName('');
+      setExpiresAt(undefined);
+      setAccessLevel('view');
+    }
+  }, [isOpen]);
+
+  const anyLoading = tasksLoading || socialPostsLoading || webArticlesLoading;
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
@@ -184,7 +250,7 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
         <DialogHeader>
           <DialogTitle>Share Delegated Tasks</DialogTitle>
           <DialogDescription>
-            Create a public link to share specific tasks assigned to you by your manager.
+            Create a public link to share a snapshot of your current work view with external collaborators.
           </DialogDescription>
         </DialogHeader>
 
@@ -192,115 +258,94 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
          <ScrollArea className="max-h-[60vh] -mx-6 px-6">
           <div className="space-y-6 py-4">
               <div className="space-y-2">
-                <Label htmlFor="link-name">Link Name</Label>
+                <Label htmlFor="link-name">Link Name (Optional)</Label>
                 <Input id="link-name" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="e.g., Q3 Client Preview" />
               </div>
-              
-              <div className="space-y-4 rounded-md border p-4">
-                <h4 className="text-sm font-medium">Select Tasks to Share</h4>
-                <p className="text-xs text-muted-foreground">Only tasks assigned to you by others are shown.</p>
-                <ScrollArea className="h-48">
-                    <div className="space-y-2 pr-4">
-                        {tasksLoading && <div className="flex items-center justify-center h-full"><Loader2 className="animate-spin" /></div>}
-                        {!tasksLoading && tasksToShow.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No delegated tasks found.</p>}
-                        {tasksToShow.map(task => {
-                            const PriorityIcon = priorityInfo[task.priority].icon;
-                            return (
-                                <div key={task.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent has-[:checked]:bg-accent">
-                                    <Checkbox
-                                        id={task.id}
-                                        checked={selectedTaskIds.includes(task.id)}
-                                        onCheckedChange={(checked) => {
-                                            setSelectedTaskIds(prev => 
-                                                checked ? [...prev, task.id] : prev.filter(id => id !== task.id)
-                                            );
-                                        }}
-                                    />
-                                    <label htmlFor={task.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer">
-                                        <PriorityIcon className={cn("h-4 w-4", priorityInfo[task.priority].color)} />
-                                        <span className="flex-1 truncate">{task.title}</span>
-                                        <Badge variant="secondary">{task.status}</Badge>
+              <Accordion type="single" collapsible defaultValue="pages" className="w-full space-y-4">
+                 <AccordionItem value="pages" className="border rounded-lg">
+                    <AccordionTrigger className="p-4 text-sm font-medium hover:no-underline">
+                        Pages & Permissions
+                    </AccordionTrigger>
+                    <AccordionContent className="p-4 pt-0 space-y-4">
+                         <div className="space-y-2">
+                            <h4 className="text-xs font-medium text-muted-foreground">Available Pages</h4>
+                            {shareableNavItems.map(item => (
+                                <div key={item.id} className="flex items-center space-x-2">
+                                    <Checkbox id={item.id} checked={selectedNavIds.includes(item.id)} onCheckedChange={(checked) => setSelectedNavIds(prev => checked ? [...prev, item.id] : prev.filter(id => id !== item.id))}/>
+                                    <label htmlFor={item.id} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2">
+                                        <Icon name={item.icon} className="h-4 w-4 text-muted-foreground" />
+                                        {t(item.label as any) || item.label}
                                     </label>
                                 </div>
-                            )
-                        })}
-                    </div>
-                </ScrollArea>
-              </div>
-
-               <div className="space-y-4 rounded-md border p-4">
-                  <h4 className="text-sm font-medium">Permissions for Viewer</h4>
-                   <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)}>
-                      <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                        <RadioGroupItem value="view" id="perm-view" />
-                        <Label htmlFor="perm-view" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                            <span className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4' /> View Only</span>
-                            <span className="font-normal text-xs text-muted-foreground">Can view shared pages and task details. Cannot make any changes.</span>
-                        </Label>
-                      </div>
-                       <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                        <RadioGroupItem value="status" id="perm-status" />
-                        <Label htmlFor="perm-status" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                            <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
-                            <span className="font-normal text-xs text-muted-foreground">
-                                Can view pages and change task statuses.
-                                {isEmployeeOrPIC && <span className="font-bold text-destructive"> Cannot move tasks to "Done" or "Revisi".</span>}
-                            </span>
-                        </Label>
-                      </div>
-                       {isManagerOrAdmin && (
-                        <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
-                          <RadioGroupItem value="limited-edit" id="perm-edit" />
-                          <Label htmlFor="perm-edit" className="flex flex-col gap-1 leading-normal cursor-pointer">
-                              <span className="font-semibold flex items-center gap-2"><Edit className='h-4 w-4'/> Limited Edit</span>
-                              <span className="font-normal text-xs text-muted-foreground">Can change status, due date, and priority. Cannot edit content.</span>
-                          </Label>
+                            ))}
                         </div>
-                       )}
-                    </RadioGroup>
-              </div>
-
-             <div className="space-y-4 rounded-md border p-4">
-                <h4 className="text-sm font-medium">Access Control</h4>
-                <div className="space-y-3">
-                    <div className="flex items-center space-x-2">
-                        <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword} />
-                        <Label htmlFor="use-password">Protect with password</Label>
-                    </div>
-                    {usePassword && (
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-medium text-muted-foreground">Viewer Permissions</h4>
+                          <RadioGroup value={accessLevel} onValueChange={(v: SharedLink['accessLevel']) => setAccessLevel(v)}>
+                              <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                                <RadioGroupItem value="view" id="perm-view" />
+                                <Label htmlFor="perm-view" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                                    <span className="font-semibold flex items-center gap-2"><Eye className='h-4 w-4' /> View Only</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Can view pages and task details. Cannot make any changes.</span>
+                                </Label>
+                              </div>
+                              <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                                <RadioGroupItem value="status" id="perm-status" />
+                                <Label htmlFor="perm-status" className="flex flex-col gap-1 leading-normal cursor-pointer">
+                                    <span className="font-semibold flex items-center gap-2"><ListTodo className='h-4 w-4' /> Can Change Status</span>
+                                    <span className="font-normal text-xs text-muted-foreground">Can view pages, change task statuses, and request revisions. {isEmployeeRole && "(Revisi & Done disabled)"}</span>
+                                </Label>
+                              </div>
+                              <div className="flex items-start space-x-2 rounded-md border p-3 hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-accent has-[:checked]:text-accent-foreground">
+                                <RadioGroupItem value="limited-edit" id="perm-edit" disabled={isEmployeeRole} />
+                                <Label htmlFor="perm-edit" className={cn("flex flex-col gap-1 leading-normal", isEmployeeRole ? 'cursor-not-allowed text-muted-foreground' : 'cursor-pointer')}>
+                                    <span className={cn("font-semibold flex items-center gap-2", !isEmployeeRole && "text-foreground")}><Edit className='h-4 w-4'/> Limited Edit</span>
+                                    <span className="font-normal text-xs">Can change status, due date, and priority. (Only for Managers/Admins)</span>
+                                </Label>
+                              </div>
+                            </RadioGroup>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+                <AccordionItem value="security" className="border rounded-lg">
+                    <AccordionTrigger className="p-4 text-sm font-medium hover:no-underline">Access Control</AccordionTrigger>
+                    <AccordionContent className="p-4 pt-0 space-y-4">
+                        <div className="flex items-center space-x-2">
+                            <Switch id="use-password" checked={usePassword} onCheckedChange={setUsePassword} />
+                            <Label htmlFor="use-password">Protect with password</Label>
+                        </div>
+                        {usePassword && (
+                            <div className="flex items-center gap-2">
+                                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                                <Input type="password" placeholder="Enter a password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                            </div>
+                        )}
                         <div className="flex items-center gap-2">
-                            <KeyRound className="h-4 w-4 text-muted-foreground" />
-                            <Input type="password" placeholder="Enter a password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                           <Clock className="h-4 w-4 text-muted-foreground" />
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                    variant={"outline"}
+                                    className={cn("w-[240px] justify-start text-left font-normal", !expiresAt && "text-muted-foreground")}
+                                    >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {expiresAt ? format(expiresAt, "PPP") : <span>Set expiration date</span>}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                    mode="single"
+                                    selected={expiresAt}
+                                    onSelect={setExpiresAt}
+                                    disabled={(date) => date < new Date()}
+                                    initialFocus
+                                    />
+                                </PopoverContent>
+                            </Popover>
                         </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                       <Clock className="h-4 w-4 text-muted-foreground" />
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button
-                                variant={"outline"}
-                                className={cn(
-                                    "w-[240px] justify-start text-left font-normal",
-                                    !expiresAt && "text-muted-foreground"
-                                )}
-                                >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {expiresAt ? format(expiresAt, "PPP") : <span>Set expiration date</span>}
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                                <Calendar
-                                mode="single"
-                                selected={expiresAt}
-                                onSelect={setExpiresAt}
-                                disabled={(date) => date < new Date()}
-                                initialFocus
-                                />
-                            </PopoverContent>
-                        </Popover>
-                    </div>
-                </div>
-            </div>
+                    </AccordionContent>
+                </AccordionItem>
+              </Accordion>
           </div>
          </ScrollArea>
         ) : (
@@ -329,8 +374,8 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
           ) : (
             <>
               <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateLink} disabled={isLoading || selectedTaskIds.length === 0}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
+              <Button onClick={handleCreateLink} disabled={isLoading || anyLoading || selectedNavIds.length === 0}>
+                {isLoading || anyLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
                 Create Link
               </Button>
             </>

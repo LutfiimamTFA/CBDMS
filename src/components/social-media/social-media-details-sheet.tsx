@@ -1,0 +1,1139 @@
+
+'use client';
+
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTrigger,
+  SheetFooter,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import type { Task, TimeLog, User, Priority, Tag, Subtask, Comment, Attachment, Notification, Activity, Brand, WorkflowStatus, SharedLink, RevisionItem, RevisionCycle, SharedTask, Dependencies, SocialMediaPost } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '../ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { useForm, useWatch } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { priorityInfo, formatLateness, getFileIcon, formatHours, getInitials } from '@/lib/utils';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { AtSign, CalendarIcon, Clock, Edit, FileUp, GitMerge, History, ListTodo, LogIn, MessageSquare, PauseCircle, PlayCircle, Plus, Repeat, Send, TagIcon, Trash, Trash2, Users, Wand2, X, Share2, Star, Link as LinkIcon, Paperclip, MoreHorizontal, Copy, FileText, Building2, CheckCircle, AlertCircle, RefreshCcw, UserPlus, Check, ListChecks, Upload, Bold, Italic, Table as TableIcon, List as ListIcon, ListOrdered, UploadCloud, Circle, CircleDashed, XCircle, Workflow, Blocks, RotateCcw } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { Separator } from '../ui/separator';
+import { useI18n } from '@/context/i18n-provider';
+import { Progress } from '../ui/progress';
+import { format, formatDistanceToNow, parseISO, isAfter, endOfDay } from 'date-fns';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { Checkbox } from '../ui/checkbox';
+import { ScrollArea } from '../ui/scroll-area';
+import { validatePriorityChange } from '@/ai/flows/validate-priority-change';
+import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
+import { useCollection, useFirestore, useUserProfile, useStorage } from '@/firebase';
+import { collection, doc, writeBatch, serverTimestamp, query, orderBy, updateDoc, deleteField, type Timestamp, where } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useRouter, useParams } from 'next/navigation';
+import Link from 'next/link';
+import { Badge } from '../ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { Label } from '@/components/ui/label';
+import { ShareTaskDialog } from '../share/share-task-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '../ui/command';
+import { Card, CardContent } from '../ui/card';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useSharedSession } from '@/context/shared-session-provider';
+import { tags as allTags } from '@/lib/data';
+import { RichTextEditor } from '../ui/rich-text-editor';
+import { deleteDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { usePermissions } from '@/context/permissions-provider';
+
+const postDetailsSchema = z.object({
+  title: z.string().min(1, 'Title is required'),
+  brandId: z.string().min(1, 'Brand is required'),
+  caption: z.string().optional(),
+  status: z.string(),
+  priority: z.enum(['Urgent', 'High', 'Medium', 'Low']),
+  assigneeIds: z.array(z.string()).optional(),
+  dueDate: z.string().optional(),
+  timeEstimate: z.coerce.number().min(0).optional(),
+});
+
+type PostDetailsFormValues = z.infer<typeof postDetailsSchema>;
+
+
+interface SocialMediaPostDetailsSheetProps {
+  post: SocialMediaPost;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+const createActivity = (user: User, action: string) => {
+  return {
+    id: `act-${crypto.randomUUID()}`,
+    user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+    action: action,
+    timestamp: new Date().toISOString(),
+  };
+};
+
+const formatDate = (date: any): string => {
+    if (!date) return 'N/A';
+    const dateObj = date.toDate ? date.toDate() : new Date(date);
+    if (isNaN(dateObj.getTime())) return 'Invalid date';
+    return format(dateObj, 'PP, p');
+};
+  
+const MAX_FILE_SIZE_MB = 2;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const ALLOWED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+const ALLOWED_FILE_TYPES = [...ALLOWED_IMAGE_TYPES, ...ALLOWED_DOC_TYPES].join(',');
+
+
+const getCurrentSubmissionCycle = (post: SocialMediaPost | null): number => {
+    if (!post) return 1;
+    const historyLength = post.revisionHistory?.length ?? 0;
+    const currentStatus = post.statusInternal || post.status;
+    if (currentStatus === 'Revisi') {
+        return historyLength + 1;
+    }
+    return historyLength > 0 ? historyLength : 1;
+};
+
+interface FinalReviewState {
+  isOpen: boolean;
+  item: SocialMediaPost | null;
+}
+
+interface EndOfDayState {
+  isOpen: boolean;
+}
+
+type BlockingReason = {
+  blocked: boolean;
+  title: string;
+  reasons: string[];
+  suggestion?: string;
+};
+
+interface TaskDetailsSheetProps {
+  task: Task;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function SharedViewLogic({ onDataLoaded }: { onDataLoaded: (data: any) => void }) {
+    const { session, isLoading, error } = useSharedSession();
+
+    useEffect(() => {
+        if (!isLoading) {
+            onDataLoaded({ session, error });
+        }
+    }, [session, isLoading, error, onDataLoaded]);
+
+    return null;
+}
+
+
+const createActivityServer = (user: User, action: string): Activity => {
+    return {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
+      action: action,
+      timestamp: new Date().toISOString() as any,
+    };
+};
+
+interface RevisionState {
+  isOpen: boolean;
+  item: SocialMediaPost | null;
+  items: Omit<RevisionItem, 'id' | 'completed'>[];
+  currentItemText: string;
+}
+
+// Helper to remove duplicate activities by ID, keeping the latest one.
+const getUniqueActivities = (activities: Activity[]): Activity[] => {
+  if (!activities) return [];
+  const activityMap = new Map<string, Activity>();
+  activities.forEach(activity => {
+      activityMap.set(activity.id, activity);
+  });
+  return Array.from(activityMap.values());
+};
+
+export function SocialMediaPostDetailsSheet({ 
+  post: initialPost, 
+  open,
+  onOpenChange,
+}: SocialMediaPostDetailsSheetProps) {
+  const { t } = useI18n();
+  const { toast } = useToast();
+  
+  const [postState, setPostState] = useState(initialPost);
+  useEffect(() => { setPostState(initialPost) }, [initialPost]);
+  
+  const [newComment, setNewComment] = useState('');
+  
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isDeleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [blockingAlert, setBlockingAlert] = useState<{ isOpen: boolean, title: string, reasons: string[], suggestion?: string }>({ isOpen: false, title: '', reasons: [], suggestion: '' });
+  const [isSaving, setIsSaving] = useState(false);
+  const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
+  const [finalReviewState, setFinalReviewState] = useState<FinalReviewState>({ isOpen: false, item: null });
+
+  
+  const firestore = useFirestore();
+  const storage = useStorage();
+  const { user: authUser, profile: currentUser } = useUserProfile();
+  const { permissions, isLoading: arePermsLoading } = usePermissions();
+
+
+  const allPostsQuery = useMemo(() => {
+    if (!firestore || !currentUser) return null;
+    return query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', currentUser.companyId));
+  }, [firestore, currentUser]);
+  const { data: allPosts } = useCollection<SocialMediaPost>(allPostsQuery);
+  
+  const usersQuery = useMemo(() => {
+    if (!firestore || !currentUser) return null;
+    let q = query(collection(firestore, 'users'), where('companyId', '==', currentUser.companyId));
+    return q;
+  }, [firestore, currentUser]);
+  const { data: allUsers } = useCollection<User>(usersQuery);
+  
+  const brandsQuery = useMemo(() => {
+    if (!firestore || !currentUser) return null;
+    return query(collection(firestore, 'brands'), orderBy('name'));
+  }, [firestore, currentUser]);
+  const { data: brands } = useCollection<Brand>(brandsQuery);
+
+  const form = useForm<PostDetailsFormValues>({
+    resolver: zodResolver(postDetailsSchema),
+    values: {
+        title: postState.title,
+        brandId: postState.brandId,
+        caption: postState.caption,
+        status: postState.status,
+        priority: postState.priority,
+        assigneeIds: postState.assigneeIds,
+        dueDate: postState.dueDate ? format(parseISO(postState.dueDate), 'yyyy-MM-dd') : undefined,
+        timeEstimate: postState.timeEstimate,
+    }
+  });
+
+  const isAssignee = !!currentUser && postState.assigneeIds.includes(currentUser.id);
+  const isManagerOrAdmin = currentUser && (currentUser.role === 'Manager' || currentUser.role === 'Super Admin');
+  const isEmployeeOrPIC = currentUser && (currentUser.role === 'Employee' || currentUser.role === 'PIC');
+
+  const canEditContent = useMemo(() => {
+    if (!currentUser) return false;
+    const isCreator = currentUser.id === postState.createdBy.id;
+    const isManagerOfBrand = currentUser.role === 'Manager' && postState.brandId && (currentUser.brandIds || []).includes(postState.brandId);
+    return currentUser.role === 'Super Admin' || isManagerOfBrand || isCreator;
+  }, [currentUser, postState]);
+
+  const canDelete = useMemo(() => {
+    if (!currentUser || arePermsLoading) return false;
+    const isCreator = postState.createdBy?.id === currentUser.id;
+    if (currentUser.role === 'Super Admin') return true;
+    if (currentUser.role === 'Manager' && permissions) {
+        return permissions.Manager.canDeleteTasks && (currentUser.brandIds || []).includes(postState.brandId);
+    }
+    if (currentUser.role === 'Employee' || currentUser.role === 'PIC') {
+        return isCreator;
+    }
+    return false;
+  }, [currentUser, permissions, arePermsLoading, postState]);
+
+  const canUploadDeliverables = useMemo(() => {
+    if (!currentUser) return false;
+    return isAssignee || isManagerOrAdmin;
+  }, [currentUser, isAssignee, isManagerOrAdmin]);
+  
+  const canSubmit = useMemo(() => {
+    if (!postState || !isEmployeeOrPIC) return false;
+    
+    const allSubtasksCompleted = (postState.subtasks || []).every(st => st.completed);
+    if (!allSubtasksCompleted) return false;
+
+    const currentCycle = getCurrentSubmissionCycle(postState);
+    const hasDeliverableForCycle = (postState.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+    if (!hasDeliverableForCycle) return false;
+
+    const nonSubmittableStatuses = ['Preview', 'Done', 'Scheduled', 'Posted'];
+    if (nonSubmittableStatuses.includes(postState.status)) return false;
+
+    return true;
+}, [postState, isEmployeeOrPIC]);
+
+  const handleDelete = () => {
+    if (!firestore || !postState || !canDelete) return;
+    deleteDocumentNonBlocking(doc(firestore, 'socialMediaPosts', postState.id));
+    toast({ title: "Post Deleted", description: "The post is being removed." });
+    onOpenChange(false);
+    setDeleteConfirmOpen(false);
+  };
+  
+  const handleConfirmRejection = async () => {
+    if (!revisionState.item || revisionState.items.length === 0 || !firestore || !currentUser) {
+        toast({ variant: 'destructive', title: 'Checklist Empty', description: 'Please add at least one revision point.' });
+        return;
+    }
+    setIsSaving(true);
+    const item = revisionState.item;
+    const itemRef = doc(firestore, 'socialMediaPosts', item.id);
+    const newStatus = 'Revisi';
+    
+    const newRevisionItems: RevisionItem[] = revisionState.items.map(revItem => ({ id: crypto.randomUUID(), text: revItem.text, completed: false }));
+    
+    const newRevisionCycle: RevisionCycle = {
+        cycleNumber: (item.revisionHistory?.length ?? 0) + 1,
+        requestedAt: new Date().toISOString() as any,
+        requestedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+        items: newRevisionItems,
+    };
+    
+    const itemUpdateData: any = {
+        status: newStatus,
+        statusInternal: newStatus,
+        revisionItems: newRevisionItems,
+        revisionHistory: [...(item.revisionHistory || []), newRevisionCycle],
+        lastActivity: createActivity(currentUser, `requested revisions and moved item to "${newStatus}"`),
+        updatedAt: serverTimestamp() as any,
+    };
+    itemUpdateData['activities'] = [...(item.activities || []), itemUpdateData.lastActivity];
+    
+    try {
+        await updateDoc(itemRef, itemUpdateData);
+        toast({ title: 'Revisions Requested', description: 'The item has been sent for revision.' });
+    } catch (error) {
+        toast({ variant: 'destructive', title: 'Update Failed', description: 'Could not send item for revision.' });
+    } finally {
+        setIsSaving(false);
+        setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' });
+    }
+  };
+
+  const handleAddRevisionItem = () => {
+    if (revisionState.currentItemText.trim()) {
+        setRevisionState(prev => ({
+            ...prev,
+            items: [...prev.items, { text: prev.currentItemText }],
+            currentItemText: '',
+        }));
+    }
+  };
+  
+  const [isUploading, setIsUploading] = React.useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const deliverableFileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isGdriveDialogOpen, setIsGdriveDialogOpen] = useState(false);
+  const [gdriveLink, setGdriveLink] = useState('');
+  const [gdriveName, setGdriveName] = useState('');
+  const [gdriveFileType, setGdriveFileType] = useState<'attachment' | 'deliverable'>('attachment');
+  const [mentionSuggestions, setMentionSuggestions] = React.useState<User[]>([]);
+  const [isMentioning, setIsMentioning] = React.useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newSubtaskAssignee, setNewSubtaskAssignee] = useState<UserType | null>(null);
+
+  
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, fileType: 'attachment' | 'deliverable') => {
+      if (!event.target.files || !storage || !postState?.id || !firestore || !currentUser) return;
+      setIsUploading(true);
+      
+      const files = Array.from(event.target.files);
+      
+      const validatedFiles = files.filter(file => {
+        const isAllowedType = ALLOWED_FILE_TYPES.split(',').includes(file.type);
+    
+        if (!isAllowedType) {
+          toast({
+            variant: 'destructive',
+            title: 'Tipe File Tidak Diizinkan',
+            description: `Tipe file "${file.name}" tidak dapat diunggah.`,
+            duration: 10000,
+          });
+          return false;
+        }
+    
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+          toast({
+            variant: 'destructive',
+            title: 'Ukuran File Terlalu Besar',
+            description: `File "${file.name}" (${(file.size / 1024 / 1024).toFixed(2)} MB) melebihi batas ${MAX_FILE_SIZE_MB} MB.`,
+            duration: 10000,
+          });
+          return false;
+        }
+    
+        return true;
+      });
+
+      if (validatedFiles.length === 0) {
+          setIsUploading(false);
+          if (event.target) event.target.value = '';
+          return;
+      }
+
+      try {
+          const currentCycle = getCurrentSubmissionCycle(postState);
+          const uploadPromises = validatedFiles.map(async (file) => {
+              const attachmentId = `${Date.now()}-${file.name}`;
+              const storageRef = ref(storage, `social-media/${postState.companyId}/${attachmentId}`);
+              await uploadBytes(storageRef, file);
+              const url = await getDownloadURL(storageRef);
+              return { id: attachmentId, name: file.name, type: 'local' as const, url, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: fileType === 'deliverable' ? currentCycle : undefined };
+          });
+          const newFiles = await Promise.all(uploadPromises);
+          const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+          const currentFiles = postState[fieldToUpdate] || [];
+          await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fieldToUpdate]: [...currentFiles, ...newFiles] });
+          toast({ title: 'Upload Successful' });
+      } catch (error) {
+          toast({ variant: 'destructive', title: 'Upload Failed' });
+      } finally {
+          setIsUploading(false);
+          if(event.target) event.target.value = '';
+      }
+  };
+
+  const handleConfirmGdriveLink = async () => {
+    if (!gdriveLink || !gdriveName) { toast({ variant: 'destructive', title: 'Missing Info' }); return; }
+    if (!firestore || !currentUser) return;
+    
+    const currentCycle = getCurrentSubmissionCycle(postState);
+    const newFile: Attachment = { id: `gdrive-${Date.now()}`, name: gdriveName, type: 'gdrive', url: gdriveLink, submittedAt: new Date().toISOString(), submittedBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, forRevisionCycle: gdriveFileType === 'deliverable' ? currentCycle : undefined };
+    const fieldToUpdate = gdriveFileType === 'attachment' ? 'attachments' : 'deliverables';
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fieldToUpdate]: [...(postState[fieldToUpdate] || []), newFile] });
+    setIsGdriveDialogOpen(false); setGdriveLink(''); setGdriveName('');
+  };
+  
+  const handleRemoveFile = async (id: string, fileType: 'attachment' | 'deliverable') => {
+      if (!firestore) return;
+      const fieldToUpdate = fileType === 'attachment' ? 'attachments' : 'deliverables';
+      await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [fieldToUpdate]: postState[fieldToUpdate]?.filter(att => att.id !== id) });
+  };
+  
+  const handleAddSubtask = async () => {
+    if (!newSubtaskTitle.trim() || !firestore) return;
+    const newSubtask: Subtask = {
+      id: `sub-${Date.now()}`,
+      title: newSubtaskTitle,
+      completed: false,
+    };
+    const updatedSubtasks = [...(postState.subtasks || []), newSubtask];
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+    setNewSubtaskTitle('');
+  };
+
+  const handleToggleSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
+    const updatedSubtasks = (postState.subtasks || []).map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+  };
+
+  const handleToggleRevisionItem = async (itemId: string) => {
+    if (!isAssignee || !firestore) return;
+    const newItems = (postState.revisionItems || []).map(item =>
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { revisionItems: newItems });
+  };
+
+  const handleRemoveSubtask = async (subtaskId: string) => {
+    if (!firestore) return;
+    const updatedSubtasks = (postState.subtasks || []).filter(st => st.id !== subtaskId);
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { subtasks: updatedSubtasks });
+  };
+  
+  const handlePostComment = async () => {
+    if (!newComment.trim() || !firestore || !currentUser) return;
+    try {
+      const newCommentData: Comment = {
+        id: crypto.randomUUID(),
+        user: {
+          id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '',
+          email: currentUser.email, role: currentUser.role, companyId: currentUser.companyId, createdAt: currentUser.createdAt
+        },
+        text: newComment,
+        timestamp: new Date().toISOString(),
+        replies: [],
+      };
+
+      const newActivity = createActivity(currentUser, `commented: "${newComment.substring(0, 50)}..."`);
+      const updates = {
+        comments: [...(postState.comments || []), newCommentData],
+        activities: [...(postState.activities || []), newActivity],
+        lastActivity: newActivity,
+      };
+
+      await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), updates);
+      toast({ title: 'Comment Posted' });
+      setNewComment('');
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Comment Failed', description: error.message });
+    }
+  };
+
+  const handleCommentChange = (text: string) => {
+    setNewComment(text);
+    if (allUsers) {
+      const mentionMatch = text.match(/@(\w*)$/);
+      if (mentionMatch) {
+        setIsMentioning(true);
+        setMentionSuggestions(allUsers.filter(u => u.name.toLowerCase().includes(mentionMatch[1].toLowerCase())));
+      } else {
+        setIsMentioning(false);
+      }
+    }
+  };
+
+  const handleMentionSelect = (user: User) => {
+    const currentComment = newComment;
+    const atIndex = currentComment.lastIndexOf('@');
+    const newCommentText = `${currentComment.substring(0, atIndex)}@${user.name.split(' ')[0]} `;
+    setNewComment(newCommentText);
+    setIsMentioning(false);
+  };
+  
+  const handleAddDependency = async (postId: string, type: keyof Dependencies) => {
+    if (!firestore) return;
+    const currentDeps = postState.dependencies?.[type] || [];
+    if (!currentDeps.includes(postId)) {
+        await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [`dependencies.${type}`]: [...currentDeps, postId] });
+    }
+  };
+  
+  const handleRemoveDependency = async (postId: string, type: keyof Dependencies) => {
+    if (!firestore) return;
+    const currentDeps = postState.dependencies?.[type] || [];
+    await updateDoc(doc(firestore, 'socialMediaPosts', postState.id), { [`dependencies.${type}`]: currentDeps.filter(id => id !== postId) });
+  };
+  
+  const dependencyOptions = useMemo(() => (allPosts || []).filter(p => p.id !== postState.id), [allPosts, postState.id]);
+  const groupedDependencyOptions = useMemo(() => {
+      const grouped: Record<string, SocialMediaPost[]> = {};
+      dependencyOptions.forEach(post => {
+          const brandName = brands?.find(b => b.id === post.brandId)?.name || 'Unbranded';
+          if (!grouped[brandName]) grouped[brandName] = [];
+          grouped[brandName].push(post);
+      });
+      return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
+  }, [dependencyOptions, brands]);
+  
+  const renderDependencyList = (ids: string[], type: keyof Dependencies) => (
+    <div className="flex flex-wrap gap-2">
+        {(ids || []).map(id => {
+            const post = allPosts?.find(p => p.id === id);
+            return post ? (
+                <Badge key={id} variant="secondary">
+                    {post.title}
+                    {canEditContent && (
+                        <button type="button" onClick={() => handleRemoveDependency(id, type)} className="ml-2 rounded-full hover:bg-background/50 p-0.5"><X className="h-3 w-3" /></button>
+                    )}
+                </Badge>
+            ) : null;
+        })}
+    </div>
+  );
+
+  const handleSubmitForReview = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Preview');
+  };
+  
+  const handleRecallSubmission = async () => {
+    if (!currentUser) return;
+    await handleStatusChange('Doing');
+    toast({ title: "Submission Recalled", description: "You can continue working on the task." });
+  };
+
+  const handleFinalReviewAndComplete = async () => {
+    if (!isManagerOrAdmin || !postState) return;
+    await handleStatusChange('Done');
+    setFinalReviewState({ isOpen: false, item: null });
+  };
+
+  const handleReopenTask = async () => {
+    if (!currentUser || !isManagerOrAdmin) return;
+    await handleStatusChange('Revisi');
+  }
+
+  const PriorityIcon = priorityInfo[postState.priority]?.icon;
+  
+  const assigneeIds = postState.assigneeIds;
+  const subtaskAssigneeOptions = useMemo(() => {
+    if (!allUsers || !currentUser) return {};
+    const mainAssignees = allUsers.filter(u => (assigneeIds || []).includes(u.id));
+    const createGroup = (title: string, users: UserType[]) => users.length > 0 ? { [title]: users } : {};
+
+    if (currentUser.role === 'Super Admin') {
+        const managers = allUsers.filter(u => u.role === 'Manager' && !mainAssignees.some(a => a.id === u.id));
+        const employees = allUsers.filter(u => u.role === 'Employee' && !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("Managers", managers), ...createGroup("Employees", employees) };
+    }
+    
+    if (currentUser.role === 'Manager') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.id || u.id === currentUser.id);
+        const otherMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("My Team", otherMembers) };
+    }
+    
+    if (currentUser.role === 'Employee') {
+        const myTeam = allUsers.filter(u => u.managerId === currentUser.managerId);
+        const otherTeamMembers = myTeam.filter(u => !mainAssignees.some(a => a.id === u.id));
+        return { ...createGroup("Task Assignees", mainAssignees), ...createGroup("My Team", otherTeamMembers) };
+    }
+    return {};
+  }, [allUsers, currentUser, assigneeIds]);
+  
+  const groupedDeliverables = useMemo(() => {
+    const groups: Record<number, Attachment[]> = {};
+    (postState.deliverables || []).forEach(d => {
+        const cycle = d.forRevisionCycle ?? 1;
+        if (!groups[cycle]) groups[cycle] = [];
+        groups[cycle].push(d);
+    });
+    return groups;
+  }, [postState.deliverables]);
+  
+  const getBlockingReasonsForStatusChange = (targetStatus: string, currentItem: SocialMediaPost): Omit<BlockingReason, 'isOpen'> => {
+    const reasons: string[] = [];
+    if (targetStatus === 'Preview') {
+        if (!currentItem.caption || currentItem.caption.length < 10) reasons.push("Caption is too short or empty.");
+        const allSubtasksCompleted = (currentItem.subtasks || []).every(st => st.completed);
+        if (!allSubtasksCompleted) reasons.push("Complete all subtasks first.");
+        
+        const currentCycle = getCurrentSubmissionCycle(currentItem);
+        const hasDeliverableForCycle = (currentItem.deliverables || []).some(d => d.forRevisionCycle === currentCycle);
+        if (!hasDeliverableForCycle) reasons.push("Upload at least one new deliverable for this submission cycle.");
+
+        if (reasons.length > 0) {
+            return { blocked: true, title: "Not Ready for Review", reasons, suggestion: "Please complete the items above before submitting for review." };
+        }
+    }
+    if (isEmployeeOrPIC && targetStatus === 'Done') {
+        return { blocked: true, title: "Action Not Allowed", reasons: ["Only Managers can complete posts."], suggestion: "Change status to 'Preview' for manager review." };
+    }
+    return { blocked: false, title: '', reasons: [] };
+  };
+
+  const handleStatusChange = useCallback(async (newStatus: string) => {
+    const oldStatus = postState.statusInternal;
+    if (oldStatus === newStatus || !firestore || !currentUser) return;
+    
+    const block = getBlockingReasonsForStatusChange(newStatus, postState);
+    if (block.blocked) {
+        setBlockingAlert({ isOpen: true, ...block });
+        return;
+    }
+    
+    setPostState(prev => ({ ...prev, statusInternal: newStatus, status: newStatus }));
+
+    const batch = writeBatch(firestore);
+    const postRef = doc(firestore, 'socialMediaPosts', postState.id);
+    const newActivity = createActivity(currentUser, `changed status from "${oldStatus}" to "${newStatus}"`);
+    
+    const updates: any = {
+      status: newStatus,
+      statusInternal: newStatus,
+      activities: [...(postState.activities || []), newActivity],
+      lastActivity: newActivity,
+      updatedAt: serverTimestamp()
+    };
+    batch.update(postRef, updates);
+
+    const notificationTitle = `Status Changed: ${postState.title}`;
+    const notificationMessage = `${currentUser.name} changed status to ${newStatus}.`;
+    const notifiedUserIds = new Set<string>();
+    postState.assigneeIds.forEach(id => { if (id !== currentUser.id) notifiedUserIds.add(id); });
+    if (postState.createdBy.id !== currentUser.id) notifiedUserIds.add(postState.createdBy.id);
+
+    notifiedUserIds.forEach(userId => {
+      const notifRef = doc(collection(firestore, `users/${userId}/notifications`));
+      batch.set(notifRef, {
+        userId,
+        title: notificationTitle,
+        message: notificationMessage,
+        entityId: postState.id,
+        entityType: 'socialPost',
+        workstream: 'social',
+        isRead: false,
+        createdAt: serverTimestamp(),
+        createdBy: { id: currentUser.id, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }
+      });
+    });
+
+    try {
+      await batch.commit();
+      toast({ title: 'Status Updated' });
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      setPostState(prev => ({ ...prev, statusInternal: oldStatus, status: oldStatus })); 
+      toast({ variant: 'destructive', title: 'Update Failed' });
+    }
+  }, [firestore, currentUser, postState, toast]);
+
+  return (
+    <>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="flex flex-col p-0 h-screen w-screen max-w-full">
+            <SheetHeader className="p-4 border-b flex-shrink-0">
+                <SheetTitle className='sr-only'>Post Details for {postState.title}</SheetTitle>
+                <div className="flex items-center justify-between">
+                    <p className="text-sm text-muted-foreground">
+                        {postState.createdBy && `Created by ${postState.createdBy.name}`}
+                    </p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild><Button variant="ghost" size="sm"><MoreHorizontal className="h-4 w-4"/></Button></DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                          <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}><History className="mr-2 h-4 w-4"/>View History</DropdownMenuItem>
+                          {canDelete && (
+                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onClick={() => setDeleteConfirmOpen(true)}><Trash2 className="mr-2 h-4 w-4"/>Delete Post</DropdownMenuItem>
+                          )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            </SheetHeader>
+            <div className="flex-1 flex min-h-0">
+              <form id="edit-post-form" className='flex-1 flex min-h-0'>
+                <div className="flex-1 grid md:grid-cols-3 min-h-0">
+                      <ScrollArea className="md:col-span-2 h-full">
+                          <div className="p-6 space-y-6">
+                            <Input value={postState.title} readOnly={!canEditContent} className="text-2xl font-bold border-dashed h-auto p-0 border-0 focus-visible:ring-1"/>
+                              {(postState.statusInternal === 'Revisi') && postState.revisionItems && postState.revisionItems.length > 0 && (
+                                  <div className="space-y-4 rounded-lg border border-orange-500/50 bg-orange-500/10 p-4">
+                                      <h3 className="font-semibold flex items-center gap-2 text-orange-600 dark:text-orange-400"><RefreshCcw className="h-5 w-5"/> Revision Checklist</h3>
+                                      <div className="space-y-2">
+                                          {postState.revisionItems.map(item => (
+                                              <div key={item.id} className="flex items-center gap-3">
+                                                  <Checkbox id={`rev-${item.id}`} checked={item.completed} onCheckedChange={() => handleToggleRevisionItem(item.id)} disabled={!isAssignee} />
+                                                  <label htmlFor={`rev-${item.id}`} className={`flex-1 text-sm ${item.completed ? 'line-through text-muted-foreground' : ''}`}>{item.text}</label>
+                                              </div>
+                                          ))}
+                                      </div>
+                                  </div>
+                              )}
+                              <Accordion type="single" collapsible defaultValue="caption">
+                                  <AccordionItem value="caption" className="border-none">
+                                      <AccordionTrigger className="text-sm font-semibold flex-row-reverse justify-end gap-2 p-0 hover:no-underline">
+                                          {postState.caption ? 'View/Edit Caption' : 'Add Caption'}
+                                      </AccordionTrigger>
+                                      <AccordionContent className="pt-2">
+                                          <RichTextEditor value={postState.caption || ''} onChange={() => {}} placeholder="Write the post caption here..." readOnly={!canEditContent} />
+                                      </AccordionContent>
+                                  </AccordionItem>
+                              </Accordion>
+                              
+                              <Tabs defaultValue="comments" className="w-full">
+                                <TabsList className="grid w-full grid-cols-4">
+                                  <TabsTrigger value="comments"><MessageSquare className="mr-2"/>Comments</TabsTrigger>
+                                  <TabsTrigger value="subtasks"><ListTodo className="mr-2"/>Subtasks</TabsTrigger>
+                                  <TabsTrigger value="files"><Paperclip className="mr-2"/>Files</TabsTrigger>
+                                  <TabsTrigger value="dependencies"><GitMerge className="mr-2"/>Dependencies</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="comments" className="mt-4 space-y-4 rounded-lg border p-4 relative">
+                                    <ScrollArea className="max-h-48 pr-2">
+                                        <div className="space-y-4">
+                                            {(postState.comments || []).map((comment) => ( <div key={comment.id} className="flex items-start gap-3"><Avatar className="h-8 w-8"><AvatarImage src={comment.user.avatarUrl}/><AvatarFallback>{getInitials(comment.user.name)}</AvatarFallback></Avatar><div><p className="font-semibold text-sm">{comment.user.name} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(parseISO(comment.timestamp), { addSuffix: true })}</span></p><div className="prose prose-sm dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: comment.text }} /></div></div> ))}
+                                            {(postState.comments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-8">No comments yet. Start the conversation!</p>}
+                                        </div>
+                                    </ScrollArea>
+                                    <div className="flex items-start gap-2 pt-4 border-t">
+                                        <Avatar className="h-9 w-9"><AvatarImage src={currentUser?.avatarUrl} /><AvatarFallback>{getInitials(currentUser?.name)}</AvatarFallback></Avatar>
+                                        <div className="flex-1 relative">
+                                        <RichTextEditor value={newComment} onChange={handleCommentChange} placeholder="Write a comment... (use '@' to mention)" minHeight={100} />
+                                        {isMentioning && (
+                                            <div className="absolute bottom-full mb-2 w-full max-h-48 overflow-y-auto border bg-background rounded-md shadow-lg z-10">
+                                            <Command>
+                                                <CommandList>
+                                                {mentionSuggestions.map(user => (
+                                                <CommandItem key={user.id} onSelect={() => handleMentionSelect(user)}>
+                                                    <Avatar className="h-6 w-6 mr-2"><AvatarImage src={user.avatarUrl}/><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar>
+                                                    {user.name}
+                                                </CommandItem>
+                                                ))}
+                                                </CommandList>
+                                            </Command>
+                                            </div>
+                                        )}
+                                        </div>
+                                        <Button type="button" onClick={handlePostComment} disabled={!newComment.trim()}><Send className="h-4 w-4"/></Button>
+                                    </div>
+                                </TabsContent>
+                                <TabsContent value="subtasks" className="mt-4 space-y-4 rounded-lg border p-4">
+                                  <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                      {(postState.subtasks || []).map((subtask) => ( <div key={subtask.id} className="flex items-center gap-3 p-2 bg-secondary/50 rounded-md hover:bg-secondary transition-colors"><Checkbox id={`subtask-${subtask.id}`} checked={subtask.completed} onCheckedChange={() => handleToggleSubtask(subtask.id)} /><label htmlFor={`subtask-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label><Popover><PopoverTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">{subtask.assignee ? ( <Avatar className="h-6 w-6"><AvatarImage src={subtask.assignee.avatarUrl} /><AvatarFallback>{getInitials(subtask.assignee.name)}</AvatarFallback></Avatar> ) : ( <UserPlus className="h-4 w-4" /> )}</Button></PopoverTrigger><PopoverContent className="w-60 p-1"><ScrollArea className="max-h-60"><div className="space-y-1">{Object.entries(subtaskAssigneeOptions).map(([group, users]) => ( users.length > 0 && ( <React.Fragment key={group}><Separator /><div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group}</div>{users.map(user => ( <Button key={user.id} variant="ghost" size="sm" className="w-full justify-start gap-2" onClick={() => setNewSubtaskAssignee(user)}><Avatar className="h-6 w-6"><AvatarImage src={user.avatarUrl} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><span className="truncate">{user.name}</span></Button> ))}</React.Fragment> ) ))}</div></ScrollArea></PopoverContent></Popover><Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => handleRemoveSubtask(subtask.id)}><Trash className="h-4 w-4"/></Button></div> ))}
+                                  </div>
+                                  <div className="flex items-center gap-2"><Input placeholder="Add a new subtask..." value={newSubtaskTitle} onChange={(e) => setNewSubtaskTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSubtask())} /><Button type="button" onClick={handleAddSubtask}><Plus className="h-4 w-4 mr-2" /> Add</Button></div>
+                                </TabsContent>
+                                <TabsContent value="files" className="mt-4 space-y-6 rounded-lg border p-4">
+                                   <div>
+                                      <h4 className="font-medium text-sm mb-2">Deliverables</h4>
+                                      <div className="space-y-2">
+                                        {Object.entries(groupedDeliverables).sort(([a], [b]) => Number(b) - Number(a)).map(([cycleNum, deliverables]) => ( <div key={`del-${cycleNum}`} className="space-y-2"><h4 className="font-semibold text-xs text-muted-foreground">{Number(cycleNum) === 1 ? 'Initial Submission' : `Revision ${Number(cycleNum)-1} Submission`}</h4>{deliverables.map(att => ( <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm"><a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">{getFileIcon(att.name)}<span className="truncate" title={att.name}>{att.name}</span></a><Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'deliverable')}><X className="h-4 w-4" /></Button></div> ))}</div> ))}
+                                          {(postState.deliverables || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No deliverables submitted.</p>}
+                                      </div>
+                                      {canUploadDeliverables && (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-2 border-t">
+                                            <input type="file" ref={deliverableFileInputRef} onChange={(e) => handleFileChange(e, 'deliverable')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} />
+                                            <Button type="button" variant="outline" onClick={() => deliverableFileInputRef.current?.click()} disabled={isUploading}>{isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Upload className="mr-2 h-4 w-4" />} Upload Deliverable</Button>
+                                            <Button type="button" variant="outline" onClick={() => { setGdriveFileType('deliverable'); setIsGdriveDialogOpen(true); }}>
+                                              <div className="flex items-center justify-center gap-2">
+                                                <svg className="mr-2" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.5187 5.56875L5.43125 0.48125L0 9.25625L5.0875 14.3438L10.5187 5.56875Z" fill="#34A853"/><path d="M16 9.25625L10.5188 0.48125H5.43125L8.25625 4.8875L13.25 13.9062L16 9.25625Z" fill="#FFC107"/><path d="M2.83125 14.7875L8.25625 5.56875L5.51875 0.81875L0.0375 9.59375L2.83125 14.7875Z" fill="#1A73E8"/><path d="M13.25 13.9062L10.825 9.75L8.25625 4.8875L5.43125 10.1L8.03125 14.7875H13.1562L13.25 13.9062Z" fill="#EA4335"/></svg>
+                                                Link from Google Drive
+                                              </div>
+                                            </Button>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <Separator />
+                                    <div>
+                                        <h4 className="font-medium text-sm mb-2">Supporting Materials</h4>
+                                        <div className="space-y-2">
+                                            {(postState.attachments || []).map((att) => (
+                                                <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                                    <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                    {getFileIcon(att.name)}
+                                                    <span className="truncate" title={att.name}>{att.name}</span>
+                                                    </a>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleRemoveFile(att.id, 'attachment')}><X className="h-4 w-4" /></Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {(postState.attachments || []).length === 0 && <p className="text-center text-muted-foreground text-sm py-4">No materials attached.</p>}
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 mt-4"><input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, 'attachment')} multiple className="hidden" accept={ALLOWED_FILE_TYPES} /><Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>{isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}Upload Material</Button><Button type="button" variant="outline" onClick={() => { setGdriveFileType('attachment'); setIsGdriveDialogOpen(true); }}>Link Material</Button></div>
+                                    </div>
+                                </TabsContent>
+                                <TabsContent value="dependencies" className="mt-4 space-y-6 rounded-lg border p-4">
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Workflow className="h-4 w-4 text-orange-500" />Waiting On</h4><p className="text-xs text-muted-foreground">These posts must be completed before this one can start.</p>{renderDependencyList(postState.dependencies?.waitingOn || [], 'waitingOn')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'waitingOn')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><Blocks className="h-4 w-4 text-red-500" />Blocking</h4><p className="text-xs text-muted-foreground">This post is blocking the following posts.</p>{renderDependencyList(postState.dependencies?.blocking || [], 'blocking')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'blocking')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                    <Separator/>
+                                    <div className="space-y-3"><h4 className="text-sm font-semibold flex items-center gap-2"><LinkIcon className="h-4 w-4 text-blue-500" />Linked Posts</h4><p className="text-xs text-muted-foreground">Related posts that are not dependent.</p>{renderDependencyList(postState.dependencies?.linked || [], 'linked')}{canEditContent && ( <Popover><PopoverTrigger asChild><Button type="button" variant="outline" size="sm" className="h-7"><Plus className="mr-2 h-3 w-3" />Add...</Button></PopoverTrigger><PopoverContent className="w-80"><Command><CommandInput placeholder="Search posts..." /><CommandList><CommandEmpty>No posts found.</CommandEmpty>{groupedDependencyOptions.map(([brandName, posts]) => (<CommandGroup key={brandName} heading={brandName}>{posts.map(post => (<CommandItem key={post.id} onSelect={() => handleAddDependency(post.id, 'linked')}>{post.title}</CommandItem>))}</CommandGroup>))}</CommandList></Command></PopoverContent></Popover>)}</div>
+                                </TabsContent>
+                                 <TabsContent value="revisions" className="mt-4 space-y-2 rounded-lg border p-4">
+                                      {(postState.revisionHistory && postState.revisionHistory.length > 0) ? (
+                                          <Accordion type="single" collapsible>
+                                              {postState.revisionHistory.slice().sort((a, b) => b.cycleNumber - a.cycleNumber).map(cycle => (
+                                                  <AccordionItem key={cycle.cycleNumber} value={`cycle-${cycle.cycleNumber}`}>
+                                                      <AccordionTrigger>
+                                                          <div className="flex flex-col items-start text-left">
+                                                              <span className="font-semibold">Revision Cycle {cycle.cycleNumber}</span>
+                                                              <span className="text-xs text-muted-foreground">Requested by {cycle.requestedBy.name} on {formatDate(cycle.requestedAt)}</span>
+                                                          </div>
+                                                      </AccordionTrigger>
+                                                      <AccordionContent>
+                                                          <ul className="list-disc pl-5 space-y-1">
+                                                              {cycle.items.map(item => ( <li key={item.id} className={item.completed ? 'text-muted-foreground line-through' : ''}>{item.text}</li> ))}
+                                                          </ul>
+                                                      </AccordionContent>
+                                                  </AccordionItem>
+                                              ))}
+                                          </Accordion>
+                                      ) : (
+                                          <p className="text-center text-muted-foreground text-sm py-8">No past revision history for this post.</p> 
+                                      )}
+                                  </TabsContent>
+                              </Tabs>
+                          </div>
+                      </ScrollArea>
+                      <ScrollArea className="md:col-span-1 h-full border-l">
+                          <div className="p-6 space-y-6">
+                              {(isAssignee && !isManagerOrAdmin) && (
+                                <div className="space-y-2">
+                                  {postState.statusInternal === 'Preview' ? (
+                                      <Button type="button" className="w-full" variant="outline" onClick={handleRecallSubmission} disabled={isSaving}>
+                                          <RotateCcw className="mr-2 h-4 w-4" />
+                                          Recall Submission
+                                      </Button>
+                                  ) : (
+                                      <Button
+                                          type="button"
+                                          className="w-full"
+                                          onClick={handleSubmitForReview}
+                                          disabled={!canSubmit || isSaving}
+                                      >
+                                          {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Check className="mr-2 h-4 w-4"/>}
+                                          Submit for Review
+                                      </Button>
+                                  )}
+                                  {!canSubmit && postState.statusInternal !== 'Preview' && postState.statusInternal !== 'Done' && (
+                                      <p className="text-xs text-center text-destructive">Selesaikan semua subtugas, poin revisi, dan unggah minimal 1 file deliverable baru untuk submission cycle ini.</p>
+                                  )}
+                                </div>
+                              )}
+
+                              {isManagerOrAdmin && postState.statusInternal === 'Preview' && ( 
+                                  <div className="flex flex-col w-full gap-2">
+                                      <Button type="button" className="w-full bg-green-600 hover:bg-green-700" onClick={() => setFinalReviewState({ isOpen: true, item: postState })} disabled={isSaving}>
+                                          <CheckCircle className="mr-2 h-4 w-4"/>Approve and Complete
+                                      </Button>
+                                      <Button type="button" variant="outline" className="w-full text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setRevisionState({ isOpen: true, item: postState, items: [], currentItemText: '' })} disabled={isSaving}>
+                                          <XCircle className="mr-2 h-4 w-4"/> Request Revisions
+                                      </Button>
+                                  </div>
+                              )}
+
+                              {isManagerOrAdmin && postState.statusInternal === 'Done' && ( <Button type="button" className="w-full" variant="outline" onClick={handleReopenTask} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}<RefreshCcw className="mr-2 h-4 w-4" />Reopen Article</Button> )}
+
+
+                              <div className='space-y-4 p-4 rounded-lg border'>
+                                  <h3 className='font-semibold text-sm'>Social Media Details</h3>
+                                  <Separator/>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Brand</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium"><Building2 className="h-4 w-4 text-muted-foreground" />{brands?.find(b => b.id === postState.brandId)?.name || 'N/A'}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Status</Label><div className="col-span-2 text-sm font-medium">{postState.status}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Priority</Label><div className="col-span-2 flex items-center gap-2 text-sm font-medium">{PriorityIcon && <PriorityIcon className={`h-4 w-4 ${priorityInfo[postState.priority].color}`} />}{postState.priority}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Due Date</Label><div className="col-span-2 text-sm font-medium">{postState.dueDate ? format(parseISO(postState.dueDate), 'MMM d, yyyy') : 'No due date'}</div></div>
+                                  <div className="grid grid-cols-3 items-center gap-2"><Label className="text-muted-foreground">Publish Date</Label><div className="col-span-2 text-sm font-medium">{postState.scheduledAt ? format(parseISO(postState.scheduledAt), 'MMM d, yyyy, p') : 'Not scheduled'}</div></div>
+                              </div>
+
+                              <div className='space-y-4 p-4 rounded-lg border'>
+                                  <h3 className='font-semibold text-sm'>People</h3>
+                                  <Separator/>
+                                  <div className='space-y-2'>
+                                      <Label className="text-muted-foreground text-sm">Assignees</Label>
+                                      {(postState.assigneeIds || []).map(id => {
+                                        const user = allUsers?.find(u => u.id === id);
+                                        if (!user) return null;
+                                        return <div key={user.id} className="flex items-center justify-between gap-2"><div className="flex items-center gap-3"><Avatar className="h-8 w-8"><AvatarImage src={user.avatarUrl} alt={user.name} /><AvatarFallback>{getInitials(user.name)}</AvatarFallback></Avatar><p className="text-sm font-medium">{user.name}</p></div></div>
+                                      })}
+                                  </div>
+                              </div>
+
+                              <div className='space-y-4 p-4 rounded-lg border'>
+                                  <div className="flex justify-between items-center"><h3 className='font-semibold text-sm'>Time Management</h3><div></div></div>
+                                  <Separator/>
+                                    <div className="grid grid-cols-3 items-center gap-2">
+                                        <Label className="text-muted-foreground text-sm">Estimasi (hari)</Label>
+                                        <div className="col-span-2">
+                                            <Input type="number" step="0.5" value={postState.timeEstimate || ''} readOnly={!canEditContent} className="text-sm" />
+                                        </div>
+                                    </div>
+                              </div>
+                          </div>
+                      </ScrollArea>
+                  </div>
+               </form>
+            </div>
+        </SheetContent>
+      </Sheet>
+    
+     <Dialog open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader><DialogTitle>Post Activity Log: {postState?.title}</DialogTitle><DialogDescription>A complete history of all changes made to this post.</DialogDescription></DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6"><div className="space-y-6 py-4">
+                {postState.activities && postState.activities.length > 0 ? (getUniqueActivities(postState.activities).slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map((activity) => ( <div key={activity.id} className="flex items-start gap-4"><Avatar className="h-9 w-9"><AvatarImage src={activity.user.avatarUrl} alt={activity.user.name} /><AvatarFallback>{activity.user.name.charAt(0)}</AvatarFallback></Avatar><div><p className="text-sm"><span className="font-semibold">{activity.user.name}</span> {activity.action}.</p><p className="text-xs text-muted-foreground mt-0.5">{formatDate(activity.timestamp)}</p></div></div> ))) : ( <p className="text-center text-muted-foreground py-8">No activities recorded.</p> )}
+            </div></ScrollArea>
+        </DialogContent>
+       </Dialog>
+    
+    <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this post?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the post: <strong className="text-foreground">{postState.title}</strong>. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Yes, Delete Post</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+     <Dialog open={isGdriveDialogOpen} onOpenChange={setIsGdriveDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Link Google Drive File</DialogTitle>
+                <DialogDescription>Paste the shareable link to your Google Drive file below.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+                <div className="space-y-2"><Label htmlFor="gdrive-name-details">File Name</Label><Input id="gdrive-name-details" value={gdriveName} onChange={(e) => setGdriveName(e.target.value)} placeholder="e.g., Q3 Marketing Report" /></div>
+                <div className="space-y-2"><Label htmlFor="gdrive-link-details">File Link</Label><Input id="gdrive-link-details" value={gdriveLink} onChange={(e) => setGdriveLink(e.target.value)} placeholder="https://docs.google.com/..." /></div>
+            </div>
+            <DialogFooter><Button variant="ghost" onClick={() => setIsGdriveDialogOpen(false)}>Cancel</Button><Button onClick={() => handleConfirmGdriveLink(gdriveFileType)}>Add Link</Button></DialogFooter>
+        </DialogContent>
+    </Dialog>
+     <AlertDialog open={blockingAlert.isOpen} onOpenChange={(open) => setBlockingAlert(prev => ({...prev, isOpen: open}))}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>{blockingAlert.title}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {blockingAlert.suggestion}
+                </AlertDialogDescription>
+                  {blockingAlert.reasons.length > 0 && (
+                      <div className="pt-2">
+                           <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                              {blockingAlert.reasons.map((reason, index) => <li key={index}>{reason}</li>)}
+                          </ul>
+                      </div>
+                  )}
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogAction onClick={() => setBlockingAlert({ isOpen: false, title: '', reasons: [] })}>OK</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
+    
+    <Dialog open={revisionState.isOpen} onOpenChange={(open) => !open && setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Create Revision Checklist</DialogTitle>
+                <DialogDescription>
+                  Revisions for item: <span className="font-bold text-foreground">{revisionState.item?.title}</span>
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+                <div className="py-4 space-y-6 px-6">
+                    <div className="space-y-2">
+                        <h4 className="font-semibold text-sm">Files for this Submission Cycle</h4>
+                        <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                            {(() => {
+                                const currentCycle = getCurrentSubmissionCycle(revisionState.item);
+                                const cycleDeliverables = (revisionState.item?.deliverables || []).filter(d => d.forRevisionCycle === currentCycle);
+                                
+                                if (cycleDeliverables.length > 0) {
+                                    return cycleDeliverables.map(att => (
+                                        <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                            <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                                {getFileIcon(att.name)}
+                                                <span className="truncate" title={att.name}>{att.name}</span>
+                                            </a>
+                                            <div className="text-xs text-muted-foreground text-right shrink-0 ml-2">
+                                                <p>{att.submittedBy?.name}</p>
+                                                <p>{att.submittedAt ? formatDistanceToNow(new Date(att.submittedAt), { addSuffix: true }) : ''}</p>
+                                            </div>
+                                        </div>
+                                    ));
+                                } else {
+                                    return <p className="text-sm text-muted-foreground">No new files were submitted for this cycle.</p>;
+                                }
+                            })()}
+                        </div>
+                    </div>
+                    <Separator/>
+                    <div className="space-y-4">
+                        <h4 className="font-semibold text-sm">Revision Points</h4>
+                        <div className="space-y-2">
+                            {revisionState.items.map((item, index) => (
+                                <div key={index} className="flex items-center gap-2 bg-secondary p-2 rounded-md">
+                                    <span className="flex-1 text-sm">{item.text}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRevisionState(prev => ({...prev, items: prev.items.filter((_, i) => i !== index)}))}><XCircle className="h-4 w-4" /></Button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Input 
+                                value={revisionState.currentItemText}
+                                onChange={(e) => setRevisionState(prev => ({...prev, currentItemText: e.target.value}))}
+                                placeholder="e.g., Fix the typo in paragraph 2"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleAddRevisionItem();
+                                  }
+                                }}
+                            />
+                            <Button type="button" onClick={handleAddRevisionItem} disabled={!revisionState.currentItemText.trim()}>
+                                <Plus className="mr-2 h-4 w-4"/> Add
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </ScrollArea>
+            <DialogFooter className="p-6 pt-4 border-t">
+                <Button variant="ghost" onClick={() => setRevisionState({ isOpen: false, item: null, items: [], currentItemText: '' })}>Cancel</Button>
+                <Button type="button" variant="destructive" onClick={handleConfirmRejection} disabled={isSaving || revisionState.items.length === 0}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Request Revisions
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+
+    <Dialog open={finalReviewState.isOpen} onOpenChange={(open) => !open && setFinalReviewState({ isOpen: false, item: null })}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Final Review & Complete Task</DialogTitle>
+                <DialogDescription>
+                    You are about to mark this item as "Done". Please review the items below to ensure everything is complete.
+                </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh] -mx-6 px-6">
+              <div className="py-4 space-y-6 px-6">
+                <div className="space-y-3">
+                    <h4 className="font-medium text-sm flex items-center gap-2"><ListChecks className="h-4 w-4" />Sub-tasks</h4>
+                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                        {finalReviewState.item?.subtasks && finalReviewState.item.subtasks.length > 0 ? (
+                             finalReviewState.item.subtasks.map(subtask => ( 
+                                <div key={subtask.id} className="flex items-center gap-3">
+                                    <Checkbox id={`final-review-${subtask.id}`} checked={subtask.completed} disabled />
+                                    <label htmlFor={`final-review-${subtask.id}`} className={`flex-1 text-sm ${subtask.completed ? 'line-through text-muted-foreground' : ''}`}>{subtask.title}</label>
+                                </div> 
+                            )) 
+                        ) : ( 
+                            <p className="text-sm text-muted-foreground">No sub-tasks for this item.</p> 
+                        )}
+                    </div>
+                </div>
+                 <div className="space-y-3">
+                    <h4 className="font-medium text-sm flex items-center gap-2"><UploadCloud className="h-4 w-4" />Deliverables for this Submission</h4>
+                     <div className="space-y-2 max-h-32 overflow-y-auto pr-2">
+                         {(() => {
+                            const currentCycle = getCurrentSubmissionCycle(finalReviewState.item);
+                            const cycleDeliverables = (finalReviewState.item?.deliverables || []).filter(d => d.forRevisionCycle === currentCycle);
+                            
+                            if (cycleDeliverables.length > 0) {
+                                return cycleDeliverables.map(att => ( 
+                                    <div key={att.id} className="flex items-center justify-between rounded-md bg-secondary/50 p-2 text-sm">
+                                        <a href={att.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 truncate hover:underline">
+                                            {getFileIcon(att.name)}
+                                            <span className="truncate" title={att.name}>{att.name}</span>
+                                        </a>
+                                        <div className="text-xs text-muted-foreground text-right shrink-0 ml-2">
+                                            <p>{att.submittedBy?.name}</p>
+                                            <p>{att.submittedAt ? formatDistanceToNow(new Date(att.submittedAt), { addSuffix: true }) : ''}</p>
+                                        </div>
+                                    </div>
+                                ));
+                            } else {
+                                return <p className="text-sm text-muted-foreground">No new files submitted for this cycle.</p>;
+                            }
+                        })()}
+                    </div>
+                </div>
+              </div>
+            </ScrollArea>
+            <DialogFooter className="p-6 pt-0">
+                <Button variant="ghost" onClick={() => setFinalReviewState({ isOpen: false, item: null })}>Cancel</Button>
+                <Button type="button" variant="default" onClick={handleFinalReviewAndComplete}>
+                    <Check className="mr-2 h-4 w-4" />
+                    Confirm & Complete
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    </>
+  );
+}
+
+    

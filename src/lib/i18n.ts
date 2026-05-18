@@ -1,5 +1,4 @@
 
-
 export const languages = {
   en: { code: 'en', name: 'English', countryCode: 'gb' },
   id: { code: 'id', name: 'Indonesia', countryCode: 'id' },
@@ -16,14 +15,17 @@ export const ui = {
     'nav.guide': 'Guide',
     'nav.settings': 'Settings',
     'nav.board': 'Board',
-    'nav.list': 'List',
+    'nav.list': 'Task List',
     'nav.daily_checklist': 'Daily Checklist',
     'nav.recurring_tasks': 'Recurring Tasks',
     'nav.schedule': 'Schedule',
     'nav.task_calendar': 'Task Calendar',
     'nav.social_media': 'Social Media',
-    'nav.social_media_calendar': 'Social Media Calendar',
+    'nav.list_social_media': 'List Social Media',
+    'nav.content_calendar': 'Content Calendar',
     'nav.analytics': 'Analytics',
+    'nav.integrations': 'Integrations',
+    'nav.published_posts': 'Published Posts',
     'nav.admin_dashboard': 'Admin Dashboard',
     'nav.users': 'Users',
     'nav.data': 'Data',
@@ -34,6 +36,7 @@ export const ui = {
     'nav.workflow': 'Workflow',
     'nav.admin': 'Admin',
     'nav.profile': 'Profile',
+    'nav.maintenance': 'Maintenance',
     'tasks.createtask': 'Create Task',
     'tasks.filter': 'Filter tasks by title...',
     'tasks.columns': 'Columns',
@@ -146,14 +149,17 @@ export const ui = {
     'nav.guide': 'Panduan',
     'nav.settings': 'Pengaturan',
     'nav.board': 'Papan',
-    'nav.list': 'Daftar',
+    'nav.list': 'Daftar Tugas',
     'nav.daily_checklist': 'Ceklis Harian',
     'nav.recurring_tasks': 'Tugas Berulang',
     'nav.schedule': 'Jadwal Proyek',
     'nav.task_calendar': 'Kalender Tugas',
     'nav.social_media': 'Media Sosial',
-    'nav.social_media_calendar': 'Kalender Medsos',
+    'nav.list_social_media': 'Daftar Tugas Sosmed',
+    'nav.content_calendar': 'Kalender Konten',
     'nav.analytics': 'Analitik',
+    'nav.integrations': 'Integrasi',
+    'nav.published_posts': 'Postingan Terbit',
     'nav.admin_dashboard': 'Dasbor Admin',
     'nav.users': 'Pengguna',
     'nav.data': 'Data',
@@ -164,6 +170,7 @@ export const ui = {
     'nav.workflow': 'Alur Kerja',
     'nav.admin': 'Admin',
     'nav.profile': 'Profil',
+    'nav.maintenance': 'Pemeliharaan',
     'tasks.createtask': 'Buat Tugas',
     'tasks.filter': 'Saring tugas berdasarkan judul...',
     'tasks.columns': 'Kolom',
@@ -269,10 +276,3 @@ export const ui = {
     'dashboard.role': 'Anda masuk sebagai {role}. Selamat bekerja dan semoga harimu produktif!',
   },
 } as const;
-
-
-
-
-
-
-

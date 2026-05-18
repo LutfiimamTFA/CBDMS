@@ -1,23 +1,12 @@
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
-import { serviceAccount } from '@/firebase/service-account';
-import type { Task, User, Activity, Notification } from '@/lib/types';
-
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
+import { Timestamp } from 'firebase-admin/firestore';
+import { adminDb, adminAuth } from '@/lib/firebase-admin';
+import type { Task, User, Activity, Notification } from '@/lib/types-backend';
 
 const createActivity = (user: User, action: string): Activity => {
   return {
-    id: `act-${crypto.randomUUID()}`,
+    id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     user: { id: user.id, name: user.name, avatarUrl: user.avatarUrl || '' },
     action: action,
     timestamp: Timestamp.now() as any,
@@ -29,9 +18,8 @@ const createActivity = (user: User, action: string): Activity => {
 // under the identity of the user who created the share link.
 export async function POST(request: Request) {
   try {
-    const app = initializeAdminApp();
-    const db = getFirestore(app);
-    const auth = getAuth(app);
+    const db = adminDb;
+    const auth = adminAuth;
 
     const { taskId, actionText, linkCreatorId } = await request.json();
 

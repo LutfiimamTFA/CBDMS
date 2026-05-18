@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Bell, Loader2 } from 'lucide-react';
+import { Bell, Loader2, ClipboardList, Share2, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -26,6 +26,7 @@ import { format, isToday, isYesterday, isThisWeek } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { useRouter } from 'next/navigation';
 import { Badge } from '../ui/badge';
+import { useRealtimeNotificationToast } from '@/hooks/use-realtime-notification-toast.tsx';
 
 type GroupedNotifications = {
   today: Notification[];
@@ -34,11 +35,20 @@ type GroupedNotifications = {
   older: Notification[];
 };
 
+const workstreamIcons = {
+    tasks: ClipboardList,
+    social: Share2,
+    web: Globe,
+};
+
 export function NotificationBell() {
   const router = useRouter();
   const firestore = useFirestore();
   const { user } = useUserProfile();
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Mount the real-time toast notification hook
+  useRealtimeNotificationToast();
 
   const notificationsQuery = useMemo(
     () =>
@@ -114,9 +124,19 @@ export function NotificationBell() {
     }
   };
 
-  const handleNotificationClick = (taskId: string) => {
-    if (!taskId) return;
-    router.push(`/tasks/${taskId}`);
+  const handleNotificationClick = (notification: Notification) => {
+    // Fallback logic for backward compatibility
+    const entityId = notification.entityId || notification.taskId;
+    if (!entityId) return;
+
+    let path = '/tasks'; // Default for general tasks or legacy notifications
+    if (notification.entityType === 'socialPost') {
+        path = '/social-media/posts';
+    } else if (notification.entityType === 'webArticle') {
+        path = '/web/articles';
+    }
+    
+    router.push(`${path}/${entityId}`);
   };
 
   const renderNotificationGroup = (
@@ -130,28 +150,36 @@ export function NotificationBell() {
         <DropdownMenuLabel className="text-xs text-muted-foreground px-2 pt-2">
           {title}
         </DropdownMenuLabel>
-        {notifs.map((notif) => (
-          <DropdownMenuItem
-            key={notif.id}
-            className="flex items-start gap-3"
-            onClick={() => handleNotificationClick(notif.taskId)}
-            disabled={!notif.taskId}
-          >
-            <Avatar className="h-8 w-8">
-              <AvatarImage src={notif.createdBy.avatarUrl} />
-              <AvatarFallback>
-                {notif.createdBy.name.charAt(0)}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1">
-              <p className="text-sm leading-tight">{notif.message}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {notif.createdAt?.toDate &&
-                  format(notif.createdAt.toDate(), 'PP, HH:mm')}
-              </p>
-            </div>
-          </DropdownMenuItem>
-        ))}
+        {notifs.map((notif) => {
+           // Default to 'tasks' icon if workstream is not defined, solving the "dark" icon issue
+           const Icon = notif.workstream ? workstreamIcons[notif.workstream as keyof typeof workstreamIcons] : workstreamIcons.tasks;
+           return (
+              <DropdownMenuItem
+                key={notif.id}
+                className="flex items-start gap-3"
+                onClick={() => handleNotificationClick(notif)}
+                disabled={!notif.entityId && !notif.taskId}
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src={notif.createdBy.avatarUrl} />
+                  <AvatarFallback>
+                    {notif.createdBy.name.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold leading-tight flex items-center gap-1.5">
+                    {Icon && <Icon className="h-3.5 w-3.5 text-muted-foreground" />}
+                    {notif.title}
+                  </p>
+                  <p className="text-sm leading-tight mt-1">{notif.message}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {notif.createdAt?.toDate &&
+                      format(notif.createdAt.toDate(), 'PP, HH:mm')}
+                  </p>
+                </div>
+              </DropdownMenuItem>
+           )
+        })}
       </>
     );
   };

@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -13,29 +12,26 @@ import {
   SidebarMenuButton,
   SidebarFooter,
   SidebarCollapsibleItem,
-  SidebarInset,
 } from '@/components/ui/sidebar';
 import {
   Loader2,
-  ChevronDown,
   User,
   Icon as LucideIcon,
   LogOut,
-  Share2,
 } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { useI18n } from '@/context/i18n-provider';
-import { useCollection, useFirestore, useUserProfile, useAuth } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile, useAuth, initiateSignOut, useDoc } from '@/firebase';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import type { NavigationItem } from '@/lib/types';
-import { collection, query, orderBy } from 'firebase/firestore';
+import type { NavigationItem, CompanySettings } from '@/lib/types';
+import { collection, query, orderBy, doc } from 'firebase/firestore';
 import { getIdTokenResult } from 'firebase/auth';
 import { Header } from '@/components/layout/header';
 import { useIdleTimer } from '@/hooks/use-idle-timer';
-import { Button } from '@/components/ui/button';
-import { ShareViewDialog } from '@/components/share/share-view-dialog';
+import { SidebarInset } from '@/components/ui/sidebar';
+import { BrandedLoader } from '@/components/branded-loader';
 
 const Icon = ({
   name,
@@ -50,40 +46,107 @@ const Icon = ({
 
 function MainAppLayout({
   children,
-  finalNavItems,
 }: {
   children: React.ReactNode;
-  finalNavItems: NavigationItem[];
 }) {
-  const pathname = usePathname();
+  const { user, profile, isLoading: isUserLoading, companyId } = useUserProfile();
   const auth = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const { t } = useI18n();
+  const firestore = useFirestore();
+  const [isReady, setIsReady] = useState(false);
 
-  const handleLogout = () => {
+  const companySettingsDocRef = useMemo(() => {
+    if (!firestore || !companyId) return null;
+    return doc(firestore, 'companySettings', companyId);
+  }, [firestore, companyId]);
+
+  const { data: companySettings, isLoading: isSettingsLoading } = useDoc<CompanySettings>(companySettingsDocRef);
+
+  useEffect(() => {
+    // If the authentication state is still loading, do nothing yet.
+    if (isUserLoading || isSettingsLoading) {
+      return;
+    }
+    
+    if (companySettings?.maintenanceSettings?.isEnabled && profile?.role !== 'Super Admin' && pathname !== '/maintenance') {
+      router.replace('/maintenance');
+      return;
+    }
+    
+    if (profile?.role === 'Super Admin' && pathname === '/maintenance') {
+        router.replace('/admin/settings/maintenance');
+        return;
+    }
+
+    // If loading is finished and there's no user, redirect to login immediately.
+    // Allow access only to the explicit login and related public pages.
+    const publicPaths = ['/login', '/check-email'];
+    if (!user && !publicPaths.includes(pathname)) {
+      router.replace(`/login?next=${pathname}`);
+      return;
+    }
+
+    // If there is a user, handle post-login logic.
+    if (user && profile) {
+      // Logic for forced actions (password change, task acknowledgment)
+      getIdTokenResult(user, true)
+        .then((idTokenResult) => {
+          const claims = idTokenResult.claims;
+          if (claims.mustChangePassword && pathname !== '/force-password-change') {
+            router.replace('/force-password-change');
+          } else if (claims.mustAcknowledgeTasks && pathname !== '/force-acknowledge-tasks') {
+            router.replace('/force-acknowledge-tasks');
+          } else {
+             // If no forced actions are needed, we can consider the layout ready.
+            setIsReady(true);
+          }
+        })
+        .catch(() => {
+          // If token verification fails, the user is effectively logged out.
+          router.replace('/login');
+        });
+    } else if (!user) {
+        // If there's no user, and we are on a public page, the content is ready to be shown.
+        setIsReady(true);
+    }
+  }, [user, profile, isUserLoading, auth, router, pathname, companySettings, isSettingsLoading]);
+  
+  const handleLogout = async () => {
     if(auth) {
-        auth.signOut();
-        router.push('/login');
+        await initiateSignOut(auth);
+        router.push('/');
     }
   }
 
   useIdleTimer({ onIdle: handleLogout, idleTime: 60 });
+  
+  const navItemsCollectionRef = useMemo(
+    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
+    [firestore]
+  );
+  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
+  
+  const finalNavItems = useMemo(() => {
+    if (!profile || !navItemsFromDB) return [];
+    
+    return navItemsFromDB
+      .filter(item => item.roles.includes(profile.role))
+      .map(item => ({...item, label: t(item.label as any) || item.label}));
 
+  }, [profile, navItemsFromDB, t]);
 
-  const { childMap } = useMemo(() => {
+  const { itemMap, childMap } = useMemo(() => {
     const itemMap = new Map(finalNavItems.map(item => [item.id, item]));
     const childMap = new Map<string, NavigationItem[]>();
 
     finalNavItems.forEach(item => {
-      let parentId: string | null = null;
-      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
-      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
-      else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
-
-      if (parentId && item.id !== parentId) {
-        if (!childMap.has(parentId)) {
-          childMap.set(parentId, []);
+      if (item.parentId) {
+        if (!childMap.has(item.parentId)) {
+          childMap.set(item.parentId, []);
         }
-        childMap.get(parentId)!.push(item);
+        childMap.get(item.parentId)!.push(item);
       }
     });
 
@@ -94,28 +157,23 @@ function MainAppLayout({
     const sections: Record<string, boolean> = {};
     if (pathname.startsWith('/admin/settings')) sections.nav_settings = true;
     else if (pathname.startsWith('/admin')) sections.nav_admin = true;
-    else if (pathname.startsWith('/social-media')) sections.nav_social_media = true;
+    else if (pathname.startsWith('/social-media')) sections.nav_social_media_group = true;
+    else if (pathname.startsWith('/web')) sections.nav_web_group = true;
+    else if (pathname.startsWith('/tasks') || pathname === '/dashboard') sections.nav_project_group = true;
     return sections;
   });
 
   const renderNavItems = useCallback(
     (items: NavigationItem[], parentId: string | null = null) => {
       return items
-        .filter((item) => {
-           let itemParentId: string | null = null;
-           if (item.path.startsWith('/admin/settings') && item.id !== 'nav_settings') itemParentId = 'nav_settings';
-           else if (item.path.startsWith('/admin') && item.id !== 'nav_admin') itemParentId = 'nav_admin';
-           else if (item.path.startsWith('/social-media') && item.id !== 'nav_social_media') itemParentId = 'nav_social_media';
-
-           return (parentId === null && itemParentId === null) || itemParentId === parentId;
-        })
+        .filter((item) => item.parentId === parentId)
         .sort((a, b) => a.order - b.order)
         .map((item) => {
           const children = childMap.get(item.id) || [];
           const path = item.path;
-          const isActive = pathname === path || (path.length > 1 && pathname.startsWith(path));
+          const isActive = path ? (pathname === path || (path.length > 1 && pathname.startsWith(path))) : false;
           
-          const hasVisibleChildren = children.some(child => finalNavItems.some(i => i.id === child.id));
+          const hasVisibleChildren = children.length > 0;
 
           if (hasVisibleChildren) {
             return (
@@ -130,7 +188,7 @@ function MainAppLayout({
             );
           }
 
-          if (!item.path) return null; // Don't render folders without visible children
+          if (!item.path) return null; // Don't render folders without path and without visible children
 
           return (
             <SidebarMenuItem key={item.id}>
@@ -157,6 +215,12 @@ function MainAppLayout({
     return activeItem?.label || 'Dashboard';
   }, [pathname, finalNavItems]);
 
+  const isLoading = isUserLoading || isNavItemsLoading || isSettingsLoading;
+  
+  if (isLoading || !isReady) {
+    return <BrandedLoader />;
+  }
+
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">
@@ -164,7 +228,7 @@ function MainAppLayout({
           <Logo />
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>{renderNavItems(finalNavItems)}</SidebarMenu>
+          <SidebarMenu>{renderNavItems(finalNavItems, null)}</SidebarMenu>
         </SidebarContent>
          <SidebarFooter>
             <SidebarMenu>
@@ -180,7 +244,7 @@ function MainAppLayout({
                 </Link>
             </SidebarMenuItem>
             </SidebarMenu>
-        </SidebarFooter>
+         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
         <Header title={headerTitle} navItems={finalNavItems} />
@@ -191,74 +255,6 @@ function MainAppLayout({
 }
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
-  const { user, profile, isLoading: isUserLoading } = useUserProfile();
-  const auth = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
-  const { t } = useI18n();
-  const firestore = useFirestore();
-
-  useEffect(() => {
-    if (isUserLoading) return;
-    
-    if (!user && pathname !== '/login') {
-      router.replace('/login');
-      return;
-    }
-
-    if (auth?.currentUser) {
-      getIdTokenResult(auth.currentUser, true)
-        .then((idTokenResult) => {
-          if (idTokenResult.claims.mustChangePassword) {
-            router.replace('/force-password-change');
-          } else if (idTokenResult.claims.mustAcknowledgeTasks) {
-            router.replace('/force-acknowledge-tasks');
-          }
-        })
-        .catch(() => router.replace('/login'));
-    }
-  }, [user, profile, isUserLoading, auth, router, pathname]);
-
-  const navItemsCollectionRef = useMemo(
-    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
-    [firestore]
-  );
-  const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
-  
-  const finalNavItems = useMemo(() => {
-    if (!profile || !navItemsFromDB) return [];
-    
-    const translatedItems = navItemsFromDB.map(item => ({...item, label: t(item.label as any) || item.label}));
-    const itemMap = new Map(translatedItems.map(item => [item.id, item]));
-
-    // Add pseudo-items for folders if they have children
-    const childMap = new Map<string, NavigationItem[]>();
-    translatedItems.forEach(item => {
-      let parentId: string | null = null;
-      if (item.path.startsWith('/admin/settings')) parentId = 'nav_settings';
-      else if (item.path.startsWith('/admin')) parentId = 'nav_admin';
-       else if (item.path.startsWith('/social-media')) parentId = 'nav_social_media';
-      if (parentId && item.id !== parentId) {
-        if (!childMap.has(parentId)) childMap.set(parentId, []);
-        childMap.get(parentId)!.push(item);
-      }
-    });
-     if (childMap.has('nav_admin')) itemMap.set('nav_admin', { id: 'nav_admin', label: t('nav.admin'), path: '', icon: 'Shield', order: 10, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_settings')) itemMap.set('nav_settings', { id: 'nav_settings', label: t('nav.settings'), path: '', icon: 'Settings', order: 20, roles: ['Super Admin', 'Manager'], parentId: null });
-    if (childMap.has('nav_social_media')) itemMap.set('nav_social_media', { id: 'nav_social_media', label: t('nav.social_media'), path: '', icon: 'Share2', order: 6, roles: ['Super Admin', 'Manager', 'Employee'], parentId: null });
-
-    return Array.from(itemMap.values()).filter(item => item.roles.includes(profile.role));
-  }, [profile, navItemsFromDB, t]);
-
-  const isLoading = isUserLoading || isNavItemsLoading;
-  
-  if (isLoading || !user || !profile) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
-
-  return <MainAppLayout finalNavItems={finalNavItems}>{children}</MainAppLayout>;
+  // This component now solely acts as the provider wrapper for the main authenticated app section.
+  return <MainAppLayout>{children}</MainAppLayout>;
 }

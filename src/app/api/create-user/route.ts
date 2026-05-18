@@ -1,27 +1,13 @@
 
-
-import { initializeApp, cert, getApps, App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { serviceAccount } from "@/firebase/service-account";
-
-// Function to safely initialize Firebase Admin
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 
 // Endpoint API Next.js 13+
 export async function POST(req: Request) {
   try {
-    const app = initializeAdminApp();
-    const auth = getAuth(app);
-    const db = getFirestore(app);
+    const auth = adminAuth;
+    const db = adminDb;
 
     const data = await req.json();
     const { name, email, password, role, companyId, managerId, brandIds } = data;
@@ -79,5 +65,3 @@ export async function POST(req: Request) {
     });
   }
 }
-
-    

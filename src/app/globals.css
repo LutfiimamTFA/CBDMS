@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -79,5 +80,53 @@
     height: 4px;
     border-radius: 50%;
     background-color: hsl(var(--primary));
+  }
+
+  /* Custom Prose styles for denser layout, like ClickUp */
+  .prose p {
+    @apply my-1; /* Even tighter paragraph margin */
+  }
+
+  .prose table {
+    @apply w-full my-1 border-collapse; /* Tighter table margin */
+    table-layout: fixed;
+  }
+  .prose th,
+  .prose td {
+    @apply border border-border px-1 py-0.5 relative align-top; /* Tighter padding in cells */
+  }
+  .prose thead th {
+    @apply font-semibold;
+  }
+
+  /* Styles for TipTap table resizing */
+  .ProseMirror {
+    table {
+      @apply w-full my-1 border-collapse;
+      table-layout: fixed;
+    }
+
+    td,
+    th {
+      @apply relative align-top px-1 py-0.5; /* Match prose styles */
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    
+    p {
+        @apply my-1; /* Match prose styles */
+    }
+  
+    .column-resize-handle {
+      @apply absolute top-0 bottom-0 -right-0.5 w-1 cursor-col-resize bg-transparent;
+      transition: background-color 0.2s;
+    }
+    .column-resize-handle:hover {
+      @apply bg-primary;
+    }
+
+    &.resize-cursor {
+      @apply cursor-col-resize;
+    }
   }
 }

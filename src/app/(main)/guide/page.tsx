@@ -1,8 +1,9 @@
+
 'use client';
 
 import React from 'react';
 import { useUserProfile } from '@/firebase';
-import { guideContent, type GuideTopic } from '@/lib/guide-content';
+import { guideContent, type GuideContent } from '@/lib/guide-content';
 import {
   Accordion,
   AccordionContent,
@@ -11,6 +12,9 @@ import {
 } from '@/components/ui/accordion';
 import { Loader2, BookOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import Image from 'next/image';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const RoleBadge = ({ role }: { role: string }) => {
   const roleColors: Record<string, string> = {
@@ -25,67 +29,50 @@ const RoleBadge = ({ role }: { role: string }) => {
 export default function GuidePage() {
   const { profile, isLoading } = useUserProfile();
 
-  const renderContent = (content: string) => {
-    return { __html: content };
-  };
-  
-  let roleKey: keyof typeof guideContent = 'employee';
-  let relevantGuides: GuideTopic[] = [];
-
-  if (profile) {
-    switch (profile.role) {
-      case 'Super Admin':
-        roleKey = 'super_admin';
-        break;
-      case 'Manager':
-        roleKey = 'manager';
-        break;
-      case 'Employee':
-        roleKey = 'employee';
-        break;
-      case 'Client':
-        roleKey = 'client';
-        break;
-    }
-    relevantGuides = guideContent[roleKey];
+  if (isLoading || !profile) {
+    return (
+        <div className="flex h-svh items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+        </div>
+    );
   }
 
+  const roleKey = profile.role.toLowerCase().replace(' ', '_') as keyof GuideContent;
+  const topicsForRole = guideContent[roleKey] || [];
 
   return (
     <div className="flex h-svh flex-col bg-background">
       <main className="flex-1 overflow-auto p-4 md:p-6">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : (
           <div className="mx-auto max-w-4xl">
             <div className="mb-8 text-center">
               <BookOpen className="mx-auto h-12 w-12 text-primary" />
               <h1 className="mt-4 text-3xl font-bold tracking-tight">
-                Selamat Datang di Pusat Panduan, {profile?.name}!
+                Selamat Datang di CBDMS Workspace!
               </h1>
               <div className="mt-2 text-lg text-muted-foreground flex items-center justify-center gap-2">
-                Anda login sebagai <RoleBadge role={profile?.role || ''} />. Berikut adalah panduan yang dirancang untuk Anda.
+                Ini adalah panduan yang disesuaikan untuk peran Anda sebagai <RoleBadge role={profile.role} />
               </div>
             </div>
 
-            <Accordion type="multiple" className="w-full">
-              {relevantGuides.map((topic, index) => (
-                <AccordionItem value={`item-${index}`} key={topic.id}>
+            <Accordion type="single" collapsible defaultValue={topicsForRole[0]?.id} className="w-full">
+              {topicsForRole.map((topic) => (
+                <AccordionItem key={topic.id} value={topic.id}>
                   <AccordionTrigger className="text-lg font-semibold hover:no-underline">
                     {topic.title}
                   </AccordionTrigger>
-                  <AccordionContent
-                    className="prose prose-sm dark:prose-invert max-w-none px-2 text-base"
-                  >
-                    <div dangerouslySetInnerHTML={renderContent(topic.content)} />
+                  <AccordionContent>
+                    <div
+                        className="prose prose-sm dark:prose-invert max-w-none px-2 text-base"
+                    >
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {topic.content}
+                      </ReactMarkdown>
+                    </div>
                   </AccordionContent>
                 </AccordionItem>
               ))}
             </Accordion>
           </div>
-        )}
       </main>
     </div>
   );

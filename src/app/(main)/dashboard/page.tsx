@@ -1,26 +1,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { SmartSuggestions } from '@/components/smart-suggestions/page';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
-import type { Task, User } from '@/lib/types';
-import { Filter, Loader2, X, Archive, HelpCircle } from 'lucide-react';
+import type { Task, User, Brand } from '@/lib/types';
+import { Filter, Loader2, X } from 'lucide-react';
 import { useI18n } from '@/context/i18n-provider';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import Link from 'next/link';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
+import { useSafeBrands } from '@/hooks/use-safe-brands';
 
 export default function DashboardPage() {
   const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
@@ -28,6 +20,7 @@ export default function DashboardPage() {
   const { t } = useI18n();
 
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   // Query untuk tugas
@@ -51,12 +44,12 @@ export default function DashboardPage() {
     }
     
     // Employees only see tasks assigned to them.
-    if (profile.role === 'Employee') {
+    if (profile.role === 'Employee' || profile.role === 'PIC') {
       return query(collection(firestore, 'tasks'), where('assigneeIds', 'array-contains', profile.id));
     }
 
     return null; // Fallback for other roles or scenarios
-  }, [firestore, companyId, profile]);
+  }, [firestore, companyId, profile?.role, profile?.id, profile?.brandIds]);
   
   const { data: tasks, isLoading: isTasksLoading } = useCollection<Task>(tasksQuery);
 
@@ -68,6 +61,11 @@ export default function DashboardPage() {
   }, [firestore, companyId]);
 
   const { data: allUsers, isLoading: areUsersLoading } = useCollection<User>(usersQuery);
+
+  // Fetch brands for filtering
+  const { brands, isLoading: areBrandsLoading } = useSafeBrands();
+  const brandOptions = useMemo(() => (brands || []).map(b => ({ value: b.id, label: b.name })), [brands]);
+
 
   // Opsi untuk filter MultiSelect, disesuaikan untuk Manajer
   const userOptions = useMemo(() => {
@@ -93,23 +91,33 @@ export default function DashboardPage() {
   // Logika untuk memfilter tugas
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
-    if (selectedUsers.length === 0) return tasks;
+    let filtered = tasks;
 
-    return tasks.filter(task =>
-      task.assigneeIds.some(assigneeId => selectedUsers.includes(assigneeId))
-    );
-  }, [tasks, selectedUsers]);
+    if (profile?.role === 'Super Admin' && selectedBrands.length > 0) {
+      filtered = filtered.filter(task => task.brandId && selectedBrands.includes(task.brandId));
+    } else if (profile?.role === 'Manager' && selectedUsers.length > 0) {
+      filtered = filtered.filter(task =>
+        task.assigneeIds.some(assigneeId => selectedUsers.includes(assigneeId))
+      );
+    }
+    
+    return filtered;
+  }, [tasks, selectedUsers, selectedBrands, profile]);
+
 
   const resetFilters = () => {
     setSelectedUsers([]);
+    setSelectedBrands([]);
   };
 
-  const isLoading = isProfileLoading || isTasksLoading || areUsersLoading;
-  const isManagerOrAdmin = profile?.role === 'Manager' || profile?.role === 'Super Admin';
+  const isLoading = isProfileLoading || isTasksLoading || areUsersLoading || areBrandsLoading;
+  const isSuperAdmin = profile?.role === 'Super Admin';
+  const isManager = profile?.role === 'Manager';
+
 
   return (
     <div className="flex h-svh flex-col bg-background">
-      <main className="flex-1 overflow-hidden p-4 md:p-6">
+      <main className="flex-1 p-4 md:p-6 overflow-auto">
         {isLoading ? (
           <div className="flex h-full items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin" />
@@ -124,35 +132,38 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-               <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="item-1" className="border-b-0">
-                  <AccordionTrigger className="p-3 bg-secondary/50 rounded-md hover:no-underline">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                      <HelpCircle className="h-4 w-4"/>
-                      Panduan Papan Kanban
-                      </div>
-                  </AccordionTrigger>
-                  <AccordionContent className="pt-2">
-                     <Alert>
-                        <Archive className="h-4 w-4" />
-                        <AlertTitle>Papan Kanban Terfilter Otomatis</AlertTitle>
-                        <AlertDescription>
-                           Untuk menjaga fokus, papan ini hanya menampilkan tugas yang relevan:
-                          <ul className="list-disc pl-5 mt-2 text-xs">
-                              <li><b>Baru Selesai:</b> Menampilkan tugas di kolom 'Done' yang selesai dalam <strong>7 hari terakhir</strong>.</li>
-                              <li><b>Akan Datang:</b> Menampilkan tugas di 'To Do' dengan tenggat waktu dalam <strong>30 hari ke depan</strong>.</li>
-                              <li><b>Aktif:</b> Semua tugas yang sedang berjalan akan selalu terlihat.</li>
-                          </ul>
-                           <p className="mt-2 text-xs">
-                            Untuk melihat <strong>semua tugas</strong> (termasuk arsip lama), silakan kunjungi halaman <Button variant="link" asChild className="p-0 h-auto text-xs"><Link href="/tasks">Daftar Tugas</Link></Button>.
-                          </p>
-                        </AlertDescription>
-                      </Alert>
-                  </AccordionContent>
-                  </AccordionItem>
-              </Accordion>
+              {isSuperAdmin && (
+                <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 border-dashed">
+                      <Filter className="mr-2 h-4 w-4" />
+                      Filter by Brand
+                      {selectedBrands.length > 0 && <Badge variant="secondary" className="ml-2">{selectedBrands.length}</Badge>}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className='p-4 border rounded-lg bg-card'>
+                     <div className='flex flex-col lg:flex-row gap-4 items-start'>
+                        <div className='flex-1 w-full space-y-2'>
+                           <Label htmlFor='brand-filter'>Brands</Label>
+                           <MultiSelect
+                              id="brand-filter"
+                              options={brandOptions}
+                              onValueChange={setSelectedBrands}
+                              defaultValue={selectedBrands}
+                              placeholder="Select brands..."
+                           />
+                        </div>
+                        {selectedBrands.length > 0 && (
+                          <Button variant="ghost" size="sm" onClick={resetFilters} className="mt-auto">
+                              <X className="mr-2 h-4 w-4"/>Reset
+                          </Button>
+                        )}
+                     </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
 
-              {isManagerOrAdmin && (
+              {isManager && (
                 <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
                   <CollapsibleTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8 border-dashed">
@@ -184,7 +195,7 @@ export default function DashboardPage() {
               )}
             </div>
             
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1 overflow-hidden pt-2">
                 <KanbanBoard tasks={filteredTasks || []} />
             </div>
           </div>

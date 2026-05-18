@@ -1,23 +1,11 @@
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
+import { adminDb } from '@/lib/firebase-admin';
 import type { SharedLink, WorkflowStatus } from '@/lib/types';
-
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
 
 export async function POST(request: Request) {
   try {
-    const app = initializeAdminApp();
-    const db = getFirestore(app);
+    const db = adminDb;
 
     const { linkId } = await request.json();
 

@@ -1,176 +1,95 @@
+'use server';
 
 import { NextResponse } from 'next/server';
-import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { serviceAccount } from '@/firebase/service-account';
-import type { RecurringTaskTemplate, Task, SocialMediaPost } from '@/lib/types';
-
-// Initialize Firebase Admin
-function initializeAdminApp(): App {
-  if (getApps().length > 0) {
-    return getApps()[0];
-  }
-  return initializeApp({
-    credential: cert(serviceAccount),
-  });
-}
-
-// Helper to check if a recurring task should be generated today
-function shouldGenerateTask(template: RecurringTaskTemplate): boolean {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  const lastGenerated = template.lastGeneratedAt?.toDate();
-  if (lastGenerated) {
-    const lastGeneratedDate = new Date(lastGenerated.getFullYear(), lastGenerated.getMonth(), lastGenerated.getDate());
-    if (lastGeneratedDate.getTime() === today.getTime()) {
-      return false; // Already generated today
-    }
-  }
-
-  const dayOfWeek = today.toLocaleString('en-US', { weekday: 'long' }) as any;
-  
-  switch (template.frequency) {
-    case 'daily':
-      return true;
-    case 'weekly':
-      return template.daysOfWeek?.includes(dayOfWeek) || false;
-    case 'monthly':
-      // dayOfMonth is 1-based, getDate() is 1-based
-      return template.dayOfMonth === today.getDate();
-    default:
-      return false;
-  }
-}
+import { serverTimestamp } from 'firebase-admin/firestore';
+import { SocialMediaPost } from '@/lib/types-backend';
+import { adminDb } from '@/lib/firebase-admin';
 
 async function runSocialMediaPoster(firestore: FirebaseFirestore.Firestore) {
-    const now = new Date().toISOString();
-    const postsToPublishSnapshot = await firestore
-      .collection('socialMediaPosts')
-      .where('status', '==', 'Scheduled')
-      .where('scheduledAt', '<=', now)
-      .get();
+  const now = new Date().toISOString();
+  const postsToPublishSnapshot = await firestore
+    .collection('socialMediaPosts')
+    .where('status', '==', 'Scheduled')
+    .where('scheduledAt', '<=', now)
+    .get();
 
-    if (postsToPublishSnapshot.empty) {
-      return 0; // No posts published
+  if (postsToPublishSnapshot.empty) {
+    return 0; // No posts to publish
+  }
+
+  let postsPublishedCount = 0;
+
+  for (const doc of postsToPublishSnapshot.docs) {
+    const postRef = doc.ref;
+
+    // Idempotency check: Ensure we only process 'Scheduled' posts.
+    // This prevents a post being published twice if the job runs again before the first one completes.
+    const currentDoc = await postRef.get();
+    if (currentDoc.data()?.status !== 'Scheduled') {
+      continue;
     }
 
-    const batch = firestore.batch();
-    let postsPublishedCount = 0;
+    try {
+      // Atomic update to 'Publishing' status
+      await postRef.update({ status: 'Publishing' });
 
-    postsToPublishSnapshot.forEach(doc => {
-      const postRef = doc.ref;
-      batch.update(postRef, {
-        status: 'Posted',
-        postedAt: Timestamp.now(),
+      // The actual publishing logic is now in a separate, more focused API route.
+      // This scheduler just acts as a trigger.
+      const publishResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL}/api/instagram/publish`, {
+          method: 'POST',
+          headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.SCHEDULER_SECRET}`,
+          },
+          body: JSON.stringify({ postId: doc.id }),
       });
-      postsPublishedCount++;
-    });
+      
+      const result = await publishResponse.json();
 
-    await batch.commit();
-    return postsPublishedCount;
-}
-
-async function runRecurringTaskGenerator(firestore: FirebaseFirestore.Firestore, auth: any) {
-    const templatesSnapshot = await firestore.collection('recurringTaskTemplates').get();
-    if (templatesSnapshot.empty) {
-      return { created: 0, flagged: 0 };
-    }
-
-    const tasksToCreate: Omit<Task, 'id'>[] = [];
-    const usersToFlag: { [userId: string]: boolean } = {};
-    const templatesToUpdate: { id: string; lastGeneratedAt: Timestamp }[] = [];
-
-    templatesSnapshot.forEach(doc => {
-      const template = { id: doc.id, ...doc.data() } as RecurringTaskTemplate;
-      if (shouldGenerateTask(template)) {
-        
-        const newTask: Omit<Task, 'id' | 'createdAt'> = {
-          title: template.title,
-          description: template.description || '',
-          brandId: template.defaultBrandId,
-          status: 'To Do',
-          priority: template.defaultPriority,
-          assigneeIds: template.defaultAssigneeIds,
-          assignees: [], 
-          companyId: template.companyId,
-          isMandatory: template.isMandatory || false,
-          createdBy: { id: 'system', name: 'Scheduler', avatarUrl: '' },
-          startDate: new Date().toISOString(),
-        };
-        tasksToCreate.push(newTask);
-
-        if (template.isMandatory) {
-          template.defaultAssigneeIds.forEach(userId => {
-            usersToFlag[userId] = true;
-          });
-        }
-        
-        templatesToUpdate.push({ id: template.id, lastGeneratedAt: Timestamp.now() });
+      if (publishResponse.ok) {
+        await postRef.update({
+          status: 'Posted',
+          postedAt: serverTimestamp(),
+        });
+        postsPublishedCount++;
+      } else {
+        console.error(`Failed to publish post ${doc.id}:`, result.message);
+        await postRef.update({
+          status: 'Error',
+          errorDetails: result.message || 'Unknown publishing error',
+        });
       }
-    });
 
-    if (tasksToCreate.length === 0) {
-      return { created: 0, flagged: 0 };
+    } catch (error: any) {
+      console.error(`Exception while publishing post ${doc.id}:`, error);
+      // Revert status to 'Scheduled' on exception so it can be retried.
+      await postRef.update({
+        status: 'Error',
+        errorDetails: error.message || 'An exception occurred during the trigger process.',
+      });
     }
+  }
 
-    const batch = firestore.batch();
-
-    tasksToCreate.forEach(taskData => {
-      const taskRef = firestore.collection('tasks').doc();
-      batch.set(taskRef, { ...taskData, createdAt: Timestamp.now() });
-    });
-
-    templatesToUpdate.forEach(update => {
-      const templateRef = firestore.collection('recurringTaskTemplates').doc(update.id);
-      batch.update(templateRef, { lastGeneratedAt: update.lastGeneratedAt });
-    });
-    
-    await batch.commit();
-
-    for (const userId of Object.keys(usersToFlag)) {
-      try {
-        const user = await auth.getUser(userId);
-        const currentClaims = user.customClaims || {};
-        await auth.setCustomUserClaims(userId, { ...currentClaims, mustAcknowledgeTasks: true });
-      } catch (error: any) {
-        console.error(`Failed to set claim for user ${userId}:`, error.message);
-      }
-    }
-
-    return { created: tasksToCreate.length, flagged: Object.keys(usersToFlag).length };
+  return postsPublishedCount;
 }
-
 
 export async function GET(request: Request) {
-  // This single endpoint now runs all scheduled jobs.
-  // Optional: Add a secret key check for security
-  // const { searchParams } = new URL(request.url);
-  // if (searchParams.get('secret') !== process.env.SCHEDULER_SECRET) {
-  //   return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-  // }
-  
-  try {
-    const app = initializeAdminApp();
-    const firestore = getFirestore(app);
-    const auth = getAuth(app);
+  const authHeader = request.headers.get('Authorization');
+  const schedulerSecret = request.headers.get('x-scheduler-secret');
 
-    const [socialResult, taskResult] = await Promise.all([
-      runSocialMediaPoster(firestore),
-      runRecurringTaskGenerator(firestore, auth)
-    ]);
+  if (authHeader !== `Bearer ${process.env.SCHEDULER_SECRET}` && schedulerSecret !== process.env.SCHEDULER_SECRET) {
+      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    const firestore = adminDb;
+    const socialResult = await runSocialMediaPoster(firestore);
 
     const messages = [];
     if (socialResult > 0) {
       messages.push(`Published ${socialResult} social media post(s).`);
     } else {
-      messages.push('No social media posts to publish.');
-    }
-    if (taskResult.created > 0) {
-      messages.push(`Generated ${taskResult.created} recurring task(s) and flagged ${taskResult.flagged} user(s).`);
-    } else {
-      messages.push('No recurring tasks to generate.');
+      messages.push('No social media posts were due for publishing.');
     }
 
     return NextResponse.json(

@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -105,6 +106,9 @@ const MultiSelect = React.forwardRef<HTMLButtonElement, MultiSelectProps>(
       onValueChange(newSelectedValues);
     };
 
+    const isTwoColumns = options.length > 6;
+    const midpoint = Math.ceil(options.length / 2);
+
     return (
       <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
         <PopoverTrigger asChild>
@@ -175,7 +179,7 @@ const MultiSelect = React.forwardRef<HTMLButtonElement, MultiSelectProps>(
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[--radix-popover-trigger-width] p-0"
+          className={cn("p-0", isTwoColumns ? "w-[450px]" : "w-[--radix-popover-trigger-width]")}
           align="start"
           onEscapeKeyDown={() => setIsPopoverOpen(false)}
         >
@@ -186,37 +190,69 @@ const MultiSelect = React.forwardRef<HTMLButtonElement, MultiSelectProps>(
             />
             <CommandList>
               <CommandEmpty>No results found.</CommandEmpty>
-              <CommandGroup>
-                {options.map((option) => {
-                  const isSelected = selectedValues.includes(option.value);
-                  return (
-                    <CommandItem
-                      key={option.value}
-                      onSelect={() => toggleOption(option.value)}
-                      style={{
-                        pointerEvents: "auto",
-                        opacity: 1,
-                      }}
-                      className="cursor-pointer"
-                    >
-                      <div
-                        className={cn(
-                          "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                          isSelected
-                            ? "bg-primary text-primary-foreground"
-                            : "opacity-50 [&_svg]:invisible"
-                        )}
+              {isTwoColumns ? (
+                <div className="flex">
+                  <CommandGroup className="w-1/2 pr-1">
+                    {options.slice(0, midpoint).map((option) => {
+                      const isSelected = selectedValues.includes(option.value);
+                      return (
+                        <CommandItem
+                          key={option.value}
+                          onSelect={() => toggleOption(option.value)}
+                          style={{ pointerEvents: "auto", opacity: 1 }}
+                          className="cursor-pointer"
+                        >
+                          <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", isSelected ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}>
+                            <CheckIcon className={cn("h-4 w-4")} />
+                          </div>
+                          {option.icon && <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />}
+                          <span>{option.label}</span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                  <Separator orientation="vertical" className="h-auto" />
+                  <CommandGroup className="w-1/2 pl-1">
+                    {options.slice(midpoint).map((option) => {
+                      const isSelected = selectedValues.includes(option.value);
+                      return (
+                        <CommandItem
+                          key={option.value}
+                          onSelect={() => toggleOption(option.value)}
+                          style={{ pointerEvents: "auto", opacity: 1 }}
+                          className="cursor-pointer"
+                        >
+                          <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", isSelected ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}>
+                            <CheckIcon className={cn("h-4 w-4")} />
+                          </div>
+                          {option.icon && <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />}
+                          <span>{option.label}</span>
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </div>
+              ) : (
+                <CommandGroup>
+                  {options.map((option) => {
+                    const isSelected = selectedValues.includes(option.value);
+                    return (
+                      <CommandItem
+                        key={option.value}
+                        onSelect={() => toggleOption(option.value)}
+                        style={{ pointerEvents: "auto", opacity: 1 }}
+                        className="cursor-pointer"
                       >
-                        <CheckIcon className={cn("h-4 w-4")} />
-                      </div>
-                      {option.icon && (
-                        <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />
-                      )}
-                      <span>{option.label}</span>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
+                        <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary", isSelected ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible")}>
+                          <CheckIcon className={cn("h-4 w-4")} />
+                        </div>
+                        {option.icon && <option.icon className="mr-2 h-4 w-4 text-muted-foreground" />}
+                        <span>{option.label}</span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              )}
               <CommandSeparator />
               <CommandGroup>
                 <div className="flex items-center justify-between">

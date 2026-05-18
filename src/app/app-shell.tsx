@@ -1,31 +1,33 @@
-
 'use client';
 
-import { usePathname } from 'next/navigation';
-
-// This list defines which routes are part of the main authenticated application.
-const APP_ROUTES = [
-  '/dashboard',
-  '/tasks',
-  '/my-work',
-  '/reports',
-  '/calendar',
-  '/schedule',
-  '/social-media',
-  '/admin',
-  '/settings',
-  '/guide',
-  '/daily-report',
-];
+import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from '@/components/ui/toaster';
+import { I18nProvider } from '@/context/i18n-provider';
+import { FirebaseClientProvider } from '@/firebase';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { CompanyProvider } from '@/context/company-provider';
+import { PermissionsProvider } from '@/context/permissions-provider';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
-  // Check if the current path starts with any of the defined app routes.
-  const isAppPage = APP_ROUTES.some(route => pathname.startsWith(route));
-
-  // For any other page (e.g., /login, /, /force-password-change, or the isolated /share route),
-  // return the children directly. These routes manage their own, simpler provider setups
-  // within their specific layouts (e.g., src/app/share/layout.tsx).
-  return <>{children}</>;
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <I18nProvider>
+        <FirebaseClientProvider>
+          <CompanyProvider>
+            <PermissionsProvider>
+              <TooltipProvider>
+                {children}
+                <Toaster />
+              </TooltipProvider>
+            </PermissionsProvider>
+          </CompanyProvider>
+        </FirebaseClientProvider>
+      </I18nProvider>
+    </ThemeProvider>
+  );
 }

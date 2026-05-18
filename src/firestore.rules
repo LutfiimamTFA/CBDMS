@@ -68,8 +68,6 @@ service cloud.firestore {
     }
     
     // --- SHARE VIEW RULES (PUBLIC READ) ---
-    // Anyone with a link can read the sharedLinks document to get the snapshot.
-    // All other data access for the share view happens via this snapshot, not direct reads.
     match /sharedLinks/{linkId} {
       allow get: if true;
       allow list: if false; // Users should not be able to list all share links
@@ -85,16 +83,28 @@ service cloud.firestore {
 
     match /brands/{brandId} {
         allow get: if isSignedIn();
+        allow list: if isSuperAdmin() || isRole('Manager');
         allow write: if isSuperAdmin() || isRole('Manager');
     }
 
     match /statuses/{statusId} {
-        allow get: if isSignedIn();
+        allow get, list: if isSignedIn();
+        allow write: if isSuperAdmin();
+    }
+    
+    match /socialMediaStatuses/{statusId} {
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin();
+    }
+    
+    match /webStatuses/{statusId} {
+        allow read: if isSignedIn();
         allow write: if isSuperAdmin();
     }
 
     match /navigationItems/{navItemId} {
         allow get: if isSignedIn();
+        allow list: if isSignedIn(); // Allow listing for all authenticated users
         allow write: if isSuperAdmin();
     }
 
@@ -114,7 +124,7 @@ service cloud.firestore {
     }
 
     match /tasks/{taskId} {
-      allow get, list: if isSignedIn(); // Only logged-in users can access tasks directly
+      allow get, list: if isSignedIn();
       allow create: if isSuperAdmin() ||
                        (isRole('Manager') && hasPermission('Manager', 'canCreateTasks')) ||
                        (isRole('Employee') && hasPermission('Employee', 'canCreateTasks'));
@@ -138,11 +148,27 @@ service cloud.firestore {
     }
 
     match /socialMediaPosts/{postId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow update, delete: if isSuperAdmin() || 
-                                 (isRole('Manager') && isSameCompanyAsRequestingUser(resource.data.companyId)) ||
-                                 (isOwnRecord(resource.data.createdBy) && resource.data.status == 'Draft');
+        allow get, list: if isSignedIn();
+        allow create: if isSuperAdmin() || isRole('Manager') || isRole('Employee');
+        allow update: if isSuperAdmin() || 
+                         (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
+                         (isOwnRecord(resource.data.createdBy) && resource.data.statusInternal != 'Done');
+        allow delete: if isSuperAdmin() || (isRole('Manager') && managerManagesBrand(resource.data.brandId));
+    }
+    
+    match /webArticles/{articleId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSuperAdmin() || isRole('Manager') || isRole('Employee');
+        allow update: if isSuperAdmin() || 
+                         (isRole('Manager') && managerManagesBrand(resource.data.brandId)) ||
+                         (isOwnRecord(resource.data.createdBy) && resource.data.statusInternal != 'Done');
+        allow delete: if isSuperAdmin() || (isRole('Manager') && managerManagesBrand(resource.data.brandId));
+    }
+    
+    match /socialMediaConnections/{connectionId} {
+        allow read: if isSignedIn() && isSameCompanyAsRequestingUser(resource.data.companyId);
+        allow write: if isSuperAdmin() || 
+                      (isRole('Manager') && isSameCompanyAsRequestingUser(request.resource.data.companyId));
     }
 
     match /permissions/{docId} {

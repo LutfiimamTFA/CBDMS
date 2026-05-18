@@ -24,7 +24,7 @@ const companySchema = z.object({
 type CompanyFormValues = z.infer<typeof companySchema>;
 
 export default function AppSettingsPage() {
-    const { profile } = useUserProfile();
+    const { profile, isLoading: isProfileLoading } = useUserProfile();
     const firestore = useFirestore();
     const storage = useStorage();
     const { toast } = useToast();
@@ -46,17 +46,35 @@ export default function AppSettingsPage() {
         },
     });
 
+    // Effect to sync Firestore data to the form
     useEffect(() => {
         if (company) {
             form.reset({ name: company.name });
             if (company.logoUrl) {
-              setLogoPreview(company.logoUrl);
+                setLogoPreview(company.logoUrl);
             }
-        } else if (!isCompanyLoading && companyDocRef) {
-            // Create a default company document if one doesn't exist
-            setDoc(companyDocRef, { id: profile?.companyId, name: 'My Company', logoUrl: '' });
         }
-    }, [company, isCompanyLoading, form, companyDocRef, profile?.companyId]);
+    }, [company, form]);
+    
+    // Effect to create the company document if it doesn't exist
+    useEffect(() => {
+        // This effect runs when loading states change or essential refs become available.
+        const createCompanyDocIfNeeded = async () => {
+            // Wait until we know for sure whether the user and company data is loaded.
+            if (isProfileLoading || isCompanyLoading) {
+                return;
+            }
+            // If companyDocRef is not ready, or if company data already exists, do nothing.
+            if (!companyDocRef || company) {
+                return;
+            }
+            // At this point, we are sure loading is done and the company doc does not exist.
+            // It's now safe to create the default document.
+            await setDoc(companyDocRef, { id: profile?.companyId, name: 'My Company', logoUrl: '' });
+        };
+      createCompanyDocIfNeeded();
+    }, [isProfileLoading, isCompanyLoading, company, companyDocRef, profile?.companyId, firestore]);
+
 
     const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -106,7 +124,7 @@ export default function AppSettingsPage() {
     };
 
 
-  if (isCompanyLoading) {
+  if (isProfileLoading || (isCompanyLoading && !company)) {
     return <div className="flex h-svh items-center justify-center"><Loader2 className="animate-spin h-8 w-8" /></div>
   }
 
@@ -146,7 +164,7 @@ export default function AppSettingsPage() {
                                     <FormLabel>Company Logo</FormLabel>
                                     <div className="flex items-center gap-4">
                                         {logoPreview ? (
-                                            <Image src={logoPreview} alt="Logo preview" width={120} height={30} className="object-contain rounded-md border p-1 bg-muted" />
+                                            <Image src={logoPreview} alt="Logo preview" width={120} height={30} className="object-contain rounded-md" />
                                         ) : (
                                             <div className="h-[30px] w-[120px] rounded-md bg-muted flex items-center justify-center text-xs text-muted-foreground">No Logo</div>
                                         )}

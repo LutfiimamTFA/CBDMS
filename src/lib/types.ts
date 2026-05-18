@@ -1,3 +1,4 @@
+
 'use client';
 import type { LucideIcon } from 'lucide-react';
 
@@ -22,6 +23,11 @@ export type Company = {
 export type CompanySettings = {
     id: string;
     emergencyAdminUserId?: string | null;
+    maintenanceSettings?: {
+        isEnabled: boolean;
+        message: string;
+        estimatedCompletion: string;
+    };
 }
 
 export type Priority = 'Urgent' | 'High' | 'Medium' | 'Low';
@@ -68,7 +74,14 @@ export type Attachment = {
   id: string;
   name: string;
   type: 'local' | 'gdrive';
-  url: string; 
+  url: string;
+  submittedAt?: string;
+  submittedBy?: {
+      id: string;
+      name: string;
+      avatarUrl: string;
+  };
+  forRevisionCycle?: number;
 };
 
 export type WorkflowStatus = {
@@ -83,6 +96,7 @@ export type Brand = {
   id: string;
   name: string;
   createdAt: any;
+  companyId: string;
 };
 
 export type Activity = {
@@ -123,10 +137,14 @@ export type DailyReport = {
   companyId: string;
 };
 
+// This represents the Firestore document for a shared link.
+// It includes a snapshot of all necessary data.
 export type SharedLink = {
   id: string;
   name: string;
   companyId: string;
+  creatorId: string;
+  creatorName: string;
   creatorRole: User['role'];
   allowedNavItems: string[];
   navItems: NavigationItem[];
@@ -140,9 +158,40 @@ export type SharedLink = {
     users: User[];
     brands: Brand[];
     socialMediaPosts?: SocialMediaPost[];
+    webArticles?: WebArticle[];
+    socialMediaStatuses?: WorkflowStatus[];
+    webStatuses?: WorkflowStatus[];
   };
-  createdBy: string;
   createdAt: any;
+};
+
+export type SharedTask = {
+    id: string;
+    taskId: string;
+    companyId: string;
+    allowedActions: ('view' | 'comment' | 'upload' | 'changeStatus')[];
+    allowedStatuses: string[];
+    creatorUserId: string;
+    creatorName: string;
+    creatorRole: User['role'];
+    createdAt: any;
+    snapshot: {
+        task: Task;
+        brand: Brand | null;
+        statuses: WorkflowStatus[];
+    };
+};
+
+export type SocialMediaConnection = {
+    id: string;
+    platform: 'instagram';
+    userId: string; // Firebase UID
+    companyId: string;
+    instagramUserId: string;
+    instagramUsername: string;
+    accessToken: string;
+    expiresAt: any; // Timestamp
+    connectedAt: any; // Timestamp
 };
 
 
@@ -154,7 +203,7 @@ export type RevisionItem = {
 
 export type RevisionCycle = {
     cycleNumber: number;
-    requestedAt: any; // Timestamp
+    requestedAt: any; // Can be Date or Timestamp
     requestedBy: {
         id: string;
         name: string;
@@ -163,33 +212,30 @@ export type RevisionCycle = {
     items: RevisionItem[];
 }
 
-export type Task = {
+export type Dependencies = {
+    waitingOn?: string[];
+    blocking?: string[];
+    linked?: string[];
+};
+
+
+// Base type for all work items
+export type WorkItem = {
   id: string;
   title: string;
   brandId: string;
   description?: string;
   status: Status;
+  statusInternal: Status; // Legacy field
   priority: Priority;
-  assignees: User[];
+  assignees?: User[];
   assigneeIds: string[];
-  startDate?: string;
   dueDate?: string;
-  actualStartDate?: string;
   actualCompletionDate?: string;
-  currentSessionStartTime?: string; 
-  isUnderRevision?: boolean; 
   timeEstimate?: number; 
   timeTracked?: number;
-  timeLogs?: TimeLog[];
-  dependencies?: string[];
   subtasks?: Subtask[];
-  revisionItems?: RevisionItem[];
-  revisionHistory?: RevisionCycle[];
-  recurring?: string;
-  isMandatory?: boolean;
-  tags?: Tag[];
   comments?: Comment[];
-  attachments?: Attachment[];
   activities?: Activity[];
   lastActivity?: Activity | null;
   createdAt: any;
@@ -199,29 +245,53 @@ export type Task = {
     avatarUrl: string;
   };
   companyId: string;
-};
-
-export type SocialMediaPost = {
-  id: string;
-  platform: string;
-  caption: string;
-  mediaUrl?: string;
-  status: 'Draft' | 'Needs Approval' | 'Scheduled' | 'Posted' | 'Error';
-  scheduledAt: string;
-  postedAt?: string;
-  createdBy: string;
-  companyId: string;
-  comments?: Comment[];
-  brandId?: string;
-  creator?: {
-    name: string;
-    avatarUrl: string;
-  };
-  postType?: 'Post' | 'Reels';
-  objectPosition?: number;
+  updatedAt?: any;
   revisionItems?: RevisionItem[];
   revisionHistory?: RevisionCycle[];
-  updatedAt?: any;
+  [key: string]: any; // Allow other properties
+}
+
+export type Task = WorkItem & {
+  category?: 'General' | 'Social Media' | 'Branding';
+  startDate?: string;
+  actualStartDate?: string;
+  currentSessionStartTime?: string; 
+  isUnderRevision?: boolean; 
+  timeLogs?: TimeLog[];
+  waitingOnTaskIds?: string[];
+  blockingTaskIds?: string[];
+  linkedTaskIds?: string[];
+  attachments?: Attachment[];
+  deliverables?: Attachment[]; 
+  recurring?: string;
+  isMandatory?: boolean;
+  tags?: Tag[];
+};
+
+export type SocialMediaPost = WorkItem & {
+  startDate?: string;
+  dependencies?: Dependencies | string[]; // Can be old array or new object
+  platform: 'Instagram' | 'Facebook' | 'Twitter' | 'LinkedIn';
+  caption: string;
+  mediaUrl?: string;
+  scheduledAt?: string; // This is now Upload/Publish Date
+  postedAt?: string;
+  postType: 'Upload' | 'Branding' | 'Reels';
+  mediaType?: 'image' | 'video';
+  crop?: { x: number; y: number; zoom: number };
+  objectPosition?: number;
+  attachments?: Attachment[];
+  deliverables?: Attachment[];
+};
+
+
+export type WebArticle = WorkItem & {
+    content: string;
+    startDate?: string;
+    attachments?: Attachment[];
+    deliverables?: Attachment[];
+    actualStartDate?: string;
+    actualCompletionDate?: string;
 };
 
 
@@ -267,6 +337,7 @@ export type NavigationItem = {
   order: number;
   roles: ('Super Admin' | 'Manager' | 'PIC' | 'Employee' | 'Client')[];
   parentId: string | null;
+  isEnabled: boolean;
 }
 
 export type Notification = {
@@ -282,4 +353,7 @@ export type Notification = {
     name: string;
     avatarUrl: string;
   };
+  entityType?: 'task' | 'socialPost' | 'webArticle';
+  entityId?: string;
+  workstream?: 'tasks' | 'social' | 'web';
 };
