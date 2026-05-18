@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -24,13 +23,12 @@ import {
 import { collection, query, where, orderBy } from 'firebase/firestore';
 import { TeamWorkloadChart } from '@/components/reports/team-workload-chart';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartConfig } from '@/components/ui/chart';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Pie, PieChart, Cell } from 'recharts';
 import { useSafeBrands } from '@/hooks/use-safe-brands';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 
-// --- Generic Chart Components ---
 const StatusPieChart = ({ items, statuses, title }: { items: WorkItem[], statuses: WorkflowStatus[], title: string }) => {
   const chartData = useMemo(() => statuses.map(status => ({
     name: status.name,
@@ -103,17 +101,14 @@ const WorkItemTypePieChart = ({ tasks, socialMediaPosts, webArticles }: { tasks:
   );
 }
 
-
-// --- Main Dashboard Page ---
 export default function AdminDashboardPage() {
   const firestore = useFirestore();
-  const { profile, companyId, isLoading: isProfileLoading } = useUserProfile();
+  const { user, profile, companyId, isLoading: isProfileLoading } = useUserProfile();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedBrand, setSelectedBrand] = useState('all');
 
   const { brands: availableBrands, isLoading: areBrandsLoading } = useSafeBrands();
 
-  // --- Data Fetching ---
   const managerBrandFilter = useMemo(() => {
     if (profile?.role === 'Manager' && profile.brandIds && profile.brandIds.length > 0) {
       return where('brandId', 'in', profile.brandIds);
@@ -122,7 +117,7 @@ export default function AdminDashboardPage() {
   }, [profile]);
 
   const tasksQuery = useMemo(() => {
-    if (!firestore || !companyId || !profile) return null;
+    if (!firestore || !companyId || !profile || !user) return null;
     let constraints = [where('companyId', '==', companyId)];
     
     if (selectedBrand !== 'all') {
@@ -133,11 +128,11 @@ export default function AdminDashboardPage() {
     }
     
     return query(collection(firestore, 'tasks'), ...constraints);
-  }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
+  }, [firestore, companyId, profile, user, managerBrandFilter, selectedBrand]);
   const { data: tasks, isLoading: areTasksLoading } = useCollection<Task>(tasksQuery);
   
   const socialMediaPostsQuery = useMemo(() => {
-    if (!firestore || !companyId || !profile) return null;
+    if (!firestore || !companyId || !profile || !user) return null;
     let constraints = [where('companyId', '==', companyId)];
     
     if (selectedBrand !== 'all') {
@@ -148,11 +143,11 @@ export default function AdminDashboardPage() {
     }
 
     return query(collection(firestore, 'socialMediaPosts'), ...constraints);
-  }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
+  }, [firestore, companyId, profile, user, managerBrandFilter, selectedBrand]);
   const { data: socialMediaPosts, isLoading: areSocialPostsLoading } = useCollection<SocialMediaPost>(socialMediaPostsQuery);
 
   const webArticlesQuery = useMemo(() => {
-    if (!firestore || !companyId || !profile) return null;
+    if (!firestore || !companyId || !profile || !user) return null;
     let constraints = [where('companyId', '==', companyId)];
 
     if (selectedBrand !== 'all') {
@@ -163,25 +158,22 @@ export default function AdminDashboardPage() {
     }
 
     return query(collection(firestore, 'webArticles'), ...constraints);
-  }, [firestore, companyId, profile, managerBrandFilter, selectedBrand]);
+  }, [firestore, companyId, profile, user, managerBrandFilter, selectedBrand]);
   const { data: webArticles, isLoading: areWebArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
   
   const { data: allCompanyUsers, isLoading: isAllUsersLoading } = useCollection<User>(
-      useMemo(() => (firestore && companyId ? query(collection(firestore, 'users'), where('companyId', '==', companyId)) : null), [firestore, companyId])
+      useMemo(() => (firestore && companyId && user ? query(collection(firestore, 'users'), where('companyId', '==', companyId)) : null), [firestore, companyId, user])
   );
   
-  const { data: taskStatuses, isLoading: areTaskStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null, [firestore]));
-  const { data: socialStatuses, isLoading: areSocialStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => firestore ? query(collection(firestore, 'socialMediaStatuses'), orderBy('order')) : null, [firestore]));
-  const { data: webStatuses, isLoading: areWebStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => firestore ? query(collection(firestore, 'webStatuses'), orderBy('order')) : null, [firestore]));
+  const { data: taskStatuses, isLoading: areTaskStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => (firestore && user) ? query(collection(firestore, 'statuses'), orderBy('order')) : null, [firestore, user]));
+  const { data: socialStatuses, isLoading: areSocialStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => (firestore && user) ? query(collection(firestore, 'socialMediaStatuses'), orderBy('order')) : null, [firestore, user]));
+  const { data: webStatuses, isLoading: areWebStatusesLoading } = useCollection<WorkflowStatus>(useMemo(() => (firestore && user) ? query(collection(firestore, 'webStatuses'), orderBy('order')) : null, [firestore, user]));
 
-  // --- Loading State ---
   const isLoading = isProfileLoading || areTasksLoading || areSocialPostsLoading || areWebArticlesLoading || isAllUsersLoading || areTaskStatusesLoading || areSocialStatusesLoading || areWebStatusesLoading || areBrandsLoading;
 
-  // `displayedUsers` will power the "Total Users" card. It reflects the current filter context.
   const displayedUsers = useMemo(() => {
     if (!allCompanyUsers) return [];
     
-    // If a brand is selected, show users active in that brand's work items.
     if (selectedBrand !== 'all') {
       const userIds = new Set<string>();
       const items = [...(tasks || []), ...(socialMediaPosts || []), ...(webArticles || [])];
@@ -189,26 +181,18 @@ export default function AdminDashboardPage() {
       return allCompanyUsers.filter(user => userIds.has(user.id));
     }
 
-    // If no brand is selected, logic depends on role.
     if (profile?.role === 'Manager') {
-      // Manager sees their team members (direct reports).
       return allCompanyUsers.filter(u => u.managerId === profile.id || u.id === profile.id);
     }
     
-    // Super Admin sees everyone.
     return allCompanyUsers;
   }, [selectedBrand, tasks, socialMediaPosts, webArticles, allCompanyUsers, profile]);
 
-  // `usersForWorkload` will power the TeamWorkloadChart. It should only contain staff who perform tasks.
   const usersForWorkload = useMemo(() => {
-      // Start with the users filtered by brand or team.
       let users = displayedUsers;
-      // Further filter to only include roles that perform tasks.
       return users.filter(u => u.role === 'Employee' || u.role === 'PIC');
   }, [displayedUsers]);
 
-
-  // --- Memoized Data for Display ---
   const { total, completed, inProgress, cardIcons, cardLabels, chartItems, chartStatuses } = useMemo(() => {
     const allWorkItems = [...(tasks || []), ...(socialMediaPosts || []), ...(webArticles || [])];
 

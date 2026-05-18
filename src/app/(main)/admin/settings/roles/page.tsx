@@ -1,11 +1,10 @@
-
 'use client';
 
 import React, { useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useDoc, useFirestore } from '@/firebase';
+import { useDoc, useFirestore, useUserProfile } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -33,20 +32,19 @@ const defaultPermissions: PermissionSettings = {
   },
 };
 
-
 export default function RoleSettingsPage() {
   const firestore = useFirestore();
+  const { user } = useUserProfile();
   const { toast } = useToast();
 
   const permsDocRef = useMemo(
-    () => (firestore ? doc(firestore, 'permissions', 'roles') : null),
-    [firestore]
+    () => (firestore && user ? doc(firestore, 'permissions', 'roles') : null),
+    [firestore, user]
   );
   
   const { data: permissions, isLoading, error } = useDoc<PermissionSettings>(permsDocRef);
 
   useEffect(() => {
-    // If the document doesn't exist, create it with default values
     if (!isLoading && !permissions && permsDocRef) {
         setDoc(permsDocRef, defaultPermissions).catch(e => console.error("Failed to initialize permissions", e));
     }
@@ -154,7 +152,6 @@ export default function RoleSettingsPage() {
             <PermissionSwitch role="Client" permissionKey="canApproveContent" label="Can Approve Final Content"/>
           </CardContent>
         </Card>
-
       </div>
     </main>
     </div>

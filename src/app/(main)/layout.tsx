@@ -65,7 +65,6 @@ function MainAppLayout({
   const { data: companySettings, isLoading: isSettingsLoading } = useDoc<CompanySettings>(companySettingsDocRef);
 
   useEffect(() => {
-    // If the authentication state is still loading, do nothing yet.
     if (isUserLoading || isSettingsLoading) {
       return;
     }
@@ -80,17 +79,13 @@ function MainAppLayout({
         return;
     }
 
-    // If loading is finished and there's no user, redirect to login immediately.
-    // Allow access only to the explicit login and related public pages.
     const publicPaths = ['/login', '/check-email'];
     if (!user && !publicPaths.includes(pathname)) {
       router.replace(`/login?next=${pathname}`);
       return;
     }
 
-    // If there is a user, handle post-login logic.
     if (user && profile) {
-      // Logic for forced actions (password change, task acknowledgment)
       getIdTokenResult(user, true)
         .then((idTokenResult) => {
           const claims = idTokenResult.claims;
@@ -99,16 +94,13 @@ function MainAppLayout({
           } else if (claims.mustAcknowledgeTasks && pathname !== '/force-acknowledge-tasks') {
             router.replace('/force-acknowledge-tasks');
           } else {
-             // If no forced actions are needed, we can consider the layout ready.
             setIsReady(true);
           }
         })
         .catch(() => {
-          // If token verification fails, the user is effectively logged out.
           router.replace('/login');
         });
     } else if (!user) {
-        // If there's no user, and we are on a public page, the content is ready to be shown.
         setIsReady(true);
     }
   }, [user, profile, isUserLoading, auth, router, pathname, companySettings, isSettingsLoading]);
@@ -123,8 +115,8 @@ function MainAppLayout({
   useIdleTimer({ onIdle: handleLogout, idleTime: 60 });
   
   const navItemsCollectionRef = useMemo(
-    () => firestore ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
-    [firestore]
+    () => (firestore && user) ? query(collection(firestore, 'navigationItems'), orderBy('order')) : null,
+    [firestore, user]
   );
   const { data: navItemsFromDB, isLoading: isNavItemsLoading } = useCollection<NavigationItem>(navItemsCollectionRef);
   
@@ -188,7 +180,7 @@ function MainAppLayout({
             );
           }
 
-          if (!item.path) return null; // Don't render folders without path and without visible children
+          if (!item.path) return null; 
 
           return (
             <SidebarMenuItem key={item.id}>
@@ -255,6 +247,5 @@ function MainAppLayout({
 }
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
-  // This component now solely acts as the provider wrapper for the main authenticated app section.
   return <MainAppLayout>{children}</MainAppLayout>;
 }

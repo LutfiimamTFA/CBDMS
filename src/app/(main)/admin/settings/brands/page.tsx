@@ -17,7 +17,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -31,9 +30,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MoreHorizontal, Plus, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import type { Brand } from '@/lib/types';
 import { collection, doc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -50,15 +49,16 @@ type BrandFormValues = z.infer<typeof brandSchema>;
 export default function BrandsPage() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const { user } = useUserProfile();
 
   const [isDialogOpen, setDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setDeleteDialogVisible] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<Brand | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const brandsCollectionRef = useMemo(
-    () => (firestore ? collection(firestore, 'brands') : null),
-    [firestore]
+    () => (firestore && user ? collection(firestore, 'brands') : null),
+    [firestore, user]
   );
   const { data: brands, isLoading: isBrandsLoading } = useCollection<Brand>(brandsCollectionRef);
 
@@ -75,7 +75,7 @@ export default function BrandsPage() {
 
   const handleOpenDeleteDialog = (brand: Brand) => {
     setSelectedBrand(brand);
-    setDeleteDialogOpen(true);
+    setDeleteDialogVisible(true);
   };
 
   const handleSubmit = async (data: BrandFormValues) => {
@@ -84,12 +84,10 @@ export default function BrandsPage() {
 
     try {
       if (selectedBrand) {
-        // Update existing brand
         const brandRef = doc(firestore, 'brands', selectedBrand.id);
         await updateDoc(brandRef, { name: data.name });
         toast({ title: 'Brand Updated', description: `Brand "${data.name}" has been saved.` });
       } else {
-        // Create new brand
         await addDoc(collection(firestore, 'brands'), {
           name: data.name,
           createdAt: serverTimestamp(),
@@ -116,7 +114,7 @@ export default function BrandsPage() {
       const brandRef = doc(firestore, 'brands', selectedBrand.id);
       await deleteDoc(brandRef);
       toast({ title: 'Brand Deleted', description: `Brand "${selectedBrand.name}" has been removed.` });
-      setDeleteDialogOpen(false);
+      setDeleteDialogVisible(false);
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -185,7 +183,6 @@ export default function BrandsPage() {
         </div>
       </main>
 
-      {/* Add/Edit Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -211,8 +208,7 @@ export default function BrandsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setDeleteDialogVisible}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>

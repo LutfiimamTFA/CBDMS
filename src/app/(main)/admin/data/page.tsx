@@ -2,7 +2,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, AlertTriangle, Database, Trash2, Upload, Send } from 'lucide-react';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirestore, useUserProfile } from '@/firebase';
 import { collection, writeBatch, getDocs, query, orderBy } from 'firebase/firestore';
 import type { Task, User, Brand, WorkflowStatus } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -21,18 +21,19 @@ import { Input } from '@/components/ui/input';
 
 export default function DataManagementPage() {
     const firestore = useFirestore();
+    const { user } = useUserProfile();
     const { toast } = useToast();
     
-    const tasksCollectionRef = useMemo(() => firestore ? collection(firestore, 'tasks') : null, [firestore]);
+    const tasksCollectionRef = useMemo(() => (firestore && user) ? collection(firestore, 'tasks') : null, [firestore, user]);
     const { data: tasks } = useCollection<Task>(tasksCollectionRef);
     
-    const usersCollectionRef = useMemo(() => firestore ? collection(firestore, 'users') : null, [firestore]);
+    const usersCollectionRef = useMemo(() => (firestore && user) ? collection(firestore, 'users') : null, [firestore, user]);
     const { data: users } = useCollection<User>(usersCollectionRef);
     
-    const brandsCollectionRef = useMemo(() => firestore ? query(collection(firestore, 'brands'), orderBy('name')) : null, [firestore]);
+    const brandsCollectionRef = useMemo(() => (firestore && user) ? query(collection(firestore, 'brands'), orderBy('name')) : null, [firestore, user]);
     const { data: brands } = useCollection<Brand>(brandsCollectionRef);
     
-    const statusesCollectionRef = useMemo(() => firestore ? query(collection(firestore, 'statuses'), orderBy('order')) : null, [firestore]);
+    const statusesCollectionRef = useMemo(() => (firestore && user) ? query(collection(firestore, 'statuses'), orderBy('order')) : null, [firestore, user]);
     const { data: statuses } = useCollection<WorkflowStatus>(statusesCollectionRef);
 
     const [deleteConfirmation, setDeleteConfirmation] = useState({
@@ -179,7 +180,6 @@ export default function DataManagementPage() {
       if (!firestore) return;
       
       const confirmAction = async () => {
-          // Collections for "Smart Reset". Users and Permissions are intentionally excluded.
           const collectionsToDelete = ['tasks', 'brands', 'statuses', 'navigationItems', 'socialMediaPosts', 'sharedLinks'];
           try {
             const batch = writeBatch(firestore);
