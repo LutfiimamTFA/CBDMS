@@ -9,24 +9,35 @@ let adminAuth: Auth;
 let adminDb: Firestore;
 let adminStorage: ReturnType<Storage['bucket']>;
 
-// This ensures we initialize only once.
+const storageBucket =
+  process.env.FIREBASE_STORAGE_BUCKET ||
+  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+  process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET_NAME;
+
 if (!getApps().length) {
-    try {
-        // In a Google Cloud environment (like Firebase App Hosting), 
-        // initializeApp() with no arguments will automatically find the credentials.
-        adminApp = initializeApp();
-    } catch (e: any) {
-        console.error("Firebase Admin SDK initialization failed:", e.message);
-        // We throw the error to ensure build failures are obvious if configuration is truly broken.
-        throw new Error("Firebase Admin SDK initialization failed. Check your service account configuration.");
-    }
+  try {
+    adminApp = initializeApp({
+      storageBucket,
+    });
+  } catch (e: any) {
+    console.error('Firebase Admin SDK initialization failed:', e.message);
+    throw new Error(
+      'Firebase Admin SDK initialization failed. Check your service account configuration.'
+    );
+  }
 } else {
   adminApp = getApps()[0];
 }
 
-// Export singleton instances of the services.
 adminAuth = getAuth(adminApp);
 adminDb = getFirestore(adminApp);
-adminStorage = getStorage(adminApp).bucket(); // Use default bucket associated with the project
+
+if (!storageBucket) {
+  throw new Error(
+    'Firebase Storage bucket is not configured. Add FIREBASE_STORAGE_BUCKET or NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET in Vercel Environment Variables.'
+  );
+}
+
+adminStorage = getStorage(adminApp).bucket(storageBucket);
 
 export { adminApp, adminAuth, adminDb, adminStorage };
