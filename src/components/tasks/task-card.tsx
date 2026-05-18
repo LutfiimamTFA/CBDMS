@@ -4,7 +4,7 @@ import type { Task, User } from '@/lib/types';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { priorityInfo, cn, getBrandColor, formatLateness } from '@/lib/utils';
-import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History, Circle, CircleDashed, Eye, HelpCircle } from 'lucide-react';
+import { Calendar, Link as LinkIcon, ListTodo, CheckCircle2, AlertCircle, RefreshCcw, Star, History, Circle, CircleDashed, Eye, HelpCircle, Share2, MoreHorizontal } from 'lucide-react';
 import { format, parseISO, isAfter, formatDistanceToNow, endOfDay } from 'date-fns';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useRouter } from 'next/navigation';
@@ -59,7 +59,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
       return `${user.name} ${action} ${timeAgo}`;
   }, [task.lastActivity]);
   
-  const isCreatorEmployeeOrPIC = ['Employee', 'PIC', 'Client'].includes(task.createdBy.role);
+  const isCreatorEmployeeOrPIC = currentUser && ['Employee', 'PIC', 'Client'].includes(task.createdBy.role);
 
 
   return (
@@ -100,7 +100,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                       </TooltipContent>
                   </Tooltip>
               </TooltipProvider>
-               <DropdownMenu onOpenChange={(e) => e.stopPropagation()}>
+               <DropdownMenu>
                   <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                     <Button variant="ghost" size="icon" className="h-6 w-6 -mr-2">
                       <MoreHorizontal className="h-4 w-4" />
@@ -208,7 +208,7 @@ export function TaskCard({ task, draggable = false }: TaskCardProps) {
                     <Badge variant="outline" className="flex items-center gap-1">
                         <Calendar className="h-3.5 w-3.5" />
                         {format(parseISO(task.dueDate), 'MMM d')}
-                    </span>
+                    </Badge>
                 )}
                 <Badge variant="outline" className={cn('flex items-center gap-1.5 text-xs font-medium', statusStyling.color)}>
                     <statusStyling.icon className="h-3 w-3" />

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useMemo, useEffect } from 'react';
@@ -17,19 +16,21 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useFirestore, useUserProfile, useCollection } from '@/firebase';
-import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, orderBy, getDocs, doc } from 'firebase/firestore';
 import type { SharedLink, NavigationItem, Task, WorkflowStatus, Brand, User, SocialMediaPost, WebArticle } from '@/lib/types';
-import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo, ChevronDown } from 'lucide-react';
+import { Share2, Link as LinkIcon, Copy, KeyRound, Loader2, Calendar as CalendarIcon, Clock, type LucideIcon, Eye, Edit, ListTodo, ChevronDown, X } from 'lucide-react';
 import * as lucideIcons from 'lucide-react';
 import { Checkbox } from '../ui/checkbox';
 import { ScrollArea } from '../ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
-import { Calendar } from '../ui/calendar';
-import { format } from 'date-fns';
+import { Calendar as CalendarComponent } from '../ui/calendar';
+import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
+import { defaultNavItems } from '@/lib/navigation-items';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof LucideIcon>) => {
   const LucideIconComponent = (lucideIcons as Record<string, any>)[name];
@@ -37,18 +38,13 @@ const Icon = ({ name, ...props }: { name: string } & React.ComponentProps<typeof
   return <LucideIconComponent {...props} />;
 };
 
-
 // Define which nav items are shareable
 const isShareable = (item: NavigationItem) => {
     const shareablePaths = ['/dashboard', '/tasks', '/tasks/schedule', '/social-media/board', '/social-media/posts', '/social-media/schedule', '/social-media/analytics', '/web/board', '/web/articles', '/web/schedule'];
     return shareablePaths.includes(item.path);
 };
 
-
-interface ShareViewDialogProps {
-  children?: React.ReactNode;
-}
-
+// Function to recursively remove undefined values from any object
 const removeUndefined = (obj: any): any => {
     if (obj === undefined) {
         return null;
@@ -69,16 +65,16 @@ const removeUndefined = (obj: any): any => {
 
 interface ShareViewDialogProps {
   children?: React.ReactNode;
-  navItems: NavigationItem[];
 }
 
-export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
+export function ShareViewDialog({ children }: ShareViewDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
   
   const firestore = useFirestore();
-  const { profile } = useUserProfile();
+  const { user, profile } = useUserProfile();
   const { t } = useI18n();
   const { toast } = useToast();
   
@@ -88,31 +84,35 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
   const [expiresAt, setExpiresAt] = useState<Date | undefined>();
   const [accessLevel, setAccessLevel] = useState<SharedLink['accessLevel']>('view');
 
+  const shareableNavItems = useMemo(() => {
+    return defaultNavItems.filter(isShareable);
+  }, []);
+
   const userTasksQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
+    if (!firestore || !profile || !user) return null;
     let q = query(collection(firestore, 'tasks'), where('companyId', '==', profile.companyId));
     if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
     else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
     return q;
-  }, [firestore, profile]);
+  }, [firestore, profile, user]);
 
   const socialPostsQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
+    if (!firestore || !profile || !user) return null;
     let q = query(collection(firestore, 'socialMediaPosts'), where('companyId', '==', profile.companyId));
     if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
     else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
     return q;
-  }, [firestore, profile]);
+  }, [firestore, profile, user]);
 
   const webArticlesQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
+    if (!firestore || !profile || !user) return null;
     let q = query(collection(firestore, 'webArticles'), where('companyId', '==', profile.companyId));
     if (profile.role === 'Manager' && profile.brandIds?.length) q = query(q, where('brandId', 'in', profile.brandIds));
     else if (profile.role === 'Employee' || profile.role === 'PIC') q = query(q, where('assigneeIds', 'array-contains', profile.id));
     return q;
-  }, [firestore, profile]);
+  }, [firestore, profile, user]);
 
-  const { data: allVisibleTasks, isLoading: tasksLoading } = useCollection<Task>(userTasksQuery);
+  const { data: allVisibleTasks, isLoading: allTasksLoading } = useCollection<Task>(userTasksQuery);
   const { data: allVisibleSocialPosts, isLoading: socialPostsLoading } = useCollection<SocialMediaPost>(socialPostsQuery);
   const { data: allVisibleWebArticles, isLoading: webArticlesLoading } = useCollection<WebArticle>(webArticlesQuery);
 
@@ -121,27 +121,16 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
     return defaultNavItems.filter(item => item.roles.includes(profile.role));
   }, [profile]);
   
-  const isEmployeeOrPIC = useMemo(() => profile?.role === 'Employee' || profile?.role === 'PIC', [profile]);
-  const isManagerOrAdmin = useMemo(() => profile?.role === 'Manager' || profile?.role === 'Super Admin', [profile]);
-  
   const delegatedTasksQuery = useMemo(() => {
-    if (!firestore || !profile) return null;
+    if (!firestore || !profile || !user) return null;
     return query(
       collection(firestore, 'tasks'), 
       where('assigneeIds', 'array-contains', profile.id),
       where('companyId', '==', profile.companyId)
-      // We will filter out tasks created by self on the client-side
     );
-  }, [firestore, profile]);
+  }, [firestore, profile, user]);
 
-  const { data: delegatedTasks, isLoading: tasksLoading } = useCollection<Task>(delegatedTasksQuery);
-
-  const tasksToShow = useMemo(() => {
-    if (!delegatedTasks || !profile) return [];
-    // Only show tasks that are NOT created by the current user.
-    return delegatedTasks.filter(task => task.createdBy.id !== profile.id);
-  }, [delegatedTasks, profile]);
-
+  const { data: delegatedTasks, isLoading: delegatedTasksLoading } = useCollection<Task>(delegatedTasksQuery);
 
   useEffect(() => {
     if (isOpen) {
@@ -188,11 +177,8 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
         };
         
-        // For a link sharing specific tasks, the only relevant nav item is the task list
-        const allowedNavItems = navItems.filter(item => item.path === '/tasks');
-
         const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
-          name: linkName || 'Shared Tasks',
+          name: linkName || 'Shared View',
           companyId: profile.companyId,
           creatorId: profile.id,
           creatorName: profile.name,
@@ -229,7 +215,7 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
     toast({ title: 'Link copied to clipboard!' });
   };
   
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setIsLoading(false);
       setGeneratedLink(null);
@@ -241,14 +227,14 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
     }
   }, [isOpen]);
 
-  const anyLoading = tasksLoading || socialPostsLoading || webArticlesLoading;
+  const anyLoading = allTasksLoading || socialPostsLoading || webArticlesLoading || delegatedTasksLoading;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Share Delegated Tasks</DialogTitle>
+          <DialogTitle>Share View</DialogTitle>
           <DialogDescription>
             Create a public link to share a snapshot of your current work view with external collaborators.
           </DialogDescription>
@@ -256,7 +242,7 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
 
         {!generatedLink ? (
          <ScrollArea className="max-h-[60vh] -mx-6 px-6">
-          <div className="space-y-6 py-4">
+          <div className="space-y-6 py-4 px-6">
               <div className="space-y-2">
                 <Label htmlFor="link-name">Link Name (Optional)</Label>
                 <Input id="link-name" value={linkName} onChange={(e) => setLinkName(e.target.value)} placeholder="e.g., Q3 Client Preview" />
@@ -333,7 +319,7 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0" align="start">
-                                    <Calendar
+                                    <CalendarComponent
                                     mode="single"
                                     selected={expiresAt}
                                     onSelect={setExpiresAt}
@@ -375,7 +361,7 @@ export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
             <>
               <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
               <Button onClick={handleCreateLink} disabled={isLoading || anyLoading || selectedNavIds.length === 0}>
-                {isLoading || anyLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
+                {isLoading || anyLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Share2 className="mr-2 h-4 w-4" />}
                 Create Link
               </Button>
             </>
