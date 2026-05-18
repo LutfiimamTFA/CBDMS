@@ -83,28 +83,21 @@ service cloud.firestore {
       allow write: if isSuperAdmin() || isRole('Manager');
     }
 
-    // ✅ FIX UTAMA: statuses harus boleh query/list
     match /statuses/{statusId} {
-<<<<<<< HEAD
-        allow read: if isSignedIn();
-        allow write: if isSuperAdmin();
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
     }
     
     match /socialMediaStatuses/{statusId} {
-        allow read: if isSignedIn();
-        allow write: if isSuperAdmin();
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
     }
     
     match /webStatuses/{statusId} {
-        allow read: if isSignedIn();
-        allow write: if isSuperAdmin();
-=======
-      allow read: if isSignedIn();          // read = get + list
+      allow read: if isSignedIn();
       allow write: if isSuperAdmin();
->>>>>>> 6a9268c65419b3d8e263cc1f1e1a79ed24c55919
     }
 
-    // ✅ FIX UTAMA: navigationItems biasanya dibaca via list/query untuk sidebar
     match /navigationItems/{navItemId} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
