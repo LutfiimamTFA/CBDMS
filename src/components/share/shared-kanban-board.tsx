@@ -43,6 +43,8 @@ export function SharedKanbanBoard({
   const [revisionState, setRevisionState] = useState<RevisionState>({ isOpen: false, item: null, items: [], currentItemText: '' });
   const [isSaving, setIsSaving] = useState(false);
 
+  const isEmployeeLink = creatorRole === 'Employee' || creatorRole === 'PIC';
+
   const canDrag = accessLevel === 'status' || accessLevel === 'limited-edit';
   const allUsers = session.snapshot.users;
 

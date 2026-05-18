@@ -130,6 +130,16 @@ export async function POST(request: Request) {
           notificationMessage = `${sharedActor.name} (via link by ${sharedLink.creatorName}) commented: "${newComment.text.substring(0, 50)}..."`;
         }
 
+        // --- Due Date & Priority Change Validation based on Creator's Role ---
+        if (updates.dueDate || updates.priority) {
+            const creatorIsManagerOrAdmin = sharedLink.creatorRole === 'Manager' || sharedLink.creatorRole === 'Super Admin';
+            const creatorIsTaskOwner = sharedLink.createdBy === initialTask.createdBy.id;
+            
+            // Allow if creator is Manager/Admin OR if creator is the owner of the task (for Employee-created tasks)
+            if (!creatorIsManagerOrAdmin && !creatorIsTaskOwner) {
+                throw new Error("The link creator does not have permission to change the due date or priority for this task.");
+            }
+        }
 
         if (actionDescription) {
             const newActivity = createActivity(sharedActor, actionDescription, sharedLink.creatorName);
