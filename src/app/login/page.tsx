@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,18 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-<<<<<<< HEAD
 import { ArrowUpRight, Loader2, Eye, EyeOff } from 'lucide-react';
-=======
-<<<<<<< HEAD
-import { ArrowUpRight, Loader2 } from 'lucide-react';
-=======
-import { Briefcase, Loader2, Eye, EyeOff } from 'lucide-react';
->>>>>>> 6a9268c65419b3d8e263cc1f1e1a79ed24c55919
->>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
-import {
-  initiateEmailSignIn,
-} from '@/firebase/non-blocking-login';
+import { initiateEmailSignIn } from '@/firebase/non-blocking-login';
 import { useAuth, useUserProfile } from '@/firebase';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
@@ -37,13 +26,8 @@ import {
   FormField,
   FormItem,
   FormMessage,
-  FormLabel,
 } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
-<<<<<<< HEAD
-
-=======
->>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
 
 const signInSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -61,63 +45,67 @@ export default function LoginPage() {
   const auth = useAuth();
   const { user, profile, isUserLoading } = useUserProfile();
   const { toast } = useToast();
+
   const [isSigningIn, setIsSigningIn] = useState(false);
-<<<<<<< HEAD
   const [justLoggedIn, setJustLoggedIn] = useState(false);
-=======
->>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const signInForm = useForm<SignInFormValues>({
     resolver: zodResolver(signInSchema),
-    defaultValues: { email: '', password: '', rememberMe: true },
+    defaultValues: {
+      email: '',
+      password: '',
+      rememberMe: true,
+    },
   });
 
-  // Effect to handle redirection after user state changes
   useEffect(() => {
-    // If the profile is loaded and the user is authenticated
     if (!isUserLoading && user && profile) {
       if (justLoggedIn) {
         toast({
           title: `Selamat Datang Kembali, ${profile.name}!`,
-          description: "Anda akan diarahkan ke dasbor Anda.",
+          description: 'Anda akan diarahkan ke dasbor Anda.',
         });
-        setJustLoggedIn(false); // Reset the flag
+        setJustLoggedIn(false);
       }
 
       const nextUrl = searchParams.get('next');
-      
+
       if (nextUrl) {
-          router.replace(nextUrl);
+        router.replace(nextUrl);
+      } else if (profile.role === 'Employee' || profile.role === 'PIC') {
+        router.replace('/my-work');
       } else {
-        if (profile.role === 'Employee' || profile.role === 'PIC') {
-          router.replace('/my-work');
-        } else {
-          router.replace('/dashboard');
-        }
+        router.replace('/dashboard');
       }
     }
   }, [user, profile, isUserLoading, router, justLoggedIn, toast, searchParams]);
 
   const onSignIn = async (data: SignInFormValues) => {
     if (!auth) return;
+
     setIsSigningIn(true);
+
     try {
-      await initiateEmailSignIn(auth, data.email, data.password, data.rememberMe);
-      // The toast is now handled by the useEffect after profile is loaded.
-      // Set a flag to indicate a fresh login.
+      await initiateEmailSignIn(
+        auth,
+        data.email,
+        data.password,
+        data.rememberMe
+      );
+
       setJustLoggedIn(true);
     } catch (error: any) {
-      let description = 'Kata sandi atau email salah. Mohon periksa kembali.';
       toast({
         variant: 'destructive',
         title: 'Login Gagal',
-        description,
+        description: 'Kata sandi atau email salah. Mohon periksa kembali.',
       });
+
       setIsSigningIn(false);
     }
   };
-  
+
   if (isUserLoading || user) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -133,14 +121,20 @@ export default function LoginPage() {
           <div className="mb-4 flex justify-center">
             <div className="flex items-center gap-2">
               <ArrowUpRight className="h-7 w-7 text-primary" />
-              <h1 className="font-headline text-xl font-bold truncate">CBDMS Workspace</h1>
+              <h1 className="font-headline text-xl font-bold truncate">
+                CBDMS Workspace
+              </h1>
             </div>
           </div>
+
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
+
           <CardDescription>
-            Sign in to access your dashboard. Accounts are created by an administrator.
+            Sign in to access your dashboard. Accounts are created by an
+            administrator.
           </CardDescription>
         </CardHeader>
+
         <CardContent>
           <Form {...signInForm}>
             <form
@@ -163,44 +157,40 @@ export default function LoginPage() {
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={signInForm.control}
                 name="password"
                 render={({ field }) => (
                   <FormItem>
                     <Label htmlFor="password-signin">Password</Label>
+
                     <div className="relative">
-<<<<<<< HEAD
-                      <Input id="password-signin" type={showPassword ? 'text' : 'password'} {...field} />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? <EyeOff /> : <Eye />}
-                      </Button>
-=======
                       <Input
                         id="password-signin"
                         type={showPassword ? 'text' : 'password'}
                         {...field}
                       />
-                       <button
+
+                      <Button
                         type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 text-muted-foreground"
+                        onClick={() => setShowPassword((prev) => !prev)}
                       >
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                      </button>
->>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </Button>
                     </div>
+
                     <FormMessage />
                   </FormItem>
                 )}
               />
-<<<<<<< HEAD
 
               <FormField
                 control={signInForm.control}
@@ -214,29 +204,18 @@ export default function LoginPage() {
                         onCheckedChange={field.onChange}
                       />
                     </FormControl>
-                    <Label htmlFor="remember-me" className="cursor-pointer font-normal">
+
+                    <Label
+                      htmlFor="remember-me"
+                      className="cursor-pointer font-normal"
+                    >
                       Remember me
                     </Label>
                   </FormItem>
                 )}
               />
 
-=======
-              <div className="flex items-center space-x-2">
-                <Checkbox id="remember-me" />
-                <label
-                  htmlFor="remember-me"
-                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                >
-                  Remember me
-                </label>
-              </div>
->>>>>>> c176c74c08a89a5e83faa3c8b0f2edf73db7fd5f
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isSigningIn}
-              >
+              <Button type="submit" className="w-full" disabled={isSigningIn}>
                 {isSigningIn && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
@@ -245,6 +224,7 @@ export default function LoginPage() {
             </form>
           </Form>
         </CardContent>
+
         <CardFooter>
           <p className="w-full text-center text-xs text-muted-foreground">
             By continuing, you agree to our Terms of Service and Privacy Policy.
