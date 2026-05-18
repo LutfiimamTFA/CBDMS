@@ -28,7 +28,6 @@ import { Calendar } from '../ui/calendar';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/context/i18n-provider';
-import { defaultNavItems } from '@/lib/navigation-items';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../ui/accordion';
 
@@ -68,8 +67,12 @@ const removeUndefined = (obj: any): any => {
     return obj;
 };
 
+interface ShareViewDialogProps {
+  children?: React.ReactNode;
+  navItems: NavigationItem[];
+}
 
-export function ShareViewDialog({ children }: ShareViewDialogProps) {
+export function ShareViewDialog({ children, navItems }: ShareViewDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
@@ -118,9 +121,27 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
     return defaultNavItems.filter(item => item.roles.includes(profile.role));
   }, [profile]);
   
-  const shareableNavItems = useMemo(() => userNavItems.filter(isShareable), [userNavItems]);
+  const isEmployeeOrPIC = useMemo(() => profile?.role === 'Employee' || profile?.role === 'PIC', [profile]);
+  const isManagerOrAdmin = useMemo(() => profile?.role === 'Manager' || profile?.role === 'Super Admin', [profile]);
   
-  const [selectedNavIds, setSelectedNavIds] = useState<string[]>([]);
+  const delegatedTasksQuery = useMemo(() => {
+    if (!firestore || !profile) return null;
+    return query(
+      collection(firestore, 'tasks'), 
+      where('assigneeIds', 'array-contains', profile.id),
+      where('companyId', '==', profile.companyId)
+      // We will filter out tasks created by self on the client-side
+    );
+  }, [firestore, profile]);
+
+  const { data: delegatedTasks, isLoading: tasksLoading } = useCollection<Task>(delegatedTasksQuery);
+
+  const tasksToShow = useMemo(() => {
+    if (!delegatedTasks || !profile) return [];
+    // Only show tasks that are NOT created by the current user.
+    return delegatedTasks.filter(task => task.createdBy.id !== profile.id);
+  }, [delegatedTasks, profile]);
+
 
   useEffect(() => {
     if (isOpen) {
@@ -152,8 +173,8 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
             getDocs(brandsQuery),
         ]);
 
-        if (statusesSnap.empty || statusesSnap.docs.length < 2) {
-            throw new Error("Cannot create share link: A valid workflow (with at least 2 statuses) was not found for this company. Please configure it in the admin settings.");
+        if (statusesSnap.empty) {
+            throw new Error("Cannot create share link: A valid workflow was not found for this company.");
         }
 
         const snapshot = {
@@ -166,9 +187,12 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
             users: usersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)),
             brands: brandsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Brand)),
         };
+        
+        // For a link sharing specific tasks, the only relevant nav item is the task list
+        const allowedNavItems = navItems.filter(item => item.path === '/tasks');
 
         const linkData: Omit<SharedLink, 'id' | 'createdAt'> = {
-          name: linkName || 'Shared View',
+          name: linkName || 'Shared Tasks',
           companyId: profile.companyId,
           creatorId: profile.id,
           creatorName: profile.name,
@@ -179,7 +203,6 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           snapshot,
           password: usePassword ? password : undefined,
           expiresAt: expiresAt || undefined,
-          brandIds: profile.role === 'Manager' ? profile.brandIds : undefined,
         };
         
         const cleanedData = removeUndefined(linkData);
@@ -225,7 +248,7 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Share View</DialogTitle>
+          <DialogTitle>Share Delegated Tasks</DialogTitle>
           <DialogDescription>
             Create a public link to share a snapshot of your current work view with external collaborators.
           </DialogDescription>
@@ -326,13 +349,21 @@ export function ShareViewDialog({ children }: ShareViewDialogProps) {
           </div>
          </ScrollArea>
         ) : (
-          <div className="space-y-2 py-4">
-            <Label htmlFor="share-link">Your Shareable Link</Label>
-            <div className="flex items-center gap-2">
-              <Input id="share-link" value={generatedLink} readOnly />
-              <Button size="icon" variant="secondary" onClick={copyToClipboard}>
-                <Copy className="h-4 w-4" />
-              </Button>
+          <div className="space-y-4 py-4">
+            <Alert>
+              <AlertTitle>Link Created Successfully!</AlertTitle>
+              <AlertDescription>
+                Anyone with this link can now view the tasks you selected with the permissions you've set.
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-2">
+              <Label htmlFor="share-link">Your Shareable Link</Label>
+              <div className="flex items-center gap-2">
+                <Input id="share-link" value={generatedLink} readOnly />
+                <Button size="icon" variant="secondary" onClick={copyToClipboard}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           </div>
         )}

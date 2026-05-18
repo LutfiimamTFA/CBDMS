@@ -474,6 +474,39 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
       },
     },
     {
+      accessorKey: 'dueDate',
+      header: 'Due Date',
+      cell: ({ row }) => {
+        const task = row.original;
+        const dueDate = task.dueDate;
+        
+        return (
+           <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"ghost"}
+                className="w-[150px] justify-start text-left font-normal"
+              >
+                <Calendar className="mr-2 h-4 w-4" />
+                {dueDate ? format(parseISO(dueDate), 'MMM d, yyyy') : <span>Set date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <CalendarComponent
+                mode="single"
+                selected={dueDate ? parseISO(dueDate) : undefined}
+                onSelect={(date) => {
+                    const taskRef = doc(firestore!, 'tasks', task.id);
+                    updateDocumentNonBlocking(taskRef, { dueDate: date?.toISOString() });
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
+        )
+      }
+    },
+    {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
@@ -540,7 +573,7 @@ export function TasksDataTable({ tasks, statuses, brands, users }: TasksDataTabl
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="icon" className="h-8 w-8 p-0 opacity-50 focus:opacity-100 group-hover:opacity-100 transition-opacity">
+                <Button variant="ghost" size="icon" className="h-8 w-8 p-0 opacity-50 focus:opacity-100 group-hover:opacity-100 transition-opacity">
                     <span className="sr-only">Open menu</span>
                     <MoreHorizontal className="h-4 w-4" />
                 </Button>
